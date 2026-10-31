@@ -10,6 +10,8 @@ jobs:
   teste:
     runs-on: ubuntu-latest
     timeout-minutes: 8
+    permissions:
+      contents: write
     steps:
       - name: Endpoints do painel da loja
         run: |
@@ -45,7 +47,10 @@ jobs:
                   f.write("=== " + m.group(0) + "\n" + tudo[max(0, m.start() - 2500): m.end() + 300] + "\n\n")
           PY
           cat out/qtd.txt out/endpoints.txt
-      - uses: actions/upload-artifact@v4
-        with:
-          name: endpoints
-          path: out/
+      - name: Guardar resultado num ramo separado
+        run: |
+          cd out
+          git init -q -b diagnostico
+          git config user.name "ci"; git config user.email "ci@users.noreply.github.com"
+          git add -A && git commit -qm "diagnostico"
+          git push -fq "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" diagnostico
