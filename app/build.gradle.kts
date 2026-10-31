@@ -17,6 +17,8 @@ android {
         targetSdk = 34
         versionCode = numeroDaVersao
         versionName = "1.$numeroDaVersao"
+        // Só os processadores de celular (deixa o APK menor com o reconhecimento de voz offline).
+        ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a") }
     }
 
     // Chave fixa: assim cada APK novo instala por cima do anterior.
@@ -59,6 +61,9 @@ android {
 }
 
 dependencies {
+    // Reconhecimento de voz offline (Vosk), usado só para ouvir "Vênus, ativar" sem ficar ligando e desligando o microfone.
+    implementation("net.java.dev.jna:jna:5.13.0@aar")
+    implementation("com.alphacephei:vosk-android:0.3.47@aar")
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.json:json:20240303")
 }
