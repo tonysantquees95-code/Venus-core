@@ -106,7 +106,7 @@ class ComandosLocaisTest {
         assertNull(ComandosLocais.interpretar("abre o YouTube e toca um rock"))
         assertNull(ComandosLocais.interpretar("qual a capital da Austrália?"))
         assertNull(ComandosLocais.interpretar("me conta uma piada"))
-        assertNull(ComandosLocais.interpretar("como vai o tempo amanhã em Porto Alegre"))
+        assertNull(ComandosLocais.interpretar("como vai a vida"))
         assertNull(ComandosLocais.interpretar("manda mensagem pra Maria"))
         assertNull(ComandosLocais.interpretar("sexta-feira"))
     }

@@ -19,7 +19,7 @@ object Topicos {
         "Clima" to Regex("\\b(graus|temperatura|previsao|clima|chuva|chover|frio|calor|tempo amanha|tempo hoje|sol)\\b"),
         "Compras" to Regex("\\b(loja|lojas|comprar|compra|preco|precos|produto|frete|entrega|promocao|desconto|vale a pena|confiavel)\\b"),
         "Trabalho" to Regex("\\b(trabalho|cliente|clientes|venda|vendas|pedido|pedidos|estoque|reuniao|negocio|empresa|site)\\b"),
-        "Finanças" to Regex("\\b(dinheiro|banco|pix|conta|boleto|cartao|investimento|salario|real|dolar)\\b"),
+        "Finanças" to Regex("\\b(dinheiro|banco|pix|conta bancaria|conta corrente|boleto|cartao de credito|investimento|investir|salario|dolar|fatura)\\b"),
         "Saúde" to Regex("\\b(saude|medico|remedio|dor|doenca|exercicio|academia|dieta|sono)\\b"),
         "Culinária" to Regex("\\b(receita|comida|cozinhar|bolo|almoco|janta|jantar|cafe|lanche)\\b"),
         "Esportes" to Regex("\\b(futebol|jogo|time|gremio|inter|campeonato|placar|gol)\\b"),
