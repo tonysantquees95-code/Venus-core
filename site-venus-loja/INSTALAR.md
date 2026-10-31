@@ -9,7 +9,7 @@ Código pronto aqui; o cérebro passou em 45 testes (teste/t.ts, `node --experim
 4. write_file pages/admin.venus.tsx (ajustar ao padrão do passo 1) + .module.css (+ .pageLayout.tsx igual ao das outras páginas admin)
 5. edit_file components/AdminNav.tsx: link "Vênus" → /admin/venus
 6. typecheck → corrigir
-7. Conta de administradora da esposa: execute_sql UPDATE users SET role='admin' WHERE email=... (pedir o e-mail)
+7. Conta de administradora da esposa: execute_sql: conferir se existe conta com nataliadarosacarvalho@gmail.com e mudar role para admin (se não existir, pedir para ela se cadastrar no site)
 8. Pendentes de hoje: ajustes do orbe (rotulo z-index, raiz spacing-6), typecheck, checkpoint, publicar após OK.
 
 ## Observações
