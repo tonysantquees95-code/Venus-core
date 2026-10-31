@@ -344,6 +344,24 @@ class Cerebro(
 
         private fun pareceVenus(p: String) = p.length in 4..6 && (p == "venus" || Corretor.distancia(p, "venus") <= 1)
 
+        private val COMANDOS_MUSICA = listOf(
+            Regex("^(?:pausar|pausa|pause|parar|para|pare) (?:a )?musica$") to "pausar",
+            Regex("^(?:continuar|continua|continue|tocar|toca|volta a tocar|voltar a tocar)(?: (?:a )?musica)?$") to "tocar",
+            Regex("^(?:proxima(?: musica)?|(?:passa|passar|pula|pular|pule) (?:a )?musica)$") to "proxima",
+            Regex("^(?:musica anterior|(?:volta|voltar|volte) (?:a )?musica)$") to "anterior",
+            Regex("^(?:aumentar|aumenta|aumente|sobe|subir) (?:o )?volume$") to "aumentar_volume",
+            Regex("^(?:diminuir|diminui|diminua|abaixar|abaixa|abaixe|baixa|baixar) (?:o )?volume$") to "diminuir_volume",
+        )
+
+        /** Comando curto de música ("pausar música", "próxima", "aumenta o volume"), ou null. */
+        fun comandoDeMusica(texto: String): String? {
+            val t = ComandosLocais.normalizar(texto).replace("[unk]", " ").replace(Regex("[^a-z ]"), " ")
+                .replace(Regex("\\s+"), " ").trim()
+            if (t.isBlank() || t.split(" ").size > 4) return null
+            for ((regra, acao) in COMANDOS_MUSICA) if (regra.matches(t)) return acao
+            return null
+        }
+
         private val INTERJEICAO = Regex(
             "^(?:(?:muito|que|bem|super|ah|oh) )?(?:interessante|legal|bacana|massa|top|entendi|certo|ok|okay|beleza|" +
                 "obrigad[oa]|valeu|uau|perfeito|otimo|incrivel|show de bola|que bom|hum+|hm+|ah|entao|tudo bem|ta bom|sei)" +

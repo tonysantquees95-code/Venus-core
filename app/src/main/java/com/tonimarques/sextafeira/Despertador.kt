@@ -35,6 +35,10 @@ class Despertador(
     private val contexto: Context,
     private val aoOuvir: () -> Unit,
     private val aoFalhar: () -> Unit = {},
+    /** Comandos de música sem "Vênus, ativar" (pausar, próxima, volume...). null = desligado. */
+    private val aoComando: ((String) -> Unit)? = null,
+    /** Lido a cada segundo: o usuário pode ligar e desligar nos ajustes. */
+    private val modoMusicaLigado: () -> Boolean = { true },
 ) {
     private val principal = Handler(Looper.getMainLooper())
     private val audio = contexto.getSystemService(AudioManager::class.java)
@@ -170,6 +174,13 @@ class Despertador(
             var piso = 200.0
             var vozAte = 0L
             var analisando = false
+            // Modo música: com algo tocando, só uma lista fechada de comandos (reconhece bem melhor no barulho)
+            var modoMusica = false
+            var proximaChecagem = 0L
+            var candidato: String? = null
+            var repeticoes = 0
+            var esperaAte = 0L
+            var inicioDaFala = 0L
             while (minha == geracao) {
                 val n = gravador.read(bloco, 0, bloco.size)
                 if (n < 0) {
@@ -177,26 +188,81 @@ class Despertador(
                     break
                 }
                 if (n == 0) continue
-                val energia = energia(bloco, n)
                 val agora = SystemClock.elapsedRealtime()
+
+                if (agora >= proximaChecagem) {
+                    proximaChecagem = agora + 1000
+                    val deveSer = aoComando != null && modoMusicaLigado() && audio?.isMusicActive == true
+                    if (deveSer != modoMusica) {
+                        modoMusica = deveSer
+                        reconhecedor?.close()
+                        reconhecedor = if (modoMusica) Recognizer(modelo, TAXA.toFloat(), GRAMATICA_MUSICA) else Recognizer(modelo, TAXA.toFloat())
+                        analisando = false
+                        candidato = null
+                        repeticoes = 0
+                        inicioDaFala = agora
+                    }
+                }
+                val rec = reconhecedor ?: break
+
+                if (modoMusica) {
+                    // Com música o som nunca "para": analisa tudo e confirma o comando por alguns instantes.
+                    val terminou = rec.acceptWaveForm(bloco, n)
+                    val texto = if (terminou) campo(rec.result, "text") else campo(rec.partialResult, "partial")
+                    if (Cerebro.pareceAtivacao(texto)) {
+                        ouviu = true
+                        break
+                    }
+                    val comando = Cerebro.comandoDeMusica(texto)
+                    if (comando != null && agora >= esperaAte) {
+                        if (comando == candidato) repeticoes++ else {
+                            candidato = comando
+                            repeticoes = 1
+                        }
+                        if (terminou || repeticoes >= 3) {
+                            val c = comando
+                            principal.post { aoComando?.invoke(c) }
+                            esperaAte = agora + 1500
+                            candidato = null
+                            repeticoes = 0
+                            rec.reset()
+                            inicioDaFala = agora
+                        }
+                    } else if (comando == null) {
+                        candidato = null
+                        repeticoes = 0
+                    }
+                    if (terminou) inicioDaFala = agora
+                    if (agora - inicioDaFala > 8000) {
+                        rec.reset()
+                        inicioDaFala = agora
+                    }
+                    continue
+                }
+
+                val energia = energia(bloco, n)
                 val temVoz = energia > max(piso * 2.2, LIMIAR_MINIMO)
                 if (temVoz) vozAte = agora + 1200 else piso = piso * 0.97 + energia * 0.03
 
                 if (agora < vozAte) {
                     if (!analisando) {
                         // Inclui o pedacinho antes da voz, para não perder o começo do "Vênus".
-                        for (a in anteriores) reconhecedor.acceptWaveForm(a, a.size)
+                        for (a in anteriores) rec.acceptWaveForm(a, a.size)
                         analisando = true
                     }
-                    val terminou = reconhecedor.acceptWaveForm(bloco, n)
-                    val texto = if (terminou) campo(reconhecedor.result, "text") else campo(reconhecedor.partialResult, "partial")
+                    val terminou = rec.acceptWaveForm(bloco, n)
+                    val texto = if (terminou) campo(rec.result, "text") else campo(rec.partialResult, "partial")
                     if (Cerebro.pareceAtivacao(texto)) {
                         ouviu = true
                         break
                     }
+                    // Comandos de música também funcionam com o som baixo
+                    if (terminou && aoComando != null && modoMusicaLigado() && audio?.isMusicActive == true) {
+                        Cerebro.comandoDeMusica(texto)?.let { c -> principal.post { aoComando?.invoke(c) } }
+                    }
                 } else if (analisando) {
                     analisando = false
-                    if (Cerebro.pareceAtivacao(campo(reconhecedor.finalResult, "text"))) {
+                    if (Cerebro.pareceAtivacao(campo(rec.finalResult, "text"))) {
                         ouviu = true
                         break
                     }
@@ -238,6 +304,18 @@ class Despertador(
     companion object {
         private const val TAXA = 16000
         private const val LIMIAR_MINIMO = 180.0
+
+        /** O que a Vênus espera ouvir quando tem música tocando ("[unk]" = qualquer outra coisa). */
+        val FRASES_MUSICA = listOf(
+            "pausar música", "pausa a música", "pausa música", "parar música", "para a música", "para música",
+            "continuar música", "continua a música", "tocar música", "toca a música", "volta a tocar",
+            "próxima música", "próxima", "passa a música", "pula a música", "pular música",
+            "música anterior", "volta a música", "voltar música",
+            "aumentar volume", "aumenta o volume", "aumentar o volume", "sobe o volume",
+            "diminuir volume", "diminui o volume", "diminuir o volume", "abaixa o volume", "abaixar volume", "baixa o volume",
+            "vênus ativar", "venus ativar", "vênus ativa",
+        )
+        private val GRAMATICA_MUSICA = (FRASES_MUSICA + "[unk]").joinToString(",", "[", "]") { "\"$it\"" }
 
         private val trava = Any()
 

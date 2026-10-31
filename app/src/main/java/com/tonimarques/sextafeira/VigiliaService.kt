@@ -33,7 +33,12 @@ class VigiliaService : Service() {
     private var errosSeguidos = 0
     private var despertador: Despertador? = null
     private var falhasOffline = 0
+    private var gesto: GestoTorcer? = null
     private val tarefa = Runnable { ouvir() }
+    private val prefs by lazy { getSharedPreferences("config", Context.MODE_PRIVATE) }
+
+    private fun escutaLigada() = prefs.getBoolean(PREF_FUNDO, false)
+    private fun gestoLigado() = prefs.getBoolean(PREF_GESTO, false)
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -50,17 +55,28 @@ class VigiliaService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == ACAO_PARAR) {
-            getSharedPreferences("config", Context.MODE_PRIVATE).edit().putBoolean("vigilia_fundo", false).apply()
+            prefs.edit().putBoolean(PREF_FUNDO, false).putBoolean(PREF_GESTO, false).apply()
             stopSelf()
             return START_NOT_STICKY
         }
-        agendar(600)
+        if (!escutaLigada() && !gestoLigado()) {
+            stopSelf()
+            return START_NOT_STICKY
+        }
+        try {
+            entrarEmPrimeiroPlano()
+        } catch (e: Exception) {
+        }
+        atualizarGesto()
+        if (escutaLigada()) agendar(600) else pausar()
         return START_NOT_STICKY
     }
 
     override fun onDestroy() {
         principal.removeCallbacksAndMessages(null)
         despertador?.parar()
+        gesto?.parar()
+        gesto = null
         try {
             reconhecedor?.destroy()
         } catch (e: Exception) {
@@ -88,8 +104,14 @@ class VigiliaService : Service() {
         val notificacao = Notification.Builder(this, CANAL)
             .setSmallIcon(R.drawable.ic_venus_simbolo)
             .setColor(android.graphics.Color.parseColor("#E36BD0"))
-            .setContentTitle("${Marca.nome} está ouvindo")
-            .setContentText("Diga “${Marca.nome}, ativar”")
+            .setContentTitle(if (escutaLigada()) "${Marca.nome} está ouvindo" else "${Marca.nome} está pronta")
+            .setContentText(
+                when {
+                    escutaLigada() && gestoLigado() -> "Diga “${Marca.nome}, ativar” ou torça o pulso 2 vezes"
+                    escutaLigada() -> "Diga “${Marca.nome}, ativar”"
+                    else -> "Torça o pulso 2 vezes para chamar"
+                }
+            )
             .setOngoing(true)
             .setContentIntent(abrir)
             .addAction(Notification.Action.Builder(Icon.createWithResource(this, R.drawable.ic_venus_simbolo), "Desligar", parar).build())
@@ -107,7 +129,28 @@ class VigiliaService : Service() {
         principal.postDelayed(tarefa, atraso)
     }
 
+    // --------------------------------------------------------------- gesto
+    private fun atualizarGesto() {
+        if (gestoLigado()) {
+            if (gesto == null) gesto = GestoTorcer(this) { aoGesto() }.also { if (!it.iniciar()) gesto = null }
+        } else {
+            gesto?.parar()
+            gesto = null
+        }
+    }
+
+    private fun aoGesto() {
+        // Com o app na tela, ele mesmo começa a ouvir; senão abre o pop-up já ouvindo.
+        aoGestoNaTela?.let {
+            it()
+            return
+        }
+        if (pausadoPorTela) return
+        abrirPopup("", ouvirDireto = true)
+    }
+
     private fun ouvir() {
+        if (!escutaLigada()) return
         if (pausadoPorTela || ouvindo || despertador?.ativo == true) return
         // Com a voz offline instalada: microfone aberto direto, sem o ícone piscando.
         if (falhasOffline < 5 && ModeloDeVoz.pronto(this)) {
@@ -121,6 +164,8 @@ class VigiliaService : Service() {
                     falhasOffline++
                     agendar(4000)
                 },
+                aoComando = { acao -> Midia.executar(this, acao) },
+                modoMusicaLigado = { prefs.getBoolean(PREF_MUSICA, true) },
             ).also { despertador = it }
             if (d.iniciar()) return
         }
@@ -155,7 +200,7 @@ class VigiliaService : Service() {
         }
     }
 
-    private fun abrirPopup(resto: String) {
+    private fun abrirPopup(resto: String, ouvirDireto: Boolean = false) {
         pausar()
         errosSeguidos = 0
         if (!Settings.canDrawOverlays(this)) {
@@ -165,7 +210,9 @@ class VigiliaService : Service() {
         }
         val intent = Intent(this, PopupActivity::class.java)
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        if (resto.isBlank()) {
+        if (ouvirDireto) {
+            intent.action = MainActivity.ACAO_OUVIR
+        } else if (resto.isBlank()) {
             intent.action = MainActivity.ACAO_ATIVAR
         } else {
             intent.action = MainActivity.ACAO_PEDIDO
@@ -227,6 +274,13 @@ class VigiliaService : Service() {
         private const val CANAL = "vigilia"
         private const val ID_NOTIFICACAO = 7
         private const val ACAO_PARAR = "com.tonimarques.sextafeira.PARAR_ESCUTA"
+        const val PREF_FUNDO = "vigilia_fundo"
+        const val PREF_GESTO = "gesto_torcer"
+        const val PREF_MUSICA = "modo_musica"
+
+        /** Quando o app está na tela, o gesto chama esta função (ele mesmo começa a ouvir). */
+        @Volatile
+        var aoGestoNaTela: (() -> Unit)? = null
 
         @Volatile
         private var instancia: VigiliaService? = null
