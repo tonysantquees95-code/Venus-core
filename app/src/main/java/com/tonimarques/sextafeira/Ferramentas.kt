@@ -179,21 +179,28 @@ class Ferramentas(private val activity: Activity) {
     // ------------------------------------------------------------- execução
     /** Chamado fora da thread principal; roda a ação na thread principal e espera o resultado. */
     fun executar(nome: String, argumentos: JSONObject): String {
+        if (Looper.myLooper() == Looper.getMainLooper()) return executarSeguro(nome, argumentos)
         val pronto = CountDownLatch(1)
         var resultado = "A ação não respondeu."
         principal.post {
-            resultado = try {
-                executarAqui(nome, argumentos)
-            } catch (e: ActivityNotFoundException) {
-                "Não encontrei nenhum app no celular capaz de fazer isso."
-            } catch (e: SecurityException) {
-                "O Android não deixou fazer isso: ${e.message}"
-            } catch (e: Exception) {
-                "Deu erro ao executar $nome: ${e.message}"
-            }
+            resultado = executarSeguro(nome, argumentos)
             pronto.countDown()
         }
         return if (pronto.await(15, TimeUnit.SECONDS)) resultado else "A ação demorou demais."
+    }
+
+    /** Executa uma ação pedida pelos comandos locais (argumentos em mapa simples). */
+    fun executar(nome: String, argumentos: Map<String, Any>): String =
+        executar(nome, JSONObject(argumentos))
+
+    private fun executarSeguro(nome: String, argumentos: JSONObject): String = try {
+        executarAqui(nome, argumentos)
+    } catch (e: ActivityNotFoundException) {
+        "Não encontrei nenhum app no celular capaz de fazer isso."
+    } catch (e: SecurityException) {
+        "O Android não deixou fazer isso: ${e.message}"
+    } catch (e: Exception) {
+        "Deu erro ao executar $nome: ${e.message}"
     }
 
     private fun executarAqui(nome: String, a: JSONObject): String = when (nome) {
@@ -263,7 +270,7 @@ class Ferramentas(private val activity: Activity) {
 
         if (SPOTIFY in pacotes) {
             val buscaSpotify = Intent(Intent.ACTION_VIEW, Uri.parse("spotify:search:" + Uri.encode(consulta)))
-            if (iniciar(buscaSpotify)) return "Abri a busca por \"$consulta\" no Spotify; o usuário escolhe a faixa."
+            if (iniciar(buscaSpotify)) return "Abri a busca por \"$consulta\" no Spotify; é só escolher a faixa."
         }
 
         activity.startActivity(
@@ -295,7 +302,7 @@ class Ferramentas(private val activity: Activity) {
             "mudo" -> volume(AudioManager.ADJUST_TOGGLE_MUTE)
             else -> return "Ação de mídia desconhecida: $acao."
         }
-        return "Feito: $acao."
+        return NOMES_MIDIA[acao] ?: "Feito."
     }
 
     // ------------------------------------------------------- mensagens/ligação
@@ -305,7 +312,7 @@ class Ferramentas(private val activity: Activity) {
                 .putExtra(Intent.EXTRA_TEXT, mensagem)
             for (pacote in WHATSAPPS) {
                 if (iniciar(Intent(compartilhar).setPackage(pacote))) {
-                    return "Abri o WhatsApp com a mensagem; o usuário escolhe o contato e toca em Enviar."
+                    return "Abri o WhatsApp com a mensagem: escolha o contato e toque em Enviar."
                 }
             }
             return "O WhatsApp não está instalado."
@@ -317,7 +324,7 @@ class Ferramentas(private val activity: Activity) {
         val uri = Uri.parse("https://api.whatsapp.com/send?phone=$internacional&text=" + Uri.encode(mensagem))
         for (pacote in WHATSAPPS) {
             if (iniciar(Intent(Intent.ACTION_VIEW, uri).setPackage(pacote))) {
-                return "Deixei a mensagem para ${achado.nome} pronta no WhatsApp; falta o usuário tocar em Enviar."
+                return "Mensagem para ${achado.nome} pronta no WhatsApp. Toque em Enviar."
             }
         }
         return "O WhatsApp não está instalado."
@@ -330,14 +337,14 @@ class Ferramentas(private val activity: Activity) {
             Intent(Intent.ACTION_SENDTO, Uri.parse("smsto:" + Uri.encode(numero)))
                 .putExtra("sms_body", mensagem)
         )
-        return "SMS para ${achado.nome} pronto; falta o usuário tocar em Enviar."
+        return "SMS para ${achado.nome} pronto. Toque em Enviar."
     }
 
     private fun ligar(contato: String): String {
         val achado = resolverContato(contato)
         val numero = achado.numero ?: return achado.aviso
         activity.startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:" + Uri.encode(numero))))
-        return "Discador aberto com o número de ${achado.nome}; falta o usuário tocar para ligar."
+        return "Discador aberto com o número de ${achado.nome}. Toque para ligar."
     }
 
     private class Contato(val nome: String, val numero: String?, val aviso: String)
@@ -353,7 +360,7 @@ class Ferramentas(private val activity: Activity) {
             activity.requestPermissions(arrayOf(Manifest.permission.READ_CONTACTS), PEDIDO_CONTATOS)
             return Contato(
                 contato, null,
-                "Pedi permissão para ler os contatos. Peça ao usuário para tocar em Permitir e repetir o pedido."
+                "Preciso de permissão para ler seus contatos: toque em Permitir e repita o pedido."
             )
         }
 
@@ -384,7 +391,7 @@ class Ferramentas(private val activity: Activity) {
             return Contato(unico.key, unico.value, "")
         }
         val nomes = encontrados.keys.take(5).joinToString(", ")
-        return Contato(contato, null, "Achei mais de um contato: $nomes. Pergunte ao usuário qual deles.")
+        return Contato(contato, null, "Achei mais de um contato: $nomes. Diga o nome completo.")
     }
 
     private fun numeroInternacional(numero: String): String {
@@ -468,7 +475,7 @@ class Ferramentas(private val activity: Activity) {
             else -> Settings.ACTION_SETTINGS
         }
         if (!iniciar(Intent(acao))) activity.startActivity(Intent(Settings.ACTION_SETTINGS))
-        return "Abri as configurações de $tipo; o usuário faz a mudança com um toque."
+        return "Abri as configurações de ${NOMES_CONFIG[tipo] ?: tipo}. É só tocar para mudar."
     }
 
     private fun iniciar(intent: Intent): Boolean = try {
@@ -489,6 +496,16 @@ class Ferramentas(private val activity: Activity) {
         private const val YOUTUBE_MUSIC = "com.google.android.apps.youtube.music"
         private const val DEEZER = "deezer.android.app"
         private val WHATSAPPS = listOf("com.whatsapp", "com.whatsapp.w4b")
+        private val NOMES_MIDIA = mapOf(
+            "tocar_pausar" to "Pronto.", "tocar" to "Tocando.", "pausar" to "Pausado.",
+            "proxima" to "Próxima música.", "anterior" to "Música anterior.",
+            "aumentar_volume" to "Volume aumentado.", "diminuir_volume" to "Volume diminuído.",
+            "mudo" to "Som no mudo (repita para tirar).",
+        )
+        private val NOMES_CONFIG = mapOf(
+            "wifi" to "Wi-Fi", "internet" to "internet", "nao_perturbe" to "Não perturbe",
+            "localizacao" to "localização", "aplicativos" to "aplicativos", "geral" to "do celular",
+        )
         private val NOMES = mapOf(SPOTIFY to "Spotify", YOUTUBE_MUSIC to "YouTube Music", DEEZER to "Deezer")
 
         private val APELIDOS = mapOf(
