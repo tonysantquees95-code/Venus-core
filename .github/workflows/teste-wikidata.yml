@@ -10,13 +10,31 @@ jobs:
   teste:
     runs-on: ubuntu-latest
     steps:
-      - name: API da loja
+      - name: Endpoints do painel da loja
         run: |
           S=https://desejo-de-intimidade.floot.app
-          r=$(curl -s -m 30 "$S/_api/catalog")
-          echo "::notice::catalog $(echo "$r" | head -c 400 | tr '\n' ' ')"
-          echo "::notice::catalog meta $(echo "$r" | jq -c '.meta' | head -c 300)"
-          r=$(curl -s -m 30 -i -X POST "$S/_api/auth/login_with_password" -H 'Content-Type: application/json' -d '{"json":{"identifier":"teste@teste.invalid","password":"x"}}')
-          echo "::notice::login $(echo "$r" | tr '\r\n' '  ' | head -c 500)"
-          r=$(curl -s -m 30 -i "$S/_api/admin/orders")
-          echo "::notice::orders $(echo "$r" | tr '\r\n' '  ' | head -c 400)"
+          mkdir -p out js
+          curl -s -m 30 "$S/" > out/index.html
+          curl -s -m 30 "$S/admin" > out/admin.html
+          # baixa os scripts e, em seguida, os módulos que eles importam (2 níveis)
+          grep -ohE '(src|href)="[^"]+\.js"' out/*.html | sed -E 's/.*="([^"]+)"/\1/' | sort -u > lista.txt
+          for n in 1 2 3; do
+            while read -r u; do
+              f="js/$(echo "$u" | tr '/' '_')"
+              [ -f "$f" ] && continue
+              case "$u" in http*) url="$u";; /*) url="$S$u";; *) url="$S/$u";; esac
+              curl -s -m 30 "$url" > "$f"
+            done < lista.txt
+            grep -ohE '"(\./|/assets/|/)[A-Za-z0-9_./-]+\.js"' js/* | tr -d '"' | sed -E 's#^\./#/assets/#' | sort -u >> lista.txt
+            sort -u lista.txt -o lista.txt
+          done
+          ls js | wc -l > out/qtd.txt
+          grep -ohE '_api/[A-Za-z0-9_/-]+' js/* | sort | uniq -c > out/endpoints.txt
+          for f in js/*; do
+            grep -oE '.{0,1500}_api/admin/[A-Za-z0-9_/-]+.{0,300}' "$f" >> out/contexto.txt || true
+          done
+          cat out/endpoints.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: endpoints
+          path: out/
