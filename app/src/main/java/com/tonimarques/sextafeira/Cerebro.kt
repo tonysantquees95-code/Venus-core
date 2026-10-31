@@ -344,6 +344,47 @@ class Cerebro(
 
         private fun pareceVenus(p: String) = p.length in 4..6 && (p == "venus" || Corretor.distancia(p, "venus") <= 1)
 
+        private val INTERJEICAO = Regex(
+            "^(?:(?:muito|que|bem|super|ah|oh) )?(?:interessante|legal|bacana|massa|top|entendi|certo|ok|okay|beleza|" +
+                "obrigad[oa]|valeu|uau|perfeito|otimo|incrivel|show de bola|que bom|hum+|hm+|ah|entao|tudo bem|ta bom|sei)" +
+                "(?:[,.!;]+\\s*|\\s+)(?:(?:venus|sexta[ -]feira)[,.!]?\\s+)?(?:(?:e|agora|entao|mas|tambem)\\s+)?"
+        )
+        private val CORRECAO = Regex(
+            "^(?:nao|na verdade|errado|negativo)[,.!]?\\s+(?:(?:venus|sexta[ -]feira)[,.!]?\\s+)?(?:eu )?(?:quis|queria|quero|to querendo|estou querendo) " +
+                "(?:perguntar|dizer|saber|falar)(?: que| se| sobre)?[,: ]+"
+        )
+        private val VOCATIVO_COM_VIRGULA = Regex(",\\s*(?:venus|sexta[ -]feira)\\s*(?:,|(?=[?!.]|$))")
+        private val E_INICIAL = Regex("^e (?=(?:qual|quais|quanto|quantos|quantas|como|onde|quando|quem|o que|por que|me |a |o ))")
+
+        /**
+         * Tira da frase o que é só conversa, para entender o pedido:
+         * "muito interessante Vênus e qual é a menor cidade da Itália" → "qual é a menor cidade da Itália";
+         * "não, eu quis perguntar qual é..." → "qual é..."; "abre o WhatsApp, Vênus" → "abre o WhatsApp".
+         * A normalização mantém o tamanho do texto, então os cortes valem para o original (com acentos).
+         */
+        fun limparFala(texto: String): String {
+            var t = texto.trim()
+            repeat(3) {
+                val n = ComandosLocais.normalizar(t)
+                val m = INTERJEICAO.find(n)?.takeIf { it.range.first == 0 }
+                    ?: CORRECAO.find(n)?.takeIf { it.range.first == 0 }
+                if (m != null) {
+                    val sinal = m.value.any { it in ",.!;" } || Regex("venus|sexta|\\b(?:e|agora|entao|mas|tambem)\\s*$").containsMatchIn(m.value) ||
+                        CORRECAO.matches(m.value)
+                    val resto = t.substring(m.value.length).trim()
+                    if (sinal && resto.split(" ").count { it.isNotBlank() } >= 2) {
+                        t = resto
+                        return@repeat
+                    }
+                }
+                val e = E_INICIAL.find(ComandosLocais.normalizar(t))
+                if (e != null) t = t.substring(e.value.length).trim()
+            }
+            val n = ComandosLocais.normalizar(t)
+            VOCATIVO_COM_VIRGULA.find(n)?.let { m -> t = (t.substring(0, m.range.first) + " " + t.substring(m.range.last + 1)).replace(Regex("\\s+"), " ").trim() }
+            return t.ifBlank { texto.trim() }
+        }
+
         /** Transforma uma frase em conceitos: sinônimos unificados, palavras sem importância removidas. */
         fun conceitos(texto: String): Set<String> {
             var s = " " + ComandosLocais.normalizar(texto)

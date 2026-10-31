@@ -13,6 +13,7 @@ object Topicos {
         "abrir_app", "abrir_camera", "abrir_configuracao", "lanterna", "nivel_bateria" -> "Celular"
         "salvar_memoria" -> "Sobre mim"
         "traduzir", "dicionario", "ortografia" -> "Português e idiomas"
+        "distancia" -> "Lugares e rotas"
         "consultar_cep", "buscar_cep", "consultar_cnpj", "consultar_ddd", "feriados" -> "Consultas"
         "cotacao_moeda" -> "Finanças"
         "noticias", "acompanhar_tema", "atualizar_noticias" -> "Notícias"

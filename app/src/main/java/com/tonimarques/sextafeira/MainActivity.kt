@@ -401,13 +401,16 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
             pedido = resto
         }
 
+        // "muito interessante Vênus e qual é..." → "qual é..."
+        val original = pedido
+        pedido = Cerebro.limparFala(pedido)
         val decisao = cerebro.responder(pedido)
         topicoAtual = when (decisao) {
             is Cerebro.Decisao.Memoria -> "Sobre mim"
             is Cerebro.Decisao.Executar -> Topicos.classificar(pedido, decisao.nome)
             else -> Topicos.classificar(pedido)
         }
-        adicionarMensagem(pedido, true)
+        adicionarMensagem(original, true)
         cerebro.ultimaCorrecao?.let { mostrarNota("Entendi: “$it”") }
         if (decisao is Cerebro.Decisao.Incerto) {
             responderPergunta(pedido)
@@ -659,7 +662,9 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         if (decisao is Cerebro.Decisao.Perguntar) {
             mostrarDecisao(decisao, pedido)
         } else {
-            responder("$motivo ${(decisao as? Cerebro.Decisao.Responder)?.texto ?: ""}".trim())
+            val extra = (decisao as? Cerebro.Decisao.Responder)?.texto?.takeIf { it !in BancoDeFrases.NAO_ENTENDI }
+                ?: "Pode perguntar de outro jeito, ou de novo daqui a pouco?"
+            responder("$motivo $extra".trim())
         }
     }
 
@@ -769,7 +774,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
                     mostrarFontes(ferramentas.ultimasFontes)
                 } else {
                     // Gemini fora do ar: a Vênus pesquisa sozinha antes de desistir.
-                    pesquisarSozinha(pedido, amplo = true, depoisIA = false, motivo = "A inteligência artificial está indisponível agora.")
+                    pesquisarSozinha(pedido, amplo = true, depoisIA = false, motivo = "Essa eu ainda não sei sozinha, e o Gemini não respondeu agora.")
                 }
             }
         }.start()

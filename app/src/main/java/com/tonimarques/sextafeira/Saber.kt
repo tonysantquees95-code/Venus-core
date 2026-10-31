@@ -182,6 +182,29 @@ object Saber {
             val nome = NOMES_ESTADOS[sigla] ?: return null
             return "$sigla é a sigla de $nome."
         }
+        Regex("\\b(menor|menos populosa|maior|mais populosa) cidade (?:d[oa] |de )(brasil|italia|portugal)\\b|\\bcidade (menos populosa|mais populosa|menor|maior) (?:d[oa] |de )(brasil|italia|portugal)\\b").find(t)?.let { m ->
+            val tipo = m.groupValues[1].ifBlank { m.groupValues[3] }
+            val pais = m.groupValues[2].ifBlank { m.groupValues[4] }
+            val menor = tipo.startsWith("men")
+            return when (pais) {
+                "brasil" -> if (menor) {
+                    "Em população, a menor cidade do Brasil é Serra da Saudade (MG), com cerca de 833 habitantes (Censo 2022). " +
+                        "Em área, a menor é Santa Cruz de Minas (MG), com uns 3,5 km²."
+                } else {
+                    "A maior cidade do Brasil é São Paulo, com cerca de 11,5 milhões de habitantes (Censo 2022). Depois vêm Rio de Janeiro (6,2 milhões) e Brasília (2,8 milhões)."
+                }
+                "italia" -> if (menor) {
+                    "A menor cidade (comuna) da Itália em população é Morterone, na Lombardia, com cerca de 30 habitantes."
+                } else {
+                    "A maior cidade da Itália é Roma, com cerca de 2,7 milhões de habitantes. Depois vêm Milão e Nápoles."
+                }
+                else -> if (menor) {
+                    "O menor município de Portugal em população é o Corvo, nos Açores, com cerca de 430 habitantes."
+                } else {
+                    "A maior cidade de Portugal é Lisboa, com cerca de 545 mil habitantes (cerca de 2,9 milhões na área metropolitana). Depois vem o Porto."
+                }
+            }
+        }
         if (Regex("\\bquantos estados (?:tem|ha|existem|possui) (?:no |o )?brasil\\b").containsMatchIn(t)) {
             return "O Brasil tem 26 estados e o Distrito Federal, somando 27 unidades federativas."
         }

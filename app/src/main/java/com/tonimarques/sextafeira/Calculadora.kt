@@ -549,6 +549,23 @@ object Calculadora {
         return "${numero(valor)} ${de.nome} dão ${numero(arredondado)} ${para.nome}."
     }
 
+    // ============================================================== distância
+    /** Distância em linha reta entre dois pontos (fórmula de haversine), em km. */
+    fun distanciaKm(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Double {
+        val r = 6371.0
+        val dLat = Math.toRadians(lat2 - lat1)
+        val dLon = Math.toRadians(lon2 - lon1)
+        val a = Math.sin(dLat / 2).pow(2) + Math.cos(Math.toRadians(lat1)) * Math.cos(Math.toRadians(lat2)) * Math.sin(dLon / 2).pow(2)
+        return 2 * r * Math.asin(sqrt(a))
+    }
+
+    fun fraseDistancia(origem: String, destino: String, km: Double): String {
+        val arredondado = if (km >= 100) (km / 10).roundToLong() * 10.0 else (km * 10).roundToLong() / 10.0
+        val de = if (origem.isBlank()) "Daqui" else "De $origem"
+        val estrada = if (km >= 5) " De carro, o caminho costuma ser de 20% a 40% maior. Se quiser a rota, diga: me leva para $destino." else ""
+        return "$de até $destino são cerca de ${numero(arredondado)} km em linha reta.$estrada"
+    }
+
     // ================================================================= datas
     private val QUANTOS_DIAS = Regex("^(?:quantos dias|quanto tempo) (?:faltam?|falta) (?:para|pra|ate) (?:o |a |os |as )?(.+)$")
     private val QUANDO_E = Regex(
