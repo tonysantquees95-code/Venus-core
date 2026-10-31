@@ -46,6 +46,7 @@ object ComandosLocais {
         if (!ehRecado) cotacao(c)?.let { return it }
         acompanhar(f)?.let { return it }
         noticias(f)?.let { return it }
+        loja(f)?.let { return it }
         perto(f)?.let { return it }
         retomar(c)?.let { return it }
         // "como chego no shopping" é rota, não pergunta aberta
@@ -314,6 +315,29 @@ object ComandosLocais {
             else -> return null
         }
         return Resultado.Acao("abrir_configuracao", mapOf("tipo" to tipo))
+    }
+
+    /** Perguntas sobre a loja: vendas, pedidos, estoque. */
+    private fun loja(f: Frase): Resultado? {
+        val c = f.chave
+        LOJA_VENDAS.find(c)?.let {
+            val periodo = when {
+                Regex("\\bontem\\b").containsMatchIn(c) -> "ontem"
+                Regex("\\b(semana|7 dias|sete dias)\\b").containsMatchIn(c) -> "semana"
+                Regex("\\b(mes|mensal)\\b").containsMatchIn(c) -> "mes"
+                else -> "hoje"
+            }
+            return Resultado.Acao("loja_resumo", mapOf("periodo" to periodo))
+        }
+        if (LOJA_PEDIDOS.containsMatchIn(c)) return Resultado.Acao("loja_pedidos", emptyMap())
+        if (LOJA_ACABANDO.containsMatchIn(c)) return Resultado.Acao("loja_acabando", emptyMap())
+        for (regra in LOJA_ESTOQUE) {
+            val m = regra.matchEntire(c) ?: continue
+            val produto = f.trecho(m.groups[1]).orEmpty().trim()
+                .replace(Regex("^(?i)(o|a|os|as|do|da|dos|das|de)\\s+"), "").trim()
+            if (produto.length >= 3) return Resultado.Acao("loja_estoque", mapOf("produto" to produto))
+        }
+        return null
     }
 
     /** "Dá play no Deezer", "toca a última música", "continua de onde parou": retoma, não procura música nova. */
@@ -587,6 +611,26 @@ object ComandosLocais {
     private val ANTERIOR = Regex(
         "^(?:(?:musica|faixa|cancao) anterior|anterior|volta(?:r)?(?:\\s+(?:a|pra|para))?(?:\\s+(?:musica|faixa))?" +
             "(?:\\s+anterior)?)$"
+    )
+    private val LOJA_VENDAS = Regex(
+        "\\b(?:como (?:foram|estao|tao|vao|anda|andam) as vendas|quanto (?:eu )?(?:vendi|faturei|a loja vendeu|a loja faturou|vendemos|faturamos)|" +
+            "vendas (?:de |d[ao] )?(?:hoje|ontem|semana|mes|essa semana|esse mes|desta semana|deste mes)|resumo (?:da loja|das vendas|do dia)|" +
+            "como (?:esta|ta|foi) a loja|faturamento (?:de |d[ao] )?(?:hoje|ontem|semana|mes)|quantas vendas)\\b"
+    )
+    private val LOJA_PEDIDOS = Regex(
+        "\\b(?:tem (?:algum )?pedido(?:s)? novo|tem pedido|chegou (?:algum )?pedido|pedidos? (?:novos?|pendentes?|para (?:separar|enviar|mandar)|pra (?:separar|enviar|mandar)|de hoje|em aberto)|" +
+            "(?:quais|que) pedidos (?:eu )?(?:tenho|preciso|tenho que|falta)|o que (?:eu )?(?:tenho|preciso) (?:que |para |pra )?(?:enviar|separar|mandar))\\b"
+    )
+    private val LOJA_ACABANDO = Regex(
+        "\\b(?:(?:quais|que) produtos (?:estao|tao|que estao|que tao) (?:acabando|esgotados?|em falta|com (?:o )?estoque baixo|no fim)|" +
+            "o que (?:esta|ta) (?:acabando|esgotado|em falta)(?: na loja| no estoque)?|produtos? (?:esgotados?|acabando|em falta)|estoque baixo|" +
+            "o que (?:eu )?(?:preciso|tenho que) (?:repor|comprar)(?: para a loja| pra loja)?)\\b"
+    )
+    private val LOJA_ESTOQUE = listOf(
+        Regex("^(?:quanto|quantos|quantas) (?:tem|tenho|ha|ainda tem|ainda tenho|sobrou|sobraram|resta|restam) (?:de |do |da |no |em )?estoque (?:de |do |da |dos |das )(.+)$"),
+        Regex("^(?:qual (?:e |eh )?o )?estoque (?:de |do |da |dos |das )(.+)$"),
+        Regex("^(?:quantos|quantas) (.+?) (?:eu )?(?:tem|tenho|ainda tenho|ainda tem|sobraram|restam|ha)(?: (?:no|em) estoque| na loja)?$"),
+        Regex("^(?:tem|ainda tem|tenho|ainda tenho) (.+?) (?:no|em) estoque$"),
     )
     private val APP_MUSICA = "(?: (?:no|na|pelo|pela) (spotify|youtube music|youtube|deezer|amazon music|apple music))?"
     private val RETOMAR = listOf(

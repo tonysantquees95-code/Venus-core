@@ -1404,6 +1404,14 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
                 )
             ),
             TelaDeAjustes.Secao(
+                "Loja Desejo de Intimidade", listOf(
+                    TelaDeAjustes.Ajuste("Conectar à loja", {
+                        ferramentas.loja.email?.let { "Conectada como $it. Pergunte: como foram as vendas hoje, tem pedido novo, o que está acabando. Toque para desconectar." }
+                            ?: "Entre com o login de administrador do site para a $n consultar vendas, pedidos e estoque. A senha fica criptografada só no celular."
+                    }) { conectarLoja() },
+                )
+            ),
+            TelaDeAjustes.Secao(
                 "Inteligência", listOf(
                     item("Modo independente", {
                         "Responde só com os próprios recursos (comandos, pesquisa e notícias), sem usar o Gemini."
@@ -1799,6 +1807,61 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
                 agendarVigilia(500)
             }
         }.start()
+    }
+
+    private fun conectarLoja() {
+        val loja = ferramentas.loja
+        if (loja.conectada) {
+            AlertDialog.Builder(this)
+                .setTitle("Desconectar a loja?")
+                .setMessage("A ${Marca.nome} deixa de consultar vendas, pedidos e estoque até você conectar de novo.")
+                .setPositiveButton("Desconectar") { _, _ ->
+                    loja.desconectar()
+                    ajustes?.atualizar()
+                }
+                .setNegativeButton("Cancelar", null)
+                .show()
+            return
+        }
+        val caixa = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(8), dp(4), dp(8), 0)
+        }
+        val email = campoDeDialogo("", "E-mail do administrador").apply {
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS
+        }
+        val senha = campoDeDialogo("", "Senha").apply {
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
+        }
+        caixa.addView(email)
+        caixa.addView(senha)
+        AlertDialog.Builder(this)
+            .setTitle("Conectar à loja")
+            .setMessage("Use o mesmo login do painel do site (conta de administrador).")
+            .setView(caixa)
+            .setPositiveButton("Conectar") { _, _ ->
+                val e = email.text.toString().trim()
+                val s = senha.text.toString()
+                if (e.isBlank() || s.isBlank()) {
+                    Toast.makeText(this, "Preencha o e-mail e a senha.", Toast.LENGTH_SHORT).show()
+                    return@setPositiveButton
+                }
+                Toast.makeText(this, "Conectando…", Toast.LENGTH_SHORT).show()
+                Thread {
+                    val erro = loja.conectar(e, s)
+                    runOnUiThread {
+                        ajustes?.atualizar()
+                        if (erro == null) {
+                            Toast.makeText(this, "Loja conectada!", Toast.LENGTH_SHORT).show()
+                            responder("Loja conectada! Pode perguntar: como foram as vendas hoje, tem pedido novo, o que está acabando, ou quanto tem de estoque de um produto.")
+                        } else {
+                            Toast.makeText(this, erro, Toast.LENGTH_LONG).show()
+                        }
+                    }
+                }.start()
+            }
+            .setNegativeButton("Cancelar", null)
+            .show()
     }
 
     private fun pedirChave() {
