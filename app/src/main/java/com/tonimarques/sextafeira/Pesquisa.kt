@@ -161,11 +161,23 @@ object Pesquisa {
         val a = ComandosLocais.normalizar(tema)
         var pontos = 0
         for (k in chaves) {
-            val raiz = if (k.length >= 6) k.take(k.length - 2) else k
+            val raiz = raiz(k)
             if (Regex("\\b${Regex.escape(raiz)}").containsMatchIn(t)) pontos += 2
             if (a.contains(raiz)) pontos += 1
         }
         return pontos
+    }
+
+    private val SUFIXOS = listOf(
+        "amentos", "imentos", "amento", "imento", "ados", "adas", "idos", "idas", "ando", "endo", "indo",
+        "ares", "eres", "oes", "aes", "ado", "ada", "ido", "ida", "es", "s",
+    )
+
+    /** Raiz simples de uma palavra: "lançados" e "lançamento" → "lanc"; "celulares" → "celul". */
+    fun raiz(palavra: String): String {
+        val p = ComandosLocais.normalizar(palavra)
+        for (s in SUFIXOS) if (p.endsWith(s) && p.length - s.length >= 4) return p.dropLast(s.length)
+        return p
     }
 
     /**
