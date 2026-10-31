@@ -97,7 +97,7 @@ class Conhecimento(private val memoria: Memoria) {
         ).use { c ->
             while (c.moveToNext()) {
                 val pontos = Pesquisa.pontuar(chaves, c.getString(1), c.getString(0))
-                if (pontos >= 2) candidatas += pontos to Pesquisa.Noticia(c.getString(1), c.getString(2), c.getString(3), c.getLong(4))
+                if (pontos >= 2 && Pesquisa.relevante(chaves, c.getString(1), c.getString(0))) candidatas += pontos to Pesquisa.Noticia(c.getString(1), c.getString(2), c.getString(3), c.getLong(4))
             }
         }
         return candidatas.sortedWith(compareByDescending<Pair<Int, Pesquisa.Noticia>> { it.first }.thenByDescending { it.second.data })

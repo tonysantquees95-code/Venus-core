@@ -176,6 +176,18 @@ object ComandosLocais {
         if (Regex("\\bcep\\b").containsMatchIn(c) && digitos.length == 8) {
             return Resultado.Acao("consultar_cep", mapOf("cep" to digitos))
         }
+        // CEP pelo endereço: "qual o CEP da Rua X em Porto Alegre"
+        if (digitos.length != 8) {
+            for (regra in CEP_ENDERECO) {
+                val m = regra.matchEntire(c) ?: continue
+                val rua = f.trecho(m.groups[1]).orEmpty()
+                val cidade = f.trecho(m.groups[2]).orEmpty()
+                val estado = (if (m.groups.size > 3) f.trecho(m.groups[3]) else null).orEmpty()
+                if (rua.length >= 3 && cidade.length >= 2) {
+                    return Resultado.Acao("buscar_cep", mapOf("logradouro" to rua, "cidade" to cidade, "estado" to estado))
+                }
+            }
+        }
         if (Regex("\\bcnpj\\b").containsMatchIn(c) && digitos.length == 14) {
             return Resultado.Acao("consultar_cnpj", mapOf("cnpj" to digitos))
         }
@@ -402,6 +414,11 @@ object ComandosLocais {
     private val PARAR_ACOMPANHAR = Regex(
         "^(?:para|pare|parar|deixa|deixe) de (?:acompanhar|seguir|monitorar)(?:\\s+(?:as|os))?" +
             "(?:\\s+(?:noticias|novidades))?(?:\\s+(?:de|do|da|dos|das|sobre|em))?\\s+(.+)$"
+    )
+    private val CEP_INICIO = "^(?:qual (?:e |eh )?(?:o )?|me (?:da|de|diz|diga|fala|passa) o |sabe o |descobre o |procura o |busca o |)cep d[aoe]s? "
+    private val CEP_ENDERECO = listOf(
+        Regex("$CEP_INICIO(.+) em (.+?)(?:,? (?:no |na |em )?(ac|al|ap|am|ba|ce|df|es|go|ma|mt|ms|mg|pa|pb|pr|pe|pi|rj|rn|rs|ro|rr|sc|sp|se|to))?$"),
+        Regex("$CEP_INICIO(.+),? (?:de|na cidade de) ([a-z ]+?)(?:,? (ac|al|ap|am|ba|ce|df|es|go|ma|mt|ms|mg|pa|pb|pr|pe|pi|rj|rn|rs|ro|rr|sc|sp|se|to))?$"),
     )
     private val FERIADO = Regex(
         "\\b(proximo feriado|proximos feriados|quando (?:e|eh|vai ser|sera) o (?:proximo )?feriado|tem feriado|" +

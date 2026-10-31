@@ -121,6 +121,8 @@ object Pesquisa {
         )
         val titulo = json.optJSONObject("query")?.optJSONArray("search")?.optJSONObject(0)?.optString("title").orEmpty()
         if (titulo.isBlank()) return null
+        // Só aceita um artigo que tenha a ver com a pergunta (evita respostas aleatórias).
+        if (!tituloCombina(palavrasChave(pergunta), titulo)) return null
         return Web.resumoWikipedia(titulo)
     }
 
@@ -153,6 +155,33 @@ object Pesquisa {
     fun ehPesquisavel(pergunta: String): Boolean {
         val c = ComandosLocais.normalizar(pergunta)
         return Web.assuntoEnciclopedico(pergunta) != null || NOVIDADE.containsMatchIn(c) || Fatos.entende(pergunta)
+    }
+
+    /** O título tem pelo menos uma palavra importante da pergunta? */
+    fun tituloCombina(chaves: List<String>, titulo: String): Boolean {
+        val t = ComandosLocais.normalizar(titulo)
+        return chaves.filter { it.length >= 3 && it.any(Char::isLetter) }
+            .any { Regex("\\b${Regex.escape(raiz(it))}").containsMatchIn(t) }
+    }
+
+    /**
+     * Uma notícia só serve se cobrir a maior parte da pergunta (título ou assunto)
+     * e tiver pelo menos uma palavra no título. Evita "eleições no Brasil" → notícia de e-commerce no Brasil.
+     */
+    fun relevante(chaves: List<String>, titulo: String, tema: String): Boolean {
+        if (chaves.isEmpty()) return false
+        val t = ComandosLocais.normalizar(titulo)
+        val a = ComandosLocais.normalizar(tema)
+        var noTitulo = 0
+        var cobertas = 0
+        for (k in chaves) {
+            val r = raiz(k)
+            val tit = Regex("\\b${Regex.escape(r)}").containsMatchIn(t)
+            if (tit) noTitulo++
+            if (tit || a.contains(r)) cobertas++
+        }
+        val minimo = Math.ceil(chaves.size * 0.6).toInt().coerceAtLeast(1)
+        return noTitulo >= 1 && cobertas >= minimo
     }
 
     /** Pontuação de uma notícia guardada para uma pergunta (palavras em comum no título e no assunto). */
