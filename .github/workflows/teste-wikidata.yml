@@ -10,21 +10,13 @@ jobs:
   teste:
     runs-on: ubuntu-latest
     steps:
-      - name: Consultas
+      - name: API da loja
         run: |
-          q() {
-            local nome="$1"; local consulta="$2"
-            local ini=$(date +%s%N)
-            local r=$(curl -s -m 70 -G 'https://query.wikidata.org/sparql' -H 'Accept: application/sparql-results+json' -H 'User-Agent: VenusTeste/1.0' --data-urlencode "query=$consulta")
-            local fim=$(date +%s%N)
-            local ms=$(( (fim-ini)/1000000 ))
-            local res=$(echo "$r" | jq -r '[.results.bindings[] | ((.cLabel.value // "?") + "=" + (.p.value // "?"))] | join("; ")' 2>/dev/null || echo "ERRO $(echo "$r" | head -c 120)")
-            echo "::notice::$nome ${ms}ms: $res"
-          }
-          for pais in Q38 Q155 Q45 Q30; do
-            q "classe1-$pais-ASC" "SELECT ?c ?cLabel (MAX(?pop) AS ?p) WHERE { ?c wdt:P17 wd:$pais; wdt:P31 ?k; wdt:P1082 ?pop. ?k wdt:P279 wd:Q15284. FILTER(?pop > 0) SERVICE wikibase:label { bd:serviceParam wikibase:language \"pt-br,pt,en\". ?c rdfs:label ?cLabel. } } GROUP BY ?c ?cLabel ORDER BY ASC(?p) LIMIT 3"
-            q "classe2-$pais-ASC" "SELECT ?c ?cLabel (MAX(?pop) AS ?p) WHERE { ?c wdt:P17 wd:$pais; wdt:P31 ?k; wdt:P1082 ?pop. ?k wdt:P279/wdt:P279? wd:Q15284. FILTER(?pop > 0) SERVICE wikibase:label { bd:serviceParam wikibase:language \"pt-br,pt,en\". ?c rdfs:label ?cLabel. } } GROUP BY ?c ?cLabel ORDER BY ASC(?p) LIMIT 3"
-            q "cidade-$pais-DESC" "SELECT ?c ?cLabel (MAX(?pop) AS ?p) WHERE { ?c wdt:P17 wd:$pais; wdt:P31/wdt:P279* wd:Q515; wdt:P1082 ?pop. MINUS { ?c wdt:P31 wd:Q1907114 } SERVICE wikibase:label { bd:serviceParam wikibase:language \"pt-br,pt,en\". ?c rdfs:label ?cLabel. } } GROUP BY ?c ?cLabel ORDER BY DESC(?p) LIMIT 3"
-          done
-          q "direta-Q747074" "SELECT ?c ?cLabel (MAX(?pop) AS ?p) WHERE { ?c wdt:P31 wd:Q747074; wdt:P1082 ?pop. FILTER(?pop > 0) SERVICE wikibase:label { bd:serviceParam wikibase:language \"pt-br,pt,en\". ?c rdfs:label ?cLabel. } } GROUP BY ?c ?cLabel ORDER BY ASC(?p) LIMIT 3"
-          q "rs-DESC" "SELECT ?c ?cLabel (MAX(?pop) AS ?p) WHERE { ?c wdt:P131 wd:Q40030; wdt:P31 wd:Q3184121; wdt:P1082 ?pop. SERVICE wikibase:label { bd:serviceParam wikibase:language \"pt-br,pt,en\". ?c rdfs:label ?cLabel. } } GROUP BY ?c ?cLabel ORDER BY DESC(?p) LIMIT 3"
+          S=https://desejo-de-intimidade.floot.app
+          r=$(curl -s -m 30 "$S/_api/catalog")
+          echo "::notice::catalog $(echo "$r" | head -c 400 | tr '\n' ' ')"
+          echo "::notice::catalog meta $(echo "$r" | jq -c '.meta' | head -c 300)"
+          r=$(curl -s -m 30 -i -X POST "$S/_api/auth/login_with_password" -H 'Content-Type: application/json' -d '{"json":{"identifier":"teste@teste.invalid","password":"x"}}')
+          echo "::notice::login $(echo "$r" | tr '\r\n' '  ' | head -c 500)"
+          r=$(curl -s -m 30 -i "$S/_api/admin/orders")
+          echo "::notice::orders $(echo "$r" | tr '\r\n' '  ' | head -c 400)"
