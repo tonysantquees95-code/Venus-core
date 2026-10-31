@@ -29,7 +29,7 @@ jobs:
       - name: Testar os comandos locais
         run: |
           set -o pipefail
-          gradle testSextaDebugUnitTest testVenusDebugUnitTest --no-daemon 2>&1 | tee build.log
+          gradle testDebugUnitTest --no-daemon 2>&1 | tee build.log
 
       - name: Compilar o APK
         run: |
@@ -48,18 +48,14 @@ jobs:
           grep -E "Could not|What went wrong|> |Caused by|Required by|Searched in" build.log | grep -v "^> Task" | head -n 40 |
             while read -r linha; do echo "::error::$linha"; done || true
 
-      - name: Renomear os APKs
-        run: |
-          cp app/build/outputs/apk/sexta/release/app-sexta-release.apk SextaFeira.apk
-          cp app/build/outputs/apk/venus/release/app-venus-release.apk Venus.apk
+      - name: Renomear o APK
+        run: cp app/build/outputs/apk/release/app-release.apk Venus.apk
 
       - name: Publicar para download
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v1.${{ github.run_number }}
-          name: Sexta-feira e Vênus 1.${{ github.run_number }}
-          body: "SextaFeira.apk = assistente pessoal. Venus.apk = assistente da loja. Toque no arquivo para instalar."
-          files: |
-            SextaFeira.apk
-            Venus.apk
+          name: Vênus 1.${{ github.run_number }}
+          body: Baixe o arquivo Venus.apk abaixo e toque nele para instalar. Ele atualiza a Sexta-feira mantendo seus dados.
+          files: Venus.apk
           make_latest: true

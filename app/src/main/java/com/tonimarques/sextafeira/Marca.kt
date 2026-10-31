@@ -3,39 +3,32 @@ package com.tonimarques.sextafeira
 import java.util.Locale
 
 /**
- * A identidade de cada versão do app, escolhida na compilação:
- *  - "sexta": Sexta-feira, assistente pessoal;
- *  - "venus": Vênus, assistente da loja Desejo de Intimidade.
- * O resto do código é o mesmo para as duas.
+ * A identidade da assistente: Vênus, pessoal e comercial (ela nasceu da Sexta-feira).
+ * Tudo que diz o nome, a personalidade e as cores fica aqui.
  */
 object Marca {
 
-    val ehVenus: Boolean = BuildConfig.FLAVOR == "venus"
-
-    val nome: String = if (ehVenus) "Vênus" else "Sexta-feira"
+    val nome: String = "Vênus"
     val nomeMaiusculo: String = nome.uppercase(Locale("pt", "BR"))
-    val subtitulo: String = if (ehVenus) "ASSISTENTE DA LOJA" else "ASSISTENTE PESSOAL"
+    val subtitulo: String = "ASSISTENTE PESSOAL E COMERCIAL"
 
     /** Primeiras linhas das instruções da IA. */
     val personalidade: String =
-        if (ehVenus) {
-            "Você é a Vênus, assistente do dono da loja online Desejo de Intimidade, que vende produtos " +
-                "para o bem-estar íntimo com entrega discreta. Você é elegante, discreta, profissional e " +
-                "simpática. Ajuda a cuidar da loja e também das tarefas do dia a dia no celular."
-        } else {
-            "Você é a Sexta-feira, assistente pessoal no celular Android do usuário: eficiente, " +
-                "simpática e com um toque de humor leve."
-        }
+        "Você é a Vênus, assistente pessoal e comercial do usuário, no celular Android dele. " +
+            "Ele é dono da loja online Desejo de Intimidade, que vende produtos para o bem-estar íntimo " +
+            "com entrega discreta. Você cuida tanto da vida pessoal (apps, música, mensagens, clima, " +
+            "lembretes, conversa) quanto da loja. Você é elegante, discreta, eficiente e simpática, " +
+            "com um toque de humor leve."
 
     // ------------------------------------------------------------- cores
-    /** Sexta-feira passeia por todas as cores; Vênus fica nos tons de rosa, magenta e dourado. */
-    val cicloCompleto: Boolean = !ehVenus
+    /** false = cores oscilam em torno dos tons da Vênus (roxo, magenta, rosa e dourado). */
+    val cicloCompleto: Boolean = false
 
-    /** Matiz central e quanto ele oscila (graus no círculo de cores), quando não é ciclo completo. */
-    const val MATIZ_VENUS = 330f
-    const val OSCILACAO_VENUS = 40f
+    /** Matiz central e quanto ele oscila (graus no círculo de cores). */
+    const val MATIZ_VENUS = 325f
+    const val OSCILACAO_VENUS = 60f
 
     /** Distância entre as três camadas de cor do orbe. */
-    val deslocamentoCor2: Float = if (ehVenus) 28f else 75f
-    val deslocamentoCor3: Float = if (ehVenus) 55f else 160f
+    val deslocamentoCor2: Float = 30f
+    val deslocamentoCor3: Float = 60f
 }
