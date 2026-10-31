@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Android 12+: a tela de abertura mostra o mesmo orbe do ícone, no fundo escuro do app -->
+    <style name="Tema" parent="android:Theme.Material.NoActionBar">
+        <item name="android:colorPrimary">@color/barra</item>
+        <item name="android:colorPrimaryDark">@color/fundo</item>
+        <item name="android:colorAccent">@color/destaque</item>
+        <item name="android:windowBackground">@color/fundo</item>
+        <item name="android:statusBarColor">@color/fundo</item>
+        <item name="android:navigationBarColor">@color/fundo</item>
+        <item name="android:alertDialogTheme">@style/Tema.Dialogo</item>
+        <item name="android:windowSplashScreenBackground">@color/fundo</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/ic_launcher_foreground</item>
+        <item name="android:windowSplashScreenIconBackgroundColor">@color/fundo</item>
+    </style>
+</resources>

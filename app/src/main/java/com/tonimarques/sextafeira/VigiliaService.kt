@@ -86,12 +86,13 @@ class VigiliaService : Service() {
             this, 1, Intent(this, VigiliaService::class.java).setAction(ACAO_PARAR), PendingIntent.FLAG_IMMUTABLE
         )
         val notificacao = Notification.Builder(this, CANAL)
-            .setSmallIcon(R.drawable.ic_atalho_falar)
+            .setSmallIcon(R.drawable.ic_venus_simbolo)
+            .setColor(android.graphics.Color.parseColor("#E36BD0"))
             .setContentTitle("${Marca.nome} está ouvindo")
             .setContentText("Diga “${Marca.nome}, ativar”")
             .setOngoing(true)
             .setContentIntent(abrir)
-            .addAction(Notification.Action.Builder(Icon.createWithResource(this, R.drawable.ic_atalho_falar), "Desligar", parar).build())
+            .addAction(Notification.Action.Builder(Icon.createWithResource(this, R.drawable.ic_venus_simbolo), "Desligar", parar).build())
             .build()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             startForeground(ID_NOTIFICACAO, notificacao, ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE)
