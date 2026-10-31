@@ -46,6 +46,8 @@ object ComandosLocais {
         if (!ehRecado) cotacao(c)?.let { return it }
         acompanhar(f)?.let { return it }
         noticias(f)?.let { return it }
+        // "como chego no shopping" é rota, não pergunta aberta
+        if (Regex("^como (?:eu )?(?:chego|chegar|vou|faco para chegar|faco pra chegar)\\b").containsMatchIn(c)) mapa(f)?.let { return it }
         // Perguntas abertas também.
         if (PERGUNTA.containsMatchIn(c) && !HORA.containsMatchIn(c) && !DATA.containsMatchIn(c)) return null
 
