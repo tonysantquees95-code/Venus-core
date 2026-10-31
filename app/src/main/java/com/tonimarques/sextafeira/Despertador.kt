@@ -4,7 +4,10 @@ import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
 import android.media.AudioFormat
+import android.media.AudioManager
 import android.media.AudioRecord
+import android.media.AudioRecordingConfiguration
+import android.os.Build
 import android.media.MediaRecorder
 import android.os.Handler
 import android.os.Looper
@@ -23,6 +26,10 @@ import kotlin.math.sqrt
  * O microfone fica aberto o tempo todo, numa sessão só: na barra de status aparece apenas o
  * pontinho verde fixo, sem o ícone do microfone piscando a cada poucos segundos.
  * Para gastar pouca bateria, o áudio só é analisado quando há som parecido com voz.
+ *
+ * Educada com os outros apps: quando outro app começa a usar o microfone (ditado do teclado,
+ * áudio do WhatsApp, ligação, gravador...), ela solta o microfone na hora e só volta a escutar
+ * uns segundos depois que o outro app terminar.
  */
 class Despertador(
     private val contexto: Context,
@@ -30,13 +37,40 @@ class Despertador(
     private val aoFalhar: () -> Unit = {},
 ) {
     private val principal = Handler(Looper.getMainLooper())
+    private val audio = contexto.getSystemService(AudioManager::class.java)
 
     @Volatile
     private var geracao = 0
 
+    /** A gravação que está aberta agora (para reconhecer qual é a nossa na lista do sistema). */
+    @Volatile
+    private var minhaSessao = -1
+
+    @Volatile
+    private var gravando = false
+
+    /** true enquanto a Vênus deve esperar a frase (mesmo que, no momento, tenha cedido o microfone). */
     @Volatile
     var ativo = false
         private set
+
+    /** true quando soltou o microfone porque outro app está usando. */
+    @Volatile
+    var cedido = false
+        private set
+
+    private val retomar = Runnable {
+        if (ativo && cedido && !outroAppGravando()) {
+            cedido = false
+            abrirMicrofone()
+        }
+    }
+
+    private val observador = object : AudioManager.AudioRecordingCallback() {
+        override fun onRecordingConfigChanged(configs: MutableList<AudioRecordingConfiguration>?) {
+            reavaliar(configs.orEmpty())
+        }
+    }
 
     /** Começa a escutar. Devolve false se a voz offline não estiver instalada ou faltar permissão. */
     fun iniciar(): Boolean {
@@ -44,15 +78,65 @@ class Despertador(
         if (!ModeloDeVoz.pronto(contexto)) return false
         if (contexto.checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) return false
         ativo = true
-        val minha = ++geracao
-        Thread({ executar(minha) }, "venus-despertador").start()
+        cedido = false
+        try {
+            audio?.registerAudioRecordingCallback(observador, principal)
+        } catch (e: Exception) {
+        }
+        if (outroAppGravando()) cedido = true else abrirMicrofone()
         return true
     }
 
     /** Para de escutar e libera o microfone (em até ~0,1 s). */
     fun parar() {
-        geracao++
         ativo = false
+        cedido = false
+        principal.removeCallbacks(retomar)
+        try {
+            audio?.unregisterAudioRecordingCallback(observador)
+        } catch (e: Exception) {
+        }
+        fecharMicrofone()
+    }
+
+    private fun abrirMicrofone() {
+        if (!ativo || gravando) return
+        gravando = true
+        val minha = ++geracao
+        Thread({ executar(minha) }, "venus-despertador").start()
+    }
+
+    private fun fecharMicrofone() {
+        geracao++
+        gravando = false
+        minhaSessao = -1
+    }
+
+    /** Outro app (ou uma ligação) quer o microfone? */
+    private fun outroAppGravando(configs: List<AudioRecordingConfiguration>? = null): Boolean {
+        val lista = configs ?: try {
+            audio?.activeRecordingConfigurations.orEmpty()
+        } catch (e: Exception) {
+            emptyList()
+        }
+        val emLigacao = audio?.mode == AudioManager.MODE_IN_CALL || audio?.mode == AudioManager.MODE_IN_COMMUNICATION
+        return emLigacao || lista.any { it.clientAudioSessionId != minhaSessao }
+    }
+
+    private fun reavaliar(configs: List<AudioRecordingConfiguration>) {
+        if (!ativo) return
+        val silenciada = Build.VERSION.SDK_INT >= 29 &&
+            configs.any { it.clientAudioSessionId == minhaSessao && it.isClientSilenced }
+        if (gravando && (silenciada || outroAppGravando(configs))) {
+            // Outro app começou a gravar: solta o microfone na hora.
+            cedido = true
+            principal.removeCallbacks(retomar)
+            fecharMicrofone()
+        } else if (cedido && !outroAppGravando(configs)) {
+            // O outro app terminou: espera um pouco (ele pode voltar a gravar) e retoma.
+            principal.removeCallbacks(retomar)
+            principal.postDelayed(retomar, 2500)
+        }
     }
 
     private fun executar(minha: Int) {
@@ -77,6 +161,8 @@ class Despertador(
                 falhou = true
                 return
             }
+            if (minha != geracao) return
+            minhaSessao = gravador.audioSessionId
             gravador.startRecording()
 
             val bloco = ShortArray(TAXA / 10) // 100 ms
@@ -131,10 +217,19 @@ class Despertador(
             } catch (e: Throwable) {
             }
             if (minha == geracao) {
-                ativo = false
+                gravando = false
+                minhaSessao = -1
                 when {
-                    ouviu -> principal.post(aoOuvir)
-                    falhou -> principal.post(aoFalhar)
+                    ouviu -> principal.post {
+                        parar()
+                        aoOuvir()
+                    }
+                    // Não conseguiu abrir porque outro app está com o microfone: espera ele terminar.
+                    falhou && outroAppGravando() -> cedido = true
+                    falhou -> principal.post {
+                        parar()
+                        aoFalhar()
+                    }
                 }
             }
         }

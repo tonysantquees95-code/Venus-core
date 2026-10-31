@@ -15,6 +15,7 @@ import android.database.sqlite.SQLiteOpenHelper
 class Memoria(contexto: Context) : SQLiteOpenHelper(contexto, "sexta.db", null, 2) {
 
     data class Mensagem(val quando: Long, val doUsuario: Boolean, val texto: String, val topico: String)
+    data class ResumoTopico(val topico: String, val quantidade: Int, val ultimo: Long, val previa: String)
     data class Fato(val id: Long, val quando: Long, val texto: String, val categoria: String)
 
     override fun onCreate(db: SQLiteDatabase) {
@@ -72,6 +73,37 @@ class Memoria(contexto: Context) : SQLiteOpenHelper(contexto, "sexta.db", null, 
             while (c.moveToNext()) lista += Mensagem(c.getLong(0), c.getString(1) == "eu", c.getString(2), c.getString(3))
         }
         return lista.reversed()
+    }
+
+    /** Tópicos com quantidade, data da última mensagem e uma prévia (mais recentes primeiro). */
+    fun resumoTopicos(): List<ResumoTopico> {
+        val lista = mutableListOf<ResumoTopico>()
+        readableDatabase.rawQuery(
+            "SELECT topico, COUNT(*), MAX(quando) FROM mensagens WHERE texto NOT LIKE 'Fontes: %' " +
+                "GROUP BY topico ORDER BY MAX(quando) DESC", null
+        ).use { c ->
+            while (c.moveToNext()) {
+                val topico = c.getString(0)
+                val previa = readableDatabase.rawQuery(
+                    "SELECT texto FROM mensagens WHERE topico = ? AND autor = 'eu' ORDER BY id DESC LIMIT 1", arrayOf(topico)
+                ).use { p -> if (p.moveToFirst()) p.getString(0) else "" }
+                lista += ResumoTopico(topico, c.getInt(1), c.getLong(2), previa)
+            }
+        }
+        return lista
+    }
+
+    /** Mensagens que contêm o trecho (mais recentes primeiro). */
+    fun buscarMensagens(trecho: String, limite: Int = 80): List<Mensagem> {
+        val lista = mutableListOf<Mensagem>()
+        readableDatabase.rawQuery(
+            "SELECT quando, autor, texto, topico FROM mensagens WHERE texto LIKE ? AND texto NOT LIKE 'Fontes: %' " +
+                "ORDER BY id DESC LIMIT $limite",
+            arrayOf("%${trecho.trim()}%")
+        ).use { c ->
+            while (c.moveToNext()) lista += Mensagem(c.getLong(0), c.getString(1) == "eu", c.getString(2), c.getString(3))
+        }
+        return lista
     }
 
     fun apagarTopico(topico: String) {

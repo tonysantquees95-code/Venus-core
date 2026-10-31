@@ -152,7 +152,7 @@ object Pesquisa {
 
     fun ehPesquisavel(pergunta: String): Boolean {
         val c = ComandosLocais.normalizar(pergunta)
-        return Web.assuntoEnciclopedico(pergunta) != null || NOVIDADE.containsMatchIn(c)
+        return Web.assuntoEnciclopedico(pergunta) != null || NOVIDADE.containsMatchIn(c) || Fatos.entende(pergunta)
     }
 
     /** Pontuação de uma notícia guardada para uma pergunta (palavras em comum no título e no assunto). */
@@ -187,6 +187,8 @@ object Pesquisa {
      */
     fun responderPergunta(pergunta: String, conhecimento: Conhecimento?, amplo: Boolean = true): Web.Resposta? {
         val normal = ComandosLocais.normalizar(pergunta)
+        // Perguntas de fato (capital, população, idade, fundador...): Wikidata.
+        tentar { Fatos.responder(ComandosLocais.limpar(pergunta).original) }?.let { return it }
         Web.assuntoEnciclopedico(pergunta)?.let { assunto ->
             (tentar { Web.wikipedia(assunto) } ?: tentar { wikipediaBusca(assunto) })?.let { return it }
         }
