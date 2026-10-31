@@ -10,6 +10,9 @@ android {
     compileSdk = 35
 
     defaultConfig {
+        // Mantém o identificador da Sexta-feira: a Vênus instala por cima e herda chave, memórias e histórico.
+        applicationId = "com.tonimarques.sextafeira"
+        resValue("string", "app_name", "Vênus")
         minSdk = 26
         targetSdk = 34
         versionCode = numeroDaVersao
@@ -34,25 +37,6 @@ android {
         debug {
             signingConfig = signingConfigs.getByName("fixa")
         }
-    }
-
-    // Dois apps a partir do mesmo código: a Sexta-feira (pessoal) e a Vênus (da loja).
-    flavorDimensions += "marca"
-    productFlavors {
-        create("sexta") {
-            dimension = "marca"
-            applicationId = "com.tonimarques.sextafeira"
-            resValue("string", "app_name", "Sexta-feira")
-        }
-        create("venus") {
-            dimension = "marca"
-            applicationId = "com.tonimarques.venus"
-            resValue("string", "app_name", "Vênus")
-        }
-    }
-
-    buildFeatures {
-        buildConfig = true
     }
 
     compileOptions {
