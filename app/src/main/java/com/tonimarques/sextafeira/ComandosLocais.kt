@@ -46,6 +46,8 @@ object ComandosLocais {
         if (!ehRecado) cotacao(c)?.let { return it }
         acompanhar(f)?.let { return it }
         noticias(f)?.let { return it }
+        perto(f)?.let { return it }
+        retomar(c)?.let { return it }
         // "como chego no shopping" é rota, não pergunta aberta
         if (Regex("^como (?:eu )?(?:chego|chegar|vou|faco para chegar|faco pra chegar)\\b").containsMatchIn(c)) mapa(f)?.let { return it }
         // Perguntas abertas também.
@@ -314,6 +316,34 @@ object ComandosLocais {
         return Resultado.Acao("abrir_configuracao", mapOf("tipo" to tipo))
     }
 
+    /** "Dá play no Deezer", "toca a última música", "continua de onde parou": retoma, não procura música nova. */
+    private fun retomar(c: String): Resultado? {
+        for (regra in RETOMAR) {
+            val m = regra.matchEntire(c) ?: continue
+            val app = m.groupValues.drop(1).firstOrNull { it.isNotBlank() }.orEmpty()
+            return Resultado.Acao("controlar_midia", mapOf("acao" to "tocar", "app" to app))
+        }
+        return null
+    }
+
+    /** "Qual a ferragem mais próxima", "onde tem farmácia perto de mim": abre no Maps perto de você. */
+    private fun perto(f: Frase): Resultado? {
+        for (regra in PERTO) {
+            val m = regra.matchEntire(f.chave) ?: continue
+            var oque = f.trecho(m.groups[1]).orEmpty().trim()
+            oque = oque.replace(Regex("^(?i)(a|o|as|os|uma|um|umas|uns|alguma|algum)\\s+"), "").trim()
+            val n = normalizar(oque)
+            if (oque.length < 3 || NAO_E_LUGAR.containsMatchIn(n)) return null
+            val referencia = when {
+                Regex("\\bda minha casa|\\bde casa\\b").containsMatchIn(f.chave) -> "casa"
+                Regex("\\bdo (?:meu )?trabalho").containsMatchIn(f.chave) -> "trabalho"
+                else -> ""
+            }
+            return Resultado.Acao("buscar_perto", mapOf("oque" to oque, "referencia" to referencia))
+        }
+        return null
+    }
+
     private fun midia(c: String): Resultado? {
         val acao = when {
             PROXIMA.matches(c) -> "proxima"
@@ -557,6 +587,26 @@ object ComandosLocais {
     private val ANTERIOR = Regex(
         "^(?:(?:musica|faixa|cancao) anterior|anterior|volta(?:r)?(?:\\s+(?:a|pra|para))?(?:\\s+(?:musica|faixa))?" +
             "(?:\\s+anterior)?)$"
+    )
+    private val APP_MUSICA = "(?: (?:no|na|pelo|pela) (spotify|youtube music|youtube|deezer|amazon music|apple music))?"
+    private val RETOMAR = listOf(
+        Regex("^(?:da|de|dar|aperta|aperte|manda|bota) (?:um |o )?play$APP_MUSICA$"),
+        Regex(
+            "^(?:toca|toque|tocar|coloca|coloque|bota|volta a tocar|voltar a tocar|continua|continue|continuar|retoma|retome|retomar|poe) " +
+                "(?:a |o )?(?:ultima musica(?: (?:tocada|que tocou|que (?:eu )?(?:estava|tava) (?:ouvindo|escutando)))?|" +
+                "musica que (?:eu )?(?:estava|tava) (?:ouvindo|escutando)|de onde parou|(?:o )?que (?:eu )?(?:estava|tava) (?:ouvindo|escutando)|" +
+                "musica de antes|minha playlist de antes)$APP_MUSICA$"
+        ),
+        Regex("^(?:continua|continue|continuar|retoma|retome|retomar|volta a tocar|voltar a tocar|despausa|play)(?: a| o)?(?: musica| som)? (?:no|na|pelo|pela) (spotify|youtube music|youtube|deezer|amazon music|apple music)$"),
+        Regex("^(?:toca|toque|tocar|abre e toca) (?:o |a )?(spotify|deezer|youtube music)$"),
+    )
+    private val PERTO = listOf(
+        Regex("^(?:qual|onde) (?:e |eh |fica |tem |esta )?(?:a |o |as |os |uma |um )?(.+?) mais proxim[oa]s?(?: (?:daqui|de mim|de onde eu estou|da onde eu estou|de onde estou|da onde estou|da minha casa|de casa|do meu trabalho|do trabalho))?$"),
+        Regex("^(?:onde (?:tem|ha|fica|acho|encontro|compro)|onde e que (?:tem|eu acho|eu encontro)|tem|procura|procure|ache|acha|me mostra|mostra) (?:uma |um |alguma |algum |a |o )?(.+?) (?:aqui )?(?:perto|por perto|proxim[oa])(?: daqui| de mim| de onde eu estou| da minha casa| do meu trabalho)?$"),
+        Regex("^(.+?) (?:mais proxim[oa]|perto de mim|aqui perto|perto daqui)$"),
+    )
+    private val NAO_E_LUGAR = Regex(
+        "\\b(planeta|estrela|galaxia|lua|sol|numero|data|feriado|dia|mes|ano|horario|hora|eleicao|jogo|resposta|palavra|valor|resultado)s?\\b"
     )
     private val PAUSAR = Regex("^(?:pausa|pausar|pause|para|parar|pare)(?:\\s+(?:a|o))?(?:\\s+(?:musica|som|video|audio))?$")
     private val CONTINUAR = Regex(

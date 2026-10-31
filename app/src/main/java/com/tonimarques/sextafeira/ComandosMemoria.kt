@@ -13,6 +13,9 @@ object ComandosMemoria {
         /** Guarda um valor único (apelido, cidade, favorito). */
         data class Definir(val categoria: String, val valor: String) : Pedido()
 
+        /** "Salva o endereço do meu trabalho" sem dizer o endereço: a Vênus pergunta. */
+        data class PerguntarLugar(val lugar: String) : Pedido()
+
         data class Esquecer(val trecho: String) : Pedido()
         object Listar : Pedido()
         object ApagarTudo : Pedido()
@@ -33,6 +36,25 @@ object ComandosMemoria {
         APELIDO.matchEntire(c)?.let { m ->
             val nome = f.trecho(m.groups[1])?.trimEnd('.', '!')?.let { capitalizar(it) }
             if (!nome.isNullOrBlank() && nome.split(" ").size <= 4) return Pedido.Definir("apelido", nome)
+        }
+        // "grave o endereço do meu trabalho: eu trabalho no Hotel X", "meu endereço é Rua X, grave como minha casa"
+        GRAVAR_ENDERECO_COM.matchEntire(c)?.let { m ->
+            val lugar = nomeDoLugar(m.groupValues[1])
+            val endereco = f.trecho(m.groups[2])?.trim()?.trimEnd('.', '!')
+            if (lugar != null && !endereco.isNullOrBlank() && endereco.length >= 4) return Pedido.Definir("lugar:$lugar", endereco)
+        }
+        MEU_ENDERECO_COMO.matchEntire(c)?.let { m ->
+            val lugar = nomeDoLugar(m.groupValues[2])
+            val endereco = f.trecho(m.groups[1])?.trim()?.trimEnd('.', '!', ',')
+            if (lugar != null && !endereco.isNullOrBlank()) return Pedido.Definir("lugar:$lugar", endereco)
+        }
+        MEU_ENDERECO.matchEntire(c)?.let { m ->
+            val endereco = f.trecho(m.groups[1])?.trim()?.trimEnd('.', '!')
+            if (!endereco.isNullOrBlank() && endereco.length >= 4) return Pedido.Definir("lugar:casa", endereco)
+        }
+        PEDIR_ENDERECO.matchEntire(c)?.let { m ->
+            val lugar = nomeDoLugar(m.groupValues[1]) ?: return@let
+            return Pedido.PerguntarLugar(lugar)
         }
         // Endereços com nome: "minha casa fica na Rua X, 123", "o endereço do meu trabalho é ..."
         for (regra in LUGARES) {
@@ -91,6 +113,19 @@ object ComandosMemoria {
         Regex("^(?:a |o )?(?:minha |meu |nossa |nosso )?((?:$TIPOS_LUGAR)(?: d[aoe] (?:minha |meu )?\\w+)?) (?:fica|e|eh|e localizad[oa]|fica localizad[oa]) ((?:na|no|em|nas|nos) .+|$RUA .+|.*\\d.*)$"),
         Regex("^(?:o )?endereco d[aoe] (?:minha |meu )?((?:$TIPOS_LUGAR)(?: d[aoe] (?:minha |meu )?\\w+)?) (?:e|eh) (.+)$"),
         Regex("^(?:salva|salve|guarda|guarde|anota|anote) como (?:minha |meu |a |o )?((?:$TIPOS_LUGAR)(?: d[aoe] \\w+)?):? (?:o endereco )?(.+)$"),
+    )
+    private const val GRAVAR = "(?:salva|salve|salvar|grava|grave|gravar|guarda|guarde|guardar|anota|anote|anotar|registra|registre|cadastra|cadastre|memoriza|memorize)"
+    private val NOME_LUGAR = "((?:$TIPOS_LUGAR)(?: d[aoe] (?:minha |meu )?\\w+)?)"
+    private val GRAVAR_ENDERECO_COM = Regex(
+        "^$GRAVAR (?:tambem )?(?:o |a )?(?:meu |minha )?endereco d[aoe] (?:meu |minha )?$NOME_LUGAR[,:]? " +
+            "(?:que (?:e|eh) |(?:e|eh|fica) )?(?:(?:eu )?(?:trabalho|moro|estudo|treino) )?(?:na |no |em )?(.+)$"
+    )
+    private val MEU_ENDERECO_COMO = Regex(
+        "^(?:o )?meu endereco (?:e|eh) (?:na |no |em )?(.+?),? (?:e )?$GRAVAR (?:este|esse|o|isso) (?:endereco )?(?:como )?(?:a |o )?(?:minha |meu )?$NOME_LUGAR$"
+    )
+    private val MEU_ENDERECO = Regex("^(?:o )?meu endereco (?:e|eh|fica) (?:na |no |em )?(.+)$")
+    private val PEDIR_ENDERECO = Regex(
+        "^(?:$GRAVAR (?:tambem )?)?(?:o |a )?(?:meu |minha )?endereco d[aoe] (?:meu |minha )?$NOME_LUGAR$"
     )
     private val MORO_NA_RUA = Regex("^(?:eu )?moro (?:na |no |em )($RUA .+)$")
     private val TRABALHO_NA_RUA = Regex("^(?:eu )?trabalho (?:na |no |em )($RUA .+)$")
