@@ -9,31 +9,42 @@ on:
 jobs:
   teste:
     runs-on: ubuntu-latest
+    timeout-minutes: 8
     steps:
       - name: Endpoints do painel da loja
         run: |
-          S=https://desejo-de-intimidade.floot.app
-          mkdir -p out js
-          curl -s -m 30 "$S/" > out/index.html
-          curl -s -m 30 "$S/admin" > out/admin.html
-          # baixa os scripts e, em seguida, os módulos que eles importam (2 níveis)
-          grep -ohE '(src|href)="[^"]+\.js"' out/*.html | sed -E 's/.*="([^"]+)"/\1/' | sort -u > lista.txt
-          for n in 1 2 3; do
-            while read -r u; do
-              f="js/$(echo "$u" | tr '/' '_')"
-              [ -f "$f" ] && continue
-              case "$u" in http*) url="$u";; /*) url="$S$u";; *) url="$S/$u";; esac
-              curl -s -m 30 "$url" > "$f"
-            done < lista.txt
-            grep -ohE '"(\./|/assets/|/)[A-Za-z0-9_./-]+\.js"' js/* | tr -d '"' | sed -E 's#^\./#/assets/#' | sort -u >> lista.txt
-            sort -u lista.txt -o lista.txt
-          done
-          ls js | wc -l > out/qtd.txt
-          grep -ohE '_api/[A-Za-z0-9_/-]+' js/* | sort | uniq -c > out/endpoints.txt
-          for f in js/*; do
-            grep -oE '.{0,1500}_api/admin/[A-Za-z0-9_/-]+.{0,300}' "$f" >> out/contexto.txt || true
-          done
-          cat out/endpoints.txt
+          mkdir -p out
+          python3 - <<'PY'
+          import re, urllib.request
+          S = "https://desejo-de-intimidade.floot.app"
+          def get(u):
+              try:
+                  return urllib.request.urlopen(urllib.request.Request(u, headers={"User-Agent": "Mozilla/5.0"}), timeout=20).read().decode("utf-8", "replace")
+              except Exception as e:
+                  return ""
+          html = get(S + "/") + get(S + "/admin")
+          fila = set(re.findall(r'(?:src|href)="([^"]+\.js)"', html))
+          vistos = {}
+          while fila and len(vistos) < 300:
+              u = fila.pop()
+              if u in vistos: continue
+              url = u if u.startswith("http") else S + (u if u.startswith("/") else "/" + u)
+              t = get(url)
+              vistos[u] = t
+              base = u.rsplit("/", 1)[0] if "/" in u else ""
+              for m in re.findall(r'["\'](\.{0,2}/[A-Za-z0-9_./-]+\.js)["\']', t):
+                  if m.startswith("./"): m = base + m[1:]
+                  elif m.startswith("../"): m = base.rsplit("/", 1)[0] + m[2:]
+                  if m not in vistos: fila.add(m)
+          tudo = "\n".join(vistos.values())
+          open("out/qtd.txt", "w").write(f"{len(vistos)} arquivos, {len(tudo)} bytes\n")
+          eps = sorted(set(re.findall(r'_api/[A-Za-z0-9_/-]+', tudo)))
+          open("out/endpoints.txt", "w").write("\n".join(eps))
+          with open("out/contexto.txt", "w") as f:
+              for m in re.finditer(r'_api/admin/[A-Za-z0-9_/-]+', tudo):
+                  f.write("=== " + m.group(0) + "\n" + tudo[max(0, m.start() - 2500): m.end() + 300] + "\n\n")
+          PY
+          cat out/qtd.txt out/endpoints.txt
       - uses: actions/upload-artifact@v4
         with:
           name: endpoints
