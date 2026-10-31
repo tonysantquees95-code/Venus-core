@@ -185,9 +185,33 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
 
     private fun processar(pedido: String) {
         if (ocupado) return
+
+        // 1) Comando rápido: resolvido no próprio celular, sem internet.
+        val local = ComandosLocais.interpretar(pedido)
+        if (local != null) {
+            val resposta = when (local) {
+                is ComandosLocais.Resultado.Resposta -> local.texto
+                is ComandosLocais.Resultado.Acao -> ferramentas.executar(local.nome, local.args)
+            }
+            val appNaoAchado = local is ComandosLocais.Resultado.Acao &&
+                local.nome == "abrir_app" && resposta.startsWith("Não encontrei")
+            // Se não achou o app, talvez a frase não fosse um nome de app: deixa a IA tentar.
+            if (!appNaoAchado || obterGemini() == null) {
+                adicionarMensagem(pedido, true)
+                adicionarMensagem(resposta, false)
+                falar(resposta)
+                return
+            }
+        }
+
+        // 2) Pedido mais complexo: vai para a inteligência artificial.
         val assistente = obterGemini()
         if (assistente == null) {
-            pedirChave()
+            adicionarMensagem(pedido, true)
+            val aviso = "Esse pedido precisa da inteligência artificial. Configure a chave do Gemini " +
+                "no menu ⋮, ou diga \"ajuda\" para ver os comandos que funcionam sem ela."
+            adicionarMensagem(aviso, false)
+            falar(aviso)
             return
         }
         ocupado = true

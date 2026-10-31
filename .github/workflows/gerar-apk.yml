@@ -26,8 +26,26 @@ jobs:
         with:
           gradle-version: "8.11.1"
 
+      - name: Testar os comandos locais
+        run: |
+          set -o pipefail
+          gradle testReleaseUnitTest --no-daemon 2>&1 | tee build.log
+
       - name: Compilar o APK
-        run: gradle assembleRelease --no-daemon --stacktrace
+        run: |
+          set -o pipefail
+          gradle assembleRelease --no-daemon 2>&1 | tee -a build.log
+
+      - name: Mostrar erros
+        if: failure()
+        run: |
+          grep -E "^e: " build.log | head -n 20 | while read -r linha; do echo "::error::$linha"; done || true
+          for f in app/build/test-results/testReleaseUnitTest/*.xml; do
+            [ -f "$f" ] || continue
+            grep -o '<failure message="[^"]*"' "$f" | sed 's/<failure message="//; s/"$//' | head -n 20 |
+              while read -r linha; do echo "::error::$linha"; done
+          done
+          grep -E "FAILED|What went wrong" -A 3 build.log | head -n 30 | while read -r linha; do echo "::error::$linha"; done || true
 
       - name: Renomear o APK
         run: cp app/build/outputs/apk/release/app-release.apk SextaFeira.apk

@@ -103,8 +103,8 @@ class Gemini(
             porque a resposta pode ser falada em voz alta.
             Use as ferramentas sempre que o pedido envolver uma ação no celular; você pode
             chamar várias em sequência.
-            Nunca diga que fez algo que a ferramenta não confirmou. Se o resultado disser que
-            falta o usuário tocar em Enviar ou Ligar, avise isso.
+            Nunca diga que fez algo que a ferramenta não confirmou. Se o resultado pedir para
+            o usuário tocar em algo (Enviar, Ligar, Permitir), repita esse aviso.
             Se não houver ferramenta para o pedido, diga com honestidade o que não consegue fazer.
             Agora é $agora.
         """.trimIndent()
@@ -198,10 +198,11 @@ class Gemini(
             codigo == 404 ->
                 "Não encontrei o modelo \"$modelo\". Troque em três pontinhos, Modelo do Gemini."
             codigo == 429 ->
-                "Atingi o limite de uso gratuito do Gemini por agora. Tente de novo daqui a pouco."
+                "Atingi o limite de uso gratuito do Gemini por agora. " +
+                    "Os comandos rápidos continuam funcionando: diga \"ajuda\" para ver a lista."
             codigo >= 500 ->
-                "Todos os modelos do Gemini que testei estão sobrecarregados agora (erro $codigo). " +
-                    "Tente de novo em alguns minutos."
+                "A inteligência artificial está sobrecarregada agora (erro $codigo). " +
+                    "Os comandos rápidos continuam funcionando: diga \"ajuda\" para ver a lista."
             else -> "O Gemini respondeu com erro $codigo: ${mensagem.take(200)}"
         }
     }
