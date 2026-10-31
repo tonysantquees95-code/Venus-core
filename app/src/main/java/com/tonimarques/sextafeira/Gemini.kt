@@ -19,6 +19,8 @@ class Gemini(
     private val ferramentas: Ferramentas,
 ) {
     private val modelo = modelo.trim().removePrefix("models/")
+    private var modeloAtivo = this.modelo
+    private var modelosReserva: List<String>? = null
     private val historico = JSONArray()
 
     fun enviar(pedido: String): String {
@@ -123,23 +125,40 @@ class Gemini(
         val bytes = corpo.toString().toByteArray(Charsets.UTF_8)
         var ultimaResposta: Pair<Int, JSONObject>? = null
         var ultimoErro: IOException? = null
-        // Tenta de novo se a rede oscilar ou o servidor estiver sobrecarregado (erro 5xx).
-        // Se o modelo principal continuar falhando, usa um modelo reserva.
-        val modelos = listOf(modelo) + MODELOS_RESERVA.filter { it != modelo }
-        for (modeloUsado in modelos) {
-            for (tentativa in 1..TENTATIVAS) {
+
+        fun ocupado(codigo: Int) = codigo >= 500 || codigo == 429
+
+        fun tentar(modeloUsado: String, vezes: Int): Pair<Int, JSONObject>? {
+            for (tentativa in 1..vezes) {
                 try {
                     val resposta = enviarRequisicao(modeloUsado, bytes)
-                    if (resposta.first < 500) return resposta
+                    if (!ocupado(resposta.first)) return resposta
                     ultimaResposta = resposta
                 } catch (e: IOException) {
                     ultimoErro = e
                 }
-                if (tentativa < TENTATIVAS) Thread.sleep(1000L * tentativa)
+                if (tentativa < vezes) Thread.sleep(1000L * tentativa)
+            }
+            return null
+        }
+
+        // 1) Modelo em uso, com uma nova tentativa se a rede oscilar ou o servidor estiver ocupado.
+        tentar(modeloAtivo, 2)?.let { return it }
+
+        // 2) Modelo sobrecarregado ou sem cota: passa para outro modelo Flash disponível na chave.
+        for (reserva in reservas()) {
+            if (reserva == modeloAtivo) continue
+            val resposta = tentar(reserva, 1) ?: continue
+            if (resposta.first in 200..299) {
+                modeloAtivo = reserva // segue a conversa com o modelo que respondeu
+                return resposta
             }
         }
         return ultimaResposta ?: throw (ultimoErro ?: IOException("sem conexão"))
     }
+
+    private fun reservas(): List<String> =
+        modelosReserva ?: listarModelosFlash(chave).ifEmpty { RESERVA_FIXA }.also { modelosReserva = it }
 
     private fun enviarRequisicao(modeloUsado: String, bytes: ByteArray): Pair<Int, JSONObject> {
         val url = URL("https://generativelanguage.googleapis.com/v1beta/models/$modeloUsado:generateContent")
@@ -181,15 +200,57 @@ class Gemini(
             codigo == 429 ->
                 "Atingi o limite de uso gratuito do Gemini por agora. Tente de novo daqui a pouco."
             codigo >= 500 ->
-                "Os servidores do Gemini estão sobrecarregados agora (erro $codigo). " +
-                    "Tente de novo em instantes. Detalhe: ${mensagem.take(150)}"
+                "Todos os modelos do Gemini que testei estão sobrecarregados agora (erro $codigo). " +
+                    "Tente de novo em alguns minutos."
             else -> "O Gemini respondeu com erro $codigo: ${mensagem.take(200)}"
         }
     }
 
     companion object {
         private const val MAX_RODADAS = 8
-        private const val TENTATIVAS = 3
-        private val MODELOS_RESERVA = listOf("gemini-flash-lite-latest")
+        private const val MAX_RESERVAS = 4
+        private val RESERVA_FIXA = listOf("gemini-flash-lite-latest", "gemini-2.5-flash")
+        private val IGNORAR = listOf("image", "tts", "live", "audio", "embed", "exp", "computer", "robotic", "native")
+
+        /**
+         * Pergunta ao Google quais modelos Flash de texto a chave pode usar,
+         * dos mais novos para os mais antigos. Lista vazia se não conseguir.
+         */
+        fun listarModelosFlash(chave: String): List<String> {
+            var conexao: HttpURLConnection? = null
+            return try {
+                conexao = URL("https://generativelanguage.googleapis.com/v1beta/models?pageSize=200")
+                    .openConnection() as HttpURLConnection
+                conexao.connectTimeout = 15_000
+                conexao.readTimeout = 20_000
+                conexao.setRequestProperty("Connection", "close")
+                conexao.setRequestProperty("x-goog-api-key", chave)
+                if (conexao.responseCode !in 200..299) return emptyList()
+                val texto = conexao.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
+                val lista = JSONObject(texto).optJSONArray("models") ?: return emptyList()
+
+                val nomes = mutableListOf<String>()
+                for (i in 0 until lista.length()) {
+                    val m = lista.optJSONObject(i) ?: continue
+                    val nome = m.optString("name").removePrefix("models/")
+                    val metodos = m.optJSONArray("supportedGenerationMethods")?.toString().orEmpty()
+                    val util = nome.startsWith("gemini") && "flash" in nome &&
+                        "generateContent" in metodos && IGNORAR.none { it in nome }
+                    if (util) nomes += nome
+                }
+                nomes.sortedWith(
+                    compareBy<String> { "preview" in it }
+                        .thenByDescending { versao(it) }
+                        .thenBy { it.length }
+                ).take(MAX_RESERVAS + 2)
+            } catch (e: Exception) {
+                emptyList()
+            } finally {
+                conexao?.disconnect()
+            }
+        }
+
+        private fun versao(nome: String): Double =
+            Regex("gemini-(\\d+(?:\\.\\d+)?)").find(nome)?.groupValues?.get(1)?.toDoubleOrNull() ?: 0.0
     }
 }

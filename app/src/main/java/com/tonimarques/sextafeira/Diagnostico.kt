@@ -20,11 +20,13 @@ object Diagnostico {
         val linhas = mutableListOf<String>()
         linhas += "Diagnóstico de conexão"
         linhas += rede(contexto)
-        linhas += "Chave: " + if (chave.startsWith("AIza")) "começa com AIza (${chave.length} caracteres)"
-        else "ATENÇÃO, não começa com AIza (${chave.length} caracteres)"
+        linhas += "Chave: ${chave.length} caracteres"
 
         linhas += testar("1. Internet (Google)", "https://www.google.com/generate_204", "GET", null, null)
         linhas += testar("2. Servidor do Gemini + chave", "$BASE/models?pageSize=1", "GET", chave, null)
+
+        val flash = Gemini.listarModelosFlash(chave)
+        linhas += "Modelos Flash disponíveis: " + flash.joinToString(", ").ifEmpty { "não consegui listar" }
 
         val simples = JSONObject().put(
             "contents",
@@ -40,6 +42,10 @@ object Diagnostico {
             JSONArray().put(JSONObject().put("functionDeclarations", ferramentas.declaracoes()))
         )
         linhas += testar("4. Pergunta com as ferramentas", "$BASE/models/$modelo:generateContent", "POST", chave, comFerramentas)
+
+        flash.filter { it != modelo }.take(3).forEachIndexed { i, reserva ->
+            linhas += testar("${5 + i}. Reserva $reserva", "$BASE/models/$reserva:generateContent", "POST", chave, comFerramentas)
+        }
 
         return linhas.joinToString("\n\n")
     }
