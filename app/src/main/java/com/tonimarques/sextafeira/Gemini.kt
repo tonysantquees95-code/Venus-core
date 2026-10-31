@@ -2,6 +2,7 @@ package com.tonimarques.sextafeira
 
 import org.json.JSONArray
 import org.json.JSONObject
+import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.URL
 import java.text.SimpleDateFormat
@@ -76,7 +77,11 @@ class Gemini(
             }
         } catch (e: Exception) {
             desfazer(inicio)
-            return "Tive um problema de conexão: ${e.message ?: e.javaClass.simpleName}"
+            return if (e is IOException) {
+                "Não consegui falar com o Gemini: a internet oscilou. Confira sua conexão e tente de novo."
+            } else {
+                "Algo deu errado: ${e.message ?: e.javaClass.simpleName}"
+            }
         }
         return "Fiz várias ações seguidas e parei por segurança. Quer que eu continue?"
     }
@@ -113,6 +118,21 @@ class Gemini(
                 JSONArray().put(JSONObject().put("functionDeclarations", ferramentas.declaracoes()))
             )
 
+        val bytes = corpo.toString().toByteArray(Charsets.UTF_8)
+        var ultimoErro: IOException? = null
+        // Se a rede oscilar (troca de Wi-Fi/5G, conexão derrubada), tenta de novo.
+        for (tentativa in 1..TENTATIVAS) {
+            try {
+                return enviarRequisicao(bytes)
+            } catch (e: IOException) {
+                ultimoErro = e
+                if (tentativa < TENTATIVAS) Thread.sleep(800L * tentativa)
+            }
+        }
+        throw ultimoErro ?: IOException("sem conexão")
+    }
+
+    private fun enviarRequisicao(bytes: ByteArray): Pair<Int, JSONObject> {
         val url = URL("https://generativelanguage.googleapis.com/v1beta/models/$modelo:generateContent")
         val conexao = url.openConnection() as HttpURLConnection
         try {
@@ -120,9 +140,13 @@ class Gemini(
             conexao.connectTimeout = 20_000
             conexao.readTimeout = 90_000
             conexao.doOutput = true
+            conexao.useCaches = false
+            conexao.setFixedLengthStreamingMode(bytes.size)
             conexao.setRequestProperty("Content-Type", "application/json; charset=utf-8")
+            // Não reaproveita conexões antigas, que o Android às vezes já fechou.
+            conexao.setRequestProperty("Connection", "close")
             conexao.setRequestProperty("x-goog-api-key", chave)
-            conexao.outputStream.use { it.write(corpo.toString().toByteArray(Charsets.UTF_8)) }
+            conexao.outputStream.use { it.write(bytes) }
 
             val codigo = conexao.responseCode
             val fluxo = if (codigo in 200..299) conexao.inputStream else conexao.errorStream
@@ -155,5 +179,6 @@ class Gemini(
 
     companion object {
         private const val MAX_RODADAS = 8
+        private const val TENTATIVAS = 3
     }
 }
