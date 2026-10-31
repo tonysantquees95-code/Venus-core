@@ -280,6 +280,7 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
         menu.add(0, MENU_CONTINUA, 3, "Conversa contínua por voz")
             .setCheckable(true).setChecked(prefs.getBoolean(PREF_CONTINUA, true))
         menu.add(0, MENU_NOVA, 4, "Nova conversa")
+        menu.add(0, MENU_DIAGNOSTICO, 5, "Diagnóstico de conexão")
         return true
     }
 
@@ -287,6 +288,7 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
         when (item.itemId) {
             MENU_CHAVE -> pedirChave()
             MENU_MODELO -> pedirModelo()
+            MENU_DIAGNOSTICO -> diagnosticar()
             MENU_FALAR -> {
                 val ligado = !item.isChecked
                 item.isChecked = ligado
@@ -306,6 +308,30 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
             else -> return super.onOptionsItemSelected(item)
         }
         return true
+    }
+
+    private fun diagnosticar() {
+        if (ocupado) return
+        if (chave().isBlank()) {
+            pedirChave()
+            return
+        }
+        ocupado = true
+        val balao = adicionarMensagem("Testando a conexão, aguarde até 1 minuto…", false)
+        val k = chave()
+        val m = modelo()
+        Thread {
+            val relatorio = try {
+                Diagnostico.executar(applicationContext, k, m, ferramentas)
+            } catch (e: Exception) {
+                "O diagnóstico falhou: ${e.javaClass.simpleName}: ${e.message}"
+            }
+            runOnUiThread {
+                balao.text = relatorio
+                rolarParaBaixo()
+                ocupado = false
+            }
+        }.start()
     }
 
     private fun pedirChave() {
@@ -371,6 +397,7 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
         private const val MENU_FALAR = 3
         private const val MENU_CONTINUA = 4
         private const val MENU_NOVA = 5
+        private const val MENU_DIAGNOSTICO = 6
 
         private val COR_FUNDO = Color.parseColor("#0B1020")
         private val COR_BARRA = Color.parseColor("#111833")
