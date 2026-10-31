@@ -21,13 +21,16 @@ jobs:
             curl -fsSL -o vosk-model-small-pt-0.3.zip https://huggingface.co/rhasspy/vosk-models/resolve/main/pt/vosk-model-small-pt-0.3.zip
           ls -la vosk-model-small-pt-0.3.zip
           echo "::notice::tamanho $(stat -c %s vosk-model-small-pt-0.3.zip)"
-          unzip -l vosk-model-small-pt-0.3.zip | awk '{print $4}' | grep -v '^$' | head -40 | while read -r f; do echo "::notice::arquivo $f"; done
           unzip -q vosk-model-small-pt-0.3.zip -d m
-          for w in $(find m -name 'words.txt'); do
-            for p in vênus venus vénus ativar ativa sexta feira; do
-              echo "::notice::$w $p: $(grep -c "^$p " "$w")"
-            done
-          done
+          pip install -q vosk
+          python3 - <<'PY' 2>&1 | grep -i "missing\|palavra" | head -n 9 | while read -r l; do echo "::notice::$l"; done
+          import json, vosk
+          vosk.SetLogLevel(0)
+          m = vosk.Model("m/vosk-model-small-pt-0.3")
+          for p in ["vênus", "venus", "vénus", "ativar", "ativa", "sexta", "feira", "bônus", "menos"]:
+              vosk.KaldiRecognizer(m, 16000, json.dumps([p, "[unk]"]))
+              print("palavra testada:", p)
+          PY
 
       - name: Publicar o modelo
         uses: softprops/action-gh-release@v2
