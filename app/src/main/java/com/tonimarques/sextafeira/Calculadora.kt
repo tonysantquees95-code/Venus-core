@@ -403,7 +403,8 @@ object Calculadora {
 
     /** "dois mil e quinhentos mais trinta" → "2500 mais 30". Números já em dígitos ficam como estão. */
     fun numerosPorExtenso(texto: String): String {
-        val palavras = texto.split(" ").filter { it.isNotBlank() }
+        // "por cento" não é o número cem
+        val palavras = texto.replace(Regex("\\bpor ?cento\\b"), "%").split(" ").filter { it.isNotBlank() }
         val saida = mutableListOf<String>()
         var total = 0L
         var parcial = 0L
