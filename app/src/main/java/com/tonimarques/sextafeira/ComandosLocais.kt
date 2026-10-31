@@ -34,8 +34,13 @@ object ComandosLocais {
 
         // Pedidos com duas ações ("abre o YouTube e toca rock") ficam para a IA.
         if (COMPOSTO.containsMatchIn(c)) return null
-        // Clima vem antes do filtro de perguntas: "quantos graus faz hoje?" é um comando.
-        clima(f)?.let { return it }
+        // Clima, cotações e notícias vêm antes do filtro de perguntas: "quanto está o dólar?" é um comando.
+        // ...mas não quando é uma mensagem: "manda pra Maria que vai chover" é mensagem, não previsão.
+        val ehRecado = RECADO.containsMatchIn(c)
+        if (!ehRecado) clima(f)?.let { return it }
+        if (!ehRecado) cotacao(c)?.let { return it }
+        acompanhar(f)?.let { return it }
+        noticias(f)?.let { return it }
         // Perguntas abertas também.
         if (PERGUNTA.containsMatchIn(c) && !HORA.containsMatchIn(c) && !DATA.containsMatchIn(c)) return null
 
@@ -131,6 +136,44 @@ object ComandosLocais {
             if (bruto.isNotBlank() && normalizar(bruto) !in LUGARES_GENERICOS) cidade = bruto
         }
         return Resultado.Acao("previsao_do_tempo", mapOf("cidade" to cidade, "dia" to dia))
+    }
+
+    private fun cotacao(c: String): Resultado? {
+        val m = MOEDA.find(c) ?: return null
+        if (!Regex("\\b(quanto|cotacao|valor|preco|ta|esta|hoje|agora|vale|custa)\\b").containsMatchIn(c) &&
+            !Regex("^(o |a )?(dolar|euro|bitcoin|libra)( hoje| agora)?$").matches(c)
+        ) return null
+        return Resultado.Acao("cotacao_moeda", mapOf("moeda" to m.groupValues[1]))
+    }
+
+    private fun acompanhar(f: Frase): Resultado? {
+        val c = f.chave
+        if (Regex("^(?:quais|que) (?:sao )?(?:os )?(?:assuntos|temas|noticias)( que)? (?:voce )?(?:acompanha|segue|esta acompanhando)$").matches(c)) {
+            return Resultado.Acao("acompanhar_tema", mapOf("acao" to "listar", "tema" to ""))
+        }
+        if (Regex("^(?:atualiza|atualize|atualizar|baixa|baixe) (?:as )?(?:noticias|novidades)$").matches(c)) {
+            return Resultado.Acao("atualizar_noticias", emptyMap())
+        }
+        PARAR_ACOMPANHAR.matchEntire(c)?.let { m ->
+            val tema = f.trecho(m.groups[1]) ?: return null
+            return Resultado.Acao("acompanhar_tema", mapOf("acao" to "parar", "tema" to tema))
+        }
+        ACOMPANHAR.matchEntire(c)?.let { m ->
+            val tema = f.trecho(m.groups[1]) ?: return null
+            if (tema.isBlank()) return null
+            return Resultado.Acao("acompanhar_tema", mapOf("acao" to "seguir", "tema" to tema))
+        }
+        return null
+    }
+
+    private fun noticias(f: Frase): Resultado? {
+        val c = f.chave
+        for (regra in NOTICIAS) {
+            val m = regra.matchEntire(c) ?: continue
+            val tema = f.trecho(m.groups[1]).orEmpty().trimEnd('?', '.', '!')
+            return Resultado.Acao("noticias", mapOf("tema" to tema.ifBlank { "Brasil" }))
+        }
+        return null
     }
 
     private fun lanterna(c: String): Resultado? {
@@ -315,6 +358,26 @@ object ComandosLocais {
     private val COMPOSTO = Regex(
         "\\s(?:e|depois|entao|e depois|e entao)\\s+(?:toca|tocar|toque|coloca|coloque|manda|mande|envia|envie|" +
             "liga|ligue|abre|abra|abrir|pesquisa|pesquise|aumenta|diminui|cria|crie|desliga|apaga|me leva)\\b"
+    )
+    private val RECADO = Regex("^(?:manda|mande|mandar|envia|envie|enviar|escreve|escreva|lembra|lembre|anota|anote|liga|ligue)\\b")
+    private val MOEDA = Regex("\\b(dolar canadense|dolar australiano|peso argentino|dolar|euro|bitcoin|libra|iene|ethereum)\\b")
+    private val ACOMPANHAR = Regex(
+        "^(?:acompanha|acompanhe|acompanhar|segue|siga|monitora|monitore|fica de olho|fique de olho)" +
+            "(?:\\s+(?:em|no|na|nos|nas))?(?:\\s+(?:as|os))?(?:\\s+(?:noticias|novidades))?" +
+            "(?:\\s+(?:de|do|da|dos|das|sobre|em))?\\s+(.+)$"
+    )
+    private val PARAR_ACOMPANHAR = Regex(
+        "^(?:para|pare|parar|deixa|deixe) de (?:acompanhar|seguir|monitorar)(?:\\s+(?:as|os))?" +
+            "(?:\\s+(?:noticias|novidades))?(?:\\s+(?:de|do|da|dos|das|sobre|em))?\\s+(.+)$"
+    )
+    private val NOTICIAS = listOf(
+        Regex(
+            "^(?:quais (?:sao )?(?:as )?|me (?:da|de|fala|fale|conta|conte|mostra|mostre) (?:as )?|tem |)?" +
+                "(?:ultimas |principais )?(?:noticias|novidades)(?:\\s+(?:de|do|da|dos|das|sobre|em|no|na)\\s+(.+))?$"
+        ),
+        Regex("^o que (?:ha|tem) de novo (?:em|no|na|nos|nas|sobre|de) (.+)$"),
+        Regex("^(?:quais (?:sao )?(?:os )?)?(?:ultimos |novos )?lancamentos (?:de|do|da|dos|das|em) (.+)$"),
+        Regex("^(?:quais|que) (.+?) (?:foram|sao|estao sendo) lancad[oa]s(?: recentemente| este ano| esse ano| agora)?$"),
     )
     private val FAVORITA = Regex(
         "^(?:a |as |o |os )?(?:minhas? |meus? )?(?:musicas? |playlist |som )?(?:favoritas?|favoritos?|preferidas?|preferidos?|" +

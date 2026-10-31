@@ -45,6 +45,9 @@ class Ferramentas(private val activity: Activity, private val memoria: Memoria? 
     /** Busca no Google pela IA (precisa de faturamento na chave). Definido pelo app. */
     var buscador: ((String) -> Web.Resposta?)? = null
 
+    /** Novidades acompanhadas e respostas guardadas, no próprio celular. */
+    val conhecimento: Conhecimento? = memoria?.let { Conhecimento(it) }
+
     /** Fontes da última resposta vinda da internet, para o app mostrar os links. */
     @Volatile
     var ultimasFontes: List<Web.Fonte> = emptyList()
@@ -168,6 +171,21 @@ class Ferramentas(private val activity: Activity, private val memoria: Memoria? 
         )
         .put(
             funcao(
+                "cotacao_moeda", "Cotação atual de uma moeda em reais (dólar, euro, bitcoin, libra...).", listOf("moeda"),
+                "moeda" to texto("Nome da moeda, por exemplo 'dólar'.")
+            )
+        )
+        .put(
+            funcao(
+                "noticias",
+                "Notícias e novidades recentes sobre um assunto (por exemplo, lançamentos de celulares). " +
+                    "Funciona sem o Google pago; prefira para novidades.",
+                listOf("tema"),
+                "tema" to texto("O assunto.")
+            )
+        )
+        .put(
+            funcao(
                 "resumo_wikipedia", "Resumo da Wikipédia sobre uma pessoa, lugar, conceito ou acontecimento.", listOf("assunto"),
                 "assunto" to texto("O assunto, por exemplo 'Santos Dumont'.")
             )
@@ -272,6 +290,10 @@ class Ferramentas(private val activity: Activity, private val memoria: Memoria? 
         "nivel_bateria" -> bateria()
         "previsao_do_tempo" -> clima(a.optString("cidade"), a.optString("dia", "hoje"))
         "resumo_wikipedia" -> wikipedia(a.optString("assunto"))
+        "cotacao_moeda" -> Pesquisa.cotacao(a.optString("moeda"))
+        "noticias" -> noticias(a.optString("tema"))
+        "acompanhar_tema" -> acompanhar(a.optString("acao"), a.optString("tema"))
+        "atualizar_noticias" -> atualizarNoticias()
         "buscar_na_internet" -> buscar(a.optString("pergunta"))
         "salvar_memoria" -> {
             val m = memoria
@@ -599,6 +621,45 @@ class Ferramentas(private val activity: Activity, private val memoria: Memoria? 
         return "Não consegui achar sua localização agora. Me diga: minha cidade é, e o nome da cidade."
     }
 
+    private fun atualizarNoticias(): String {
+        val c = conhecimento ?: return "Memória indisponível."
+        val novas = c.atualizar()
+        return "Pronto, atualizei as novidades: $novas novas. Tenho ${c.totalDeNovidades()} guardadas."
+    }
+
+    private fun noticias(tema: String): String {
+        val t = tema.ifBlank { "Brasil" }
+        conhecimento?.buscar(t)?.takeIf { it.isNotEmpty() }?.let {
+            val r = Pesquisa.formatarNoticias(it, "Pelas novidades que eu acompanho:")
+            ultimasFontes = r.fontes
+            return r.texto
+        }
+        val lista = Pesquisa.noticias("$t when:30d")
+        if (lista.isEmpty()) return "Não encontrei notícias recentes sobre $t."
+        conhecimento?.guardar(t, lista)
+        val r = Pesquisa.formatarNoticias(lista, "Encontrei estas notícias recentes sobre $t:")
+        ultimasFontes = r.fontes
+        return r.texto
+    }
+
+    private fun acompanhar(acao: String, tema: String): String {
+        val c = conhecimento ?: return "Memória indisponível."
+        return when (acao) {
+            "listar" -> "Eu acompanho: " + c.temas().joinToString(", ") + "."
+            "parar" -> if (c.parar(tema) > 0) "Certo, parei de acompanhar $tema." else "Eu não estava acompanhando $tema."
+            else -> {
+                c.seguir(tema)
+                val novas = try {
+                    c.guardar(tema, Pesquisa.noticias("$tema when:7d", 15))
+                } catch (e: Exception) {
+                    0
+                }
+                "Combinado, vou acompanhar as novidades sobre $tema" +
+                    if (novas > 0) " e já guardei $novas." else "."
+            }
+        }
+    }
+
     private fun wikipedia(assunto: String): String {
         if (assunto.isBlank()) return "Sobre o que você quer saber?"
         val r = Web.wikipedia(assunto) ?: return "Não encontrei nada sobre $assunto na Wikipédia."
@@ -629,7 +690,10 @@ class Ferramentas(private val activity: Activity, private val memoria: Memoria? 
     companion object {
         const val PEDIDO_CONTATOS = 20
         const val PEDIDO_LOCALIZACAO = 21
-        val USAM_REDE = setOf("previsao_do_tempo", "resumo_wikipedia", "buscar_na_internet")
+        val USAM_REDE = setOf(
+            "previsao_do_tempo", "resumo_wikipedia", "buscar_na_internet", "cotacao_moeda", "noticias",
+            "acompanhar_tema", "atualizar_noticias",
+        )
 
         private const val SPOTIFY = "com.spotify.music"
         private const val YOUTUBE_MUSIC = "com.google.android.apps.youtube.music"

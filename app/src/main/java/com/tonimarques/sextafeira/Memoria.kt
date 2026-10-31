@@ -12,7 +12,7 @@ import android.database.sqlite.SQLiteOpenHelper
  *  - aprendidas: frases novas que ela aprendeu quando você confirmou o que queria dizer;
  *  - uso: o que você mais usa (apps, músicas, contatos), para entender "o de sempre".
  */
-class Memoria(contexto: Context) : SQLiteOpenHelper(contexto, "sexta.db", null, 1) {
+class Memoria(contexto: Context) : SQLiteOpenHelper(contexto, "sexta.db", null, 2) {
 
     data class Mensagem(val quando: Long, val doUsuario: Boolean, val texto: String, val topico: String)
     data class Fato(val id: Long, val quando: Long, val texto: String, val categoria: String)
@@ -23,9 +23,26 @@ class Memoria(contexto: Context) : SQLiteOpenHelper(contexto, "sexta.db", null, 
         db.execSQL("CREATE TABLE memorias (id INTEGER PRIMARY KEY AUTOINCREMENT, quando INTEGER, texto TEXT, categoria TEXT)")
         db.execSQL("CREATE TABLE aprendidas (id INTEGER PRIMARY KEY AUTOINCREMENT, frase TEXT UNIQUE, intencao TEXT)")
         db.execSQL("CREATE TABLE uso (chave TEXT PRIMARY KEY, contagem INTEGER, ultimo INTEGER)")
+        criarTabelasDeConhecimento(db)
     }
 
-    override fun onUpgrade(db: SQLiteDatabase, antiga: Int, nova: Int) {}
+    override fun onUpgrade(db: SQLiteDatabase, antiga: Int, nova: Int) {
+        if (antiga < 2) criarTabelasDeConhecimento(db)
+    }
+
+    /** Versão 2: novidades acompanhadas, assuntos, respostas guardadas e informações de controle. */
+    private fun criarTabelasDeConhecimento(db: SQLiteDatabase) {
+        db.execSQL(
+            "CREATE TABLE IF NOT EXISTS noticias (id INTEGER PRIMARY KEY AUTOINCREMENT, tema TEXT, titulo TEXT, " +
+                "fonte TEXT, link TEXT UNIQUE, data INTEGER, coletado INTEGER)"
+        )
+        db.execSQL("CREATE TABLE IF NOT EXISTS temas (nome TEXT PRIMARY KEY)")
+        db.execSQL(
+            "CREATE TABLE IF NOT EXISTS respostas (id INTEGER PRIMARY KEY AUTOINCREMENT, pergunta TEXT, " +
+                "resposta TEXT, quando INTEGER)"
+        )
+        db.execSQL("CREATE TABLE IF NOT EXISTS controle (chave TEXT PRIMARY KEY, valor TEXT)")
+    }
 
     // ------------------------------------------------------------- conversas
     fun salvarMensagem(doUsuario: Boolean, texto: String, topico: String) {
