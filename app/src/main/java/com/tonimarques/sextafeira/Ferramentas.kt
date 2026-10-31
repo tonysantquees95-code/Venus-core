@@ -6,10 +6,12 @@ import android.app.SearchManager
 import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.hardware.camera2.CameraCharacteristics
 import android.hardware.camera2.CameraManager
 import android.media.AudioManager
+import android.os.BatteryManager
 import android.net.Uri
 import android.os.Build
 import android.os.Handler
@@ -135,6 +137,7 @@ class Ferramentas(private val activity: Activity) {
             )
         )
         .put(funcao("abrir_camera", "Abre a câmera para tirar foto.", emptyList()))
+        .put(funcao("nivel_bateria", "Informa a porcentagem de bateria do celular e se está carregando.", emptyList()))
         .put(
             funcao(
                 "abrir_configuracao",
@@ -221,6 +224,7 @@ class Ferramentas(private val activity: Activity) {
             "Câmera aberta."
         }
         "abrir_configuracao" -> configuracao(a.optString("tipo"))
+        "nivel_bateria" -> bateria()
         else -> "Não conheço a ferramenta $nome."
     }
 
@@ -476,6 +480,25 @@ class Ferramentas(private val activity: Activity) {
         }
         if (!iniciar(Intent(acao))) activity.startActivity(Intent(Settings.ACTION_SETTINGS))
         return "Abri as configurações de ${NOMES_CONFIG[tipo] ?: tipo}. É só tocar para mudar."
+    }
+
+    private fun bateria(): String {
+        val gerente = activity.getSystemService(Context.BATTERY_SERVICE) as BatteryManager
+        val nivel = gerente.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY)
+        val estado = activity.registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
+            ?.getIntExtra(BatteryManager.EXTRA_STATUS, -1) ?: -1
+        val carregando = estado == BatteryManager.BATTERY_STATUS_CHARGING || estado == BatteryManager.BATTERY_STATUS_FULL
+        if (nivel <= 0) return "Não consegui ler a bateria agora."
+        val comentario = when {
+            carregando -> "e carregando"
+            nivel <= 15 -> "Melhor colocar para carregar"
+            else -> ""
+        }
+        return when {
+            carregando -> "A bateria está em $nivel por cento $comentario."
+            comentario.isNotEmpty() -> "A bateria está em $nivel por cento. $comentario."
+            else -> "A bateria está em $nivel por cento."
+        }
     }
 
     private fun iniciar(intent: Intent): Boolean = try {

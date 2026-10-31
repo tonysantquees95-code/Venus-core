@@ -173,6 +173,9 @@ object ComandosLocais {
             Regex("\\b(localizacao|gps)\\b").containsMatchIn(c) -> "localizacao"
             Regex("\\bbrilho\\b").containsMatchIn(c) -> "tela"
             Regex("\\b(configuracoes|ajustes) d[ae] bateria\\b").containsMatchIn(c) -> "bateria"
+            Regex("^(?:(?:abre|abrir|abra|abri|entra|entrar|mostra|acessa)\\s+)?(?:(?:as|os|a|o|nas|nos)\\s+)?" +
+                "(configuracoes|configuracao|config|ajustes|definicoes)(?:\\s+d[oe]\\s+(celular|telefone|sistema|aparelho))?$")
+                .matches(c) -> "geral"
             else -> return null
         }
         return Resultado.Acao("abrir_configuracao", mapOf("tipo" to tipo))
@@ -203,7 +206,7 @@ object ComandosLocais {
         var contato = f.trecho(m.groups[3]) ?: return null
         val texto = f.trecho(m.groups[4]) ?: return null
         contato = contato.replace(Regex("^(?i)(a|o|as|os)\\s+"), "")
-        if (contato.isBlank() || texto.isBlank()) return null
+        if (contato.isBlank() || texto.isBlank() || ehAlguem(contato)) return null
         val canal = (m.groups[1]?.value.orEmpty() + " " + m.groups[2]?.value.orEmpty())
         val sms = "sms" in canal || "torpedo" in canal
         return Resultado.Acao(
@@ -215,9 +218,13 @@ object ComandosLocais {
     private fun ligacao(f: Frase): Resultado? {
         val m = LIGACAO.matchEntire(f.chave) ?: return null
         val contato = f.trecho(m.groups[1])?.replace(Regex("^(?i)(a|o)\\s+"), "") ?: return null
-        if (contato.isBlank()) return null
+        if (contato.isBlank() || ehAlguem(contato)) return null
         return Resultado.Acao("fazer_ligacao", mapOf("contato" to contato))
     }
+
+    /** "liga pra alguém" não tem contato de verdade: deixa o cérebro perguntar para quem. */
+    private fun ehAlguem(contato: String) =
+        normalizar(contato).trim() in setOf("alguem", "uma pessoa", "ninguem", "um contato", "um amigo", "uma amiga")
 
     private fun mapa(f: Frase): Resultado? {
         NAVEGAR.matchEntire(f.chave)?.let { m ->
@@ -262,6 +269,8 @@ object ComandosLocais {
         var nome = f.trecho(m.groups[1]) ?: return null
         nome = nome.replace(Regex("(?i)\\s+(app|aplicativo)$"), "").trim()
         if (nome.isBlank() || nome.split(" ").size > 4) return null
+        // "abre um aplicativo" não diz qual: o cérebro pergunta.
+        if (Regex("^(um |uma |algum |alguma |o |a |outro )?(app|apps|aplicativo|aplicativos|programa|aplicacao)$").matches(normalizar(nome))) return null
         return Resultado.Acao("abrir_app", mapOf("nome" to nome))
     }
 

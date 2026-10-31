@@ -23,7 +23,9 @@ class Gemini(
     private var modelosReserva: List<String>? = null
     private val historico = JSONArray()
 
-    fun enviar(pedido: String): String {
+    data class RespostaIA(val ok: Boolean, val texto: String)
+
+    fun enviar(pedido: String): RespostaIA {
         val inicio = historico.length()
         historico.put(
             JSONObject()
@@ -36,14 +38,14 @@ class Gemini(
                 val (codigo, resposta) = chamarApi()
                 if (codigo !in 200..299) {
                     desfazer(inicio)
-                    return explicarErro(codigo, resposta)
+                    return RespostaIA(false, explicarErro(codigo, resposta))
                 }
 
                 val candidato = resposta.optJSONArray("candidates")?.optJSONObject(0)
                 val conteudo = candidato?.optJSONObject("content")
                 if (conteudo == null) {
                     desfazer(inicio)
-                    return "Não consegui uma resposta para isso. Pode reformular?"
+                    return RespostaIA(false, "Não consegui uma resposta para isso. Pode reformular?")
                 }
                 if (!conteudo.has("role")) conteudo.put("role", "model")
                 // Guarda o conteúdo inteiro (inclui as assinaturas de raciocínio do Gemini).
@@ -61,7 +63,7 @@ class Gemini(
                 }
 
                 if (chamadas.isEmpty()) {
-                    return texto.toString().trim().ifEmpty { "Feito." }
+                    return RespostaIA(true, texto.toString().trim().ifEmpty { "Feito." })
                 }
 
                 val respostas = JSONArray()
@@ -79,15 +81,13 @@ class Gemini(
             }
         } catch (e: Exception) {
             desfazer(inicio)
-            return if (e is IOException) {
-                "Não consegui falar com o Gemini: a conexão caiu. " +
-                    "Use o menu ⋮ > Diagnóstico de conexão para ver o motivo. " +
-                    "(${e.javaClass.simpleName}: ${e.message.orEmpty().take(100)})"
-            } else {
-                "Algo deu errado: ${e.message ?: e.javaClass.simpleName}"
-            }
+            return RespostaIA(
+                false,
+                if (e is IOException) "Não consegui falar com a inteligência artificial: a conexão caiu."
+                else "Algo deu errado: ${e.message ?: e.javaClass.simpleName}"
+            )
         }
-        return "Fiz várias ações seguidas e parei por segurança. Quer que eu continue?"
+        return RespostaIA(true, "Fiz várias ações seguidas e parei por segurança. Quer que eu continue?")
     }
 
     private fun desfazer(tamanho: Int) {
@@ -143,10 +143,10 @@ class Gemini(
         }
 
         // 1) Modelo em uso, com uma nova tentativa se a rede oscilar ou o servidor estiver ocupado.
-        tentar(modeloAtivo, 2)?.let { return it }
+        tentar(modeloAtivo, 1)?.let { return it }
 
         // 2) Modelo sobrecarregado ou sem cota: passa para outro modelo Flash disponível na chave.
-        for (reserva in reservas()) {
+        for (reserva in reservas().take(3)) {
             if (reserva == modeloAtivo) continue
             val resposta = tentar(reserva, 1) ?: continue
             if (resposta.first in 200..299) {
@@ -165,8 +165,8 @@ class Gemini(
         val conexao = url.openConnection() as HttpURLConnection
         try {
             conexao.requestMethod = "POST"
-            conexao.connectTimeout = 20_000
-            conexao.readTimeout = 90_000
+            conexao.connectTimeout = 8_000
+            conexao.readTimeout = 25_000
             conexao.doOutput = true
             conexao.useCaches = false
             conexao.setFixedLengthStreamingMode(bytes.size)
