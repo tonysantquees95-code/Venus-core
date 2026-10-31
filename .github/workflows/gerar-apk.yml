@@ -3,7 +3,7 @@ name: Gerar APK
 on:
   push:
     branches: [main]
-    paths-ignore: [".github/workflows/modelo-voz.yml"]
+    paths-ignore: [".github/workflows/modelo-voz.yml", ".github/workflows/teste-wikidata.yml"]
   workflow_dispatch:
 
 permissions:
