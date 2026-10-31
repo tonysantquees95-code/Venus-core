@@ -47,7 +47,7 @@ class Orbe(context: Context) : View(context) {
         strokeCap = Paint.Cap.ROUND
     }
     private val pBlob = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) blendMode = BlendMode.PLUS
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) blendMode = BlendMode.SCREEN
     }
 
     private val caminho = Path()
@@ -76,12 +76,23 @@ class Orbe(context: Context) : View(context) {
         nivelVoz = ((rmsDb + 2f) / 12f).coerceIn(0f, 1f)
     }
 
+    /** Um "flash" de energia, usado na ativação. */
+    fun pulsar() {
+        energia = 1f
+    }
+
     private fun cor(matiz: Float, saturacao: Float = 0.78f, valor: Float = 1f): Int {
         hsv[0] = ((matiz % 360f) + 360f) % 360f
         hsv[1] = saturacao
         hsv[2] = valor
         return Color.HSVToColor(hsv)
     }
+
+    private fun clarear(cor: Int, quanto: Float): Int = Color.rgb(
+        (Color.red(cor) + (255 - Color.red(cor)) * quanto).toInt(),
+        (Color.green(cor) + (255 - Color.green(cor)) * quanto).toInt(),
+        (Color.blue(cor) + (255 - Color.blue(cor)) * quanto).toInt(),
+    )
 
     private fun comAlfa(cor: Int, alfa: Float): Int =
         Color.argb((alfa.coerceIn(0f, 1f) * 255).toInt(), Color.red(cor), Color.green(cor), Color.blue(cor))
@@ -163,8 +174,8 @@ class Orbe(context: Context) : View(context) {
             val fy = cy + sin(giro + desloc) * raio * 0.3f
             pBlob.shader = RadialGradient(
                 fx, fy, raio * 1.35f,
-                intArrayOf(comAlfa(Color.WHITE, 0.35f), comAlfa(corCamada, 0.75f), comAlfa(corCamada, 0.12f)),
-                floatArrayOf(0f, 0.5f, 1f), Shader.TileMode.CLAMP
+                intArrayOf(comAlfa(clarear(corCamada, 0.3f), 0.5f), comAlfa(corCamada, 0.62f), comAlfa(corCamada, 0.06f)),
+                floatArrayOf(0f, 0.55f, 1f), Shader.TileMode.CLAMP
             )
             canvas.drawPath(caminho, pBlob)
         }
@@ -172,10 +183,20 @@ class Orbe(context: Context) : View(context) {
         // ----- núcleo luminoso
         pNucleo.shader = RadialGradient(
             cx, cy, raio * 0.8f,
-            intArrayOf(comAlfa(Color.WHITE, 0.45f + 0.4f * energia), comAlfa(cor1, 0.25f), Color.TRANSPARENT),
+            intArrayOf(comAlfa(clarear(cor2, 0.55f), 0.10f + 0.30f * energia), comAlfa(cor2, 0.08f), Color.TRANSPARENT),
             floatArrayOf(0f, 0.5f, 1f), Shader.TileMode.CLAMP
         )
         canvas.drawCircle(cx, cy, raio * 0.8f, pNucleo)
+
+        // ----- reflexo de vidro no alto, à esquerda
+        val bx = cx - raio * 0.38f
+        val by = cy - raio * 0.42f
+        pNucleo.shader = RadialGradient(
+            bx, by, raio * 0.42f,
+            intArrayOf(comAlfa(Color.WHITE, 0.16f), Color.TRANSPARENT),
+            null, Shader.TileMode.CLAMP
+        )
+        canvas.drawCircle(bx, by, raio * 0.42f, pNucleo)
 
         quadros++
         if (quadros % 12 == 0) aoMudarCor?.invoke(cor1)
