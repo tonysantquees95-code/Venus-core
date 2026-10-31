@@ -171,6 +171,26 @@ class Ferramentas(private val activity: Activity, private val memoria: Memoria? 
         )
         .put(
             funcao(
+                "traduzir", "Traduz um texto para outro idioma (sem precisar do Google).", listOf("texto", "para"),
+                "texto" to texto("O texto a traduzir."),
+                "para" to texto("Código do idioma de destino: en, es, fr, it, de, ja, zh-CN, pt-BR..."),
+                "de" to texto("Código do idioma de origem; padrão pt-BR.")
+            )
+        )
+        .put(
+            funcao(
+                "consultar_cep", "Endereço (rua, bairro, cidade) de um CEP brasileiro.", listOf("cep"),
+                "cep" to texto("O CEP, só números.")
+            )
+        )
+        .put(
+            funcao(
+                "consultar_cnpj", "Dados públicos de uma empresa pelo CNPJ (razão social, situação, cidade, atividade).", listOf("cnpj"),
+                "cnpj" to texto("O CNPJ, só números.")
+            )
+        )
+        .put(
+            funcao(
                 "cotacao_moeda", "Cotação atual de uma moeda em reais (dólar, euro, bitcoin, libra...).", listOf("moeda"),
                 "moeda" to texto("Nome da moeda, por exemplo 'dólar'.")
             )
@@ -291,6 +311,11 @@ class Ferramentas(private val activity: Activity, private val memoria: Memoria? 
         "previsao_do_tempo" -> clima(a.optString("cidade"), a.optString("dia", "hoje"))
         "resumo_wikipedia" -> wikipedia(a.optString("assunto"))
         "cotacao_moeda" -> Pesquisa.cotacao(a.optString("moeda"))
+        "traduzir" -> Servicos.traduzir(a.optString("texto"), a.optString("para", "en"), a.optString("de", "pt-BR").ifBlank { "pt-BR" })
+        "consultar_cep" -> Servicos.cep(a.optString("cep"))
+        "consultar_cnpj" -> Servicos.cnpj(a.optString("cnpj"))
+        "consultar_ddd" -> Servicos.ddd(a.optString("ddd"))
+        "feriados" -> Servicos.proximosFeriados()
         "noticias" -> noticias(a.optString("tema"))
         "acompanhar_tema" -> acompanhar(a.optString("acao"), a.optString("tema"))
         "atualizar_noticias" -> atualizarNoticias()
@@ -692,7 +717,7 @@ class Ferramentas(private val activity: Activity, private val memoria: Memoria? 
         const val PEDIDO_LOCALIZACAO = 21
         val USAM_REDE = setOf(
             "previsao_do_tempo", "resumo_wikipedia", "buscar_na_internet", "cotacao_moeda", "noticias",
-            "acompanhar_tema", "atualizar_noticias",
+            "acompanhar_tema", "atualizar_noticias", "traduzir", "consultar_cep", "consultar_cnpj", "consultar_ddd", "feriados",
         )
 
         private const val SPOTIFY = "com.spotify.music"

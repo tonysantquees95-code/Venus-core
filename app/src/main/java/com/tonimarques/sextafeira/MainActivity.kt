@@ -181,9 +181,14 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         val cabecalho = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            setPadding(dp(22), dp(14), dp(10), dp(4))
+            setPadding(dp(8), dp(14), dp(10), dp(4))
         }
-        val nomes = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        // Canto esquerdo: histórico de conversas
+        cabecalho.addView(botaoIcone(R.drawable.ic_historico, "Histórico de conversas", COR_TEXTO_APAGADO) { mostrarHistorico() })
+        val nomes = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(4), 0, 0, 0)
+        }
         titulo = TextView(this).apply {
             text = Marca.nomeMaiusculo
             textSize = 15f
@@ -1299,7 +1304,6 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
             ),
             TelaDeAjustes.Secao(
                 "Memória e conversas", listOf(
-                    item("Histórico por tópico", { "Todas as conversas, separadas por assunto." }, MENU_HISTORICO),
                     item("O que a $n sabe sobre mim", { "Seus gostos, favoritos e o que ela aprendeu. Dá para apagar." }, MENU_MEMORIAS),
                     item("Nova conversa", { "Limpa a tela e começa do zero (o histórico continua salvo)." }, MENU_NOVA),
                 )
@@ -1448,47 +1452,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
 
     // --------------------------------------------------- histórico e memórias
     private fun mostrarHistorico() {
-        val topicos = memoria.topicos()
-        if (topicos.isEmpty()) {
-            Toast.makeText(this, "Ainda não há conversas salvas.", Toast.LENGTH_SHORT).show()
-            return
-        }
-        val nomes = topicos.map { (t, n) -> "$t  ($n)" }.toTypedArray()
-        AlertDialog.Builder(this)
-            .setTitle("Histórico por tópico")
-            .setItems(nomes) { _, qual -> mostrarTopico(topicos[qual].first) }
-            .setNeutralButton("Apagar todo o histórico") { _, _ ->
-                AlertDialog.Builder(this)
-                    .setTitle("Apagar todo o histórico?")
-                    .setMessage("As conversas salvas serão apagadas. As memórias continuam.")
-                    .setPositiveButton("Apagar") { _, _ -> memoria.apagarHistorico() }
-                    .setNegativeButton("Cancelar", null)
-                    .show()
-            }
-            .setNegativeButton("Fechar", null)
-            .show()
-    }
-
-    private fun mostrarTopico(topico: String) {
-        val formato = java.text.SimpleDateFormat("dd/MM HH:mm", Locale("pt", "BR"))
-        val texto = memoria.mensagens(topico, 150).joinToString("\n\n") { m ->
-            val quem = if (m.doUsuario) "Você" else Marca.nome
-            "${formato.format(java.util.Date(m.quando))} · $quem\n${m.texto}"
-        }
-        val vista = TextView(this).apply {
-            this.text = texto
-            textSize = 14f
-            setTextIsSelectable(true)
-            setPadding(dp(22), dp(12), dp(22), dp(12))
-        }
-        val rolar = ScrollView(this).apply { addView(vista) }
-        rolar.post { rolar.fullScroll(View.FOCUS_DOWN) }
-        AlertDialog.Builder(this)
-            .setTitle(topico)
-            .setView(rolar)
-            .setPositiveButton("Fechar", null)
-            .setNeutralButton("Apagar tópico") { _, _ -> memoria.apagarTopico(topico) }
-            .show()
+        TelaDeHistorico(this, memoria, corAtual).show()
     }
 
     private fun mostrarMemorias() {

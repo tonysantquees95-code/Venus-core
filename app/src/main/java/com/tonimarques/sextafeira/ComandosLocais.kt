@@ -37,6 +37,9 @@ object ComandosLocais {
         // Clima, cotações e notícias vêm antes do filtro de perguntas: "quanto está o dólar?" é um comando.
         // ...mas não quando é uma mensagem: "manda pra Maria que vai chover" é mensagem, não previsão.
         val ehRecado = RECADO.containsMatchIn(c)
+        // Contas, conversões, datas, tradução, CEP...: antes do clima ("30 graus em fahrenheit" é conversão).
+        if (!ehRecado) Calculadora.responder(c)?.let { return Resultado.Resposta(it) }
+        if (!ehRecado) servicos(f)?.let { return it }
         if (!ehRecado) clima(f)?.let { return it }
         if (!ehRecado) cotacao(c)?.let { return it }
         acompanhar(f)?.let { return it }
@@ -162,6 +165,36 @@ object ComandosLocais {
             val tema = f.trecho(m.groups[1]) ?: return null
             if (tema.isBlank()) return null
             return Resultado.Acao("acompanhar_tema", mapOf("acao" to "seguir", "tema" to tema))
+        }
+        return null
+    }
+
+    /** CEP, CNPJ, DDD, feriados e tradução. */
+    private fun servicos(f: Frase): Resultado? {
+        val c = f.chave
+        val digitos = c.filter { it.isDigit() }
+        if (Regex("\\bcep\\b").containsMatchIn(c) && digitos.length == 8) {
+            return Resultado.Acao("consultar_cep", mapOf("cep" to digitos))
+        }
+        if (Regex("\\bcnpj\\b").containsMatchIn(c) && digitos.length == 14) {
+            return Resultado.Acao("consultar_cnpj", mapOf("cnpj" to digitos))
+        }
+        if (Regex("\\bddd\\b").containsMatchIn(c) && digitos.length == 2) {
+            return Resultado.Acao("consultar_ddd", mapOf("ddd" to digitos))
+        }
+        if (FERIADO.containsMatchIn(c)) return Resultado.Acao("feriados", emptyMap())
+        for ((regra, sentido) in TRADUCAO) {
+            val m = regra.matchEntire(c) ?: continue
+            val texto = f.trecho(m.groups[1]).orEmpty().trim().trim('"', '“', '”', '\'', ' ')
+            val idioma = Servicos.IDIOMAS[m.groupValues[2]] ?: continue
+            if (texto.isBlank()) continue
+            val (de, para) = when {
+                sentido == "de" -> idioma to "pt-BR"
+                idioma == "pt-BR" -> "en" to "pt-BR" // "o que significa good morning em português"
+                else -> "pt-BR" to idioma
+            }
+            if (de == para) continue
+            return Resultado.Acao("traduzir", mapOf("texto" to texto, "para" to para, "de" to de))
         }
         return null
     }
@@ -369,6 +402,17 @@ object ComandosLocais {
     private val PARAR_ACOMPANHAR = Regex(
         "^(?:para|pare|parar|deixa|deixe) de (?:acompanhar|seguir|monitorar)(?:\\s+(?:as|os))?" +
             "(?:\\s+(?:noticias|novidades))?(?:\\s+(?:de|do|da|dos|das|sobre|em))?\\s+(.+)$"
+    )
+    private val FERIADO = Regex(
+        "\\b(proximo feriado|proximos feriados|quando (?:e|eh|vai ser|sera) o (?:proximo )?feriado|tem feriado|" +
+            "quais (?:sao )?os (?:proximos )?feriados|feriados (?:do ano|deste ano|desse ano|de \\d{4}))\\b"
+    )
+    private val IDIOMA = "(" + Servicos.IDIOMAS.keys.joinToString("|") + ")"
+    private val TRADUCAO = listOf(
+        Regex("^(?:como (?:e que )?(?:se )?(?:diz|fala|escreve|falo|digo|escrevo)|qual (?:e |eh )?a traducao de) (.+?) (?:em|no) $IDIOMA$") to "auto",
+        Regex("^(?:traduz|traduza|traduzir|traduz ai|traducao de|me traduz) (.+?) (?:para|pro|pra|em) (?:o )?$IDIOMA$") to "auto",
+        Regex("^(?:traduz|traduza|traduzir|me traduz) (.+?) do $IDIOMA(?: para o portugues| pro portugues)?$") to "de",
+        Regex("^o que (?:significa|quer dizer) (.+?) em $IDIOMA$") to "auto",
     )
     private val NOTICIAS = listOf(
         Regex(
