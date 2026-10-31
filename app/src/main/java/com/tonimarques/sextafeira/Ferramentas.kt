@@ -1,0 +1,506 @@
+package com.tonimarques.sextafeira
+
+import android.Manifest
+import android.app.Activity
+import android.app.SearchManager
+import android.content.ActivityNotFoundException
+import android.content.Context
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.hardware.camera2.CameraCharacteristics
+import android.hardware.camera2.CameraManager
+import android.media.AudioManager
+import android.net.Uri
+import android.os.Build
+import android.os.Handler
+import android.os.Looper
+import android.provider.AlarmClock
+import android.provider.ContactsContract
+import android.provider.MediaStore
+import android.provider.Settings
+import android.view.KeyEvent
+import org.json.JSONArray
+import org.json.JSONObject
+import java.text.Normalizer
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
+
+/**
+ * As habilidades da Sexta-feira. Cada uma tem uma descrição (que o Gemini lê)
+ * e uma implementação (que roda no celular).
+ *
+ * Para criar uma habilidade nova:
+ *  1. adicione a descrição em declaracoes();
+ *  2. adicione o nome em executarAqui();
+ *  3. escreva a função que faz a ação.
+ */
+class Ferramentas(private val activity: Activity) {
+
+    private val principal = Handler(Looper.getMainLooper())
+
+    // ------------------------------------------------------------- descrições
+    fun declaracoes(): JSONArray = JSONArray()
+        .put(
+            funcao(
+                "abrir_app", "Abre um aplicativo instalado no celular.", listOf("nome"),
+                "nome" to texto("Nome do app, por exemplo WhatsApp, Instagram, Câmera, Spotify.")
+            )
+        )
+        .put(
+            funcao(
+                "tocar_musica",
+                "Toca uma música, artista, álbum ou playlist em um app de música.",
+                listOf("busca"),
+                "busca" to texto("O que tocar, por exemplo 'Jorge e Mateus' ou 'playlist de rock'."),
+                "app" to opcoes("App preferido, se o usuário disser.", "spotify", "youtube music", "youtube", "deezer")
+            )
+        )
+        .put(
+            funcao(
+                "controlar_midia",
+                "Controla a música ou vídeo que já está tocando e o volume do celular.",
+                listOf("acao"),
+                "acao" to opcoes(
+                    "O que fazer.",
+                    "tocar_pausar", "tocar", "pausar", "proxima", "anterior",
+                    "aumentar_volume", "diminuir_volume", "mudo"
+                )
+            )
+        )
+        .put(
+            funcao(
+                "enviar_whatsapp",
+                "Deixa uma mensagem pronta no WhatsApp para um contato ou número. " +
+                    "O usuário ainda precisa tocar em Enviar.",
+                listOf("mensagem"),
+                "contato" to texto("Nome do contato salvo ou número com DDD. Vazio para o usuário escolher."),
+                "mensagem" to texto("Texto da mensagem.")
+            )
+        )
+        .put(
+            funcao(
+                "enviar_sms",
+                "Deixa um SMS pronto para um contato ou número. O usuário ainda precisa tocar em Enviar.",
+                listOf("contato", "mensagem"),
+                "contato" to texto("Nome do contato salvo ou número com DDD."),
+                "mensagem" to texto("Texto da mensagem.")
+            )
+        )
+        .put(
+            funcao(
+                "fazer_ligacao",
+                "Abre o discador com o número de um contato. O usuário toca para ligar.",
+                listOf("contato"),
+                "contato" to texto("Nome do contato salvo ou número com DDD.")
+            )
+        )
+        .put(
+            funcao(
+                "lanterna", "Liga ou desliga a lanterna do celular.", listOf("ligar"),
+                "ligar" to booleano("true para ligar, false para desligar.")
+            )
+        )
+        .put(
+            funcao(
+                "criar_alarme", "Cria um alarme no relógio do celular.", listOf("hora", "minuto"),
+                "hora" to inteiro("Hora de 0 a 23."),
+                "minuto" to inteiro("Minuto de 0 a 59."),
+                "descricao" to texto("Nome do alarme, opcional.")
+            )
+        )
+        .put(
+            funcao(
+                "criar_timer", "Inicia um timer (contagem regressiva).", listOf("segundos"),
+                "segundos" to inteiro("Duração total em segundos."),
+                "descricao" to texto("Nome do timer, opcional.")
+            )
+        )
+        .put(
+            funcao(
+                "abrir_site", "Abre um site no navegador.", listOf("endereco"),
+                "endereco" to texto("Endereço, por exemplo youtube.com.")
+            )
+        )
+        .put(
+            funcao(
+                "pesquisar_na_web", "Pesquisa algo no Google e mostra os resultados.", listOf("termo"),
+                "termo" to texto("O que pesquisar.")
+            )
+        )
+        .put(
+            funcao(
+                "abrir_mapa", "Mostra um lugar no mapa ou inicia a navegação até ele.", listOf("destino"),
+                "destino" to texto("Endereço ou nome do lugar."),
+                "navegar" to booleano("true para iniciar a rota com GPS.")
+            )
+        )
+        .put(funcao("abrir_camera", "Abre a câmera para tirar foto.", emptyList()))
+        .put(
+            funcao(
+                "abrir_configuracao",
+                "Abre uma tela de configurações do celular. Usar para Wi-Fi, Bluetooth etc., " +
+                    "porque o Android não deixa apps ligarem ou desligarem isso sozinhos.",
+                listOf("tipo"),
+                "tipo" to opcoes(
+                    "Qual configuração.",
+                    "wifi", "bluetooth", "internet", "volume", "tela", "bateria",
+                    "localizacao", "aplicativos", "nao_perturbe", "geral"
+                )
+            )
+        )
+
+    private fun funcao(
+        nome: String,
+        descricao: String,
+        obrigatorios: List<String>,
+        vararg parametros: Pair<String, JSONObject>,
+    ): JSONObject {
+        val obj = JSONObject().put("name", nome).put("description", descricao)
+        if (parametros.isNotEmpty()) {
+            val propriedades = JSONObject()
+            for ((chave, valor) in parametros) propriedades.put(chave, valor)
+            obj.put(
+                "parameters",
+                JSONObject()
+                    .put("type", "object")
+                    .put("properties", propriedades)
+                    .put("required", JSONArray(obrigatorios))
+            )
+        }
+        return obj
+    }
+
+    private fun texto(descricao: String) = JSONObject().put("type", "string").put("description", descricao)
+    private fun inteiro(descricao: String) = JSONObject().put("type", "integer").put("description", descricao)
+    private fun booleano(descricao: String) = JSONObject().put("type", "boolean").put("description", descricao)
+    private fun opcoes(descricao: String, vararg valores: String) =
+        texto(descricao).put("enum", JSONArray(valores.toList()))
+
+    // ------------------------------------------------------------- execução
+    /** Chamado fora da thread principal; roda a ação na thread principal e espera o resultado. */
+    fun executar(nome: String, argumentos: JSONObject): String {
+        val pronto = CountDownLatch(1)
+        var resultado = "A ação não respondeu."
+        principal.post {
+            resultado = try {
+                executarAqui(nome, argumentos)
+            } catch (e: ActivityNotFoundException) {
+                "Não encontrei nenhum app no celular capaz de fazer isso."
+            } catch (e: SecurityException) {
+                "O Android não deixou fazer isso: ${e.message}"
+            } catch (e: Exception) {
+                "Deu erro ao executar $nome: ${e.message}"
+            }
+            pronto.countDown()
+        }
+        return if (pronto.await(15, TimeUnit.SECONDS)) resultado else "A ação demorou demais."
+    }
+
+    private fun executarAqui(nome: String, a: JSONObject): String = when (nome) {
+        "abrir_app" -> abrirApp(a.optString("nome"))
+        "tocar_musica" -> tocarMusica(a.optString("busca"), a.optString("app"))
+        "controlar_midia" -> controlarMidia(a.optString("acao"))
+        "enviar_whatsapp" -> enviarWhatsapp(a.optString("contato"), a.optString("mensagem"))
+        "enviar_sms" -> enviarSms(a.optString("contato"), a.optString("mensagem"))
+        "fazer_ligacao" -> ligar(a.optString("contato"))
+        "lanterna" -> lanterna(a.optBoolean("ligar", true))
+        "criar_alarme" -> alarme(a.optInt("hora"), a.optInt("minuto"), a.optString("descricao"))
+        "criar_timer" -> timer(a.optInt("segundos"), a.optString("descricao"))
+        "abrir_site" -> abrirSite(a.optString("endereco"))
+        "pesquisar_na_web" -> pesquisar(a.optString("termo"))
+        "abrir_mapa" -> mapa(a.optString("destino"), a.optBoolean("navegar", false))
+        "abrir_camera" -> {
+            activity.startActivity(Intent(MediaStore.INTENT_ACTION_STILL_IMAGE_CAMERA))
+            "Câmera aberta."
+        }
+        "abrir_configuracao" -> configuracao(a.optString("tipo"))
+        else -> "Não conheço a ferramenta $nome."
+    }
+
+    // ------------------------------------------------------------------ apps
+    private fun abrirApp(nome: String): String {
+        if (nome.isBlank()) return "Qual app devo abrir?"
+        val pm = activity.packageManager
+        val alvo = normalizar(APELIDOS[normalizar(nome)] ?: nome)
+        val lancadores = pm.queryIntentActivities(
+            Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER), 0
+        )
+        val apps = lancadores.map { it.loadLabel(pm).toString() to it.activityInfo.packageName }
+
+        val escolhido = apps.firstOrNull { normalizar(it.first) == alvo }
+            ?: apps.firstOrNull { normalizar(it.first).startsWith(alvo) }
+            ?: apps.firstOrNull { normalizar(it.first).contains(alvo) }
+            ?: apps.firstOrNull { normalizar(it.first).length >= 3 && alvo.contains(normalizar(it.first)) }
+            ?: apps.firstOrNull { it.second.contains(alvo.replace(" ", "")) }
+            ?: return "Não encontrei um app chamado \"$nome\" instalado."
+
+        val intent = pm.getLaunchIntentForPackage(escolhido.second)
+            ?: return "Não consegui abrir ${escolhido.first}."
+        activity.startActivity(intent)
+        return "Abri o app ${escolhido.first}."
+    }
+
+    // ---------------------------------------------------------------- música
+    private fun tocarMusica(busca: String, app: String): String {
+        val consulta = busca.trim()
+        if (consulta.isEmpty()) return "O que devo tocar?"
+        val preferido = normalizar(app)
+        val pacotes = when {
+            preferido.contains("youtube music") -> listOf(YOUTUBE_MUSIC)
+            preferido.contains("youtube") -> emptyList()
+            preferido.contains("deezer") -> listOf(DEEZER)
+            preferido.contains("spotify") -> listOf(SPOTIFY)
+            else -> listOf(SPOTIFY, YOUTUBE_MUSIC, DEEZER)
+        }
+
+        for (pacote in pacotes) {
+            val intent = Intent(MediaStore.INTENT_ACTION_MEDIA_PLAY_FROM_SEARCH)
+                .setPackage(pacote)
+                .putExtra(SearchManager.QUERY, consulta)
+                .putExtra(MediaStore.EXTRA_MEDIA_FOCUS, "vnd.android.cursor.item/*")
+            if (iniciar(intent)) return "Pedi para o ${NOMES[pacote]} tocar \"$consulta\"."
+        }
+
+        if (SPOTIFY in pacotes) {
+            val buscaSpotify = Intent(Intent.ACTION_VIEW, Uri.parse("spotify:search:" + Uri.encode(consulta)))
+            if (iniciar(buscaSpotify)) return "Abri a busca por \"$consulta\" no Spotify; o usuário escolhe a faixa."
+        }
+
+        activity.startActivity(
+            Intent(
+                Intent.ACTION_VIEW,
+                Uri.parse("https://www.youtube.com/results?search_query=" + Uri.encode(consulta))
+            )
+        )
+        return "Abri \"$consulta\" no YouTube."
+    }
+
+    private fun controlarMidia(acao: String): String {
+        val audio = activity.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+        fun tecla(codigo: Int) {
+            audio.dispatchMediaKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, codigo))
+            audio.dispatchMediaKeyEvent(KeyEvent(KeyEvent.ACTION_UP, codigo))
+        }
+        fun volume(direcao: Int) =
+            audio.adjustStreamVolume(AudioManager.STREAM_MUSIC, direcao, AudioManager.FLAG_SHOW_UI)
+
+        when (acao) {
+            "tocar_pausar" -> tecla(KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE)
+            "tocar" -> tecla(KeyEvent.KEYCODE_MEDIA_PLAY)
+            "pausar" -> tecla(KeyEvent.KEYCODE_MEDIA_PAUSE)
+            "proxima" -> tecla(KeyEvent.KEYCODE_MEDIA_NEXT)
+            "anterior" -> tecla(KeyEvent.KEYCODE_MEDIA_PREVIOUS)
+            "aumentar_volume" -> repeat(2) { volume(AudioManager.ADJUST_RAISE) }
+            "diminuir_volume" -> repeat(2) { volume(AudioManager.ADJUST_LOWER) }
+            "mudo" -> volume(AudioManager.ADJUST_TOGGLE_MUTE)
+            else -> return "Ação de mídia desconhecida: $acao."
+        }
+        return "Feito: $acao."
+    }
+
+    // ------------------------------------------------------- mensagens/ligação
+    private fun enviarWhatsapp(contato: String, mensagem: String): String {
+        if (contato.isBlank()) {
+            val compartilhar = Intent(Intent.ACTION_SEND).setType("text/plain")
+                .putExtra(Intent.EXTRA_TEXT, mensagem)
+            for (pacote in WHATSAPPS) {
+                if (iniciar(Intent(compartilhar).setPackage(pacote))) {
+                    return "Abri o WhatsApp com a mensagem; o usuário escolhe o contato e toca em Enviar."
+                }
+            }
+            return "O WhatsApp não está instalado."
+        }
+
+        val achado = resolverContato(contato)
+        val numero = achado.numero ?: return achado.aviso
+        val internacional = numeroInternacional(numero)
+        val uri = Uri.parse("https://api.whatsapp.com/send?phone=$internacional&text=" + Uri.encode(mensagem))
+        for (pacote in WHATSAPPS) {
+            if (iniciar(Intent(Intent.ACTION_VIEW, uri).setPackage(pacote))) {
+                return "Deixei a mensagem para ${achado.nome} pronta no WhatsApp; falta o usuário tocar em Enviar."
+            }
+        }
+        return "O WhatsApp não está instalado."
+    }
+
+    private fun enviarSms(contato: String, mensagem: String): String {
+        val achado = resolverContato(contato)
+        val numero = achado.numero ?: return achado.aviso
+        activity.startActivity(
+            Intent(Intent.ACTION_SENDTO, Uri.parse("smsto:" + Uri.encode(numero)))
+                .putExtra("sms_body", mensagem)
+        )
+        return "SMS para ${achado.nome} pronto; falta o usuário tocar em Enviar."
+    }
+
+    private fun ligar(contato: String): String {
+        val achado = resolverContato(contato)
+        val numero = achado.numero ?: return achado.aviso
+        activity.startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:" + Uri.encode(numero))))
+        return "Discador aberto com o número de ${achado.nome}; falta o usuário tocar para ligar."
+    }
+
+    private class Contato(val nome: String, val numero: String?, val aviso: String)
+
+    private fun resolverContato(contato: String): Contato {
+        val digitos = contato.filter { it.isDigit() }
+        if (digitos.length >= 8 && contato.count { it.isLetter() } == 0) {
+            return Contato(contato, digitos, "")
+        }
+        if (contato.isBlank()) return Contato("", null, "Para quem? Preciso do nome ou do número.")
+
+        if (activity.checkSelfPermission(Manifest.permission.READ_CONTACTS) != PackageManager.PERMISSION_GRANTED) {
+            activity.requestPermissions(arrayOf(Manifest.permission.READ_CONTACTS), PEDIDO_CONTATOS)
+            return Contato(
+                contato, null,
+                "Pedi permissão para ler os contatos. Peça ao usuário para tocar em Permitir e repetir o pedido."
+            )
+        }
+
+        val procurado = normalizar(contato)
+        val encontrados = linkedMapOf<String, String>()
+        activity.contentResolver.query(
+            ContactsContract.CommonDataKinds.Phone.CONTENT_URI,
+            arrayOf(
+                ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME,
+                ContactsContract.CommonDataKinds.Phone.NUMBER
+            ),
+            null, null, null
+        )?.use { cursor ->
+            while (cursor.moveToNext()) {
+                val nome = cursor.getString(0) ?: continue
+                val numero = cursor.getString(1) ?: continue
+                if (normalizar(nome).contains(procurado) && nome !in encontrados) {
+                    encontrados[nome] = numero
+                }
+            }
+        }
+
+        if (encontrados.isEmpty()) return Contato(contato, null, "Não encontrei \"$contato\" nos contatos.")
+        val exato = encontrados.entries.firstOrNull { normalizar(it.key) == procurado }
+        if (exato != null) return Contato(exato.key, exato.value, "")
+        if (encontrados.size == 1) {
+            val unico = encontrados.entries.first()
+            return Contato(unico.key, unico.value, "")
+        }
+        val nomes = encontrados.keys.take(5).joinToString(", ")
+        return Contato(contato, null, "Achei mais de um contato: $nomes. Pergunte ao usuário qual deles.")
+    }
+
+    private fun numeroInternacional(numero: String): String {
+        var d = numero.filter { it.isDigit() }
+        if (d.startsWith("00")) d = d.drop(2) else if (d.startsWith("0")) d = d.drop(1)
+        if (d.length == 10 || d.length == 11) d = "55$d"
+        return d
+    }
+
+    // ----------------------------------------------------------- utilidades
+    private fun lanterna(ligar: Boolean): String {
+        val cameras = activity.getSystemService(Context.CAMERA_SERVICE) as CameraManager
+        val id = cameras.cameraIdList.firstOrNull {
+            cameras.getCameraCharacteristics(it).get(CameraCharacteristics.FLASH_INFO_AVAILABLE) == true
+        } ?: return "Este celular não tem lanterna."
+        cameras.setTorchMode(id, ligar)
+        return if (ligar) "Lanterna ligada." else "Lanterna desligada."
+    }
+
+    private fun alarme(hora: Int, minuto: Int, descricao: String): String {
+        val intent = Intent(AlarmClock.ACTION_SET_ALARM)
+            .putExtra(AlarmClock.EXTRA_HOUR, hora)
+            .putExtra(AlarmClock.EXTRA_MINUTES, minuto)
+            .putExtra(AlarmClock.EXTRA_SKIP_UI, true)
+        if (descricao.isNotBlank()) intent.putExtra(AlarmClock.EXTRA_MESSAGE, descricao)
+        activity.startActivity(intent)
+        return "Alarme criado para %02d:%02d.".format(hora, minuto)
+    }
+
+    private fun timer(segundos: Int, descricao: String): String {
+        if (segundos <= 0) return "Quanto tempo deve ter o timer?"
+        val intent = Intent(AlarmClock.ACTION_SET_TIMER)
+            .putExtra(AlarmClock.EXTRA_LENGTH, segundos)
+            .putExtra(AlarmClock.EXTRA_SKIP_UI, true)
+        if (descricao.isNotBlank()) intent.putExtra(AlarmClock.EXTRA_MESSAGE, descricao)
+        activity.startActivity(intent)
+        return "Timer de $segundos segundos iniciado."
+    }
+
+    private fun abrirSite(endereco: String): String {
+        var url = endereco.trim()
+        if (url.isEmpty()) return "Qual site?"
+        if (!url.startsWith("http://") && !url.startsWith("https://")) url = "https://$url"
+        activity.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+        return "Abri $url."
+    }
+
+    private fun pesquisar(termo: String): String {
+        activity.startActivity(
+            Intent(Intent.ACTION_VIEW, Uri.parse("https://www.google.com/search?q=" + Uri.encode(termo)))
+        )
+        return "Pesquisa por \"$termo\" aberta."
+    }
+
+    private fun mapa(destino: String, navegar: Boolean): String {
+        val local = Uri.encode(destino)
+        if (navegar && iniciar(Intent(Intent.ACTION_VIEW, Uri.parse("google.navigation:q=$local")))) {
+            return "Navegação até $destino iniciada."
+        }
+        if (iniciar(Intent(Intent.ACTION_VIEW, Uri.parse("geo:0,0?q=$local")))) {
+            return "Mostrei $destino no mapa."
+        }
+        activity.startActivity(
+            Intent(Intent.ACTION_VIEW, Uri.parse("https://www.google.com/maps/search/?api=1&query=$local"))
+        )
+        return "Abri $destino no Google Maps pelo navegador."
+    }
+
+    private fun configuracao(tipo: String): String {
+        val paineis = Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q
+        val acao = when (tipo) {
+            "wifi" -> if (paineis) Settings.Panel.ACTION_WIFI else Settings.ACTION_WIFI_SETTINGS
+            "internet" -> if (paineis) Settings.Panel.ACTION_INTERNET_CONNECTIVITY else Settings.ACTION_WIRELESS_SETTINGS
+            "volume" -> if (paineis) Settings.Panel.ACTION_VOLUME else Settings.ACTION_SOUND_SETTINGS
+            "bluetooth" -> Settings.ACTION_BLUETOOTH_SETTINGS
+            "tela" -> Settings.ACTION_DISPLAY_SETTINGS
+            "bateria" -> Intent.ACTION_POWER_USAGE_SUMMARY
+            "localizacao" -> Settings.ACTION_LOCATION_SOURCE_SETTINGS
+            "aplicativos" -> Settings.ACTION_APPLICATION_SETTINGS
+            "nao_perturbe" -> "android.settings.ZEN_MODE_SETTINGS"
+            else -> Settings.ACTION_SETTINGS
+        }
+        if (!iniciar(Intent(acao))) activity.startActivity(Intent(Settings.ACTION_SETTINGS))
+        return "Abri as configurações de $tipo; o usuário faz a mudança com um toque."
+    }
+
+    private fun iniciar(intent: Intent): Boolean = try {
+        activity.startActivity(intent)
+        true
+    } catch (e: ActivityNotFoundException) {
+        false
+    }
+
+    private fun normalizar(s: String): String =
+        Normalizer.normalize(s.lowercase().trim(), Normalizer.Form.NFD)
+            .replace(Regex("\\p{Mn}+"), "")
+
+    companion object {
+        const val PEDIDO_CONTATOS = 20
+
+        private const val SPOTIFY = "com.spotify.music"
+        private const val YOUTUBE_MUSIC = "com.google.android.apps.youtube.music"
+        private const val DEEZER = "deezer.android.app"
+        private val WHATSAPPS = listOf("com.whatsapp", "com.whatsapp.w4b")
+        private val NOMES = mapOf(SPOTIFY to "Spotify", YOUTUBE_MUSIC to "YouTube Music", DEEZER to "Deezer")
+
+        private val APELIDOS = mapOf(
+            "zap" to "whatsapp",
+            "zapzap" to "whatsapp",
+            "wpp" to "whatsapp",
+            "insta" to "instagram",
+            "face" to "facebook",
+            "yt" to "youtube",
+            "relogio" to "relogio",
+            "configuracao" to "configuracoes",
+            "ajustes" to "configuracoes",
+        )
+    }
+}
