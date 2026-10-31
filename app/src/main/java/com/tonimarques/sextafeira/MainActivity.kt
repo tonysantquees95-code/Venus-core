@@ -90,6 +90,10 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         cerebro.apelido = memoria.valor("apelido") ?: "chefe"
         cerebro.carregarAprendidas(memoria.aprendidas())
         cerebro.aoAprender = { frase, intencao -> memoria.aprender(frase, intencao) }
+        try {
+            if (Calculadora.conversaVazia()) for (m in memoria.mensagens(null, 120)) Calculadora.lembrar(m.texto)
+        } catch (e: Exception) {
+        }
         tts = TextToSpeech(this, this)
         setContentView(montarTela())
         carregarConversaAnterior()
@@ -324,6 +328,8 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
     }
 
     protected open fun adicionarMensagem(texto: String, doUsuario: Boolean, salvar: Boolean = true): TextView {
+        // Contexto da conversa: valores e nomes citados ficam disponíveis para as próximas contas.
+        if (salvar) Calculadora.lembrar(texto)
         if (salvar) {
             try {
                 memoria.salvarMensagem(doUsuario, texto, topicoAtual)

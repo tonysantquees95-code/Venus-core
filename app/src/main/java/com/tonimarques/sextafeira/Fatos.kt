@@ -45,13 +45,42 @@ object Fatos {
     )
 
     /** Separado da rede para ser testado. Recebe a frase normalizada (sem acentos). */
+    /** O último assunto perguntado, para continuar: "e a população?", "e a moeda de lá?" */
+    @Volatile
+    var ultimoSujeito: String? = null
+
+    private val PRONOMES = setOf("la", "ele", "ela", "dele", "dela", "desse pais", "dessa cidade", "desse lugar", "desse estado", "isso", "esse pais", "essa cidade")
+    private val CONTINUACAO = Regex(
+        "^e (?:o |a |os |as )?(capital|populacao|moeda|area|idioma|lingua|presidente|presidenta|ceo|fundador|fundadora|altura|idade|sede|autor|autora)" +
+            "(?: (?:de la|dele|dela|desse pais|dessa cidade|desse lugar))?$"
+    )
+
     fun entender(c: String): Pergunta? {
-        val t = c.trim().trimEnd('?', '.', '!').replace(Regex("\\s+"), " ")
+        var t = c.trim().trimEnd('?', '.', '!').replace(Regex("\\s+"), " ")
+        val anterior = ultimoSujeito
+        if (anterior != null) {
+            CONTINUACAO.matchEntire(t)?.let { m ->
+                t = when (val o = m.groupValues[1]) {
+                    "idade" -> "quantos anos tem $anterior"
+                    "populacao" -> "qual a populacao de $anterior"
+                    "lingua", "idioma" -> "qual o idioma de $anterior"
+                    "ceo" -> "quem e o ceo de $anterior"
+                    "presidente", "presidenta" -> "quem e o presidente de $anterior"
+                    "fundador", "fundadora" -> "quem fundou $anterior"
+                    "autor", "autora" -> "quem e o autor de $anterior"
+                    else -> "qual a $o de $anterior"
+                }
+            }
+            t = t.replace(Regex("\\b(?:de la|dele|dela|desse pais|dessa cidade|desse lugar|desse estado)$"), "de $anterior")
+                .replace(Regex(" (?:ele|ela) tem$"), " tem $anterior")
+                .replace(Regex("^quantos anos (?:ele|ela) tem$"), "quantos anos tem $anterior")
+        }
         for (r in REGRAS) {
             val m = r.regex.matchEntire(t) ?: continue
             val grupos = m.groupValues.drop(1)
             val sujeito = grupos.last().trim().removePrefix("o ").removePrefix("a ").trim()
             if (sujeito.isBlank() || sujeito.length > 60) continue
+            if (sujeito in PRONOMES) continue
             val prep = grupos.dropLast(1).firstOrNull { it.isNotBlank() }?.trim().orEmpty()
             return Pergunta(r.tipo, r.props, sujeito, prep)
         }
@@ -72,6 +101,7 @@ object Fatos {
         val item = busca.optJSONArray("search")?.optJSONObject(0) ?: return null
         val id = item.optString("id")
         val nome = item.optString("label").ifBlank { sujeitoOriginal }
+        ultimoSujeito = ComandosLocais.normalizar(nome)
         for (prop in p.propriedades) {
             val claims = JSONObject(Web.texto(API + "action=wbgetclaims&entity=$id&property=$prop"))
                 .optJSONObject("claims")?.optJSONArray(prop) ?: continue

@@ -157,11 +157,25 @@ object Pesquisa {
         return Web.assuntoEnciclopedico(pergunta) != null || NOVIDADE.containsMatchIn(c) || Fatos.entende(pergunta)
     }
 
+    private val CONSULTA = Regex(
+        "^(?:qual|quais|quanto|quantos|quantas|como|onde|quando|quem|por que|porque|pq|o que|oque|que|me (?:fala|fale|conta|conte|explica|explique) sobre|" +
+            "fala sobre|fale sobre|explica|explique|pesquisa|pesquise|procura|procure|busca|busque|define|defina|voce sabe|sabe|existe|e verdade|historia d|significado|onde fica|informacoes sobre)\\b"
+    )
+
+    /** É uma pergunta ou um pedido de informação (e não uma resposta solta como "não posso")? */
+    fun pareceConsulta(pergunta: String): Boolean {
+        val c = ComandosLocais.limpar(pergunta).chave
+        return pergunta.trim().endsWith("?") || CONSULTA.containsMatchIn(c)
+    }
+
     /** O título tem pelo menos uma palavra importante da pergunta? */
     fun tituloCombina(chaves: List<String>, titulo: String): Boolean {
         val t = ComandosLocais.normalizar(titulo)
-        return chaves.filter { it.length >= 3 && it.any(Char::isLetter) }
-            .any { Regex("\\b${Regex.escape(raiz(it))}").containsMatchIn(t) }
+        val importantes = chaves.filter { it.length >= 3 && it.any(Char::isLetter) }
+        if (importantes.isEmpty()) return false
+        val achadas = importantes.count { Regex("\\b${Regex.escape(raiz(it))}").containsMatchIn(t) }
+        // pelo menos metade das palavras importantes no título
+        return achadas >= 1 && achadas * 2 >= importantes.size
     }
 
     /**
@@ -231,7 +245,7 @@ object Pesquisa {
                 return formatarNoticias(it, "Encontrei estas notícias recentes:")
             }
         }
-        if (!amplo || chaves.isEmpty()) return null
+        if (!amplo || chaves.isEmpty() || !pareceConsulta(pergunta)) return null
         return tentar { wikipediaBusca(chaves.joinToString(" ")) } ?: tentar { duckduckgo(pergunta) }
     }
 

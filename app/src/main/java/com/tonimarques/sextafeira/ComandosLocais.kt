@@ -39,6 +39,8 @@ object ComandosLocais {
         val ehRecado = RECADO.containsMatchIn(c)
         // Contas, conversões, datas, tradução, CEP...: antes do clima ("30 graus em fahrenheit" é conversão).
         if (!ehRecado) Calculadora.responder(c)?.let { return Resultado.Resposta(it) }
+        // Conhecimentos gerais que ela sabe de cor (português, ciências, geografia, matemática)
+        if (!ehRecado) Saber.responder(c)?.let { return Resultado.Resposta(it) }
         if (!ehRecado) servicos(f)?.let { return it }
         if (!ehRecado) clima(f)?.let { return it }
         if (!ehRecado) cotacao(c)?.let { return it }
@@ -195,6 +197,20 @@ object ComandosLocais {
             return Resultado.Acao("consultar_ddd", mapOf("ddd" to digitos))
         }
         if (FERIADO.containsMatchIn(c)) return Resultado.Acao("feriados", emptyMap())
+        // Dicionário: significado, sinônimos, antônimos, plural e escrita certa
+        for ((regra, tipo) in DICIONARIO) {
+            val m = regra.matchEntire(c) ?: continue
+            val palavra = f.trecho(m.groups[1]).orEmpty().trim()
+            if (palavra.length >= 2) return Resultado.Acao("dicionario", mapOf("tipo" to tipo, "palavra" to palavra))
+        }
+        for (regra in ORTOGRAFIA) {
+            val m = regra.matchEntire(c) ?: continue
+            val a = f.trecho(m.groups[1]).orEmpty()
+            val b = f.trecho(m.groups[2]).orEmpty()
+            if (a.length >= 3 && b.length >= 3 && !a.equals(b, true)) {
+                return Resultado.Acao("ortografia", mapOf("a" to a, "b" to b))
+            }
+        }
         for ((regra, sentido) in TRADUCAO) {
             val m = regra.matchEntire(c) ?: continue
             val texto = f.trecho(m.groups[1]).orEmpty().trim().trim('"', '“', '”', '\'', ' ')
@@ -419,6 +435,17 @@ object ComandosLocais {
     private val CEP_ENDERECO = listOf(
         Regex("$CEP_INICIO(.+) em (.+?)(?:,? (?:no |na |em )?(ac|al|ap|am|ba|ce|df|es|go|ma|mt|ms|mg|pa|pb|pr|pe|pi|rj|rn|rs|ro|rr|sc|sp|se|to))?$"),
         Regex("$CEP_INICIO(.+),? (?:de|na cidade de) ([a-z ]+?)(?:,? (ac|al|ap|am|ba|ce|df|es|go|ma|mt|ms|mg|pa|pb|pr|pe|pi|rj|rn|rs|ro|rr|sc|sp|se|to))?$"),
+    )
+    private val PALAVRA = "([a-z][a-z-]+)"
+    private val DICIONARIO = listOf(
+        Regex("^(?:o que (?:significa|quer dizer)|qual (?:e |eh )?o significado d[aeo]|significado d[aeo]|definicao d[aeo]|defina|define) (?:a palavra |o termo |a expressao )?$PALAVRA$") to "significado",
+        Regex("^(?:(?:qual|quais) (?:e |eh |sao )?(?:o |os |um |uns )?)?(?:sinonimos?|outra palavra para|outra palavra pra|outras palavras para) (?:de |da |do |para )?(?:a palavra )?$PALAVRA$") to "sinonimos",
+        Regex("^(?:(?:qual|quais) (?:e |eh |sao )?(?:o |os |um )?)?(?:antonimos?|contrario|oposto) (?:de |da |do )?(?:a palavra )?$PALAVRA$") to "antonimos",
+        Regex("^(?:qual (?:e |eh )?)?o plural d[eao] (?:a palavra )?$PALAVRA$") to "plural",
+    )
+    private val ORTOGRAFIA = listOf(
+        Regex("^(?:qual (?:e |eh )?o (?:certo|correto)|o (?:certo|correto) (?:e|eh)|como (?:e que )?se escreve|se escreve|como escreve|escreve|e) ([a-z]+) ou ([a-z]+)$"),
+        Regex("^([a-z]+) ou ([a-z]+),? (?:qual (?:e |eh )?(?:o )?(?:certo|correto|que esta certo)|como se escreve|qual se escreve)$"),
     )
     private val FERIADO = Regex(
         "\\b(proximo feriado|proximos feriados|quando (?:e|eh|vai ser|sera) o (?:proximo )?feriado|tem feriado|" +
