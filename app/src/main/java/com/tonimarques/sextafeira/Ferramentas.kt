@@ -348,6 +348,24 @@ class Ferramentas(private val activity: Activity, private val memoria: Memoria? 
         "loja_pedidos" -> daLoja { it.pedidosPendentes() }
         "loja_acabando" -> daLoja { it.acabando() }
         "loja_estoque" -> daLoja { it.estoqueDe(a.optString("produto")) }
+        "loja_retiradas" -> daLoja { it.retiradas() }
+        "loja_alterar" -> daLoja { l ->
+            val valor = if (a.has("valor")) a.optInt("valor") else null
+            val preparo = l.prepararAlteracao(a.optString("tipo"), a.optString("produto"), valor)
+            lojaPendente = preparo.alteracao
+            preparo.texto
+        }
+        "loja_entregue" -> daLoja { l ->
+            val preparo = l.prepararEntregue(a.optInt("pedido"))
+            lojaPendente = preparo.alteracao
+            preparo.texto
+        }
+        "loja_confirmar" -> {
+            val alt = lojaPendente
+            lojaPendente = null
+            if (alt == null) "Não tinha nenhuma alteração esperando confirmação." else daLoja { it.aplicar(alt) }
+        }
+        "loja_agendar" -> daLoja { l -> agendarRetirada(l, a.optInt("pedido")) }
         "distancia" -> distancia(a.optString("origem"), a.optString("destino"))
         "dicionario" -> Dicionario.consultar(a.optString("tipo", "significado"), a.optString("palavra"))
         "ortografia" -> Dicionario.qualCerta(a.optString("a"), a.optString("b"))
@@ -476,6 +494,26 @@ class Ferramentas(private val activity: Activity, private val memoria: Memoria? 
         } catch (e: Exception) {
             "Não consegui falar com a loja agora. Confira a internet."
         }
+    }
+
+    /** Mudança na loja esperando o "sim" do usuário (preparada por loja_alterar ou loja_entregue). */
+    @Volatile
+    var lojaPendente: Loja.Alteracao? = null
+
+    /** Abre o WhatsApp do cliente com a mensagem de agendamento da retirada já escrita. */
+    private fun agendarRetirada(loja: Loja, id: Int): String {
+        val p = loja.pedido(id) ?: return "Não achei o pedido $id."
+        if (p.entrega != "pickup") return "O pedido $id é de envio pelos Correios, não de retirada."
+        if (p.status == "canceled") return "O pedido $id está cancelado."
+        if (p.status == "delivered") return "O pedido $id já foi entregue."
+        val link = Loja.linkAgendar(p) ?: return "O pedido $id não tem telefone do cliente cadastrado."
+        val uri = Uri.parse(link)
+        activity.runOnUiThread {
+            if (WHATSAPPS.none { iniciar(Intent(Intent.ACTION_VIEW, uri).setPackage(it)) }) iniciar(Intent(Intent.ACTION_VIEW, uri))
+        }
+        val nome = p.cliente.trim().split(" ").firstOrNull().orEmpty()
+        val aviso = if (p.status == "awaiting_payment") " Atenção: esse pedido ainda está aguardando pagamento." else ""
+        return "Abri o WhatsApp${if (nome.isNotBlank()) " de $nome" else ""} com a mensagem de agendamento do pedido $id. Confira e toque em Enviar.$aviso"
     }
 
     /** Abre o Maps com a busca perto de você (ou perto de casa/trabalho). */
@@ -913,6 +951,7 @@ class Ferramentas(private val activity: Activity, private val memoria: Memoria? 
             "acompanhar_tema", "atualizar_noticias", "traduzir", "consultar_cep", "consultar_cnpj", "consultar_ddd", "feriados",
             "buscar_cep", "dicionario", "ortografia", "distancia",
             "loja_resumo", "loja_pedidos", "loja_acabando", "loja_estoque",
+            "loja_retiradas", "loja_alterar", "loja_entregue", "loja_confirmar", "loja_agendar",
         )
 
         private const val SPOTIFY = "com.spotify.music"

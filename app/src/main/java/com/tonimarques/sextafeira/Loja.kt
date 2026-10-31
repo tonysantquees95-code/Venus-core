@@ -93,6 +93,32 @@ class Loja(private val contexto: Context) {
         throw ErroDaLoja("Não consegui entrar na loja.")
     }
 
+    /** POST num endereço do painel (formato superjson), entrando de novo quando a sessão vence. */
+    private fun enviar(caminho: String, corpo: JSONObject): JSONObject {
+        val texto = JSONObject().put("json", corpo).toString()
+        repeat(2) { tentativa ->
+            val cookie = prefs.getString(P_COOKIE, null)
+            if (cookie == null || tentativa == 1) reentrar()
+            val c = abrir(caminho, "POST")
+            c.setRequestProperty("Cookie", prefs.getString(P_COOKIE, "").orEmpty())
+            c.setRequestProperty("Content-Type", "application/json")
+            c.doOutput = true
+            c.outputStream.use { it.write(texto.toByteArray()) }
+            val codigo = c.responseCode
+            val resposta = ler(c)
+            if (codigo == 401 || codigo == 403) {
+                if (tentativa == 0) return@repeat
+                throw ErroDaLoja(if (codigo == 403) "A conta salva não é de administrador." else "Não consegui entrar na loja. Confira o login nos ajustes.")
+            }
+            if (codigo !in 200..299) {
+                val erro = dados(resposta).optString("error").ifBlank { dados(resposta).optString("message") }
+                throw ErroDaLoja(if (erro.isNotBlank()) "O site recusou: $erro" else "O site respondeu com erro $codigo. Nada foi mudado.")
+            }
+            return dados(resposta)
+        }
+        throw ErroDaLoja("Não consegui entrar na loja.")
+    }
+
     private fun reentrar() {
         val email = prefs.getString(P_EMAIL, null) ?: throw ErroDaLoja(SEM_CONTA)
         val senha = prefs.getString(P_SENHA, null)?.let { decifrar(it) } ?: throw ErroDaLoja(SEM_CONTA)
@@ -135,6 +161,45 @@ class Loja(private val contexto: Context) {
 
     fun acabando(): String = montarAcabando(produtos())
 
+    fun retiradas(): String = montarRetiradas(pedidos())
+
+    fun pedido(id: Int): Pedido? = pedidos().firstOrNull { it.id == id }
+
+    /** Monta a pergunta de confirmação (nada muda no site ainda). */
+    fun prepararAlteracao(tipo: String, falado: String, valor: Int?): Preparo = montarAlteracao(produtos(), tipo, falado, valor)
+
+    fun prepararEntregue(id: Int): Preparo = montarEntregue(pedidos(), id)
+
+    /** Aplica uma alteração já confirmada. */
+    fun aplicar(a: Alteracao): String {
+        when (a.tipo) {
+            "estoque_somar", "estoque_tirar", "estoque_definir" -> {
+                val p = a.produto!!
+                enviar("/_api/admin/stock_update", JSONObject().put("productId", p.id).put("quantity", a.valor!!).put("mode", "set"))
+                return "Pronto: ${p.nome} agora tem ${plural(a.valor, "unidade", "unidades")} no estoque."
+            }
+            "preco", "ativar", "desativar" -> {
+                val p = a.produto!!
+                // relê o produto na hora, para não desfazer outra mudança feita pelo painel
+                val atual = produtos().firstOrNull { it.id == p.id } ?: throw ErroDaLoja("Não achei mais ${p.nome} na loja.")
+                val corpo = corpoDoProduto(atual.bruto, a.tipo, a.valor)
+                    ?: throw ErroDaLoja("Não consegui ler todos os dados de ${p.nome}. Faça essa mudança pelo painel do site.")
+                enviar("/_api/admin/product_save", corpo)
+                return when (a.tipo) {
+                    "preco" -> "Pronto: ${p.nome} agora custa ${dinheiro(a.valor!!)} no site."
+                    "ativar" -> "Pronto: ${p.nome} voltou a aparecer no site."
+                    else -> "Pronto: ${p.nome} foi escondido do site."
+                }
+            }
+            "entregue" -> {
+                val o = a.pedido!!
+                enviar("/_api/admin/order_update", JSONObject().put("id", o.id).put("status", "delivered").put("trackingCode", o.rastreio ?: JSONObject.NULL))
+                return "Pronto: o pedido ${o.id} está marcado como entregue."
+            }
+        }
+        throw ErroDaLoja("Não sei fazer essa alteração.")
+    }
+
     // ------------------------------------------------------------- criptografia
     private fun chave(): SecretKey {
         val ks = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
@@ -170,8 +235,18 @@ class Loja(private val contexto: Context) {
     data class Pedido(
         val id: Int, val status: String, val totalCentavos: Int, val cliente: String,
         val entrega: String, val criado: Long, val pago: Long?, val itens: List<Item>,
+        val telefone: String = "", val rastreio: String? = null,
     )
-    data class Produto(val id: Int, val nome: String, val ativo: Boolean, val estoque: Int?, val precoCentavos: Int?)
+    data class Produto(
+        val id: Int, val nome: String, val ativo: Boolean, val estoque: Int?, val precoCentavos: Int?,
+        val precoAntigo: Int? = null, val bruto: JSONObject? = null,
+    )
+
+    /** Uma mudança esperando o "sim". [valor]: quantidade final do estoque ou preço em centavos. */
+    data class Alteracao(val tipo: String, val produto: Produto? = null, val pedido: Pedido? = null, val valor: Int? = null)
+
+    /** O que falar e, se der para seguir, a alteração que aguarda confirmação. */
+    data class Preparo(val texto: String, val alteracao: Alteracao?)
 
     companion object {
         const val SITE = "https://desejo-de-intimidade.floot.app"
@@ -228,6 +303,8 @@ class Loja(private val contexto: Context) {
                 itens = (0 until itens.length()).mapNotNull { itens.optJSONObject(it) }.map { i ->
                     Item(i.optString("name"), i.optInt("quantity", 1), i.optInt("unitPriceCents"))
                 },
+                telefone = o.optString("customerPhone"),
+                rastreio = if (o.isNull("trackingCode")) null else o.optString("trackingCode").ifBlank { null },
             )
         }
 
@@ -238,6 +315,8 @@ class Loja(private val contexto: Context) {
                 ativo = p.optBoolean("active", true),
                 estoque = if (p.isNull("stockQuantity")) null else p.optInt("stockQuantity"),
                 precoCentavos = if (p.isNull("priceCents")) null else p.optInt("priceCents"),
+                precoAntigo = if (p.isNull("compareAtCents")) null else p.optInt("compareAtCents"),
+                bruto = p,
             )
         }
 
@@ -339,6 +418,156 @@ class Loja(private val contexto: Context) {
             if (baixos.isNotEmpty()) partes += "Acabando: " + baixos.take(6).joinToString(", ") { "${it.nome} (${it.estoque})" } +
                 if (baixos.size > 6) " e mais ${baixos.size - 6}" else ""
             return partes.joinToString(". ") + "."
+        }
+
+        private const val CONFIRMA = " Diga sim para confirmar ou não para cancelar."
+
+        /** Campos que o painel exige para salvar um produto (o site troca o produto inteiro). */
+        private val CAMPOS_PRODUTO = listOf(
+            "id", "category", "name", "description", "priceCents", "compareAtCents", "specifications", "stockQuantity",
+            "weightGrams", "widthCm", "heightCm", "lengthCm", "imageUrl", "active",
+        )
+
+        /**
+         * Monta o corpo do product_save a partir do produto como veio do site, mudando só preço ou ativo.
+         * Se faltar algum campo, devolve null: melhor não salvar do que apagar algo sem querer.
+         */
+        fun corpoDoProduto(bruto: JSONObject?, tipo: String, valor: Int?): JSONObject? {
+            if (bruto == null || CAMPOS_PRODUTO.any { !bruto.has(it) }) return null
+            val corpo = JSONObject()
+            for (k in CAMPOS_PRODUTO) corpo.put(k, bruto.get(k))
+            when (tipo) {
+                "preco" -> corpo.put("priceCents", valor ?: return null)
+                "ativar" -> corpo.put("active", true)
+                "desativar" -> corpo.put("active", false)
+                else -> return null
+            }
+            return corpo
+        }
+
+        fun montarAlteracao(produtos: List<Produto>, tipo: String, falado: String, valor: Int?): Preparo {
+            val achados = acharProdutos(produtos, falado)
+            if (achados.isEmpty()) return Preparo("Não achei nenhum produto com \"$falado\" na loja. Nada foi mudado.", null)
+            if (achados.size > 1) {
+                val nomes = achados.take(4).joinToString(", ") { it.nome }
+                return Preparo("Achei ${achados.size} produtos parecidos: $nomes. Repita com o nome mais completo, para eu não mudar o errado.", null)
+            }
+            val p = achados[0]
+            val atual = p.estoque
+            return when (tipo) {
+                "estoque_somar", "estoque_tirar" -> {
+                    val n = valor ?: return Preparo("Quantas unidades?", null)
+                    if (n <= 0) return Preparo("Me diga uma quantidade maior que zero.", null)
+                    if (atual == null) return Preparo(
+                        "${p.nome} está sem controle de estoque. Para começar a controlar, diga: o estoque de ${p.nome} é, e a quantidade.", null
+                    )
+                    if (tipo == "estoque_tirar" && n > atual) {
+                        return Preparo("${p.nome} só tem ${plural(atual, "unidade", "unidades")}, não dá para tirar $n. Nada foi mudado.", null)
+                    }
+                    val novo = if (tipo == "estoque_somar") atual + n else atual - n
+                    val verbo = if (tipo == "estoque_somar") "Somar ${plural(n, "unidade", "unidades")} ao estoque de" else "Tirar ${plural(n, "unidade", "unidades")} do estoque de"
+                    Preparo("$verbo ${p.nome}? Fica com $novo (hoje tem $atual).$CONFIRMA", Alteracao("estoque_definir", p, valor = novo))
+                }
+                "estoque_definir" -> {
+                    val n = valor ?: return Preparo("Qual a quantidade?", null)
+                    if (atual == n) return Preparo("${p.nome} já está com ${plural(n, "unidade", "unidades")}. Nada para mudar.", null)
+                    val de = if (atual == null) "(hoje sem controle de estoque)" else "de $atual"
+                    Preparo("Mudar o estoque de ${p.nome} $de para ${plural(n, "unidade", "unidades")}?$CONFIRMA", Alteracao("estoque_definir", p, valor = n))
+                }
+                "preco" -> {
+                    val novo = valor ?: return Preparo("Qual o novo preço?", null)
+                    if (novo <= 0) return Preparo("O preço precisa ser maior que zero.", null)
+                    if (corpoDoProduto(p.bruto, "preco", novo) == null) {
+                        return Preparo("Não consegui ler todos os dados de ${p.nome}. Mude o preço pelo painel do site.", null)
+                    }
+                    val antes = p.precoCentavos
+                    if (antes == novo) return Preparo("${p.nome} já custa ${dinheiro(novo)}.", null)
+                    var texto = if (antes == null) "Definir o preço de ${p.nome} em ${dinheiro(novo)}?"
+                    else "Mudar o preço de ${p.nome} de ${dinheiro(antes)} para ${dinheiro(novo)}?"
+                    if (antes != null && (novo * 2 < antes || novo > antes * 2)) texto += " É bem diferente do preço atual, confira."
+                    val promo = p.precoAntigo
+                    if (promo != null && antes != null && promo > antes && novo >= promo) {
+                        texto += " Ele está em promoção (de ${dinheiro(promo)}); com esse preço a promoção deixa de aparecer."
+                    }
+                    Preparo(texto + CONFIRMA, Alteracao("preco", p, valor = novo))
+                }
+                "desativar" -> {
+                    if (!p.ativo) return Preparo("${p.nome} já está escondido do site.", null)
+                    if (corpoDoProduto(p.bruto, "desativar", null) == null) {
+                        return Preparo("Não consegui ler todos os dados de ${p.nome}. Esconda pelo painel do site.", null)
+                    }
+                    Preparo("Esconder ${p.nome} do site? Ele deixa de aparecer para os clientes.$CONFIRMA", Alteracao("desativar", p))
+                }
+                "ativar" -> {
+                    if (p.ativo) return Preparo("${p.nome} já está aparecendo no site.", null)
+                    if (corpoDoProduto(p.bruto, "ativar", null) == null) {
+                        return Preparo("Não consegui ler todos os dados de ${p.nome}. Ative pelo painel do site.", null)
+                    }
+                    val aviso = when {
+                        p.precoCentavos == null -> " Atenção: ele está sem preço."
+                        p.estoque != null && p.estoque <= 0 -> " Atenção: ele está sem estoque e vai aparecer como esgotado."
+                        else -> ""
+                    }
+                    Preparo("Mostrar ${p.nome} no site de novo?$aviso$CONFIRMA", Alteracao("ativar", p))
+                }
+                else -> Preparo("Não entendi o que mudar.", null)
+            }
+        }
+
+        fun montarEntregue(pedidos: List<Pedido>, id: Int): Preparo {
+            val o = pedidos.firstOrNull { it.id == id } ?: return Preparo("Não achei o pedido $id.", null)
+            return when (o.status) {
+                "delivered" -> Preparo("O pedido $id já está como entregue.", null)
+                "canceled" -> Preparo("O pedido $id está cancelado. Nada foi mudado.", null)
+                "awaiting_payment" -> Preparo("O pedido $id ainda está aguardando pagamento. Nada foi mudado.", null)
+                else -> {
+                    val nome = o.cliente.trim().split(" ").firstOrNull().orEmpty()
+                    val entrega = if (o.entrega == "pickup") "retirada" else "envio"
+                    Preparo(
+                        "Marcar o pedido $id${if (nome.isNotBlank()) " de $nome" else ""} ($entrega, ${dinheiro(o.totalCentavos)}) como entregue?$CONFIRMA",
+                        Alteracao("entregue", pedido = o),
+                    )
+                }
+            }
+        }
+
+        /** Pedidos pagos para retirar que ainda não foram entregues. */
+        fun montarRetiradas(pedidos: List<Pedido>): String {
+            val lista = pedidos.filter { it.entrega == "pickup" && it.status in setOf("paid", "preparing", "shipped") }.sortedBy { it.id }
+            val aguardando = pedidos.count { it.entrega == "pickup" && it.status == "awaiting_payment" }
+            if (lista.isEmpty()) {
+                return "Nenhuma retirada para combinar agora." +
+                    if (aguardando > 0) " Há ${plural(aguardando, "pedido de retirada aguardando", "pedidos de retirada aguardando")} pagamento." else ""
+            }
+            val linhas = lista.take(5).joinToString(" ") { p ->
+                val nome = p.cliente.trim().split(" ").firstOrNull().orEmpty()
+                val itens = p.itens.sumOf { it.quantidade }
+                "Pedido ${p.id}${if (nome.isNotBlank()) " de $nome" else ""}: ${plural(itens, "item", "itens")}, ${dinheiro(p.totalCentavos)}, ${STATUS[p.status] ?: p.status}."
+            }
+            val mais = if (lista.size > 5) " E mais ${lista.size - 5}." else ""
+            return "Você tem ${plural(lista.size, "retirada para combinar", "retiradas para combinar")}. $linhas$mais " +
+                "Para chamar o cliente, diga: agendar retirada do pedido, e o número."
+        }
+
+        /** Link do WhatsApp do cliente com a mensagem de agendamento pronta (null se não houver telefone). */
+        fun linkAgendar(p: Pedido): String? {
+            val tel = p.telefone.replace(Regex("\\D"), "")
+            if (tel.length < 10) return null
+            val numero = if (tel.startsWith("55") && tel.length > 11) tel else "55$tel"
+            val nome = p.cliente.trim().split(Regex("\\s+")).firstOrNull().orEmpty()
+            val texto = "Olá${if (nome.isNotBlank()) ", $nome" else ""}! Aqui é da Desejo de Intimidade. " +
+                "Seu pedido #${p.id} já está separado para retirada em Porto Alegre. " +
+                "Qual dia e horário ficam melhor para você? Assim que combinarmos, te passo o local certinho. 💖"
+            return "https://wa.me/$numero?text=" + java.net.URLEncoder.encode(texto, "UTF-8").replace("+", "%20")
+        }
+
+        /** "sim", "pode", "confirma" → true; "não", "cancela" → false; outra coisa → null. */
+        fun simOuNao(fala: String): Boolean? {
+            val c = ComandosLocais.normalizar(fala).replace(Regex("[^a-z ]"), " ").replace(Regex("\\s+"), " ").trim()
+            if (Regex("\\b(?:nao|cancela|cancelar|cancele|esquece|negativo)\\b").containsMatchIn(c) ||
+                Regex("^(?:no|para|pare|deixa|deixa pra la|nem|errado)\\b").containsMatchIn(c)) return false
+            if (Regex("^(?:sim|s|pode|pode sim|pode ser|confirma|confirmo|confirmar|isso|isso mesmo|ok|okay|beleza|claro|com certeza|certo|manda|faz|faca|bora|exato|positivo|correto|ta|ta bom|esta bom|aham|uhum|quero)\\b").containsMatchIn(c)) return true
+            return null
         }
 
         private fun plural(n: Int, um: String, varios: String) = "$n ${if (n == 1) um else varios}"
