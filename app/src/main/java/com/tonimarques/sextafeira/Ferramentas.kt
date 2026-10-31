@@ -9,6 +9,8 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.hardware.camera2.CameraCharacteristics
+import android.location.Location
+import android.location.LocationManager
 import android.hardware.camera2.CameraManager
 import android.media.AudioManager
 import android.os.BatteryManager
@@ -36,9 +38,16 @@ import java.util.concurrent.TimeUnit
  *  2. adicione o nome em executarAqui();
  *  3. escreva a função que faz a ação.
  */
-class Ferramentas(private val activity: Activity) {
+class Ferramentas(private val activity: Activity, private val memoria: Memoria? = null) {
 
     private val principal = Handler(Looper.getMainLooper())
+
+    /** Busca no Google pela IA (precisa de faturamento na chave). Definido pelo app. */
+    var buscador: ((String) -> Web.Resposta?)? = null
+
+    /** Fontes da última resposta vinda da internet, para o app mostrar os links. */
+    @Volatile
+    var ultimasFontes: List<Web.Fonte> = emptyList()
 
     // ------------------------------------------------------------- descrições
     fun declaracoes(): JSONArray = JSONArray()
@@ -125,7 +134,10 @@ class Ferramentas(private val activity: Activity) {
         )
         .put(
             funcao(
-                "pesquisar_na_web", "Pesquisa algo no Google e mostra os resultados.", listOf("termo"),
+                "pesquisar_na_web",
+                "Abre a pesquisa do Google no navegador. Use só se o usuário pedir para abrir o navegador; " +
+                    "para responder perguntas, prefira buscar_na_internet.",
+                listOf("termo"),
                 "termo" to texto("O que pesquisar.")
             )
         )
@@ -138,6 +150,37 @@ class Ferramentas(private val activity: Activity) {
         )
         .put(funcao("abrir_camera", "Abre a câmera para tirar foto.", emptyList()))
         .put(funcao("nivel_bateria", "Informa a porcentagem de bateria do celular e se está carregando.", emptyList()))
+        .put(
+            funcao(
+                "buscar_na_internet",
+                "Pesquisa na internet (Google) e devolve um resumo com fontes. Use para notícias, avaliações de lojas " +
+                    "e produtos, preços, horários, resultados de jogos e qualquer informação atual.",
+                listOf("pergunta"),
+                "pergunta" to texto("A pergunta completa, como o usuário faria no Google.")
+            )
+        )
+        .put(
+            funcao(
+                "previsao_do_tempo", "Temperatura atual e previsão do tempo de hoje ou amanhã.", emptyList(),
+                "cidade" to texto("Cidade; vazio para a cidade do usuário."),
+                "dia" to opcoes("Qual dia.", "hoje", "amanha")
+            )
+        )
+        .put(
+            funcao(
+                "resumo_wikipedia", "Resumo da Wikipédia sobre uma pessoa, lugar, conceito ou acontecimento.", listOf("assunto"),
+                "assunto" to texto("O assunto, por exemplo 'Santos Dumont'.")
+            )
+        )
+        .put(
+            funcao(
+                "salvar_memoria",
+                "Guarda um fato duradouro sobre o usuário (gostos, rotina, pessoas próximas, planos). " +
+                    "Nunca salve senhas, documentos, dados bancários ou de saúde.",
+                listOf("fato"),
+                "fato" to texto("O fato, curto, por exemplo: 'gosta de rock nacional'.")
+            )
+        )
         .put(
             funcao(
                 "abrir_configuracao",
@@ -182,6 +225,8 @@ class Ferramentas(private val activity: Activity) {
     // ------------------------------------------------------------- execução
     /** Chamado fora da thread principal; roda a ação na thread principal e espera o resultado. */
     fun executar(nome: String, argumentos: JSONObject): String {
+        // Ferramentas que usam a internet rodam na thread de quem chamou (nunca na principal).
+        if (nome in USAM_REDE) return executarSeguro(nome, argumentos)
         if (Looper.myLooper() == Looper.getMainLooper()) return executarSeguro(nome, argumentos)
         val pronto = CountDownLatch(1)
         var resultado = "A ação não respondeu."
@@ -225,6 +270,17 @@ class Ferramentas(private val activity: Activity) {
         }
         "abrir_configuracao" -> configuracao(a.optString("tipo"))
         "nivel_bateria" -> bateria()
+        "previsao_do_tempo" -> clima(a.optString("cidade"), a.optString("dia", "hoje"))
+        "resumo_wikipedia" -> wikipedia(a.optString("assunto"))
+        "buscar_na_internet" -> buscar(a.optString("pergunta"))
+        "salvar_memoria" -> {
+            val m = memoria
+            when {
+                m == null -> "Memória indisponível."
+                m.lembrar(a.optString("fato"), "ia") -> "Memória salva."
+                else -> "Isso já estava guardado."
+            }
+        }
         else -> "Não conheço a ferramenta $nome."
     }
 
@@ -248,6 +304,7 @@ class Ferramentas(private val activity: Activity) {
         val intent = pm.getLaunchIntentForPackage(escolhido.second)
             ?: return "Não consegui abrir ${escolhido.first}."
         activity.startActivity(intent)
+        memoria?.registrarUso("app", escolhido.first)
         return "Abri o app ${escolhido.first}."
     }
 
@@ -255,6 +312,7 @@ class Ferramentas(private val activity: Activity) {
     private fun tocarMusica(busca: String, app: String): String {
         val consulta = busca.trim()
         if (consulta.isEmpty()) return "O que devo tocar?"
+        memoria?.registrarUso("musica", consulta)
         val preferido = normalizar(app)
         val pacotes = when {
             preferido.contains("youtube music") -> listOf(YOUTUBE_MUSIC)
@@ -328,6 +386,7 @@ class Ferramentas(private val activity: Activity) {
         val uri = Uri.parse("https://api.whatsapp.com/send?phone=$internacional&text=" + Uri.encode(mensagem))
         for (pacote in WHATSAPPS) {
             if (iniciar(Intent(Intent.ACTION_VIEW, uri).setPackage(pacote))) {
+                registrarContato(achado.nome)
                 return "Mensagem para ${achado.nome} pronta no WhatsApp. Toque em Enviar."
             }
         }
@@ -341,6 +400,7 @@ class Ferramentas(private val activity: Activity) {
             Intent(Intent.ACTION_SENDTO, Uri.parse("smsto:" + Uri.encode(numero)))
                 .putExtra("sms_body", mensagem)
         )
+        registrarContato(achado.nome)
         return "SMS para ${achado.nome} pronto. Toque em Enviar."
     }
 
@@ -348,6 +408,7 @@ class Ferramentas(private val activity: Activity) {
         val achado = resolverContato(contato)
         val numero = achado.numero ?: return achado.aviso
         activity.startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:" + Uri.encode(numero))))
+        registrarContato(achado.nome)
         return "Discador aberto com o número de ${achado.nome}. Toque para ligar."
     }
 
@@ -501,6 +562,58 @@ class Ferramentas(private val activity: Activity) {
         }
     }
 
+    private fun registrarContato(nome: String) {
+        if (nome.any { it.isLetter() }) memoria?.registrarUso("contato", nome)
+    }
+
+    // ------------------------------------------------------ internet
+    private fun clima(cidade: String, dia: String): String {
+        val alvo = cidade.ifBlank { memoria?.valor("cidade").orEmpty() }
+        val resposta = if (alvo.isNotBlank()) {
+            val lugar = Web.procurarCidade(alvo) ?: return "Não encontrei a cidade $alvo."
+            Web.previsao(lugar.latitude, lugar.longitude, lugar.nome, dia)
+        } else {
+            val local = ultimaLocalizacao() ?: return pedirLocalizacao()
+            Web.previsao(local.latitude, local.longitude, "", dia)
+        }
+        ultimasFontes = resposta.fontes
+        return resposta.texto
+    }
+
+    private fun ultimaLocalizacao(): Location? {
+        if (activity.checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) return null
+        val gerente = activity.getSystemService(Context.LOCATION_SERVICE) as LocationManager
+        return listOf(LocationManager.NETWORK_PROVIDER, LocationManager.PASSIVE_PROVIDER, LocationManager.GPS_PROVIDER)
+            .mapNotNull { p -> try { gerente.getLastKnownLocation(p) } catch (e: Exception) { null } }
+            .maxByOrNull { it.time }
+    }
+
+    private fun pedirLocalizacao(): String {
+        if (activity.checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+            activity.runOnUiThread {
+                activity.requestPermissions(arrayOf(Manifest.permission.ACCESS_COARSE_LOCATION), PEDIDO_LOCALIZACAO)
+            }
+            return "Para ver o clima aí, permita a localização e pergunte de novo. " +
+                "Ou me diga: minha cidade é, e o nome da cidade."
+        }
+        return "Não consegui achar sua localização agora. Me diga: minha cidade é, e o nome da cidade."
+    }
+
+    private fun wikipedia(assunto: String): String {
+        if (assunto.isBlank()) return "Sobre o que você quer saber?"
+        val r = Web.wikipedia(assunto) ?: return "Não encontrei nada sobre $assunto na Wikipédia."
+        ultimasFontes = r.fontes
+        return r.texto
+    }
+
+    private fun buscar(pergunta: String): String {
+        if (pergunta.isBlank()) return "O que devo pesquisar?"
+        val r = buscador?.invoke(pergunta)
+            ?: return "A busca na internet não está disponível agora. Ela precisa do faturamento ativado na chave do Gemini."
+        ultimasFontes = r.fontes
+        return r.texto
+    }
+
     private fun iniciar(intent: Intent): Boolean = try {
         activity.startActivity(intent)
         true
@@ -514,6 +627,8 @@ class Ferramentas(private val activity: Activity) {
 
     companion object {
         const val PEDIDO_CONTATOS = 20
+        const val PEDIDO_LOCALIZACAO = 21
+        val USAM_REDE = setOf("previsao_do_tempo", "resumo_wikipedia", "buscar_na_internet")
 
         private const val SPOTIFY = "com.spotify.music"
         private const val YOUTUBE_MUSIC = "com.google.android.apps.youtube.music"

@@ -17,6 +17,8 @@ class Gemini(
     private val chave: String,
     modelo: String,
     private val ferramentas: Ferramentas,
+    /** O que a Sexta-feira sabe sobre o usuário (memórias), incluído nas instruções. */
+    private val contexto: () -> String = { "" },
 ) {
     private val modelo = modelo.trim().removePrefix("models/")
     private var modeloAtivo = this.modelo
@@ -99,15 +101,92 @@ class Gemini(
         return """
             Você é a Sexta-feira, assistente pessoal no celular Android do usuário: eficiente,
             simpática e com um toque de humor leve.
-            Responda sempre em português do Brasil, em 1 ou 2 frases curtas e sem markdown,
+            Responda sempre em português do Brasil, de forma curta (até 3 frases) e sem markdown,
             porque a resposta pode ser falada em voz alta.
+            Para informações atuais (clima, notícias, avaliações de lojas, preços, horários, resultados),
+            use previsao_do_tempo ou buscar_na_internet e responda com o que encontrou, em vez de abrir o navegador.
+            Para "o que é" e "quem foi", pode usar resumo_wikipedia.
+            Quando o usuário contar algo duradouro sobre ele (gostos, rotina, pessoas, planos), use salvar_memoria.
+            Use o que você sabe sobre ele para personalizar as respostas, sem repetir isso à toa.
             Use as ferramentas sempre que o pedido envolver uma ação no celular; você pode
             chamar várias em sequência.
             Nunca diga que fez algo que a ferramenta não confirmou. Se o resultado pedir para
             o usuário tocar em algo (Enviar, Ligar, Permitir), repita esse aviso.
             Se não houver ferramenta para o pedido, diga com honestidade o que não consegue fazer.
             Agora é $agora.
-        """.trimIndent()
+        """.trimIndent() + contexto().let { if (it.isBlank()) "" else "\n\nSobre o usuário:\n$it" }
+    }
+
+    /**
+     * Pesquisa no Google pelo Gemini ("grounding") e devolve o resumo com as fontes.
+     * Null se não der (por exemplo: a chave está no plano gratuito, que não inclui a busca).
+     */
+    fun buscarNaInternet(pergunta: String): Web.Resposta? {
+        val agora = SimpleDateFormat("dd/MM/yyyy", Locale("pt", "BR")).format(Date())
+        val corpo = JSONObject()
+            .put(
+                "systemInstruction",
+                JSONObject().put(
+                    "parts", JSONArray().put(
+                        JSONObject().put(
+                            "text",
+                            "Responda em português do Brasil, em até 4 frases, direto ao ponto e sem markdown. " +
+                                "Se for sobre uma loja ou produto, resuma a reputação e as reclamações mais comuns. " +
+                                "Hoje é $agora." + contexto().let { if (it.isBlank()) "" else "\nSobre o usuário:\n$it" }
+                        )
+                    )
+                )
+            )
+            .put(
+                "contents",
+                JSONArray().put(
+                    JSONObject().put("role", "user").put("parts", JSONArray().put(JSONObject().put("text", pergunta)))
+                )
+            )
+            .put("tools", JSONArray().put(JSONObject().put("google_search", JSONObject())))
+        val bytes = corpo.toString().toByteArray(Charsets.UTF_8)
+
+        val modelos = (listOf(modeloAtivo) + reservas().take(2)).distinct()
+        for (m in modelos) {
+            val (codigo, resposta) = try {
+                enviarRequisicao(m, bytes)
+            } catch (e: IOException) {
+                continue
+            }
+            if (codigo !in 200..299) {
+                if (codigo == 400 || codigo == 403) return null // busca não liberada para esta chave
+                continue
+            }
+            val candidato = resposta.optJSONArray("candidates")?.optJSONObject(0) ?: continue
+            val partes = candidato.optJSONObject("content")?.optJSONArray("parts") ?: continue
+            val texto = StringBuilder()
+            for (i in 0 until partes.length()) {
+                val p = partes.optJSONObject(i) ?: continue
+                if (p.has("text") && !p.optBoolean("thought", false)) texto.append(p.optString("text"))
+            }
+            if (texto.isBlank()) continue
+            val fontes = mutableListOf<Web.Fonte>()
+            val meta = candidato.optJSONObject("groundingMetadata")
+            val pedacos = meta?.optJSONArray("groundingChunks")
+            if (pedacos != null) {
+                for (i in 0 until pedacos.length()) {
+                    val web = pedacos.optJSONObject(i)?.optJSONObject("web") ?: continue
+                    val url = web.optString("uri")
+                    if (url.isNotBlank() && fontes.none { it.url == url }) fontes += Web.Fonte(web.optString("title", "fonte"), url)
+                }
+            }
+            meta?.optJSONArray("webSearchQueries")?.let { consultas ->
+                for (i in 0 until minOf(consultas.length(), 2)) {
+                    val q = consultas.optString(i)
+                    if (q.isNotBlank()) fontes += Web.Fonte(
+                        "Pesquisar \"$q\" no Google",
+                        "https://www.google.com/search?q=" + java.net.URLEncoder.encode(q, "UTF-8")
+                    )
+                }
+            }
+            return Web.Resposta(texto.toString().trim().replace(Regex("[*#]"), ""), fontes.take(6))
+        }
+        return null
     }
 
     private fun chamarApi(): Pair<Int, JSONObject> {

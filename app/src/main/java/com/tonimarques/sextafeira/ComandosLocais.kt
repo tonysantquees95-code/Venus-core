@@ -34,6 +34,8 @@ object ComandosLocais {
 
         // Pedidos com duas ações ("abre o YouTube e toca rock") ficam para a IA.
         if (COMPOSTO.containsMatchIn(c)) return null
+        // Clima vem antes do filtro de perguntas: "quantos graus faz hoje?" é um comando.
+        clima(f)?.let { return it }
         // Perguntas abertas também.
         if (PERGUNTA.containsMatchIn(c) && !HORA.containsMatchIn(c) && !DATA.containsMatchIn(c)) return null
 
@@ -114,6 +116,21 @@ object ComandosLocais {
                 Resultado.Resposta("Hoje é " + SimpleDateFormat("EEEE, d 'de' MMMM 'de' yyyy", br).format(agora) + ".")
             else -> null
         }
+    }
+
+    private fun clima(f: Frase): Resultado? {
+        val c = f.chave
+        if (!CLIMA.containsMatchIn(c)) return null
+        if (Regex("\\b(timer|alarme|temporizador|cronometro|minutos?|segundos?)\\b").containsMatchIn(c)) return null
+        val dia = if (Regex("\\bamanha\\b").containsMatchIn(c)) "amanha" else "hoje"
+        var cidade = ""
+        LUGAR_CLIMA.find(c)?.let { m ->
+            val bruto = f.trecho(m.groups[1]).orEmpty()
+                .replace(Regex("(?i)\\s+(hoje|amanh[ãa]|agora|de manh[ãa]|a tarde|à tarde|a noite|à noite)$"), "")
+                .trim()
+            if (bruto.isNotBlank() && normalizar(bruto) !in LUGARES_GENERICOS) cidade = bruto
+        }
+        return Resultado.Acao("previsao_do_tempo", mapOf("cidade" to cidade, "dia" to dia))
     }
 
     private fun lanterna(c: String): Resultado? {
@@ -261,6 +278,8 @@ object ComandosLocais {
         if (prefixo != null && prefixo.range.first == 0) busca = busca.substring(prefixo.value.length)
         busca = busca.trim()
         if (busca.isBlank()) return null
+        // "toca minha música favorita" / "o de sempre": o cérebro usa a memória.
+        if (FAVORITA.matches(normalizar(busca))) return null
         return Resultado.Acao("tocar_musica", mapOf("busca" to busca, "app" to app))
     }
 
@@ -296,6 +315,20 @@ object ComandosLocais {
     private val COMPOSTO = Regex(
         "\\s(?:e|depois|entao|e depois|e entao)\\s+(?:toca|tocar|toque|coloca|coloque|manda|mande|envia|envie|" +
             "liga|ligue|abre|abra|abrir|pesquisa|pesquise|aumenta|diminui|cria|crie|desliga|apaga|me leva)\\b"
+    )
+    private val FAVORITA = Regex(
+        "^(?:a |as |o |os )?(?:minhas? |meus? )?(?:musicas? |playlist |som )?(?:favoritas?|favoritos?|preferidas?|preferidos?|" +
+            "de sempre|que eu gosto|que eu curto)$|^(?:minha playlist|minhas musicas|meu som|o de sempre|a de sempre|as de sempre)$"
+    )
+    private val CLIMA = Regex(
+        "\\b(graus|temperatura|previsao do tempo|previsao|clima|chover|chovendo|chuva|vai fazer frio|vai fazer calor|" +
+            "esta frio|esta calor|ta frio|ta calor|faz frio|faz calor|o tempo (hoje|amanha|agora|la fora)|como (esta|ta) o tempo|" +
+            "tempo (hoje|amanha|la fora)|vai fazer sol|ensolarado|nublado)\\b"
+    )
+    private val LUGAR_CLIMA = Regex("\\b(?:em|no|na|de|para|pra)\\s+([a-z][a-z .'-]+?)\\s*(?:hoje|amanha|agora)?$")
+    private val LUGARES_GENERICOS = setOf(
+        "hoje", "amanha", "agora", "la fora", "aqui", "casa", "rua", "chuva", "tempo", "frio", "calor", "sol",
+        "graus", "temperatura", "manha", "tarde", "noite", "semana", "fim de semana", "clima",
     )
     private val PERGUNTA = Regex("^(qual|quais|quanto|quantos|quantas|como|por que|porque|o que|quem|onde(?! fica)|quando)\\b")
     private val HORA = Regex("\\b(que horas? (sao|e)|horas? agora|me diz as horas|que horas tem)\\b")
