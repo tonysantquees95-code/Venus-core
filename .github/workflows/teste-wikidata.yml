@@ -21,10 +21,10 @@ jobs:
             local res=$(echo "$r" | jq -r '[.results.bindings[] | ((.cLabel.value // "?") + "=" + (.p.value // "?"))] | join("; ")' 2>/dev/null || echo "ERRO $(echo "$r" | head -c 120)")
             echo "::notice::$nome ${ms}ms: $res"
           }
-          for pais in Q38 Q155; do
-            for ordem in DESC ASC; do
-              q "cidade-$pais-$ordem" "SELECT ?c ?cLabel (MAX(?pop) AS ?p) WHERE { ?c wdt:P17 wd:$pais; wdt:P31/wdt:P279* wd:Q515; wdt:P1082 ?pop. SERVICE wikibase:label { bd:serviceParam wikibase:language \"pt-br,pt,en\". ?c rdfs:label ?cLabel. } } GROUP BY ?c ?cLabel ORDER BY $ordem(?p) LIMIT 3"
-              q "munic-$pais-$ordem" "SELECT ?c ?cLabel (MAX(?pop) AS ?p) WHERE { ?c wdt:P17 wd:$pais; wdt:P31/wdt:P279* wd:Q15284; wdt:P1082 ?pop. FILTER(?pop > 0) SERVICE wikibase:label { bd:serviceParam wikibase:language \"pt-br,pt,en\". ?c rdfs:label ?cLabel. } } GROUP BY ?c ?cLabel ORDER BY $ordem(?p) LIMIT 3"
-            done
+          for pais in Q38 Q155 Q45 Q30; do
+            q "classe1-$pais-ASC" "SELECT ?c ?cLabel (MAX(?pop) AS ?p) WHERE { ?c wdt:P17 wd:$pais; wdt:P31 ?k; wdt:P1082 ?pop. ?k wdt:P279 wd:Q15284. FILTER(?pop > 0) SERVICE wikibase:label { bd:serviceParam wikibase:language \"pt-br,pt,en\". ?c rdfs:label ?cLabel. } } GROUP BY ?c ?cLabel ORDER BY ASC(?p) LIMIT 3"
+            q "classe2-$pais-ASC" "SELECT ?c ?cLabel (MAX(?pop) AS ?p) WHERE { ?c wdt:P17 wd:$pais; wdt:P31 ?k; wdt:P1082 ?pop. ?k wdt:P279/wdt:P279? wd:Q15284. FILTER(?pop > 0) SERVICE wikibase:label { bd:serviceParam wikibase:language \"pt-br,pt,en\". ?c rdfs:label ?cLabel. } } GROUP BY ?c ?cLabel ORDER BY ASC(?p) LIMIT 3"
+            q "cidade-$pais-DESC" "SELECT ?c ?cLabel (MAX(?pop) AS ?p) WHERE { ?c wdt:P17 wd:$pais; wdt:P31/wdt:P279* wd:Q515; wdt:P1082 ?pop. MINUS { ?c wdt:P31 wd:Q1907114 } SERVICE wikibase:label { bd:serviceParam wikibase:language \"pt-br,pt,en\". ?c rdfs:label ?cLabel. } } GROUP BY ?c ?cLabel ORDER BY DESC(?p) LIMIT 3"
           done
-          q "inception-roma" "SELECT ?c ?cLabel ?p WHERE { BIND(wd:Q220 AS ?c) ?c wdt:P571 ?p. SERVICE wikibase:label { bd:serviceParam wikibase:language \"pt\". ?c rdfs:label ?cLabel. } }"
+          q "direta-Q747074" "SELECT ?c ?cLabel (MAX(?pop) AS ?p) WHERE { ?c wdt:P31 wd:Q747074; wdt:P1082 ?pop. FILTER(?pop > 0) SERVICE wikibase:label { bd:serviceParam wikibase:language \"pt-br,pt,en\". ?c rdfs:label ?cLabel. } } GROUP BY ?c ?cLabel ORDER BY ASC(?p) LIMIT 3"
+          q "rs-DESC" "SELECT ?c ?cLabel (MAX(?pop) AS ?p) WHERE { ?c wdt:P131 wd:Q40030; wdt:P31 wd:Q3184121; wdt:P1082 ?pop. SERVICE wikibase:label { bd:serviceParam wikibase:language \"pt-br,pt,en\". ?c rdfs:label ?cLabel. } } GROUP BY ?c ?cLabel ORDER BY DESC(?p) LIMIT 3"
