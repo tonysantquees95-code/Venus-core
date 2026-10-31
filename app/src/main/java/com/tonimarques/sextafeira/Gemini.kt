@@ -78,7 +78,9 @@ class Gemini(
         } catch (e: Exception) {
             desfazer(inicio)
             return if (e is IOException) {
-                "Não consegui falar com o Gemini: a internet oscilou. Confira sua conexão e tente de novo."
+                "Não consegui falar com o Gemini: a conexão caiu. " +
+                    "Use o menu ⋮ > Diagnóstico de conexão para ver o motivo. " +
+                    "(${e.javaClass.simpleName}: ${e.message.orEmpty().take(100)})"
             } else {
                 "Algo deu errado: ${e.message ?: e.javaClass.simpleName}"
             }
