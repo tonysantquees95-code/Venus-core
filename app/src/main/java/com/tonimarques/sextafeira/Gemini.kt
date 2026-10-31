@@ -119,21 +119,28 @@ class Gemini(
             )
 
         val bytes = corpo.toString().toByteArray(Charsets.UTF_8)
+        var ultimaResposta: Pair<Int, JSONObject>? = null
         var ultimoErro: IOException? = null
-        // Se a rede oscilar (troca de Wi-Fi/5G, conexão derrubada), tenta de novo.
-        for (tentativa in 1..TENTATIVAS) {
-            try {
-                return enviarRequisicao(bytes)
-            } catch (e: IOException) {
-                ultimoErro = e
-                if (tentativa < TENTATIVAS) Thread.sleep(800L * tentativa)
+        // Tenta de novo se a rede oscilar ou o servidor estiver sobrecarregado (erro 5xx).
+        // Se o modelo principal continuar falhando, usa um modelo reserva.
+        val modelos = listOf(modelo) + MODELOS_RESERVA.filter { it != modelo }
+        for (modeloUsado in modelos) {
+            for (tentativa in 1..TENTATIVAS) {
+                try {
+                    val resposta = enviarRequisicao(modeloUsado, bytes)
+                    if (resposta.first < 500) return resposta
+                    ultimaResposta = resposta
+                } catch (e: IOException) {
+                    ultimoErro = e
+                }
+                if (tentativa < TENTATIVAS) Thread.sleep(1000L * tentativa)
             }
         }
-        throw ultimoErro ?: IOException("sem conexão")
+        return ultimaResposta ?: throw (ultimoErro ?: IOException("sem conexão"))
     }
 
-    private fun enviarRequisicao(bytes: ByteArray): Pair<Int, JSONObject> {
-        val url = URL("https://generativelanguage.googleapis.com/v1beta/models/$modelo:generateContent")
+    private fun enviarRequisicao(modeloUsado: String, bytes: ByteArray): Pair<Int, JSONObject> {
+        val url = URL("https://generativelanguage.googleapis.com/v1beta/models/$modeloUsado:generateContent")
         val conexao = url.openConnection() as HttpURLConnection
         try {
             conexao.requestMethod = "POST"
@@ -172,7 +179,8 @@ class Gemini(
             codigo == 429 ->
                 "Atingi o limite de uso gratuito do Gemini por agora. Tente de novo daqui a pouco."
             codigo >= 500 ->
-                "Os servidores do Gemini estão instáveis agora. Tente de novo em instantes."
+                "Os servidores do Gemini estão sobrecarregados agora (erro $codigo). " +
+                    "Tente de novo em instantes. Detalhe: ${mensagem.take(150)}"
             else -> "O Gemini respondeu com erro $codigo: ${mensagem.take(200)}"
         }
     }
@@ -180,5 +188,6 @@ class Gemini(
     companion object {
         private const val MAX_RODADAS = 8
         private const val TENTATIVAS = 3
+        private val MODELOS_RESERVA = listOf("gemini-flash-lite-latest")
     }
 }
