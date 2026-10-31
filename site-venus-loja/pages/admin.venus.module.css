@@ -1,0 +1,8 @@
+.pagina {
+  padding: var(--spacing-3) var(--spacing-3) 0;
+}
+@media (min-width: 640px) {
+  .pagina {
+    padding: var(--spacing-6) var(--spacing-6) 0;
+  }
+}
