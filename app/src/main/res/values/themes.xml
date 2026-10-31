@@ -1,15 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="fundo">#0B1020</color>
-    <color name="barra">#111833</color>
+    <color name="fundo">#03040A</color>
+    <color name="barra">#03040A</color>
     <color name="destaque">#36D6FF</color>
 
-    <style name="Tema" parent="android:Theme.Material">
+    <style name="Tema" parent="android:Theme.Material.NoActionBar">
         <item name="android:colorPrimary">@color/barra</item>
         <item name="android:colorPrimaryDark">@color/fundo</item>
         <item name="android:colorAccent">@color/destaque</item>
         <item name="android:windowBackground">@color/fundo</item>
         <item name="android:statusBarColor">@color/fundo</item>
-        <item name="android:navigationBarColor">@color/barra</item>
+        <item name="android:navigationBarColor">@color/fundo</item>
     </style>
 </resources>
