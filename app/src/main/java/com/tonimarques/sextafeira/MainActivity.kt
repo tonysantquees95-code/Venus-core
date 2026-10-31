@@ -1358,6 +1358,10 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
                         "Gire o celular para um lado e para o outro, duas vezes, com a tela ligada: a $n abre ouvindo, mesmo com música alta. " +
                             "Desligue a \"Câmera rápida\" no app Moto para não abrir os dois."
                     }, MENU_GESTO) { prefs.getBoolean(VigiliaService.PREF_GESTO, false) },
+                    item("Funcionar com a tela apagada", {
+                        "Ouve \"$n, ativar\", os comandos de música e o gesto mesmo com a tela apagada ou bloqueada. " +
+                            "Acende a tela e aparece por cima do bloqueio; para abrir apps ou mandar mensagem, pede a senha antes. Gasta mais bateria."
+                    }, MENU_TELA_APAGADA) { prefs.getBoolean(VigiliaService.PREF_TELA_APAGADA, false) },
                     item("Abrir segurando o botão", {
                         "Define a $n como assistente padrão: segure o botão de início ou de ligar para chamar o orbe."
                     }, MENU_ASSISTENTE),
@@ -1507,6 +1511,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
                 if (ligado && !ModeloDeVoz.pronto(this)) oferecerVozOffline(forcar = true)
             }
             MENU_GESTO -> alternarGesto()
+            MENU_TELA_APAGADA -> alternarTelaApagada()
             MENU_INDEPENDENTE -> {
                 val ligado = !modoIndependente()
                 prefs.edit().putBoolean(PREF_INDEPENDENTE, ligado).apply()
@@ -1589,6 +1594,41 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         } catch (e: Exception) {
             Toast.makeText(this, "Não consegui ligar a escuta em segundo plano.", Toast.LENGTH_SHORT).show()
         }
+    }
+
+    private fun alternarTelaApagada() {
+        val ligar = !prefs.getBoolean(VigiliaService.PREF_TELA_APAGADA, false)
+        prefs.edit().putBoolean(VigiliaService.PREF_TELA_APAGADA, ligar).apply()
+        // O serviço relê os ajustes (liga ou solta a trava do processador)
+        try {
+            if (prefs.getBoolean(PREF_FUNDO, false) || prefs.getBoolean(VigiliaService.PREF_GESTO, false)) VigiliaService.iniciar(this)
+        } catch (e: Exception) {
+        }
+        if (!ligar) return
+        val energia = getSystemService(android.os.PowerManager::class.java)
+        val explicacao = "Com a tela apagada, a ${Marca.nome} continua ouvindo \"${Marca.nome}, ativar\", os comandos de música e o gesto. " +
+            "Para o Android não desligar ela para economizar bateria, permita na próxima tela que ela funcione sem restrição de bateria."
+        if (energia?.isIgnoringBatteryOptimizations(packageName) == true) {
+            if (!prefs.getBoolean(PREF_FUNDO, false) && !prefs.getBoolean(VigiliaService.PREF_GESTO, false)) {
+                Toast.makeText(this, "Ligue também \"Ouvir com o app fechado\" ou o gesto.", Toast.LENGTH_LONG).show()
+            }
+            return
+        }
+        AlertDialog.Builder(this)
+            .setTitle("Tela apagada")
+            .setMessage(explicacao)
+            .setPositiveButton("Permitir") { _, _ ->
+                try {
+                    startActivity(Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:$packageName")))
+                } catch (e: Exception) {
+                    try {
+                        startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
+                    } catch (e2: Exception) {
+                    }
+                }
+            }
+            .setNegativeButton("Agora não", null)
+            .show()
     }
 
     private fun alternarGesto() {
@@ -1824,6 +1864,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         private const val MENU_INDEPENDENTE = 14
         private const val MENU_MUSICA = 15
         private const val MENU_GESTO = 16
+        private const val MENU_TELA_APAGADA = 17
         private const val PREF_INDEPENDENTE = "modo_independente"
         private const val PREF_OFERECEU_VOZ = "ofereceu_voz_offline"
         private const val PREF_FUNDO = "vigilia_fundo"

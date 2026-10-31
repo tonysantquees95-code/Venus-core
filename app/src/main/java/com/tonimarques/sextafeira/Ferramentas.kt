@@ -796,11 +796,26 @@ class Ferramentas(private val activity: Activity, private val memoria: Memoria? 
         return r.texto
     }
 
-    private fun iniciar(intent: Intent): Boolean = try {
-        activity.startActivity(intent)
-        true
-    } catch (e: ActivityNotFoundException) {
-        false
+    private fun iniciar(intent: Intent): Boolean {
+        // Celular bloqueado (Vênus aberta por cima da tela de bloqueio): pede a senha/digital e só então abre.
+        val bloqueio = activity.getSystemService(android.app.KeyguardManager::class.java)
+        if (bloqueio?.isKeyguardLocked == true && intent.resolveActivity(activity.packageManager) != null) {
+            bloqueio.requestDismissKeyguard(activity, object : android.app.KeyguardManager.KeyguardDismissCallback() {
+                override fun onDismissSucceeded() {
+                    try {
+                        activity.startActivity(intent)
+                    } catch (e: Exception) {
+                    }
+                }
+            })
+            return true
+        }
+        return try {
+            activity.startActivity(intent)
+            true
+        } catch (e: ActivityNotFoundException) {
+            false
+        }
     }
 
     private fun normalizar(s: String): String =

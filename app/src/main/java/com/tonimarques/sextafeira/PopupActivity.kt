@@ -28,6 +28,19 @@ class PopupActivity : MainActivity() {
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        // Com "funcionar com a tela apagada": acende a tela e aparece por cima da tela de bloqueio.
+        // O que precisa do celular desbloqueado (abrir apps, mandar mensagem) pede a senha/digital antes.
+        if (getSharedPreferences("config", MODE_PRIVATE).getBoolean(VigiliaService.PREF_TELA_APAGADA, false)) {
+            if (android.os.Build.VERSION.SDK_INT >= 27) {
+                setShowWhenLocked(true)
+                setTurnScreenOn(true)
+            } else {
+                @Suppress("DEPRECATION")
+                window.addFlags(
+                    android.view.WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or android.view.WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON
+                )
+            }
+        }
         super.onCreate(savedInstanceState)
         window.setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
     }
