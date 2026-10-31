@@ -29,7 +29,7 @@ jobs:
       - name: Testar os comandos locais
         run: |
           set -o pipefail
-          gradle testReleaseUnitTest --no-daemon 2>&1 | tee build.log
+          gradle testDebugUnitTest --no-daemon 2>&1 | tee build.log
 
       - name: Compilar o APK
         run: |
@@ -40,12 +40,13 @@ jobs:
         if: failure()
         run: |
           grep -E "^e: " build.log | head -n 20 | while read -r linha; do echo "::error::$linha"; done || true
-          for f in app/build/test-results/testReleaseUnitTest/*.xml; do
+          for f in app/build/test-results/testDebugUnitTest/*.xml; do
             [ -f "$f" ] || continue
             grep -o '<failure message="[^"]*"' "$f" | sed 's/<failure message="//; s/"$//' | head -n 20 |
               while read -r linha; do echo "::error::$linha"; done
           done
-          grep -E "FAILED|What went wrong" -A 3 build.log | head -n 30 | while read -r linha; do echo "::error::$linha"; done || true
+          grep -E "Could not|What went wrong|> |Caused by|Required by|Searched in" build.log | grep -v "^> Task" | head -n 40 |
+            while read -r linha; do echo "::error::$linha"; done || true
 
       - name: Renomear o APK
         run: cp app/build/outputs/apk/release/app-release.apk SextaFeira.apk
