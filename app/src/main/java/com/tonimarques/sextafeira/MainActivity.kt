@@ -90,7 +90,7 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
         tts = TextToSpeech(this, this)
         setContentView(montarTela())
         carregarConversaAnterior()
-        adicionarMensagem("Olá! Diga \"Sexta-feira, ativar\", toque no orbe ou digite abaixo.", false, salvar = false)
+        adicionarMensagem("Olá! Diga \"${Marca.nome}, ativar\", toque no orbe ou digite abaixo.", false, salvar = false)
         tratarIntent(intent)
     }
 
@@ -155,14 +155,14 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
         }
         val nomes = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         titulo = TextView(this).apply {
-            text = "SEXTA-FEIRA"
+            text = Marca.nomeMaiusculo
             textSize = 15f
             letterSpacing = 0.35f
             typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
             setTextColor(corAtual)
         }
         val subtitulo = TextView(this).apply {
-            text = "ASSISTENTE PESSOAL"
+            text = Marca.subtitulo
             textSize = 9.5f
             letterSpacing = 0.3f
             setTextColor(COR_TEXTO_APAGADO)
@@ -471,7 +471,7 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
         responder("Tem certeza? Confirme na tela.")
         AlertDialog.Builder(this)
             .setTitle("Apagar todas as memórias?")
-            .setMessage("A Sexta-feira vai esquecer seu nome, sua cidade, seus favoritos, o que aprendeu e o que você mais usa. O histórico de conversas continua.")
+            .setMessage("A ${Marca.nome} vai esquecer seu nome, sua cidade, seus favoritos, o que aprendeu e o que você mais usa. O histórico de conversas continua.")
             .setPositiveButton("Apagar") { _, _ ->
                 memoria.apagarMemorias()
                 cerebro.apelido = "chefe"
@@ -739,7 +739,7 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
     }
 
     private fun amostraDeVoz() {
-        tts?.speak("Olá! Eu sou a Sexta-feira. Gostou desta voz?", TextToSpeech.QUEUE_FLUSH, null, ID_AMOSTRA)
+        tts?.speak("Olá! Eu sou a ${Marca.nome}. Gostou desta voz?", TextToSpeech.QUEUE_FLUSH, null, ID_AMOSTRA)
     }
 
     private fun escolherVoz() {
@@ -767,7 +767,7 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
         }.toTypedArray()
 
         AlertDialog.Builder(this)
-            .setTitle("Voz da Sexta-feira")
+            .setTitle("Voz da ${Marca.nome}")
             .setSingleChoiceItems(nomes, marcada) { _, qual ->
                 marcada = qual
                 try {
@@ -1048,7 +1048,7 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
         val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
             .putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
             .putExtra(RecognizerIntent.EXTRA_LANGUAGE, "pt-BR")
-            .putExtra(RecognizerIntent.EXTRA_PROMPT, "Fale com a Sexta-feira")
+            .putExtra(RecognizerIntent.EXTRA_PROMPT, "Fale com a ${Marca.nome}")
         try {
             startActivityForResult(intent, PEDIDO_VOZ)
         } catch (e: ActivityNotFoundException) {
@@ -1090,7 +1090,7 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
     private fun abrirMenu(ancora: View) {
         val popup = PopupMenu(this, ancora)
         val menu = popup.menu
-        menu.add(0, MENU_VIGILIA, 0, "Ouvir \"Sexta-feira, ativar\"")
+        menu.add(0, MENU_VIGILIA, 0, "Ouvir \"${Marca.nome}, ativar\"")
             .setCheckable(true).setChecked(vigiliaLigada())
         menu.add(0, MENU_VOZ, 1, "Escolher a voz")
         menu.add(0, MENU_AJUSTE_VOZ, 2, "Velocidade e tom da voz")
@@ -1099,7 +1099,7 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
         menu.add(0, MENU_CONTINUA, 4, "Conversa contínua por voz")
             .setCheckable(true).setChecked(prefs.getBoolean(PREF_CONTINUA, true))
         menu.add(0, MENU_HISTORICO, 5, "Histórico por tópico")
-        menu.add(0, MENU_MEMORIAS, 5, "O que a Sexta-feira sabe sobre mim")
+        menu.add(0, MENU_MEMORIAS, 5, "O que a ${Marca.nome} sabe sobre mim")
         menu.add(0, MENU_CHAVE, 5, "Chave do Gemini")
         menu.add(0, MENU_MODELO, 6, "Modelo do Gemini")
         menu.add(0, MENU_NOVA, 7, "Nova conversa")
@@ -1121,7 +1121,7 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
                 }
                 mudarEstadoOcioso()
                 Toast.makeText(
-                    this, if (ligado) "Diga \"Sexta-feira, ativar\" com o app aberto." else "Ativação por voz desligada.",
+                    this, if (ligado) "Diga \"${Marca.nome}, ativar\" com o app aberto." else "Ativação por voz desligada.",
                     Toast.LENGTH_SHORT
                 ).show()
             }
@@ -1180,7 +1180,7 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
     private fun mostrarTopico(topico: String) {
         val formato = java.text.SimpleDateFormat("dd/MM HH:mm", Locale("pt", "BR"))
         val texto = memoria.mensagens(topico, 150).joinToString("\n\n") { m ->
-            val quem = if (m.doUsuario) "Você" else "Sexta-feira"
+            val quem = if (m.doUsuario) "Você" else Marca.nome
             "${formato.format(java.util.Date(m.quando))} · $quem\n${m.texto}"
         }
         val vista = TextView(this).apply {
@@ -1321,7 +1321,7 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
         private const val ID_AMOSTRA = "amostra"
         private const val MODELO_PADRAO = "gemini-flash-latest"
         private const val STATUS_PADRAO = "TOQUE NO ORBE PARA FALAR"
-        private const val STATUS_VIGILIA = "DIGA “SEXTA-FEIRA, ATIVAR”"
+        private val STATUS_VIGILIA = "DIGA “${Marca.nomeMaiusculo}, ATIVAR”"
 
         private const val PREF_CHAVE = "chave"
         private const val PREF_MODELO = "modelo"

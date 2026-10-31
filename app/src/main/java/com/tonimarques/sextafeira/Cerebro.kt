@@ -210,6 +210,7 @@ class Cerebro(
         val h = agora.get(Calendar.HOUR_OF_DAY)
         return texto
             .replace("chefe", apelido)
+            .replace("{nome}", Marca.nome)
             .replace("{hora}", SimpleDateFormat("HH:mm", br).format(agora.time))
             .replace("{data}", SimpleDateFormat("EEEE, d 'de' MMMM", br).format(agora.time))
             .replace("{periodo}", if (h < 12) "Bom dia" else if (h < 18) "Boa tarde" else "Boa noite")
@@ -264,8 +265,8 @@ class Cerebro(
         fun ehPergunta(chave: String) = PERGUNTA.containsMatchIn(chave)
 
         private val ATIVACAO = Regex(
-            "(sexta[\\s-]*feira|sextafeira|sexta|6a feira)[\\s,.!]*(ativar|ativa|ative|ativada|ativacao|ativo|online|acordar|acorda)\\b" +
-                "|\\b(ativar|ativa)[\\s,]+(a\\s+)?(sexta[\\s-]*feira|sexta)\\b"
+            "(sexta[\\s-]*feira|sextafeira|sexta|6a feira|venus|vinus)[\\s,.!]*(ativar|ativa|ative|ativada|ativacao|ativo|online|acordar|acorda)\\b" +
+                "|\\b(ativar|ativa)[\\s,]+(a\\s+)?(sexta[\\s-]*feira|sexta|venus)\\b"
         )
 
         /** Se a frase contém "Sexta-feira, ativar", devolve o que vem depois (pode ser vazio). Senão, null. */

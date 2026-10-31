@@ -67,7 +67,7 @@ class Orbe(context: Context) : View(context) {
     }
 
     init {
-        contentDescription = "Orbe da Sexta-feira. Toque para falar."
+        contentDescription = "Orbe da ${Marca.nome}. Toque para falar."
         isClickable = true
     }
 
@@ -121,10 +121,14 @@ class Orbe(context: Context) : View(context) {
         giro += dt * velocidade
 
         // ----- cores: um ciclo completo a cada ~50 s
-        val matiz = (tempo * 7.2f) % 360f
+        val matiz = if (Marca.cicloCompleto) {
+            (tempo * 7.2f) % 360f
+        } else {
+            Marca.MATIZ_VENUS + Marca.OSCILACAO_VENUS * sin(tempo * 0.13f)
+        }
         val cor1 = cor(matiz)
-        val cor2 = cor(matiz + 75f)
-        val cor3 = cor(matiz + 160f, 0.7f)
+        val cor2 = cor(matiz + Marca.deslocamentoCor2)
+        val cor3 = cor(matiz + Marca.deslocamentoCor3, 0.7f)
 
         val cx = width / 2f
         val cy = height / 2f

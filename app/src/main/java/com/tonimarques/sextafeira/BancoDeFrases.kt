@@ -120,7 +120,7 @@ object BancoDeFrases {
     val IRRELEVANTES: Set<String> = (
         "a o as os um uma uns umas de do da dos das pra pro pras pros para por favor me mim eu e ou no na nos nas " +
             "em ao aos com que isso esse essa este aqui ai ei ok so agora celular rapidinho rapido entao tipo quero " +
-            "queria gostaria poderia pode consegue preciso sexta feira meu minha meus minhas seu sua teu tua ja la se " +
+            "queria gostaria poderia pode consegue preciso sexta feira venus meu minha meus minhas seu sua teu tua ja la se " +
             "tem ta sera vai alguma algum coisa favorzinho tu te lhe nele nela pfv pf"
         ).split(" ").toSet()
 
@@ -256,7 +256,7 @@ object BancoDeFrases {
             "desativar",
             listOf("desativar", "pode descansar", "modo de espera", "vai dormir", "descansa", "pode desativar", "desativa sexta-feira"),
             especial = "desativar",
-            respostas = listOf("Entrando em modo de espera. É só chamar.", "Certo, vou descansar. Diga Sexta-feira, ativar quando precisar."),
+            respostas = listOf("Entrando em modo de espera. É só chamar.", "Certo, vou descansar. Diga {nome}, ativar quando precisar."),
         ),
 
         Intencao(
@@ -350,8 +350,8 @@ object BancoDeFrases {
             "quem_e",
             listOf("quem é você", "se apresenta", "qual é o seu nome", "como você se chama", "qual seu nome"),
             respostas = listOf(
-                "Eu sou a Sexta-feira, sua assistente pessoal. Abro apps, toco música, mando mensagens e respondo perguntas.",
-                "Sexta-feira, ao seu dispor. Sou sua assistente: cuido dos comandos do celular e converso com você.",
+                "Eu sou a {nome}, sua assistente. Abro apps, toco música, mando mensagens e respondo perguntas.",
+                "{nome}, ao seu dispor. Sou sua assistente: cuido dos comandos do celular e converso com você.",
             ),
         ),
         Intencao(
@@ -388,7 +388,7 @@ object BancoDeFrases {
                 "Qual é o café mais perigoso do mundo? O ex-presso.",
                 "O que o tomate foi fazer no banco? Tirar extrato.",
                 "Por que a plantinha não foi atendida no hospital? Porque só tinha médico de plantão.",
-                "Sabe por que eu nunca me atraso? Porque eu sempre chego depois da quinta.",
+                "Por que o celular foi ao psicólogo? Porque tinha muitas mensagens não resolvidas.",
                 "Qual é o contrário de volátil? Vem cá, sobrinho.",
             ),
         ),
@@ -427,7 +427,7 @@ object BancoDeFrases {
         "Às suas ordens, chefe. O que deseja?",
         "Sistemas online. Como posso ajudar?",
         "Estou aqui. No que posso ser útil?",
-        "Sexta-feira ativada. Qual é a missão?",
+        "{nome} ativada. Qual é a missão?",
         "Pronta para o trabalho. O que você precisa?",
         "{periodo}, chefe. Em que posso ajudar?",
     )

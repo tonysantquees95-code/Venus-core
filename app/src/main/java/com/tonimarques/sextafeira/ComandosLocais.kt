@@ -306,11 +306,11 @@ object ComandosLocais {
 
     // ---------------------------------------------------------------- padrões
     private val PREFIXO = Regex(
-        "^(?:(?:ei|ok|oi|ola|hey|e ai)\\s*,?\\s+)?(?:sexta[- ]?feira|sexta|friday)\\b\\s*[,.!:]?\\s*" +
+        "^(?:(?:ei|ok|oi|ola|hey|e ai)\\s*,?\\s+)?(?:sexta[- ]?feira|sexta|friday|venus)\\b\\s*[,.!:]?\\s*" +
             "|^(?:por favor|por gentileza|pode|voce pode|voce poderia|poderia|consegue|voce consegue|" +
             "quero que voce|preciso que voce|eu quero que voce)\\b\\s*,?\\s*"
     )
-    private val SUFIXO = Regex("\\s*,?\\s*(?:por favor|por gentileza|sexta[- ]?feira|valeu|obrigad[oa])\\s*[.!?]*$")
+    private val SUFIXO = Regex("\\s*,?\\s*(?:por favor|por gentileza|sexta[- ]?feira|venus|valeu|obrigad[oa])\\s*[.!?]*$")
 
     private val COMPOSTO = Regex(
         "\\s(?:e|depois|entao|e depois|e entao)\\s+(?:toca|tocar|toque|coloca|coloque|manda|mande|envia|envie|" +
