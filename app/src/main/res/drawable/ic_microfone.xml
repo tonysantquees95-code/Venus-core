@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <!-- cápsula -->
+    <path
+        android:pathData="M12,2.8a3.2,3.2 0,0 1,3.2 3.2v5a3.2,3.2 0,0 1,-6.4 0v-5a3.2,3.2 0,0 1,3.2 -3.2z"
+        android:strokeWidth="1.7"
+        android:strokeColor="#FFFFFFFF" />
+    <!-- ondas internas -->
+    <path
+        android:pathData="M12,6.4v3.6"
+        android:strokeWidth="1.5"
+        android:strokeLineCap="round"
+        android:strokeColor="#FFFFFFFF" />
+    <!-- arco -->
+    <path
+        android:pathData="M5.8,10.8a6.2,6.2 0,0 0,12.4 0"
+        android:strokeWidth="1.7"
+        android:strokeLineCap="round"
+        android:strokeColor="#FFFFFFFF" />
+    <!-- haste e base -->
+    <path
+        android:pathData="M12,17.2v3.4M8.8,20.8h6.4"
+        android:strokeWidth="1.7"
+        android:strokeLineCap="round"
+        android:strokeColor="#FFFFFFFF" />
+    <!-- detalhes laterais -->
+    <path
+        android:pathData="M3,9.5v2.6M21,9.5v2.6"
+        android:strokeWidth="1.3"
+        android:strokeLineCap="round"
+        android:strokeAlpha="0.6"
+        android:strokeColor="#FFFFFFFF" />
+</vector>

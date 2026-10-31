@@ -1,20 +1,24 @@
 package com.tonimarques.sextafeira
 
+import android.Manifest
 import android.app.Activity
 import android.app.AlertDialog
 import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.graphics.Color
+import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.net.Uri
 import android.os.Bundle
+import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
+import android.speech.SpeechRecognizer
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
 import android.text.InputType
 import android.view.Gravity
-import android.view.Menu
 import android.view.MenuItem
 import android.view.View
 import android.view.ViewGroup
@@ -22,6 +26,7 @@ import android.view.inputmethod.EditorInfo
 import android.widget.EditText
 import android.widget.ImageButton
 import android.widget.LinearLayout
+import android.widget.PopupMenu
 import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
@@ -29,28 +34,36 @@ import java.util.Locale
 
 class MainActivity : Activity(), TextToSpeech.OnInitListener {
 
+    private lateinit var orbe: Orbe
+    private lateinit var titulo: TextView
+    private lateinit var status: TextView
+    private lateinit var parcial: TextView
     private lateinit var mensagens: LinearLayout
     private lateinit var rolagem: ScrollView
     private lateinit var campo: EditText
+    private lateinit var botaoMic: ImageButton
+    private lateinit var botaoEnviar: ImageButton
     private lateinit var ferramentas: Ferramentas
 
     private var gemini: Gemini? = null
     private var tts: TextToSpeech? = null
     private var ttsPronto = false
+    private var reconhecedor: SpeechRecognizer? = null
+    private var ouvindo = false
     private var ocupado = false
     private var ultimaFoiVoz = false
     private var naTela = false
+    private var corAtual = Color.parseColor("#36D6FF")
 
     private val prefs by lazy { getSharedPreferences("config", Context.MODE_PRIVATE) }
 
     // ------------------------------------------------------------ ciclo de vida
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        title = getString(R.string.app_name)
         ferramentas = Ferramentas(this)
         tts = TextToSpeech(this, this)
         setContentView(montarTela())
-        adicionarMensagem("Sexta-feira online. Em que posso ajudar?", false)
+        adicionarMensagem("Olá! Toque no orbe e fale comigo, ou digite abaixo.", false)
         if (chave().isBlank()) pedirChave()
         tratarIntent(intent)
     }
@@ -63,22 +76,29 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
     override fun onResume() {
         super.onResume()
         naTela = true
+        orbe.invalidate()
     }
 
     override fun onPause() {
         naTela = false
+        if (ouvindo) {
+            reconhecedor?.cancel()
+            ouvindo = false
+            mudarEstado(Orbe.Estado.OCIOSO, STATUS_PADRAO)
+        }
         super.onPause()
     }
 
     override fun onDestroy() {
         tts?.shutdown()
+        reconhecedor?.destroy()
         super.onDestroy()
     }
 
     private fun tratarIntent(intent: Intent?) {
         val acao = intent?.action ?: return
         if (acao == ACAO_OUVIR || acao == Intent.ACTION_ASSIST) {
-            campo.post { ouvir() }
+            orbe.post { ouvir() }
         }
     }
 
@@ -86,33 +106,97 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
     private fun montarTela(): View {
         val raiz = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setBackgroundColor(COR_FUNDO)
+            background = GradientDrawable(
+                GradientDrawable.Orientation.TOP_BOTTOM,
+                intArrayOf(Color.parseColor("#0A0F24"), Color.parseColor("#04050C"), Color.parseColor("#000000"))
+            )
         }
 
-        rolagem = ScrollView(this).apply { isFillViewport = true }
+        // Cabeçalho
+        val cabecalho = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(22), dp(14), dp(10), dp(4))
+        }
+        val nomes = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        titulo = TextView(this).apply {
+            text = "SEXTA-FEIRA"
+            textSize = 15f
+            letterSpacing = 0.35f
+            typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
+            setTextColor(corAtual)
+        }
+        val subtitulo = TextView(this).apply {
+            text = "ASSISTENTE PESSOAL"
+            textSize = 9.5f
+            letterSpacing = 0.3f
+            setTextColor(COR_TEXTO_APAGADO)
+        }
+        nomes.addView(titulo)
+        nomes.addView(subtitulo)
+        cabecalho.addView(nomes, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        val botaoMenu = botaoIcone(R.drawable.ic_menu_futuro, "Menu", COR_TEXTO_APAGADO) { }
+        botaoMenu.setOnClickListener { abrirMenu(it) }
+        cabecalho.addView(botaoMenu)
+        raiz.addView(cabecalho)
+
+        // Orbe
+        orbe = Orbe(this).apply {
+            setOnClickListener { alternarEscuta() }
+            aoMudarCor = { cor -> aplicarCor(cor) }
+        }
+        val alturaOrbe = (resources.displayMetrics.heightPixels * 0.38f).toInt()
+        raiz.addView(orbe, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, alturaOrbe))
+
+        // Status e transcrição ao vivo
+        status = TextView(this).apply {
+            text = STATUS_PADRAO
+            textSize = 11f
+            letterSpacing = 0.28f
+            gravity = Gravity.CENTER
+            setTextColor(COR_TEXTO_APAGADO)
+        }
+        raiz.addView(status, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+        parcial = TextView(this).apply {
+            textSize = 17f
+            gravity = Gravity.CENTER
+            setTextColor(Color.argb(220, 255, 255, 255))
+            typeface = Typeface.create("sans-serif-light", Typeface.ITALIC)
+            setPadding(dp(24), dp(6), dp(24), 0)
+            visibility = View.GONE
+        }
+        raiz.addView(parcial, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+
+        // Conversa
+        rolagem = ScrollView(this).apply {
+            isFillViewport = true
+            isVerticalFadingEdgeEnabled = true
+            setFadingEdgeLength(dp(36))
+            overScrollMode = View.OVER_SCROLL_NEVER
+        }
         mensagens = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(dp(12), dp(12), dp(12), dp(12))
+            setPadding(dp(16), dp(10), dp(16), dp(10))
         }
         rolagem.addView(mensagens)
         raiz.addView(rolagem, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
 
+        // Barra de digitação em "vidro"
         val barra = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            setPadding(dp(8), dp(8), dp(4), dp(8))
-            setBackgroundColor(COR_BARRA)
+            setPadding(dp(18), dp(2), dp(4), dp(2))
+            background = vidro(Color.argb(18, 255, 255, 255), Color.argb(40, 255, 255, 255), 28)
         }
-
         campo = EditText(this).apply {
-            hint = "Fale com a Sexta-feira…"
-            setHintTextColor(Color.parseColor("#7A86A8"))
+            hint = "Digite ou toque no orbe…"
+            setHintTextColor(COR_TEXTO_APAGADO)
             setTextColor(Color.WHITE)
-            textSize = 16f
+            textSize = 15f
+            background = null
             inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
             imeOptions = EditorInfo.IME_ACTION_SEND
-            background = bolha(COR_CAMPO)
-            setPadding(dp(16), dp(12), dp(16), dp(12))
+            setPadding(0, dp(12), 0, dp(12))
             setOnEditorActionListener { _, acao, _ ->
                 if (acao == EditorInfo.IME_ACTION_SEND) {
                     enviarTexto()
@@ -123,38 +207,56 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
             }
         }
         barra.addView(campo, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-        barra.addView(botao(android.R.drawable.ic_btn_speak_now, "Falar") { ouvir() })
-        barra.addView(botao(android.R.drawable.ic_menu_send, "Enviar") { enviarTexto() })
+        botaoMic = botaoIcone(R.drawable.ic_microfone, "Falar", corAtual) { alternarEscuta() }
+        botaoEnviar = botaoIcone(R.drawable.ic_enviar, "Enviar", corAtual) { enviarTexto() }
+        barra.addView(botaoMic)
+        barra.addView(botaoEnviar)
+        val paramsBarra = LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+        ).apply { setMargins(dp(14), dp(6), dp(14), dp(14)) }
+        raiz.addView(barra, paramsBarra)
 
-        raiz.addView(
-            barra,
-            LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
-        )
         return raiz
     }
 
-    private fun botao(icone: Int, descricao: String, acao: () -> Unit) = ImageButton(this).apply {
+    private fun aplicarCor(cor: Int) {
+        corAtual = cor
+        titulo.setTextColor(cor)
+        botaoMic.setColorFilter(cor)
+        botaoEnviar.setColorFilter(cor)
+    }
+
+    private fun botaoIcone(icone: Int, descricao: String, cor: Int, acao: () -> Unit) = ImageButton(this).apply {
         setImageResource(icone)
-        setColorFilter(COR_DESTAQUE)
+        setColorFilter(cor)
         contentDescription = descricao
         background = null
-        setPadding(dp(12), dp(12), dp(12), dp(12))
+        setPadding(dp(11), dp(11), dp(11), dp(11))
         setOnClickListener { acao() }
     }
 
-    private fun bolha(cor: Int) = GradientDrawable().apply {
-        setColor(cor)
-        cornerRadius = dp(20).toFloat()
+    private fun vidro(preenchimento: Int, borda: Int, raio: Int) = GradientDrawable().apply {
+        setColor(preenchimento)
+        setStroke(dp(1).coerceAtLeast(1), borda)
+        cornerRadius = dp(raio).toFloat()
     }
+
+    private fun comAlfa(cor: Int, alfa: Int) = Color.argb(alfa, Color.red(cor), Color.green(cor), Color.blue(cor))
 
     private fun dp(valor: Int) = (valor * resources.displayMetrics.density).toInt()
 
     private fun adicionarMensagem(texto: String, doUsuario: Boolean): TextView {
         val balao = TextView(this).apply {
             text = texto
-            setTextColor(Color.WHITE)
-            textSize = 16f
-            background = bolha(if (doUsuario) COR_USUARIO else COR_SEXTA)
+            textSize = 15f
+            setLineSpacing(0f, 1.15f)
+            setTextColor(if (doUsuario) Color.WHITE else Color.parseColor("#DCE3F5"))
+            typeface = Typeface.create(if (doUsuario) "sans-serif" else "sans-serif-light", Typeface.NORMAL)
+            background = if (doUsuario) {
+                vidro(comAlfa(corAtual, 40), comAlfa(corAtual, 110), 18)
+            } else {
+                vidro(Color.argb(14, 255, 255, 255), Color.argb(34, 255, 255, 255), 18)
+            }
             setPadding(dp(14), dp(10), dp(14), dp(10))
             setTextIsSelectable(true)
         }
@@ -162,8 +264,8 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
             ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT
         ).apply {
             gravity = if (doUsuario) Gravity.END else Gravity.START
-            topMargin = dp(6)
-            if (doUsuario) leftMargin = dp(48) else rightMargin = dp(48)
+            topMargin = dp(8)
+            if (doUsuario) leftMargin = dp(56) else rightMargin = dp(40)
         }
         mensagens.addView(balao, params)
         rolarParaBaixo()
@@ -172,6 +274,11 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
 
     private fun rolarParaBaixo() {
         rolagem.post { rolagem.fullScroll(View.FOCUS_DOWN) }
+    }
+
+    private fun mudarEstado(estado: Orbe.Estado, texto: String) {
+        orbe.estado = estado
+        status.text = texto
     }
 
     // ---------------------------------------------------------------- conversa
@@ -209,14 +316,14 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
         if (assistente == null) {
             adicionarMensagem(pedido, true)
             val aviso = "Esse pedido precisa da inteligência artificial. Configure a chave do Gemini " +
-                "no menu ⋮, ou diga \"ajuda\" para ver os comandos que funcionam sem ela."
+                "no menu, ou diga \"ajuda\" para ver os comandos que funcionam sem ela."
             adicionarMensagem(aviso, false)
             falar(aviso)
             return
         }
         ocupado = true
         adicionarMensagem(pedido, true)
-        val pensando = adicionarMensagem("…", false)
+        mudarEstado(Orbe.Estado.PENSANDO, "PENSANDO…")
 
         Thread {
             val resposta = try {
@@ -225,9 +332,8 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
                 "Algo deu errado: ${e.message}"
             }
             runOnUiThread {
-                pensando.text = resposta
-                rolarParaBaixo()
                 ocupado = false
+                adicionarMensagem(resposta, false)
                 falar(resposta)
             }
         }.start()
@@ -242,35 +348,137 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
     private fun chave() = prefs.getString(PREF_CHAVE, "").orEmpty()
     private fun modelo() = prefs.getString(PREF_MODELO, MODELO_PADRAO).orEmpty().ifBlank { MODELO_PADRAO }
 
-    // --------------------------------------------------------------------- voz
+    // ------------------------------------------------------------ fala (TTS)
     override fun onInit(status: Int) {
         if (status != TextToSpeech.SUCCESS) return
         tts?.setLanguage(Locale("pt", "BR"))
         tts?.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
-            override fun onStart(utteranceId: String?) {}
+            override fun onStart(utteranceId: String?) {
+                runOnUiThread { mudarEstado(Orbe.Estado.FALANDO, "FALANDO") }
+            }
 
             override fun onDone(utteranceId: String?) {
                 runOnUiThread {
+                    mudarEstado(Orbe.Estado.OCIOSO, STATUS_PADRAO)
                     // Conversa contínua: depois de responder, volta a ouvir.
                     if (ultimaFoiVoz && naTela && !ocupado && prefs.getBoolean(PREF_CONTINUA, true)) ouvir()
                 }
             }
 
             @Deprecated("Exigido pela classe base")
-            override fun onError(utteranceId: String?) {}
+            override fun onError(utteranceId: String?) {
+                runOnUiThread { mudarEstado(Orbe.Estado.OCIOSO, STATUS_PADRAO) }
+            }
         })
         ttsPronto = true
     }
 
     private fun falar(texto: String) {
-        if (!ttsPronto || !prefs.getBoolean(PREF_FALAR, true)) return
+        if (!ttsPronto || !prefs.getBoolean(PREF_FALAR, true)) {
+            mudarEstado(Orbe.Estado.OCIOSO, STATUS_PADRAO)
+            return
+        }
         val limpo = texto.replace(Regex("[*#_`>]"), "")
         tts?.speak(limpo, TextToSpeech.QUEUE_FLUSH, null, "resposta")
     }
 
+    // ------------------------------------------------------- escuta (microfone)
+    private fun alternarEscuta() {
+        if (ouvindo) {
+            reconhecedor?.stopListening()
+        } else {
+            ouvir()
+        }
+    }
+
     private fun ouvir() {
-        if (ocupado) return
+        if (ocupado || ouvindo) return
         tts?.stop()
+        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO), PEDIDO_MICROFONE)
+            return
+        }
+        if (!SpeechRecognizer.isRecognitionAvailable(this)) {
+            ouvirPeloGoogle()
+            return
+        }
+        val r = reconhecedor ?: SpeechRecognizer.createSpeechRecognizer(this).also {
+            it.setRecognitionListener(ouvinte)
+            reconhecedor = it
+        }
+        val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
+            .putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+            .putExtra(RecognizerIntent.EXTRA_LANGUAGE, "pt-BR")
+            .putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
+            .putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
+            .putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE, packageName)
+        ouvindo = true
+        mostrarParcial("")
+        mudarEstado(Orbe.Estado.OUVINDO, "OUVINDO…")
+        try {
+            r.startListening(intent)
+        } catch (e: Exception) {
+            ouvindo = false
+            mudarEstado(Orbe.Estado.OCIOSO, STATUS_PADRAO)
+            ouvirPeloGoogle()
+        }
+    }
+
+    private fun mostrarParcial(texto: String) {
+        parcial.text = texto
+        parcial.visibility = if (texto.isBlank()) View.GONE else View.VISIBLE
+    }
+
+    private val ouvinte = object : RecognitionListener {
+        override fun onReadyForSpeech(params: Bundle?) {}
+        override fun onBeginningOfSpeech() {}
+        override fun onBufferReceived(buffer: ByteArray?) {}
+        override fun onEvent(eventType: Int, params: Bundle?) {}
+
+        override fun onRmsChanged(rmsdB: Float) {
+            orbe.definirNivelVoz(rmsdB)
+        }
+
+        override fun onEndOfSpeech() {
+            orbe.definirNivelVoz(-2f)
+            mudarEstado(Orbe.Estado.PENSANDO, "PROCESSANDO…")
+        }
+
+        override fun onPartialResults(partialResults: Bundle?) {
+            val texto = partialResults?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull()
+            if (!texto.isNullOrBlank()) mostrarParcial(texto)
+        }
+
+        override fun onResults(results: Bundle?) {
+            ouvindo = false
+            mostrarParcial("")
+            val texto = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull()
+            if (texto.isNullOrBlank()) {
+                ultimaFoiVoz = false
+                mudarEstado(Orbe.Estado.OCIOSO, STATUS_PADRAO)
+            } else {
+                ultimaFoiVoz = true
+                mudarEstado(Orbe.Estado.OCIOSO, STATUS_PADRAO)
+                processar(texto)
+            }
+        }
+
+        override fun onError(error: Int) {
+            ouvindo = false
+            ultimaFoiVoz = false
+            mostrarParcial("")
+            val texto = when (error) {
+                SpeechRecognizer.ERROR_NO_MATCH, SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> "NÃO OUVI NADA · TOQUE PARA FALAR"
+                SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> "PERMITA O USO DO MICROFONE"
+                SpeechRecognizer.ERROR_NETWORK, SpeechRecognizer.ERROR_NETWORK_TIMEOUT -> "SEM INTERNET PARA OUVIR"
+                else -> STATUS_PADRAO
+            }
+            mudarEstado(Orbe.Estado.OCIOSO, texto)
+        }
+    }
+
+    /** Plano B: a janela de voz do Google, se o reconhecimento direto não estiver disponível. */
+    private fun ouvirPeloGoogle() {
         val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
             .putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
             .putExtra(RecognizerIntent.EXTRA_LANGUAGE, "pt-BR")
@@ -295,8 +503,20 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
         }
     }
 
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode != PEDIDO_MICROFONE) return
+        if (grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED) {
+            ouvir()
+        } else {
+            mudarEstado(Orbe.Estado.OCIOSO, "SEM PERMISSÃO DO MICROFONE")
+        }
+    }
+
     // ------------------------------------------------------------------- menu
-    override fun onCreateOptionsMenu(menu: Menu): Boolean {
+    private fun abrirMenu(ancora: View) {
+        val popup = PopupMenu(this, ancora)
+        val menu = popup.menu
         menu.add(0, MENU_CHAVE, 0, "Chave do Gemini")
         menu.add(0, MENU_MODELO, 1, "Modelo do Gemini")
         menu.add(0, MENU_FALAR, 2, "Responder em voz alta")
@@ -305,31 +525,32 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
             .setCheckable(true).setChecked(prefs.getBoolean(PREF_CONTINUA, true))
         menu.add(0, MENU_NOVA, 4, "Nova conversa")
         menu.add(0, MENU_DIAGNOSTICO, 5, "Diagnóstico de conexão")
-        return true
+        popup.setOnMenuItemClickListener { tratarMenu(it) }
+        popup.show()
     }
 
-    override fun onOptionsItemSelected(item: MenuItem): Boolean {
+    private fun tratarMenu(item: MenuItem): Boolean {
         when (item.itemId) {
             MENU_CHAVE -> pedirChave()
             MENU_MODELO -> pedirModelo()
             MENU_DIAGNOSTICO -> diagnosticar()
             MENU_FALAR -> {
-                val ligado = !item.isChecked
-                item.isChecked = ligado
+                val ligado = !prefs.getBoolean(PREF_FALAR, true)
                 prefs.edit().putBoolean(PREF_FALAR, ligado).apply()
                 if (!ligado) tts?.stop()
+                Toast.makeText(this, if (ligado) "Respostas em voz alta ligadas." else "Respostas em voz alta desligadas.", Toast.LENGTH_SHORT).show()
             }
             MENU_CONTINUA -> {
-                val ligado = !item.isChecked
-                item.isChecked = ligado
+                val ligado = !prefs.getBoolean(PREF_CONTINUA, true)
                 prefs.edit().putBoolean(PREF_CONTINUA, ligado).apply()
+                Toast.makeText(this, if (ligado) "Conversa contínua ligada." else "Conversa contínua desligada.", Toast.LENGTH_SHORT).show()
             }
             MENU_NOVA -> {
                 gemini = null
                 mensagens.removeAllViews()
                 adicionarMensagem("Conversa nova. Em que posso ajudar?", false)
             }
-            else -> return super.onOptionsItemSelected(item)
+            else -> return false
         }
         return true
     }
@@ -341,6 +562,7 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
             return
         }
         ocupado = true
+        mudarEstado(Orbe.Estado.PENSANDO, "TESTANDO A CONEXÃO…")
         val balao = adicionarMensagem("Testando a conexão, aguarde até 1 minuto…", false)
         val k = chave()
         val m = modelo()
@@ -354,6 +576,7 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
                 balao.text = relatorio
                 rolarParaBaixo()
                 ocupado = false
+                mudarEstado(Orbe.Estado.OCIOSO, STATUS_PADRAO)
             }
         }.start()
     }
@@ -362,7 +585,8 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
         val entrada = campoDeDialogo(chave(), "Cole aqui sua chave")
         AlertDialog.Builder(this)
             .setTitle("Chave do Gemini")
-            .setMessage("Crie uma chave grátis em aistudio.google.com/apikey, copie e cole aqui.")
+            .setMessage("Crie uma chave grátis em aistudio.google.com/apikey, copie e cole aqui. " +
+                "Os comandos rápidos funcionam mesmo sem chave.")
             .setView(entrada)
             .setPositiveButton("Salvar") { _, _ ->
                 prefs.edit().putString(PREF_CHAVE, entrada.text.toString().trim()).apply()
@@ -409,7 +633,9 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
     companion object {
         const val ACAO_OUVIR = "com.tonimarques.sextafeira.OUVIR"
         private const val PEDIDO_VOZ = 10
+        private const val PEDIDO_MICROFONE = 11
         private const val MODELO_PADRAO = "gemini-flash-latest"
+        private const val STATUS_PADRAO = "TOQUE NO ORBE PARA FALAR"
 
         private const val PREF_CHAVE = "chave"
         private const val PREF_MODELO = "modelo"
@@ -423,11 +649,6 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
         private const val MENU_NOVA = 5
         private const val MENU_DIAGNOSTICO = 6
 
-        private val COR_FUNDO = Color.parseColor("#0B1020")
-        private val COR_BARRA = Color.parseColor("#111833")
-        private val COR_CAMPO = Color.parseColor("#1B2447")
-        private val COR_SEXTA = Color.parseColor("#1A2A4A")
-        private val COR_USUARIO = Color.parseColor("#0E7490")
-        private val COR_DESTAQUE = Color.parseColor("#36D6FF")
+        private val COR_TEXTO_APAGADO = Color.parseColor("#6B769A")
     }
 }
