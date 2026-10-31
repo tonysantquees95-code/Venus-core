@@ -37,7 +37,36 @@ class VigiliaService : Service() {
     private val tarefa = Runnable { ouvir() }
     private val prefs by lazy { getSharedPreferences("config", Context.MODE_PRIVATE) }
 
+    private var travaDeTela: android.os.PowerManager.WakeLock? = null
+
     private fun escutaLigada() = prefs.getBoolean(PREF_FUNDO, false)
+    private fun telaApagadaLigada() = prefs.getBoolean(PREF_TELA_APAGADA, false)
+
+    /**
+     * Com "funcionar com a tela apagada", mantém o processador acordado (só ele, a tela continua apagada),
+     * para a escuta e o gesto não pararem quando o celular dorme. Gasta mais bateria.
+     */
+    private fun atualizarTravaDeTela() {
+        if (telaApagadaLigada()) {
+            if (travaDeTela?.isHeld != true) {
+                val energia = getSystemService(android.os.PowerManager::class.java)
+                travaDeTela = energia?.newWakeLock(android.os.PowerManager.PARTIAL_WAKE_LOCK, "venus:escuta")?.apply {
+                    setReferenceCounted(false)
+                    acquire(12 * 60 * 60 * 1000L)
+                }
+            }
+        } else {
+            liberarTravaDeTela()
+        }
+    }
+
+    private fun liberarTravaDeTela() {
+        try {
+            if (travaDeTela?.isHeld == true) travaDeTela?.release()
+        } catch (e: Exception) {
+        }
+        travaDeTela = null
+    }
     private fun gestoLigado() = prefs.getBoolean(PREF_GESTO, false)
 
     override fun onBind(intent: Intent?): IBinder? = null
@@ -68,6 +97,7 @@ class VigiliaService : Service() {
         } catch (e: Exception) {
         }
         atualizarGesto()
+        atualizarTravaDeTela()
         if (escutaLigada()) agendar(600) else pausar()
         return START_NOT_STICKY
     }
@@ -77,6 +107,7 @@ class VigiliaService : Service() {
         despertador?.parar()
         gesto?.parar()
         gesto = null
+        liberarTravaDeTela()
         try {
             reconhecedor?.destroy()
         } catch (e: Exception) {
@@ -277,6 +308,7 @@ class VigiliaService : Service() {
         const val PREF_FUNDO = "vigilia_fundo"
         const val PREF_GESTO = "gesto_torcer"
         const val PREF_MUSICA = "modo_musica"
+        const val PREF_TELA_APAGADA = "tela_apagada"
 
         /** Quando o app está na tela, o gesto chama esta função (ele mesmo começa a ouvir). */
         @Volatile
