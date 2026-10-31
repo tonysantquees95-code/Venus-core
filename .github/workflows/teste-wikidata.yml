@@ -18,10 +18,7 @@ jobs:
             local r=$(curl -s -m 70 -G 'https://query.wikidata.org/sparql' -H 'Accept: application/sparql-results+json' -H 'User-Agent: VenusTeste/1.0' --data-urlencode "query=$consulta")
             local fim=$(date +%s%N)
             local ms=$(( (fim-ini)/1000000 ))
-            local res=$(echo "$r" | python3 -c 'import sys,json
-try:
-  d=json.load(sys.stdin); print("; ".join(b.get("cLabel",{}).get("value","?")+"="+b.get("p",{}).get("value","?") for b in d["results"]["bindings"]))
-except Exception as e: print("ERRO", str(e)[:80])')
+            local res=$(echo "$r" | jq -r '[.results.bindings[] | ((.cLabel.value // "?") + "=" + (.p.value // "?"))] | join("; ")' 2>/dev/null || echo "ERRO $(echo "$r" | head -c 120)")
             echo "::notice::$nome ${ms}ms: $res"
           }
           for pais in Q38 Q155; do
