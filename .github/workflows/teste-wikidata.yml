@@ -1,0 +1,33 @@
+name: Teste Wikidata
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: [".github/workflows/teste-wikidata.yml"]
+
+jobs:
+  teste:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Consultas
+        run: |
+          q() {
+            local nome="$1"; local consulta="$2"
+            local ini=$(date +%s%N)
+            local r=$(curl -s -m 70 -G 'https://query.wikidata.org/sparql' -H 'Accept: application/sparql-results+json' -H 'User-Agent: VenusTeste/1.0' --data-urlencode "query=$consulta")
+            local fim=$(date +%s%N)
+            local ms=$(( (fim-ini)/1000000 ))
+            local res=$(echo "$r" | python3 -c 'import sys,json
+try:
+  d=json.load(sys.stdin); print("; ".join(b.get("cLabel",{}).get("value","?")+"="+b.get("p",{}).get("value","?") for b in d["results"]["bindings"]))
+except Exception as e: print("ERRO", str(e)[:80])')
+            echo "::notice::$nome ${ms}ms: $res"
+          }
+          for pais in Q38 Q155; do
+            for ordem in DESC ASC; do
+              q "cidade-$pais-$ordem" "SELECT ?c ?cLabel (MAX(?pop) AS ?p) WHERE { ?c wdt:P17 wd:$pais; wdt:P31/wdt:P279* wd:Q515; wdt:P1082 ?pop. SERVICE wikibase:label { bd:serviceParam wikibase:language \"pt-br,pt,en\". ?c rdfs:label ?cLabel. } } GROUP BY ?c ?cLabel ORDER BY $ordem(?p) LIMIT 3"
+              q "munic-$pais-$ordem" "SELECT ?c ?cLabel (MAX(?pop) AS ?p) WHERE { ?c wdt:P17 wd:$pais; wdt:P31/wdt:P279* wd:Q15284; wdt:P1082 ?pop. FILTER(?pop > 0) SERVICE wikibase:label { bd:serviceParam wikibase:language \"pt-br,pt,en\". ?c rdfs:label ?cLabel. } } GROUP BY ?c ?cLabel ORDER BY $ordem(?p) LIMIT 3"
+            done
+          done
+          q "inception-roma" "SELECT ?c ?cLabel ?p WHERE { BIND(wd:Q220 AS ?c) ?c wdt:P571 ?p. SERVICE wikibase:label { bd:serviceParam wikibase:language \"pt\". ?c rdfs:label ?cLabel. } }"
