@@ -344,6 +344,10 @@ class Ferramentas(private val activity: Activity, private val memoria: Memoria? 
         "cotacao_moeda" -> Pesquisa.cotacao(a.optString("moeda"))
         "traduzir" -> Servicos.traduzir(a.optString("texto"), a.optString("para", "en"), a.optString("de", "pt-BR").ifBlank { "pt-BR" })
         "consultar_cep" -> Servicos.cep(a.optString("cep"))
+        "loja_resumo" -> daLoja { it.resumo(a.optString("periodo", "hoje")) }
+        "loja_pedidos" -> daLoja { it.pedidosPendentes() }
+        "loja_acabando" -> daLoja { it.acabando() }
+        "loja_estoque" -> daLoja { it.estoqueDe(a.optString("produto")) }
         "distancia" -> distancia(a.optString("origem"), a.optString("destino"))
         "dicionario" -> Dicionario.consultar(a.optString("tipo", "significado"), a.optString("palavra"))
         "ortografia" -> Dicionario.qualCerta(a.optString("a"), a.optString("b"))
@@ -457,6 +461,21 @@ class Ferramentas(private val activity: Activity, private val memoria: Memoria? 
         }, 1500)
         val nome = mapOf("spotify" to "Spotify", "deezer" to "Deezer", "youtube music" to "YouTube Music", "youtube" to "YouTube Music")[ComandosLocais.normalizar(app).trim()]
         return if (nome != null) "Continuando a música de onde parou no $nome." else "Continuando a música de onde parou."
+    }
+
+    val loja by lazy { Loja(activity) }
+
+    /** Consulta a loja. Os dados ficam no celular (estas ferramentas não são oferecidas ao Gemini). */
+    private fun daLoja(consulta: (Loja) -> String): String {
+        if (!loja.conectada) return "A loja ainda não está conectada. Abra os ajustes e toque em Conectar à loja."
+        ultimasFontes = listOf(Web.Fonte("Painel da loja", Loja.SITE + "/admin"))
+        return try {
+            consulta(loja)
+        } catch (e: Loja.ErroDaLoja) {
+            e.message ?: "Não consegui consultar a loja."
+        } catch (e: Exception) {
+            "Não consegui falar com a loja agora. Confira a internet."
+        }
     }
 
     /** Abre o Maps com a busca perto de você (ou perto de casa/trabalho). */
@@ -893,6 +912,7 @@ class Ferramentas(private val activity: Activity, private val memoria: Memoria? 
             "previsao_do_tempo", "resumo_wikipedia", "buscar_na_internet", "cotacao_moeda", "noticias",
             "acompanhar_tema", "atualizar_noticias", "traduzir", "consultar_cep", "consultar_cnpj", "consultar_ddd", "feriados",
             "buscar_cep", "dicionario", "ortografia", "distancia",
+            "loja_resumo", "loja_pedidos", "loja_acabando", "loja_estoque",
         )
 
         private const val SPOTIFY = "com.spotify.music"
