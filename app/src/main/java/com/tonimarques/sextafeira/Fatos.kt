@@ -24,6 +24,7 @@ object Fatos {
     private val P = "(?:o |a |os |as )?"
     private val DE = "(d[oa]s?|de)"
     private val REGRAS = listOf(
+        Regra("maior_cidade", listOf("SPARQL"), Regex("^(?:qual (?:e |eh )?)?(?:a )?(?:maior cidade|cidade mais populosa|cidade com mais (?:habitantes|gente|pessoas)|cidade mais (?:habitada|povoada)) $DE (.+)$")),
         Regra("capital", listOf("P36"), Regex("^qual (?:e |eh )?(?:a )?capital $DE (.+)$")),
         Regra("populacao", listOf("P1082"), Regex("^(?:qual (?:e |eh )?(?:a )?populacao $DE |quantos habitantes (?:tem|possui|ha em|existem em) ($P)|quantas pessoas (?:moram|vivem) (no|na|em|nos|nas) )(.+)$")),
         Regra("presidente", listOf("P35", "P6", "P488", "P169"), Regex("^quem (?:e|eh) (?:o |a )?(?:atual )?(?:presidente|presidenta|chefe de estado) $DE (.+)$")),
@@ -32,7 +33,7 @@ object Fatos {
         Regra("fundador", listOf("P112", "P170", "P61"), Regex("^(?:quem (?:fundou|criou|inventou) ($P)|quem (?:e|eh|foi) (?:o |a )?(?:fundador|fundadora|criador|criadora|inventor|inventora) $DE )(.+)$")),
         Regra("fundacao", listOf("P571"), Regex("^(?:quando (?:foi )?(?:fundad[oa]|criad[oa]|inaugurad[oa]) ($P)|em que ano (?:foi fundad[oa]|foi criad[oa]|surgiu) ($P))(.+)$")),
         Regra("nascimento", listOf("P569"), Regex("^(?:quando (?:nasceu|e o aniversario d[eoa]) ($P)|qual (?:e |eh )?a data de nascimento $DE )(.+)$")),
-        Regra("idade", listOf("P569"), Regex("^(?:quantos anos tem ($P)|qual (?:e |eh )?a idade $DE )(.+)$")),
+        Regra("idade", listOf("P569", "P571"), Regex("^(?:quantos anos tem ($P)|qual (?:e |eh )?a idade $DE |quantos anos (?:existe|tem de existencia|de historia tem|de fundacao tem) ($P)|ha quanto tempo existe ($P)|quantos anos faz (?:que existe )?($P))(.+)$")),
         Regra("morte", listOf("P570"), Regex("^(?:quando morreu ($P)|quando faleceu ($P))(.+)$")),
         Regra("altura", listOf("P2048"), Regex("^(?:qual (?:e |eh )?a altura $DE |quanto mede ($P))(.+)$")),
         Regra("area", listOf("P2046"), Regex("^(?:qual (?:e |eh )?(?:o tamanho|a area) $DE )(.+)$")),
@@ -102,6 +103,7 @@ object Fatos {
         val id = item.optString("id")
         val nome = item.optString("label").ifBlank { sujeitoOriginal }
         ultimoSujeito = ComandosLocais.normalizar(nome)
+        if (p.tipo == "maior_cidade") return maiorCidade(id, nome)
         for (prop in p.propriedades) {
             val claims = JSONObject(Web.texto(API + "action=wbgetclaims&entity=$id&property=$prop"))
                 .optJSONObject("claims")?.optJSONArray(prop) ?: continue
@@ -113,6 +115,45 @@ object Fatos {
             return Web.Resposta(texto, listOf(Web.Fonte("Wikidata: $nome", "https://www.wikidata.org/wiki/$id")))
         }
         return null
+    }
+
+    /** Cidade mais populosa de um país (ou estado/região), pela consulta SPARQL da Wikidata. */
+    private fun maiorCidade(id: String, nome: String): Web.Resposta? {
+        for (ligacao in listOf("P17", "P131")) {
+            val consulta = "SELECT ?c ?cLabel (MAX(?pop) AS ?p) WHERE { ?c wdt:$ligacao wd:$id; wdt:P31/wdt:P279* wd:Q515; wdt:P1082 ?pop. " +
+                "SERVICE wikibase:label { bd:serviceParam wikibase:language \"pt-br,pt,en\". ?c rdfs:label ?cLabel. } } " +
+                "GROUP BY ?c ?cLabel ORDER BY DESC(?p) LIMIT 6"
+            val j = try {
+                JSONObject(
+                    Web.texto(
+                        "https://query.wikidata.org/sparql?format=json&query=" + codificar(consulta),
+                        aceitar = "application/sparql-results+json"
+                    )
+                )
+            } catch (e: Exception) {
+                continue
+            }
+            val texto = montarMaiorCidade(j, nome) ?: continue
+            return Web.Resposta(texto, listOf(Web.Fonte("Wikidata: $nome", "https://www.wikidata.org/wiki/$id")))
+        }
+        return null
+    }
+
+    /** Separado da rede para ser testado. Ignora regiões metropolitanas. */
+    fun montarMaiorCidade(j: JSONObject, nome: String): String? {
+        val linhas = j.optJSONObject("results")?.optJSONArray("bindings") ?: return null
+        val cidades = (0 until linhas.length()).mapNotNull { linhas.optJSONObject(it) }.mapNotNull { b ->
+            val rotulo = b.optJSONObject("cLabel")?.optString("value").orEmpty()
+            val pop = b.optJSONObject("p")?.optString("value")?.toDoubleOrNull() ?: return@mapNotNull null
+            if (rotulo.isBlank() || Regex("^Q\\d+$").matches(rotulo)) return@mapNotNull null
+            if (Regex("(?i)metropolitan|regi[aã]o|^grande |aglomera|área urbana|area urbana").containsMatchIn(rotulo)) return@mapNotNull null
+            rotulo to pop
+        }
+        if (cidades.isEmpty()) return null
+        val (primeira, pop) = cidades.first()
+        val outras = cidades.drop(1).take(2).joinToString(" e ") { it.first }
+        return "A cidade mais populosa de $nome é $primeira, com cerca de ${Calculadora.numero(pop)} habitantes." +
+            if (outras.isNotBlank()) " Depois vêm $outras." else ""
     }
 
     private fun trechoOriginal(original: String, sujeitoNormal: String): String {
@@ -201,6 +242,14 @@ object Fatos {
         return anos
     }
 
+    /** Anos desde uma data como "753 a.C.", "1554" ou "25 de janeiro de 1554". */
+    fun anosDesde(data: String, anoAtual: Int = Calendar.getInstance().get(Calendar.YEAR)): Int? {
+        val ac = Regex("^(\\d+) a\\.C\\.$").find(data.trim())
+        if (ac != null) return anoAtual + ac.groupValues[1].toInt() - 1
+        val ano = Regex("(\\d{3,4})$").find(data.trim())?.groupValues?.get(1)?.toIntOrNull() ?: return null
+        return (anoAtual - ano).takeIf { it >= 0 }
+    }
+
     private fun lista(v: List<String>) = if (v.size <= 1) v.firstOrNull().orEmpty() else v.dropLast(1).joinToString(", ") + " e " + v.last()
 
     /** Monta a resposta em português. Pública para testes. */
@@ -228,8 +277,13 @@ object Fatos {
             "fundador" -> if (prop == "P61") "$nome foi criado por $v." else "$nome foi fundado por $v."
             "fundacao" -> "$nome foi fundado em $v."
             "nascimento" -> "$nome nasceu em $v."
-            "idade" -> idadeDe(valores.first())?.let { "$nome tem $it anos (nasceu em ${valores.first()})." }
-                ?: "$nome nasceu em ${valores.first()}."
+            "idade" -> if (prop == "P571") {
+                anosDesde(valores.first())?.let { "$nome existe há cerca de ${Calculadora.numero(it.toDouble())} anos (fundação em ${valores.first()})." }
+                    ?: "$nome foi fundado em ${valores.first()}."
+            } else {
+                idadeDe(valores.first())?.let { "$nome tem $it anos (nasceu em ${valores.first()})." }
+                    ?: "$nome nasceu em ${valores.first()}."
+            }
             "morte" -> "$nome morreu em $v."
             "altura" -> "$nome tem $v de altura."
             "area" -> "A área $de $nome é de $v."

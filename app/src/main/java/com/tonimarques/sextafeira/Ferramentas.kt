@@ -329,6 +329,7 @@ class Ferramentas(private val activity: Activity, private val memoria: Memoria? 
         "cotacao_moeda" -> Pesquisa.cotacao(a.optString("moeda"))
         "traduzir" -> Servicos.traduzir(a.optString("texto"), a.optString("para", "en"), a.optString("de", "pt-BR").ifBlank { "pt-BR" })
         "consultar_cep" -> Servicos.cep(a.optString("cep"))
+        "distancia" -> distancia(a.optString("origem"), a.optString("destino"))
         "dicionario" -> Dicionario.consultar(a.optString("tipo", "significado"), a.optString("palavra"))
         "ortografia" -> Dicionario.qualCerta(a.optString("a"), a.optString("b"))
         "buscar_cep" -> Servicos.buscarCep(a.optString("logradouro"), a.optString("cidade"), a.optString("estado"))
@@ -646,6 +647,26 @@ class Ferramentas(private val activity: Activity, private val memoria: Memoria? 
         return resposta.texto
     }
 
+    private fun distancia(origem: String, destino: String): String {
+        val b = Web.procurarCidade(destino) ?: return "Não encontrei o lugar $destino."
+        val nomeB = b.nome
+        val (lat, lon, nomeA) = if (origem.isBlank()) {
+            val local = ultimaLocalizacao()
+            val salva = memoria?.valor("cidade")
+            when {
+                local != null -> Triple(local.latitude, local.longitude, "")
+                !salva.isNullOrBlank() -> Web.procurarCidade(salva)?.let { Triple(it.latitude, it.longitude, it.nome) }
+                    ?: return pedirLocalizacao("calcular a distância daí")
+                else -> return pedirLocalizacao("calcular a distância daí")
+            }
+        } else {
+            val a = Web.procurarCidade(origem) ?: return "Não encontrei o lugar $origem."
+            Triple(a.latitude, a.longitude, a.nome)
+        }
+        ultimasFontes = listOf(Web.Fonte("Open-Meteo (localização das cidades)", "https://open-meteo.com"))
+        return Calculadora.fraseDistancia(nomeA, nomeB, Calculadora.distanciaKm(lat, lon, b.latitude, b.longitude))
+    }
+
     private fun ultimaLocalizacao(): Location? {
         if (activity.checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) return null
         val gerente = activity.getSystemService(Context.LOCATION_SERVICE) as LocationManager
@@ -654,12 +675,12 @@ class Ferramentas(private val activity: Activity, private val memoria: Memoria? 
             .maxByOrNull { it.time }
     }
 
-    private fun pedirLocalizacao(): String {
+    private fun pedirLocalizacao(para: String = "ver o clima aí"): String {
         if (activity.checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
             activity.runOnUiThread {
                 activity.requestPermissions(arrayOf(Manifest.permission.ACCESS_COARSE_LOCATION), PEDIDO_LOCALIZACAO)
             }
-            return "Para ver o clima aí, permita a localização e pergunte de novo. " +
+            return "Para $para, permita a localização e pergunte de novo. " +
                 "Ou me diga: minha cidade é, e o nome da cidade."
         }
         return "Não consegui achar sua localização agora. Me diga: minha cidade é, e o nome da cidade."
@@ -737,7 +758,7 @@ class Ferramentas(private val activity: Activity, private val memoria: Memoria? 
         val USAM_REDE = setOf(
             "previsao_do_tempo", "resumo_wikipedia", "buscar_na_internet", "cotacao_moeda", "noticias",
             "acompanhar_tema", "atualizar_noticias", "traduzir", "consultar_cep", "consultar_cnpj", "consultar_ddd", "feriados",
-            "buscar_cep", "dicionario", "ortografia",
+            "buscar_cep", "dicionario", "ortografia", "distancia",
         )
 
         private const val SPOTIFY = "com.spotify.music"

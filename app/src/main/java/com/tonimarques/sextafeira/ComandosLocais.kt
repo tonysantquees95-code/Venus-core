@@ -178,6 +178,16 @@ object ComandosLocais {
         if (Regex("\\bcep\\b").containsMatchIn(c) && digitos.length == 8) {
             return Resultado.Acao("consultar_cep", mapOf("cep" to digitos))
         }
+        // Distância: "qual a distância daqui até Brasília", "distância entre Porto Alegre e Caxias"
+        DISTANCIA_DAQUI.matchEntire(c)?.let { m ->
+            val destino = f.trecho(m.groups[1] ?: m.groups[2]).orEmpty().trim()
+            if (destino.length >= 2) return Resultado.Acao("distancia", mapOf("origem" to "", "destino" to destino))
+        }
+        DISTANCIA_ENTRE.matchEntire(c)?.let { m ->
+            val origem = f.trecho(m.groups[1]).orEmpty().trim()
+            val destino = f.trecho(m.groups[2]).orEmpty().trim()
+            if (origem.length >= 2 && destino.length >= 2) return Resultado.Acao("distancia", mapOf("origem" to origem, "destino" to destino))
+        }
         // CEP pelo endereço: "qual o CEP da Rua X em Porto Alegre"
         if (digitos.length != 8) {
             for (regra in CEP_ENDERECO) {
@@ -430,6 +440,15 @@ object ComandosLocais {
     private val PARAR_ACOMPANHAR = Regex(
         "^(?:para|pare|parar|deixa|deixe) de (?:acompanhar|seguir|monitorar)(?:\\s+(?:as|os))?" +
             "(?:\\s+(?:noticias|novidades))?(?:\\s+(?:de|do|da|dos|das|sobre|em))?\\s+(.+)$"
+    )
+    private val DISTANCIA_DAQUI = Regex(
+        "^(?:qual (?:e |eh )?(?:a )?distancia|a distancia|distancia|quantos (?:km|quilometros) (?:sao|tem|da|ha|faltam)?|quanto (?:da|e|eh|tem))\\s*" +
+            "(?:daqui|de onde eu estou|da onde eu estou|de onde estou|da onde estou|de mim|da minha casa|de casa|da minha localizacao|de onde eu to)\\s+" +
+            "(?:ate|para|pra|a|ao|à|na|no)\\s+(?:a cidade de |o |a )?(.+)$|" +
+            "^(?:quao|quanto) longe (?:fica|esta|e|eh) (?:a cidade de |o |a )?(.+?)(?: daqui| de mim| de onde eu estou)?$"
+    )
+    private val DISTANCIA_ENTRE = Regex(
+        "^(?:qual (?:e |eh )?(?:a )?distancia|a distancia|distancia|quantos (?:km|quilometros) (?:sao|tem|da|ha)?)\\s*(?:entre|de|da|do)\\s+(.+?)\\s+(?:e|ate|para|pra|a)\\s+(.+)$"
     )
     private val CEP_INICIO = "^(?:qual (?:e |eh )?(?:o )?|me (?:da|de|diz|diga|fala|passa) o |sabe o |descobre o |procura o |busca o |)cep d[aoe]s? "
     private val CEP_ENDERECO = listOf(
