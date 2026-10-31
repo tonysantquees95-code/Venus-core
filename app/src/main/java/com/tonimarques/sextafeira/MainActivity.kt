@@ -20,7 +20,10 @@ import android.speech.SpeechRecognizer
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
 import android.speech.tts.Voice
+import android.text.Html
 import android.text.InputType
+import android.text.TextUtils
+import android.text.method.LinkMovementMethod
 import android.view.Gravity
 import android.view.MenuItem
 import android.view.View
@@ -68,6 +71,8 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
     private var ouvirAposPermissao = false
     private var naTela = false
     private var corAtual = Color.parseColor("#36D6FF")
+    private var topicoAtual = "Conversa"
+    private val memoria by lazy { Memoria(this) }
 
     private val prefs by lazy { getSharedPreferences("config", Context.MODE_PRIVATE) }
     private val tarefaVigilia = Runnable { iniciarVigilia() }
@@ -75,10 +80,16 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
     // ------------------------------------------------------------ ciclo de vida
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        ferramentas = Ferramentas(this)
+        ferramentas = Ferramentas(this, memoria)
+        // A busca no Google roda numa thread de fundo, chamada pela ferramenta buscar_na_internet.
+        ferramentas.buscador = { pergunta -> gemini?.buscarNaInternet(pergunta) }
+        cerebro.apelido = memoria.valor("apelido") ?: "chefe"
+        cerebro.carregarAprendidas(memoria.aprendidas())
+        cerebro.aoAprender = { frase, intencao -> memoria.aprender(frase, intencao) }
         tts = TextToSpeech(this, this)
         setContentView(montarTela())
-        adicionarMensagem("Olá! Diga \"Sexta-feira, ativar\", toque no orbe ou digite abaixo.", false)
+        carregarConversaAnterior()
+        adicionarMensagem("Olá! Diga \"Sexta-feira, ativar\", toque no orbe ou digite abaixo.", false, salvar = false)
         tratarIntent(intent)
     }
 
@@ -263,7 +274,26 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
 
     private fun dp(valor: Int) = (valor * resources.displayMetrics.density).toInt()
 
-    private fun adicionarMensagem(texto: String, doUsuario: Boolean): TextView {
+    /** Mostra as últimas mensagens da conversa anterior, para dar continuidade. */
+    private fun carregarConversaAnterior() {
+        val anteriores = try {
+            memoria.mensagens(null, 6)
+        } catch (e: Exception) {
+            emptyList()
+        }
+        for (m in anteriores) {
+            if (m.texto.startsWith("Fontes: ")) continue
+            adicionarMensagem(m.texto, m.doUsuario, salvar = false).alpha = 0.55f
+        }
+    }
+
+    private fun adicionarMensagem(texto: String, doUsuario: Boolean, salvar: Boolean = true): TextView {
+        if (salvar) {
+            try {
+                memoria.salvarMensagem(doUsuario, texto, topicoAtual)
+            } catch (e: Exception) {
+            }
+        }
         val balao = TextView(this).apply {
             text = texto
             textSize = 15f
@@ -320,6 +350,7 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
         // "Sexta-feira, ativar" (sozinho ou seguido de um pedido)
         restoDepoisDaAtivacao(pedido)?.let { resto ->
             if (resto.isBlank()) {
+                topicoAtual = "Conversa"
                 adicionarMensagem(pedido, true)
                 ativar()
                 return
@@ -327,22 +358,31 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
             pedido = resto
         }
 
+        val decisao = cerebro.responder(pedido)
+        topicoAtual = when (decisao) {
+            is Cerebro.Decisao.Memoria -> "Sobre mim"
+            is Cerebro.Decisao.Executar -> Topicos.classificar(pedido, decisao.nome)
+            else -> Topicos.classificar(pedido)
+        }
         adicionarMensagem(pedido, true)
-        when (val decisao = cerebro.responder(pedido)) {
-            is Cerebro.Decisao.Incerto -> {
-                if (obterGemini() == null) mostrarDecisao(cerebro.usarPalpite(), pedido, semIA = true)
-                else consultarIA(pedido)
-            }
-            else -> mostrarDecisao(decisao, pedido)
+        if (decisao is Cerebro.Decisao.Incerto) {
+            if (obterGemini() == null) semInteligencia(pedido) else consultarIA(pedido)
+        } else {
+            mostrarDecisao(decisao, pedido)
         }
     }
 
     private fun mostrarDecisao(decisao: Cerebro.Decisao, pedido: String, semIA: Boolean = false) {
         when (decisao) {
-            is Cerebro.Decisao.Executar -> {
-                val resultado = ferramentas.executar(decisao.nome, decisao.args)
-                val appNaoAchado = decisao.nome == "abrir_app" && resultado.startsWith("Não encontrei")
-                if (appNaoAchado && obterGemini() != null) consultarIA(pedido) else responder(resultado)
+            is Cerebro.Decisao.Executar -> when {
+                decisao.nome == "pesquisar_na_web" ->
+                    buscaInteligente(decisao.args["termo"]?.toString().orEmpty().ifBlank { pedido })
+                decisao.nome in Ferramentas.USAM_REDE -> executarNaRede(decisao.nome, decisao.args)
+                else -> {
+                    val resultado = ferramentas.executar(decisao.nome, decisao.args)
+                    val appNaoAchado = decisao.nome == "abrir_app" && resultado.startsWith("Não encontrei")
+                    if (appNaoAchado && obterGemini() != null) consultarIA(pedido) else responder(resultado)
+                }
             }
             is Cerebro.Decisao.Responder -> {
                 val aviso = if (semIA && obterGemini() == null && decisao.texto in BancoDeFrases.NAO_ENTENDI) {
@@ -367,19 +407,184 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
                         ultimaFoiVoz = false
                         forcarEscuta = false
                     }
+                    "musica_favorita" -> {
+                        tocarFavorita()
+                        return
+                    }
                 }
                 responder(decisao.texto)
             }
+            is Cerebro.Decisao.Memoria -> tratarMemoria(decisao.pedido)
             is Cerebro.Decisao.Incerto -> mostrarDecisao(cerebro.usarPalpite(), pedido, semIA)
         }
     }
 
+    // ----------------------------------------------------------- memória
+    private fun tratarMemoria(pedido: ComandosMemoria.Pedido) {
+        when (pedido) {
+            is ComandosMemoria.Pedido.Lembrar ->
+                responder(if (memoria.lembrar(pedido.texto, pedido.categoria)) "Anotado! Vou lembrar disso." else "Isso eu já sabia!")
+            is ComandosMemoria.Pedido.Definir -> {
+                memoria.definir(pedido.categoria, pedido.valor)
+                val resposta = when {
+                    pedido.categoria == "apelido" -> {
+                        cerebro.apelido = pedido.valor
+                        "Prazer, ${pedido.valor}! Vou te chamar assim."
+                    }
+                    pedido.categoria == "cidade" -> "Anotado: você mora em ${pedido.valor}. Vou usar isso na previsão do tempo."
+                    else -> {
+                        val tipo = pedido.categoria.removePrefix("favorito:")
+                        val feminino = tipo in setOf("musica", "banda", "cantora", "comida", "cor", "serie", "bebida", "playlist")
+                        val nomeTipo = mapOf("musica" to "música", "serie" to "série")[tipo] ?: tipo
+                        if (feminino) "Anotado: sua $nomeTipo favorita é ${pedido.valor}."
+                        else "Anotado: seu $nomeTipo favorito é ${pedido.valor}."
+                    }
+                }
+                responder(resposta)
+            }
+            is ComandosMemoria.Pedido.Esquecer ->
+                responder(if (memoria.esquecer(pedido.trecho) > 0) "Pronto, esqueci." else "Não encontrei nada sobre isso na minha memória.")
+            ComandosMemoria.Pedido.Listar -> responder(resumoDaMemoria())
+            ComandosMemoria.Pedido.ApagarTudo -> confirmarApagarMemorias()
+        }
+    }
+
+    private fun resumoDaMemoria(): String {
+        val partes = mutableListOf<String>()
+        memoria.valor("apelido")?.let { partes += "seu nome é $it" }
+        memoria.valor("cidade")?.let { partes += "você mora em $it" }
+        for (f in memoria.fatos()) {
+            if (f.categoria.startsWith("favorito:")) {
+                val tipo = f.categoria.removePrefix("favorito:").let { mapOf("musica" to "música", "serie" to "série")[it] ?: it }
+                partes += "seu favorito em $tipo é ${f.texto}"
+            }
+        }
+        val fatos = memoria.fatos().filter { it.categoria in setOf("fato", "gosto", "ia") }.takeLast(8).map { it.texto }
+        partes += fatos
+        if (partes.isEmpty()) return "Ainda não sei nada sobre você. Diga, por exemplo: lembra que eu gosto de rock."
+        return "O que eu sei sobre você: " + partes.joinToString("; ") + "."
+    }
+
+    private fun confirmarApagarMemorias() {
+        responder("Tem certeza? Confirme na tela.")
+        AlertDialog.Builder(this)
+            .setTitle("Apagar todas as memórias?")
+            .setMessage("A Sexta-feira vai esquecer seu nome, sua cidade, seus favoritos, o que aprendeu e o que você mais usa. O histórico de conversas continua.")
+            .setPositiveButton("Apagar") { _, _ ->
+                memoria.apagarMemorias()
+                cerebro.apelido = "chefe"
+                cerebro.esquecerAprendidas()
+                responder("Pronto, memórias apagadas. Começando do zero.")
+            }
+            .setNegativeButton("Cancelar", null)
+            .show()
+    }
+
+    private fun tocarFavorita() {
+        val favorita = listOf("musica", "banda", "cantor", "cantora", "artista", "playlist", "estilo")
+            .firstNotNullOfOrNull { memoria.valor("favorito:$it") }
+            ?: memoria.maisUsados("musica", 1).firstOrNull()
+        if (favorita == null) {
+            responder("Ainda não sei sua favorita. Me diga: minha música favorita é, e o nome dela.")
+            return
+        }
+        responder(ferramentas.executar("tocar_musica", mapOf("busca" to favorita, "app" to "")))
+    }
+
+    // ----------------------------------------------------------- internet
+    private fun comTempoLimite(estado: String, trabalho: () -> (() -> Unit)) {
+        ocupado = true
+        val id = ++pedidoAtual
+        mudarEstado(Orbe.Estado.PENSANDO, estado)
+        principal.postDelayed({
+            if (pedidoAtual == id && ocupado) {
+                pedidoAtual++
+                ocupado = false
+                responder("Demorou demais para responder. Pode tentar de novo?")
+            }
+        }, LIMITE_IA_MS)
+        Thread {
+            val mostrar = try {
+                trabalho()
+            } catch (e: Exception) {
+                { responder("Não consegui buscar isso agora. Confira sua internet e tente de novo.") }
+            }
+            runOnUiThread {
+                if (id != pedidoAtual) return@runOnUiThread
+                pedidoAtual++
+                ocupado = false
+                mostrar()
+            }
+        }.start()
+    }
+
+    private fun executarNaRede(nome: String, args: Map<String, Any>) {
+        comTempoLimite("BUSCANDO…") {
+            ferramentas.ultimasFontes = emptyList()
+            val resultado = ferramentas.executar(nome, args)
+            val fontes = ferramentas.ultimasFontes
+            val acao: () -> Unit = {
+                responder(resultado)
+                mostrarFontes(fontes)
+            }
+            acao
+        }
+    }
+
+    /** Pesquisa e responde no chat: Google (pela IA) → Wikipédia → navegador, nessa ordem. */
+    private fun buscaInteligente(termo: String) {
+        val assistente = obterGemini()
+        comTempoLimite("PESQUISANDO…") {
+            val r = assistente?.buscarNaInternet(termo)
+                ?: try {
+                    Web.wikipedia(termo)
+                } catch (e: Exception) {
+                    null
+                }
+            val acao: () -> Unit = if (r != null) {
+                {
+                    responder(r.texto)
+                    mostrarFontes(r.fontes)
+                }
+            } else {
+                {
+                    ferramentas.executar("pesquisar_na_web", mapOf("termo" to termo))
+                    responder("Não consegui a resposta direto aqui, então abri a pesquisa no navegador.")
+                }
+            }
+            acao
+        }
+    }
+
+    /** Sem chave do Gemini: tenta a Wikipédia para "o que é / quem foi"; senão, confirma ou pede para repetir. */
+    private fun semInteligencia(pedido: String) {
+        val assunto = Web.assuntoEnciclopedico(pedido)
+        if (assunto != null) buscaInteligente(assunto) else mostrarDecisao(cerebro.usarPalpite(), pedido, semIA = true)
+    }
+
+    private fun mostrarFontes(fontes: List<Web.Fonte>) {
+        if (fontes.isEmpty()) return
+        val html = fontes.joinToString(" · ") { "<a href=\"${TextUtils.htmlEncode(it.url)}\">${TextUtils.htmlEncode(it.titulo)}</a>" }
+        val vista = TextView(this).apply {
+            text = Html.fromHtml("Fontes: $html", Html.FROM_HTML_MODE_COMPACT)
+            textSize = 12f
+            setTextColor(COR_TEXTO_APAGADO)
+            setLinkTextColor(corAtual)
+            movementMethod = LinkMovementMethod.getInstance()
+            setPadding(dp(6), dp(4), dp(6), 0)
+        }
+        mensagens.addView(vista)
+        rolarParaBaixo()
+        memoria.salvarMensagem(false, "Fontes: " + fontes.joinToString("; ") { "${it.titulo} (${it.url})" }, topicoAtual)
+    }
+
     /** Envia para o Gemini, com tempo limite: se ele travar ou falhar, o cérebro local assume. */
     private fun consultarIA(pedido: String) {
-        val assistente = obterGemini() ?: return mostrarDecisao(cerebro.usarPalpite(), pedido, semIA = true)
+        val assistente = obterGemini() ?: return semInteligencia(pedido)
         ocupado = true
         val id = ++pedidoAtual
         mudarEstado(Orbe.Estado.PENSANDO, "PENSANDO…")
+        ferramentas.ultimasFontes = emptyList()
 
         principal.postDelayed({
             if (pedidoAtual == id && ocupado) {
@@ -399,12 +604,21 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
                 if (id != pedidoAtual) return@runOnUiThread
                 pedidoAtual++
                 ocupado = false
-                if (resposta.ok) responder(resposta.texto) else planoB("A inteligência artificial está indisponível agora.", pedido)
+                if (resposta.ok) {
+                    responder(resposta.texto)
+                    mostrarFontes(ferramentas.ultimasFontes)
+                } else {
+                    planoB("A inteligência artificial está indisponível agora.", pedido)
+                }
             }
         }.start()
     }
 
     private fun planoB(motivo: String, pedido: String) {
+        Web.assuntoEnciclopedico(pedido)?.let {
+            buscaInteligente(it)
+            return
+        }
         val decisao = cerebro.usarPalpite()
         if (decisao is Cerebro.Decisao.Perguntar) {
             mostrarDecisao(decisao, pedido)
@@ -421,7 +635,7 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
     private fun obterGemini(): Gemini? {
         val k = chave()
         if (k.isBlank()) return null
-        return gemini ?: Gemini(k, modelo(), ferramentas).also { gemini = it }
+        return gemini ?: Gemini(k, modelo(), ferramentas) { memoria.resumoParaIA() }.also { gemini = it }
     }
 
     private fun chave() = prefs.getString(PREF_CHAVE, "").orEmpty()
@@ -846,6 +1060,12 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == Ferramentas.PEDIDO_LOCALIZACAO) {
+            if (grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED) {
+                Toast.makeText(this, "Localização liberada. Pergunte o clima de novo.", Toast.LENGTH_LONG).show()
+            }
+            return
+        }
         if (requestCode != PEDIDO_MICROFONE) return
         if (grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED) {
             if (ouvirAposPermissao) ouvirComando() else agendarVigilia(500)
@@ -867,6 +1087,8 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
             .setCheckable(true).setChecked(prefs.getBoolean(PREF_FALAR, true))
         menu.add(0, MENU_CONTINUA, 4, "Conversa contínua por voz")
             .setCheckable(true).setChecked(prefs.getBoolean(PREF_CONTINUA, true))
+        menu.add(0, MENU_HISTORICO, 5, "Histórico por tópico")
+        menu.add(0, MENU_MEMORIAS, 5, "O que a Sexta-feira sabe sobre mim")
         menu.add(0, MENU_CHAVE, 5, "Chave do Gemini")
         menu.add(0, MENU_MODELO, 6, "Modelo do Gemini")
         menu.add(0, MENU_NOVA, 7, "Nova conversa")
@@ -893,6 +1115,8 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
                 ).show()
             }
             MENU_VOZ -> escolherVoz()
+            MENU_HISTORICO -> mostrarHistorico()
+            MENU_MEMORIAS -> mostrarMemorias()
             MENU_AJUSTE_VOZ -> ajustarVoz()
             MENU_CHAVE -> pedirChave()
             MENU_MODELO -> pedirModelo()
@@ -912,11 +1136,91 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
                 gemini = null
                 cerebro.esquecerPendencias()
                 mensagens.removeAllViews()
-                adicionarMensagem("Conversa nova. Em que posso ajudar?", false)
+                adicionarMensagem("Conversa nova. Em que posso ajudar?", false, salvar = false)
             }
             else -> return false
         }
         return true
+    }
+
+    // --------------------------------------------------- histórico e memórias
+    private fun mostrarHistorico() {
+        val topicos = memoria.topicos()
+        if (topicos.isEmpty()) {
+            Toast.makeText(this, "Ainda não há conversas salvas.", Toast.LENGTH_SHORT).show()
+            return
+        }
+        val nomes = topicos.map { (t, n) -> "$t  ($n)" }.toTypedArray()
+        AlertDialog.Builder(this)
+            .setTitle("Histórico por tópico")
+            .setItems(nomes) { _, qual -> mostrarTopico(topicos[qual].first) }
+            .setNeutralButton("Apagar todo o histórico") { _, _ ->
+                AlertDialog.Builder(this)
+                    .setTitle("Apagar todo o histórico?")
+                    .setMessage("As conversas salvas serão apagadas. As memórias continuam.")
+                    .setPositiveButton("Apagar") { _, _ -> memoria.apagarHistorico() }
+                    .setNegativeButton("Cancelar", null)
+                    .show()
+            }
+            .setNegativeButton("Fechar", null)
+            .show()
+    }
+
+    private fun mostrarTopico(topico: String) {
+        val formato = java.text.SimpleDateFormat("dd/MM HH:mm", Locale("pt", "BR"))
+        val texto = memoria.mensagens(topico, 150).joinToString("\n\n") { m ->
+            val quem = if (m.doUsuario) "Você" else "Sexta-feira"
+            "${formato.format(java.util.Date(m.quando))} · $quem\n${m.texto}"
+        }
+        val vista = TextView(this).apply {
+            this.text = texto
+            textSize = 14f
+            setTextIsSelectable(true)
+            setPadding(dp(22), dp(12), dp(22), dp(12))
+        }
+        val rolar = ScrollView(this).apply { addView(vista) }
+        rolar.post { rolar.fullScroll(View.FOCUS_DOWN) }
+        AlertDialog.Builder(this)
+            .setTitle(topico)
+            .setView(rolar)
+            .setPositiveButton("Fechar", null)
+            .setNeutralButton("Apagar tópico") { _, _ -> memoria.apagarTopico(topico) }
+            .show()
+    }
+
+    private fun mostrarMemorias() {
+        val fatos = memoria.fatos()
+        if (fatos.isEmpty()) {
+            Toast.makeText(this, "Ainda não sei nada sobre você. Diga: lembra que eu gosto de rock.", Toast.LENGTH_LONG).show()
+            return
+        }
+        val nomes = fatos.map { f ->
+            val rotulo = when {
+                f.categoria == "apelido" -> "Seu nome"
+                f.categoria == "cidade" -> "Sua cidade"
+                f.categoria.startsWith("favorito:") -> "Favorito (" + f.categoria.removePrefix("favorito:") + ")"
+                f.categoria == "ia" -> "Aprendido na conversa"
+                else -> "Você disse"
+            }
+            "$rotulo: ${f.texto}"
+        }.toTypedArray()
+        AlertDialog.Builder(this)
+            .setTitle("O que eu sei sobre você")
+            .setItems(nomes) { _, qual ->
+                val f = fatos[qual]
+                AlertDialog.Builder(this)
+                    .setTitle("Esquecer isto?")
+                    .setMessage(f.texto)
+                    .setPositiveButton("Esquecer") { _, _ ->
+                        memoria.esquecerId(f.id)
+                        if (f.categoria == "apelido") cerebro.apelido = "chefe"
+                    }
+                    .setNegativeButton("Manter", null)
+                    .show()
+            }
+            .setNeutralButton("Apagar tudo") { _, _ -> confirmarApagarMemorias() }
+            .setNegativeButton("Fechar", null)
+            .show()
     }
 
     private fun diagnosticar() {
@@ -928,7 +1232,7 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
         pararVigilia()
         ocupado = true
         mudarEstado(Orbe.Estado.PENSANDO, "TESTANDO A CONEXÃO…")
-        val balao = adicionarMensagem("Testando a conexão, aguarde até 1 minuto…", false)
+        val balao = adicionarMensagem("Testando a conexão, aguarde até 1 minuto…", false, salvar = false)
         val k = chave()
         val m = modelo()
         Thread {
@@ -1027,6 +1331,8 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
         private const val MENU_VIGILIA = 7
         private const val MENU_VOZ = 8
         private const val MENU_AJUSTE_VOZ = 9
+        private const val MENU_HISTORICO = 10
+        private const val MENU_MEMORIAS = 11
 
         private val COR_TEXTO_APAGADO = Color.parseColor("#6B769A")
     }

@@ -86,6 +86,7 @@ object BancoDeFrases {
         "DESCULPA" to "desculpa desculpe perdao",
         "SORTEIO" to "sorteia sortear sorteio aleatorio",
         "NUMERO" to "numero",
+        "FAVORITO" to "favorita favoritas favorito favoritos preferida preferidas preferido preferidos sempre",
     )
 
     val SINONIMOS: Map<String, String> = buildMap {
@@ -256,6 +257,15 @@ object BancoDeFrases {
             listOf("desativar", "pode descansar", "modo de espera", "vai dormir", "descansa", "pode desativar", "desativa sexta-feira"),
             especial = "desativar",
             respostas = listOf("Entrando em modo de espera. É só chamar.", "Certo, vou descansar. Diga Sexta-feira, ativar quando precisar."),
+        ),
+
+        Intencao(
+            "musica_favorita",
+            listOf(
+                "toca minha música favorita", "coloca o de sempre", "toca o de sempre", "toca minhas músicas",
+                "toca minha playlist", "coloca as que eu gosto", "toca minha favorita", "bota meu som",
+            ),
+            especial = "musica_favorita",
         ),
 
         // ----- pedidos incompletos: a Sexta-feira pergunta o que falta

@@ -31,6 +31,9 @@ class Cerebro(
 
         /** Não teve certeza. [temPalpite] diz se há uma intenção provável para confirmar depois. */
         data class Incerto(val temPalpite: Boolean) : Decisao()
+
+        /** Pedido sobre a memória (lembrar, esquecer, listar...), executado pelo app. */
+        data class Memoria(val pedido: ComandosMemoria.Pedido) : Decisao()
     }
 
     private sealed class Pendente {
@@ -42,6 +45,24 @@ class Cerebro(
 
     private var pendente: Pendente? = null
     private var palpite: Intencao? = null
+    private var fraseDoPalpite: String = ""
+
+    /** Como chamar o usuário nas respostas (troca o "chefe"). */
+    var apelido: String = "chefe"
+
+    /** Avisado quando ela aprende uma frase nova (frase normalizada, id da intenção), para salvar. */
+    var aoAprender: ((String, String) -> Unit)? = null
+
+    private val aprendidas = mutableListOf<Pair<Intencao, Set<String>>>()
+
+    /** Carrega frases aprendidas em usos anteriores. */
+    fun carregarAprendidas(lista: List<Pair<String, String>>) {
+        for ((frase, id) in lista) {
+            val i = BancoDeFrases.INTENCOES.firstOrNull { it.id == id } ?: continue
+            val c = conceitos(frase)
+            if (c.isNotEmpty()) aprendidas += i to c
+        }
+    }
 
     val aguardandoResposta: Boolean get() = pendente != null
 
@@ -56,6 +77,9 @@ class Cerebro(
             tratarPendente(p, frase, bruto)?.let { return it }
         }
         palpite = null
+
+        // Memória: "lembra que...", "meu nome é...", "o que você sabe sobre mim"...
+        ComandosMemoria.interpretar(entrada)?.let { return Decisao.Memoria(it) }
 
         if (SIM.matches(chave) || SIM.matches(bruto)) return Decisao.Responder("Certo! Precisa de mais alguma coisa?")
         if (NAO.matches(chave) || NAO.matches(bruto)) return Decisao.Responder("Tudo bem. É só chamar quando precisar.")
@@ -74,7 +98,10 @@ class Cerebro(
         // 3) Banco de frases
         val (melhor, nota) = classificar(alvo)
         if (melhor != null && nota >= CONFIANTE) return decidir(melhor)
-        if (melhor != null && nota >= PROVAVEL) palpite = melhor
+        if (melhor != null && nota >= PROVAVEL) {
+            palpite = melhor
+            fraseDoPalpite = alvo
+        }
         return Decisao.Incerto(palpite != null)
     }
 
@@ -93,6 +120,10 @@ class Cerebro(
 
     fun saudacaoDeAtivacao(): String = preencher(sortear(BancoDeFrases.RESPOSTAS_ATIVACAO))
 
+    fun esquecerAprendidas() {
+        aprendidas.clear()
+    }
+
     fun esquecerPendencias() {
         pendente = null
         palpite = null
@@ -105,7 +136,16 @@ class Cerebro(
 
         return when (p) {
             is Pendente.Confirmar -> when {
-                SIM.matches(c) || SIM.matches(bruto) -> decidir(p.intencao)
+                SIM.matches(c) || SIM.matches(bruto) -> {
+                    // Aprende: da próxima vez essa frase já vai direto.
+                    if (fraseDoPalpite.isNotBlank()) {
+                        val novos = conceitos(fraseDoPalpite)
+                        if (novos.isNotEmpty()) aprendidas += p.intencao to novos
+                        aoAprender?.invoke(fraseDoPalpite, p.intencao.id)
+                        fraseDoPalpite = ""
+                    }
+                    decidir(p.intencao)
+                }
                 NAO.matches(c) || NAO.matches(bruto) -> Decisao.Responder("Tudo bem. Então me diz de outro jeito o que você quer.")
                 else -> null // era um pedido novo
             }
@@ -169,6 +209,7 @@ class Cerebro(
         val br = Locale("pt", "BR")
         val h = agora.get(Calendar.HOUR_OF_DAY)
         return texto
+            .replace("chefe", apelido)
             .replace("{hora}", SimpleDateFormat("HH:mm", br).format(agora.time))
             .replace("{data}", SimpleDateFormat("EEEE, d 'de' MMMM", br).format(agora.time))
             .replace("{periodo}", if (h < 12) "Bom dia" else if (h < 18) "Boa tarde" else "Boa noite")
@@ -190,6 +231,13 @@ class Cerebro(
                     melhorNota = nota
                     melhor = intencao
                 }
+            }
+        }
+        for ((intencao, ex) in aprendidas) {
+            val nota = similaridade(entrada, ex, pergunta)
+            if (nota > melhorNota) {
+                melhorNota = nota
+                melhor = intencao
             }
         }
         return melhor to melhorNota
