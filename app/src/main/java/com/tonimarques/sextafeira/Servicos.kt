@@ -39,6 +39,73 @@ object Servicos {
         }
     }
 
+    private val ESTADOS = mapOf(
+        "acre" to "AC", "alagoas" to "AL", "amapa" to "AP", "amazonas" to "AM", "bahia" to "BA", "ceara" to "CE",
+        "distrito federal" to "DF", "espirito santo" to "ES", "goias" to "GO", "maranhao" to "MA", "mato grosso" to "MT",
+        "mato grosso do sul" to "MS", "minas gerais" to "MG", "para" to "PA", "paraiba" to "PB", "parana" to "PR",
+        "pernambuco" to "PE", "piaui" to "PI", "rio de janeiro" to "RJ", "rio grande do norte" to "RN",
+        "rio grande do sul" to "RS", "rondonia" to "RO", "roraima" to "RR", "santa catarina" to "SC",
+        "sao paulo" to "SP", "sergipe" to "SE", "tocantins" to "TO",
+    )
+    private val TIPOS_DE_RUA = Regex("^(rua|r|avenida|av|travessa|tv|alameda|estrada|praca|rodovia|largo|beco|viela|servidao|acesso)\\.?\\s+")
+
+    /** Sigla do estado a partir do nome ("Rio Grande do Sul" → "RS") ou da própria sigla. */
+    fun uf(nome: String): String? {
+        val n = ComandosLocais.normalizar(nome).trim()
+        if (n.length == 2 && n.uppercase(BR) in ESTADOS.values) return n.uppercase(BR)
+        return ESTADOS[n]
+    }
+
+    private fun caminho(s: String) = codificar(s).replace("+", "%20")
+
+    /**
+     * CEP pelo endereço: "Rua Ernesto Vidal Martins" em "Porto Alegre" (ViaCEP).
+     * Descobre o estado da cidade pela busca de cidades da Open-Meteo.
+     */
+    fun buscarCep(logradouro: String, cidade: String, estado: String = ""): String {
+        var uf = uf(estado)
+        var nomeCidade = cidade.trim()
+        if (uf == null) {
+            val lugar = Web.procurarCidade(nomeCidade) ?: return "Não encontrei a cidade $cidade."
+            nomeCidade = lugar.nome.substringBefore(",").trim()
+            uf = uf(lugar.nome.substringAfter(",", "").trim()) ?: return "Não consegui saber o estado de $cidade."
+        }
+        val semTipo = TIPOS_DE_RUA.replace(ComandosLocais.normalizar(logradouro).trim(), "")
+        val palavras = semTipo.split(" ").filter { it.length >= 3 }
+        val tentativas = listOf(semTipo, palavras.takeLast(2).joinToString(" "), palavras.maxByOrNull { it.length }.orEmpty())
+            .filter { it.length >= 3 }.distinct()
+        for (termo in tentativas) {
+            val j = try {
+                JSONArray(Web.texto("https://viacep.com.br/ws/$uf/${caminho(nomeCidade)}/${caminho(termo)}/json/"))
+            } catch (e: Exception) {
+                continue
+            }
+            val texto = montarBuscaCep(j, palavras)
+            if (texto != null) return texto
+        }
+        return "Não encontrei o CEP de $logradouro em $nomeCidade - $uf. Confira o nome da rua."
+    }
+
+    /** Separado da rede para ser testado. Prefere as ruas que têm mais palavras do pedido. */
+    fun montarBuscaCep(j: JSONArray, palavras: List<String>): String? {
+        val itens = (0 until j.length()).mapNotNull { j.optJSONObject(it) }.filter { it.optString("cep").isNotBlank() }
+        if (itens.isEmpty()) return null
+        val ordenados = itens.sortedByDescending { o ->
+            val l = ComandosLocais.normalizar(o.optString("logradouro"))
+            palavras.count { l.contains(it) }
+        }
+        val melhores = ordenados.distinctBy { it.optString("cep") }.take(3)
+        val partes = melhores.map { o ->
+            val bairro = o.optString("bairro").takeIf { it.isNotBlank() }?.let { ", $it" }.orEmpty()
+            val comp = o.optString("complemento").takeIf { it.isNotBlank() }?.let { " ($it)" }.orEmpty()
+            "${o.optString("logradouro")}$comp$bairro: ${o.optString("cep")}"
+        }
+        val cidade = melhores.first().let { "${it.optString("localidade")} - ${it.optString("uf")}" }
+        val mais = if (itens.size > 3) " Há mais ${itens.size - 3} resultados parecidos." else ""
+        return if (partes.size == 1) "O CEP de ${partes[0].replace(": ", " é ")}, em $cidade.$mais"
+        else "Encontrei em $cidade: ${partes.joinToString("; ")}.$mais"
+    }
+
     fun formatarCep(n: String) = if (n.length == 8) n.substring(0, 5) + "-" + n.substring(5) else n
 
     fun montarCep(j: JSONObject, n: String): String {

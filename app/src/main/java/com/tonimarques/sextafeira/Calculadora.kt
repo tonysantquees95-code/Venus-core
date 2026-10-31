@@ -30,11 +30,30 @@ object Calculadora {
             "qual (?:e |eh )?(?:o )?resultado de|resolve|resolva|me diz quanto e|quanto vale)\\s+"
     )
 
+    /** O resultado da última conta, para "quanto é 25% desse valor", "divide isso por 2", "mais 10"... */
+    @Volatile
+    var ultimoResultado: Double? = null
+
+    private val REF_DE = Regex("\\b(?:desse|deste|daquele|disso|do) (?:valor|numero|resultado|total)\\b|\\bdisso\\b")
+    private val REF = Regex("\\b(?:esse|este|aquele|o) (?:valor|numero|resultado|total)\\b|\\bisso\\b")
+    private val CONTINUA = Regex("^(?:e |agora )?(?:mais|menos|vezes|multiplicado por|dividido por|divide por|divida por|elevado a|ao quadrado)\\b")
+
     fun conta(c: String): String? {
         var e = c.trim().trimEnd('?', '.', '!', ' ')
         val temPrefixo = PREFIXO_CONTA.containsMatchIn(e)
         e = PREFIXO_CONTA.replace(e, "")
         e = numerosPorExtenso(e)
+        // Referência ao resultado anterior
+        ultimoResultado?.let { anterior ->
+            val n = java.math.BigDecimal.valueOf(anterior).stripTrailingZeros().toPlainString()
+            e = e.replace(Regex("^(?:divide|divida|dividir) (?:isso|esse valor|o resultado) por "), "isso dividido por ")
+                .replace(Regex("^(?:multiplica|multiplique|multiplicar) (?:isso|esse valor|o resultado) por "), "isso vezes ")
+            e = REF_DE.replace(e, "de $n")
+            e = REF.replace(e, n)
+            if (CONTINUA.containsMatchIn(e)) {
+                e = "$n " + e.removePrefix("e ").removePrefix("agora ").replace(Regex("^(?:divide|divida) por"), "dividido por")
+            }
+        }
         e = e.replace(Regex("(\\d),(\\d)"), "$1.$2")
             .replace(Regex("(\\d+(?:\\.\\d+)?)\\s*(?:%|por cento|porcento)\\s+(?:de|do|da|sobre)\\s+"), "($1/100)*")
             .replace(Regex("raiz quadrada (?:de |do )?"), " r ")
@@ -63,6 +82,7 @@ object Calculadora {
         }
         if (valor.isNaN()) return "Essa conta não tem resultado (raiz de número negativo)."
         if (valor.isInfinite()) return "Não dá para dividir por zero."
+        ultimoResultado = valor
         return "Dá ${numero(valor)}."
     }
 

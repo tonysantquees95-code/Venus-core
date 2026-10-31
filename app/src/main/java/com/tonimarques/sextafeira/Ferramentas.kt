@@ -185,6 +185,14 @@ class Ferramentas(private val activity: Activity, private val memoria: Memoria? 
         )
         .put(
             funcao(
+                "buscar_cep", "Descobre o CEP de uma rua numa cidade brasileira.", listOf("logradouro", "cidade"),
+                "logradouro" to texto("Nome da rua ou avenida."),
+                "cidade" to texto("Cidade."),
+                "estado" to texto("Sigla do estado, se souber.")
+            )
+        )
+        .put(
+            funcao(
                 "consultar_cnpj", "Dados públicos de uma empresa pelo CNPJ (razão social, situação, cidade, atividade).", listOf("cnpj"),
                 "cnpj" to texto("O CNPJ, só números.")
             )
@@ -313,6 +321,7 @@ class Ferramentas(private val activity: Activity, private val memoria: Memoria? 
         "cotacao_moeda" -> Pesquisa.cotacao(a.optString("moeda"))
         "traduzir" -> Servicos.traduzir(a.optString("texto"), a.optString("para", "en"), a.optString("de", "pt-BR").ifBlank { "pt-BR" })
         "consultar_cep" -> Servicos.cep(a.optString("cep"))
+        "buscar_cep" -> Servicos.buscarCep(a.optString("logradouro"), a.optString("cidade"), a.optString("estado"))
         "consultar_cnpj" -> Servicos.cnpj(a.optString("cnpj"))
         "consultar_ddd" -> Servicos.ddd(a.optString("ddd"))
         "feriados" -> Servicos.proximosFeriados()
@@ -718,6 +727,7 @@ class Ferramentas(private val activity: Activity, private val memoria: Memoria? 
         val USAM_REDE = setOf(
             "previsao_do_tempo", "resumo_wikipedia", "buscar_na_internet", "cotacao_moeda", "noticias",
             "acompanhar_tema", "atualizar_noticias", "traduzir", "consultar_cep", "consultar_cnpj", "consultar_ddd", "feriados",
+            "buscar_cep",
         )
 
         private const val SPOTIFY = "com.spotify.music"

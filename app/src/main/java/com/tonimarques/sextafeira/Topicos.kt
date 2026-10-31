@@ -13,7 +13,7 @@ object Topicos {
         "abrir_app", "abrir_camera", "abrir_configuracao", "lanterna", "nivel_bateria" -> "Celular"
         "salvar_memoria" -> "Sobre mim"
         "traduzir" -> "Traduções"
-        "consultar_cep", "consultar_cnpj", "consultar_ddd", "feriados" -> "Consultas"
+        "consultar_cep", "buscar_cep", "consultar_cnpj", "consultar_ddd", "feriados" -> "Consultas"
         "cotacao_moeda" -> "Finanças"
         "noticias", "acompanhar_tema", "atualizar_noticias" -> "Notícias"
         else -> null

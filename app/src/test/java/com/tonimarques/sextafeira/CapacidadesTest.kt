@@ -156,4 +156,41 @@ class CapacidadesTest {
         assertTrue("$conv", conv is Resposta && conv.texto.contains("86"))
         assertNotNull(ComandosLocais.interpretar("quantos dias faltam para o natal"))
     }
+
+    // ------------------------------------------------------------- correções do teste no celular
+    @Test fun lembraDoResultadoAnterior() {
+        assertEquals("Dá 9.549.120.", Calculadora.conta(c("quanto é 2436 x 3920")))
+        assertEquals("Dá 2.387.280.", Calculadora.conta(c("Quanto é 25% desse valor")))
+        assertEquals("Dá 1.193.640.", Calculadora.conta(c("divide isso por 2")))
+        assertEquals("Dá 1.193.650.", Calculadora.conta(c("mais 10")))
+        Calculadora.ultimoResultado = null
+    }
+
+    @Test fun cepPeloEndereco() {
+        val a = acao("Qual o CEP da Rua Ernesto Vidal Martins em Porto Alegre", "buscar_cep")
+        assertEquals("Rua Ernesto Vidal Martins", a.args["logradouro"])
+        assertEquals("Porto Alegre", a.args["cidade"])
+        val b = acao("qual o cep da avenida paulista em São Paulo, SP", "buscar_cep")
+        assertEquals("São Paulo", b.args["cidade"])
+        assertEquals("SP", b.args["estado"])
+        assertEquals("RS", Servicos.uf("Rio Grande do Sul"))
+        assertEquals("SP", Servicos.uf("sp"))
+        val j = JSONArray(
+            """[{"cep":"91000-100","logradouro":"Rua Doutor Ernesto Vidal Martins","complemento":"","bairro":"Jardim","localidade":"Porto Alegre","uf":"RS"}]"""
+        )
+        assertEquals(
+            "O CEP de Rua Doutor Ernesto Vidal Martins, Jardim é 91000-100, em Porto Alegre - RS.",
+            Servicos.montarBuscaCep(j, listOf("ernesto", "vidal", "martins"))
+        )
+    }
+
+    @Test fun relevancia() {
+        val chaves = Pesquisa.palavrasChave("quem ganhou as eleições no Brasil")
+        assertTrue(!Pesquisa.relevante(chaves, "E-commerce no Brasil cresce 12% em outubro", "e-commerce no Brasil"))
+        assertTrue(Pesquisa.relevante(chaves, "Quem ganhou as eleições no Brasil: veja os resultados", "eleições"))
+        val cel = Pesquisa.palavrasChave("quais celulares foram lançados recentemente")
+        assertTrue(Pesquisa.relevante(cel, "Samsung lança Galaxy S26 no Brasil", "lançamentos de celulares"))
+        assertTrue(!Pesquisa.tituloCombina(Pesquisa.palavrasChave("quanto é 25% desse valor"), "Economia e sociedade"))
+        assertTrue(Pesquisa.tituloCombina(Pesquisa.palavrasChave("história da Bahia"), "Bahia"))
+    }
 }
