@@ -111,6 +111,12 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         super.onResume()
         naTela = true
         VigiliaService.pausarPorTela(true)
+        VigiliaService.aoGestoNaTela = {
+            if (!ocupado && escuta != Escuta.COMANDO) {
+                ultimaFoiVoz = true
+                ouvirComando()
+            }
+        }
         iniciarEscutaDeFundoSePreciso()
         atualizarConhecimentoSePreciso()
         orbe.invalidate()
@@ -127,6 +133,8 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
 
     override fun onPause() {
         naTela = false
+        VigiliaService.aoGestoNaTela = null
+        liberarFoco()
         VigiliaService.pausarPorTela(false)
         principal.removeCallbacks(tarefaVigilia)
         despertador?.parar()
@@ -150,6 +158,39 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
     /** Quando a conversa termina e não há mais nada a ouvir. Na tela principal, volta a esperar a ativação. */
     protected open fun aoFicarOcioso() {
         agendarVigilia(500)
+    }
+
+    /** Terminou a conversa: devolve o som para o app de música e segue o que cada tela faz quando fica ociosa. */
+    private fun ficarOcioso() {
+        liberarFoco()
+        aoFicarOcioso()
+    }
+
+    // ------------------------------------------------- foco de áudio (música)
+    private var foco: android.media.AudioFocusRequest? = null
+
+    /** Enquanto a Vênus ouve e responde, a música pausa sozinha (e volta depois). */
+    private fun pedirFoco() {
+        if (foco != null) return
+        val audio = getSystemService(android.media.AudioManager::class.java) ?: return
+        if (!audio.isMusicActive) return
+        val pedido = android.media.AudioFocusRequest.Builder(android.media.AudioManager.AUDIOFOCUS_GAIN_TRANSIENT)
+            .setAudioAttributes(
+                android.media.AudioAttributes.Builder()
+                    .setUsage(android.media.AudioAttributes.USAGE_ASSISTANT)
+                    .setContentType(android.media.AudioAttributes.CONTENT_TYPE_SPEECH)
+                    .build()
+            ).build()
+        if (audio.requestAudioFocus(pedido) == android.media.AudioManager.AUDIOFOCUS_REQUEST_GRANTED) foco = pedido
+    }
+
+    private fun liberarFoco() {
+        val f = foco ?: return
+        foco = null
+        try {
+            getSystemService(android.media.AudioManager::class.java)?.abandonAudioFocusRequest(f)
+        } catch (e: Exception) {
+        }
     }
 
     protected fun estaOcioso() = !ocupado && !falando && escuta == Escuta.NADA
@@ -425,6 +466,12 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
                 decisao.nome == "pesquisar_na_web" ->
                     buscaInteligente(decisao.args["termo"]?.toString().orEmpty().ifBlank { pedido })
                 decisao.nome in Ferramentas.USAM_REDE -> executarNaRede(decisao.nome, decisao.args)
+                decisao.nome == "controlar_midia" || decisao.nome == "tocar_musica" -> {
+                    // A música estava pausada só para ouvir você: devolve o som e só então aperta o botão.
+                    val tinhaFoco = foco != null
+                    liberarFoco()
+                    principal.postDelayed({ responder(ferramentas.executar(decisao.nome, decisao.args)) }, if (tinhaFoco) 450 else 0)
+                }
                 else -> {
                     val resultado = ferramentas.executar(decisao.nome, decisao.args)
                     val appNaoAchado = decisao.nome == "abrir_app" && resultado.startsWith("Não encontrei")
@@ -876,7 +923,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         mudarEstadoOcioso()
         val continuar = ultimaFoiVoz && naTela && !ocupado &&
             (forcarEscuta || cerebro.aguardandoResposta || prefs.getBoolean(PREF_CONTINUA, true))
-        if (continuar) ouvirComando() else aoFicarOcioso()
+        if (continuar) ouvirComando() else ficarOcioso()
     }
 
     private fun vozesEmPortugues(): List<Voice> {
@@ -1065,6 +1112,8 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
                         agendarVigilia(4000)
                     }
                 },
+                aoComando = { acao -> mostrarNota("♪ " + Midia.executar(this, acao)) },
+                modoMusicaLigado = { prefs.getBoolean(VigiliaService.PREF_MUSICA, true) },
             ).also { despertador = it }
             if (d.iniciar()) {
                 escuta = Escuta.VIGILIA
@@ -1118,6 +1167,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
             ouvirPeloGoogle()
             return
         }
+        pedirFoco()
         escuta = Escuta.COMANDO
         mostrarParcial("")
         mudarEstado(Orbe.Estado.OUVINDO, "OUVINDO…")
@@ -1192,7 +1242,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
                     mudarEstadoOcioso()
                     if (texto.isBlank()) {
                         ultimaFoiVoz = false
-                        aoFicarOcioso()
+                        ficarOcioso()
                     } else {
                         ultimaFoiVoz = true
                         processar(texto)
@@ -1231,7 +1281,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
                         else -> STATUS_PADRAO
                     }
                     mudarEstado(Orbe.Estado.OCIOSO, texto)
-                    aoFicarOcioso()
+                    ficarOcioso()
                 }
                 Escuta.NADA -> {}
             }
@@ -1300,6 +1350,14 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
                         "Diga \"$n, ativar\" de qualquer tela e o orbe aparece num pop-up, sem abrir o app inteiro."
                     }, MENU_FUNDO) { prefs.getBoolean(PREF_FUNDO, false) },
                     TelaDeAjustes.Ajuste("Voz offline para a ativação", { descricaoVozOffline() }) { tratarVozOffline() },
+                    item("Comandos de música sem chamar", {
+                        "Com música tocando, diga só: pausar música, próxima música, música anterior, aumentar volume, diminuir volume. " +
+                            "Funciona com qualquer app de música. Precisa da voz offline e da escuta ligada."
+                    }, MENU_MUSICA) { prefs.getBoolean(VigiliaService.PREF_MUSICA, true) },
+                    item("Torcer o pulso 2 vezes para chamar", {
+                        "Gire o celular para um lado e para o outro, duas vezes, com a tela ligada: a $n abre ouvindo, mesmo com música alta. " +
+                            "Desligue a \"Câmera rápida\" no app Moto para não abrir os dois."
+                    }, MENU_GESTO) { prefs.getBoolean(VigiliaService.PREF_GESTO, false) },
                     item("Abrir segurando o botão", {
                         "Define a $n como assistente padrão: segure o botão de início ou de ligar para chamar o orbe."
                     }, MENU_ASSISTENTE),
@@ -1443,6 +1501,12 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
                 if (prefs.getBoolean(PREF_FUNDO, false) && podeSobrepor()) oferecerVozOffline(forcar = true)
             }
             MENU_ASSISTENTE -> definirAssistentePadrao()
+            MENU_MUSICA -> {
+                val ligado = !prefs.getBoolean(VigiliaService.PREF_MUSICA, true)
+                prefs.edit().putBoolean(VigiliaService.PREF_MUSICA, ligado).apply()
+                if (ligado && !ModeloDeVoz.pronto(this)) oferecerVozOffline(forcar = true)
+            }
+            MENU_GESTO -> alternarGesto()
             MENU_INDEPENDENTE -> {
                 val ligado = !modoIndependente()
                 prefs.edit().putBoolean(PREF_INDEPENDENTE, ligado).apply()
@@ -1517,7 +1581,9 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
     private fun podeSobrepor() = Settings.canDrawOverlays(this)
 
     private fun iniciarEscutaDeFundoSePreciso() {
-        if (!prefs.getBoolean(PREF_FUNDO, false) || !temMicrofone() || !podeSobrepor()) return
+        val escuta = prefs.getBoolean(PREF_FUNDO, false) && temMicrofone()
+        val gesto = prefs.getBoolean(VigiliaService.PREF_GESTO, false)
+        if ((!escuta && !gesto) || !podeSobrepor()) return
         try {
             VigiliaService.iniciar(this)
         } catch (e: Exception) {
@@ -1525,11 +1591,60 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         }
     }
 
+    private fun alternarGesto() {
+        val ligar = !prefs.getBoolean(VigiliaService.PREF_GESTO, false)
+        prefs.edit().putBoolean(VigiliaService.PREF_GESTO, ligar).apply()
+        if (!ligar) {
+            // Atualiza o serviço (ele desliga sozinho se nada mais estiver ligado)
+            try {
+                VigiliaService.iniciar(this)
+            } catch (e: Exception) {
+            }
+            return
+        }
+        if (!podeSobrepor()) {
+            AlertDialog.Builder(this)
+                .setTitle("Uma permissão a mais")
+                .setMessage("Para a ${Marca.nome} abrir por cima de outros apps quando você torcer o pulso, ative \"Sobrepor a outros apps\" para ela na próxima tela.")
+                .setPositiveButton("Abrir configuração") { _, _ ->
+                    try {
+                        startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName")))
+                    } catch (e: ActivityNotFoundException) {
+                        startActivity(Intent(Settings.ACTION_SETTINGS))
+                    }
+                }
+                .setNegativeButton("Agora não", null)
+                .show()
+            return
+        }
+        iniciarEscutaDeFundoSePreciso()
+        AlertDialog.Builder(this)
+            .setTitle("Gesto ligado")
+            .setMessage(
+                "Com a tela ligada, gire o celular para um lado e para o outro, duas vezes, firme. A ${Marca.nome} abre já ouvindo, e a música pausa enquanto você fala.\n\n" +
+                    "Para não abrir a câmera junto, desligue no app Moto: Gestos → Câmera rápida (torcer o pulso)."
+            )
+            .setPositiveButton("Abrir o app Moto") { _, _ ->
+                val moto = listOf("com.motorola.actions", "com.motorola.moto", "com.motorola.motoapp")
+                    .firstNotNullOfOrNull { packageManager.getLaunchIntentForPackage(it) }
+                try {
+                    startActivity(moto ?: Intent(Settings.ACTION_SETTINGS))
+                } catch (e: Exception) {
+                }
+            }
+            .setNegativeButton("Entendi", null)
+            .show()
+    }
+
     private fun alternarEscutaDeFundo() {
         val ligar = !prefs.getBoolean(PREF_FUNDO, false)
         prefs.edit().putBoolean(PREF_FUNDO, ligar).apply()
         if (!ligar) {
-            VigiliaService.parar(this)
+            // O gesto pode continuar ligado: o serviço se ajusta (ou desliga se nada mais estiver ligado)
+            try {
+                if (prefs.getBoolean(VigiliaService.PREF_GESTO, false)) VigiliaService.iniciar(this) else VigiliaService.parar(this)
+            } catch (e: Exception) {
+            }
             Toast.makeText(this, "Escuta com o app fechado desligada.", Toast.LENGTH_SHORT).show()
             return
         }
@@ -1707,6 +1822,8 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         private const val MENU_FUNDO = 12
         private const val MENU_ASSISTENTE = 13
         private const val MENU_INDEPENDENTE = 14
+        private const val MENU_MUSICA = 15
+        private const val MENU_GESTO = 16
         private const val PREF_INDEPENDENTE = "modo_independente"
         private const val PREF_OFERECEU_VOZ = "ofereceu_voz_offline"
         private const val PREF_FUNDO = "vigilia_fundo"
