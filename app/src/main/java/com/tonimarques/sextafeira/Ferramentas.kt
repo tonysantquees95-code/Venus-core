@@ -609,7 +609,8 @@ class Ferramentas(private val activity: Activity, private val memoria: Memoria? 
     private fun buscar(pergunta: String): String {
         if (pergunta.isBlank()) return "O que devo pesquisar?"
         val r = buscador?.invoke(pergunta)
-            ?: return "A busca na internet não está disponível agora. Ela precisa do faturamento ativado na chave do Gemini."
+            ?: return "A busca na internet não está disponível (a chave do Gemini precisa de faturamento ativado). " +
+                "Responda com o que você já sabe e avise que pode estar desatualizado."
         ultimasFontes = r.fontes
         return r.texto
     }

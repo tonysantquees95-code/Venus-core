@@ -72,6 +72,7 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
     private var naTela = false
     private var corAtual = Color.parseColor("#36D6FF")
     private var topicoAtual = "Conversa"
+    private var respostaAtrasada = 0
     private val memoria by lazy { Memoria(this) }
 
     private val prefs by lazy { getSharedPreferences("config", Context.MODE_PRIVATE) }
@@ -345,6 +346,7 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
     private fun processar(entrada: String) {
         if (ocupado) return
         pararVigilia()
+        respostaAtrasada = 0
         var pedido = entrada
 
         // "Sexta-feira, ativar" (sozinho ou seguido de um pedido)
@@ -590,7 +592,8 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
             if (pedidoAtual == id && ocupado) {
                 pedidoAtual++
                 ocupado = false
-                planoB("A inteligência artificial demorou demais.", pedido)
+                respostaAtrasada = id
+                responder("A resposta está demorando mais que o normal. Se ela chegar, eu mostro aqui.")
             }
         }, LIMITE_IA_MS)
 
@@ -601,7 +604,15 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
                 Gemini.RespostaIA(false, "Algo deu errado: ${e.message}")
             }
             runOnUiThread {
-                if (id != pedidoAtual) return@runOnUiThread
+                if (id != pedidoAtual) {
+                    // Chegou depois do tempo limite: mostra, se nada novo foi pedido enquanto isso.
+                    if (respostaAtrasada == id && !ocupado && resposta.ok) {
+                        respostaAtrasada = 0
+                        responder(resposta.texto)
+                        mostrarFontes(ferramentas.ultimasFontes)
+                    }
+                    return@runOnUiThread
+                }
                 pedidoAtual++
                 ocupado = false
                 if (resposta.ok) {
@@ -1306,7 +1317,7 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
         const val ACAO_OUVIR = "com.tonimarques.sextafeira.OUVIR"
         private const val PEDIDO_VOZ = 10
         private const val PEDIDO_MICROFONE = 11
-        private const val LIMITE_IA_MS = 22_000L
+        private const val LIMITE_IA_MS = 35_000L
         private const val ID_AMOSTRA = "amostra"
         private const val MODELO_PADRAO = "gemini-flash-latest"
         private const val STATUS_PADRAO = "TOQUE NO ORBE PARA FALAR"

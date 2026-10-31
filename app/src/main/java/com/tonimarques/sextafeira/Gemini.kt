@@ -108,6 +108,9 @@ class Gemini(
             Para "o que é" e "quem foi", pode usar resumo_wikipedia.
             Quando o usuário contar algo duradouro sobre ele (gostos, rotina, pessoas, planos), use salvar_memoria.
             Use o que você sabe sobre ele para personalizar as respostas, sem repetir isso à toa.
+            Se a busca na internet não estiver disponível e a pergunta for sobre algo atual (lançamentos,
+            preços, notícias), responda com o que sabe, mas avise em poucas palavras que a informação pode
+            estar desatualizada.
             Use as ferramentas sempre que o pedido envolver uma ação no celular; você pode
             chamar várias em sequência.
             Nunca diga que fez algo que a ferramenta não confirmou. Se o resultado pedir para
@@ -122,6 +125,8 @@ class Gemini(
      * Null se não der (por exemplo: a chave está no plano gratuito, que não inclui a busca).
      */
     fun buscarNaInternet(pergunta: String): Web.Resposta? {
+        // Se a chave já recusou a busca há pouco, nem tenta de novo (evita esperar à toa).
+        if (System.currentTimeMillis() < buscaRecusadaAte) return null
         val agora = SimpleDateFormat("dd/MM/yyyy", Locale("pt", "BR")).format(Date())
         val corpo = JSONObject()
             .put(
@@ -146,7 +151,7 @@ class Gemini(
             .put("tools", JSONArray().put(JSONObject().put("google_search", JSONObject())))
         val bytes = corpo.toString().toByteArray(Charsets.UTF_8)
 
-        val modelos = (listOf(modeloAtivo) + reservas().take(2)).distinct()
+        val modelos = (listOf(modeloAtivo) + reservas().take(1)).distinct()
         for (m in modelos) {
             val (codigo, resposta) = try {
                 enviarRequisicao(m, bytes)
@@ -154,7 +159,11 @@ class Gemini(
                 continue
             }
             if (codigo !in 200..299) {
-                if (codigo == 400 || codigo == 403) return null // busca não liberada para esta chave
+                if (codigo == 400 || codigo == 403 || codigo == 429) {
+                    // Busca não liberada para esta chave (plano gratuito) ou cota esgotada: espera 6 horas.
+                    buscaRecusadaAte = System.currentTimeMillis() + 6 * 60 * 60 * 1000L
+                    return null
+                }
                 continue
             }
             val candidato = resposta.optJSONArray("candidates")?.optJSONObject(0) ?: continue
@@ -287,6 +296,10 @@ class Gemini(
     }
 
     companion object {
+        /** Até quando não tentar a busca do Google de novo, depois de uma recusa. */
+        @Volatile
+        var buscaRecusadaAte = 0L
+
         private const val MAX_RODADAS = 8
         private const val MAX_RESERVAS = 4
         private val RESERVA_FIXA = listOf("gemini-flash-lite-latest", "gemini-2.5-flash")
