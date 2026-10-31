@@ -106,6 +106,9 @@ class IndependenciaTest {
         assertTrue("$chaves", "celulares" in chaves)
         assertFalse("$chaves", "quais" in chaves || "recentemente" in chaves)
         assertEquals(6, Pesquisa.pontuar(listOf("celulares", "lancados"), "Samsung lança novos celulares", "lançamentos de celulares"))
+        assertEquals("lanc", Pesquisa.raiz("lançados"))
+        assertEquals("lanc", Pesquisa.raiz("lançamentos"))
+        assertEquals("carro", Pesquisa.raiz("carros"))
         assertEquals(0, Pesquisa.pontuar(listOf("geladeira"), "Samsung lança novos celulares", "tecnologia"))
     }
 
