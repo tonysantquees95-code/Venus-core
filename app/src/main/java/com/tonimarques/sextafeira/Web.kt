@@ -19,13 +19,17 @@ object Web {
 
     private const val AGENTE = "SextaFeira/1.0 (assistente pessoal Android)"
 
-    fun texto(endereco: String, cabecalhos: Map<String, String> = emptyMap()): String {
+    fun texto(
+        endereco: String,
+        cabecalhos: Map<String, String> = emptyMap(),
+        aceitar: String = "application/json",
+    ): String {
         val conexao = URL(endereco).openConnection() as HttpURLConnection
         try {
             conexao.connectTimeout = 8_000
             conexao.readTimeout = 12_000
             conexao.setRequestProperty("User-Agent", AGENTE)
-            conexao.setRequestProperty("Accept", "application/json")
+            conexao.setRequestProperty("Accept", aceitar)
             for ((k, v) in cabecalhos) conexao.setRequestProperty(k, v)
             val codigo = conexao.responseCode
             if (codigo !in 200..299) throw java.io.IOException("HTTP $codigo")
@@ -111,6 +115,11 @@ object Web {
         )
         val titulo = busca.optJSONArray(1)?.optString(0).orEmpty()
         if (titulo.isBlank()) return null
+        return resumoWikipedia(titulo)
+    }
+
+    /** Resumo de um artigo da Wikipédia pelo título exato. */
+    fun resumoWikipedia(titulo: String): Resposta? {
         val resumo = JSONObject(
             texto("https://pt.wikipedia.org/api/rest_v1/page/summary/" + codificar(titulo.replace(' ', '_')).replace("+", "%20"))
         )

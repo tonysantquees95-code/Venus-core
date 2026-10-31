@@ -25,10 +25,12 @@ class Gemini(
     private var modelosReserva: List<String>? = null
     private val historico = JSONArray()
 
-    data class RespostaIA(val ok: Boolean, val texto: String)
+    /** [chamadas]: ferramentas que a IA usou para responder (nome e argumentos), para a Vênus aprender. */
+    data class RespostaIA(val ok: Boolean, val texto: String, val chamadas: List<Pair<String, JSONObject>> = emptyList())
 
     fun enviar(pedido: String): RespostaIA {
         val inicio = historico.length()
+        val usadas = mutableListOf<Pair<String, JSONObject>>()
         historico.put(
             JSONObject()
                 .put("role", "user")
@@ -65,13 +67,14 @@ class Gemini(
                 }
 
                 if (chamadas.isEmpty()) {
-                    return RespostaIA(true, texto.toString().trim().ifEmpty { "Feito." })
+                    return RespostaIA(true, texto.toString().trim().ifEmpty { "Feito." }, usadas)
                 }
 
                 val respostas = JSONArray()
                 for (chamada in chamadas) {
                     val nome = chamada.optString("name")
                     val argumentos = chamada.optJSONObject("args") ?: JSONObject()
+                    usadas += nome to argumentos
                     val resultado = ferramentas.executar(nome, argumentos)
                     val respostaFuncao = JSONObject()
                         .put("name", nome)

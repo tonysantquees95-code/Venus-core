@@ -76,6 +76,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
     private var corAtual = Color.parseColor("#36D6FF")
     private var topicoAtual = "Conversa"
     private var respostaAtrasada = 0
+    @Volatile private var atualizandoConhecimento = false
     private val memoria by lazy { Memoria(this) }
 
     private val prefs by lazy { getSharedPreferences("config", Context.MODE_PRIVATE) }
@@ -107,6 +108,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         naTela = true
         VigiliaService.pausarPorTela(true)
         iniciarEscutaDeFundoSePreciso()
+        atualizarConhecimentoSePreciso()
         orbe.invalidate()
         if (vigiliaLigada()) {
             if (temMicrofone()) {
@@ -393,8 +395,9 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
             else -> Topicos.classificar(pedido)
         }
         adicionarMensagem(pedido, true)
+        cerebro.ultimaCorrecao?.let { mostrarNota("Entendi: “$it”") }
         if (decisao is Cerebro.Decisao.Incerto) {
-            if (obterGemini() == null) semInteligencia(pedido) else consultarIA(pedido)
+            responderPergunta(pedido)
         } else {
             mostrarDecisao(decisao, pedido)
         }
@@ -413,7 +416,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
                 }
             }
             is Cerebro.Decisao.Responder -> {
-                val aviso = if (semIA && obterGemini() == null && decisao.texto in BancoDeFrases.NAO_ENTENDI) {
+                val aviso = if (semIA && !modoIndependente() && obterGemini() == null && decisao.texto in BancoDeFrases.NAO_ENTENDI) {
                     " Para perguntas livres, configure a chave do Gemini no menu."
                 } else {
                     ""
@@ -559,11 +562,13 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         }
     }
 
-    /** Pesquisa e responde no chat: Google (pela IA) → Wikipédia → navegador, nessa ordem. */
+    /** Pesquisa e responde no chat: Google (pela IA) → pesquisa própria da Vênus → navegador, nessa ordem. */
     private fun buscaInteligente(termo: String) {
         val assistente = obterGemini()
+        val conhecimento = ferramentas.conhecimento
         comTempoLimite("PESQUISANDO…") {
             val r = assistente?.buscarNaInternet(termo)
+                ?: Pesquisa.responderPergunta(termo, conhecimento)
                 ?: try {
                     Web.wikipedia(termo)
                 } catch (e: Exception) {
@@ -584,11 +589,113 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         }
     }
 
-    /** Sem chave do Gemini: tenta a Wikipédia para "o que é / quem foi"; senão, confirma ou pede para repetir. */
-    private fun semInteligencia(pedido: String) {
-        val assunto = Web.assuntoEnciclopedico(pedido)
-        if (assunto != null) buscaInteligente(assunto) else mostrarDecisao(cerebro.usarPalpite(), pedido, semIA = true)
+    /**
+     * Uma pergunta que os comandos não resolveram. A Vênus tenta sozinha primeiro:
+     *  1. uma resposta que ela já deu antes;
+     *  2. a pesquisa própria (Wikipédia, notícias acompanhadas, Google Notícias, DuckDuckGo);
+     *  3. só então o Gemini (se houver chave e o modo independente estiver desligado).
+     */
+    private fun responderPergunta(pedido: String) {
+        try {
+            ferramentas.conhecimento?.respostaGuardada(pedido)
+        } catch (e: Exception) {
+            null
+        }?.let {
+            responder(it)
+            return
+        }
+        val assistente = obterGemini()
+        when {
+            assistente == null -> pesquisarSozinha(pedido, amplo = true, depoisIA = false, motivo = null)
+            Pesquisa.ehPesquisavel(pedido) -> pesquisarSozinha(pedido, amplo = false, depoisIA = true, motivo = null)
+            else -> consultarIA(pedido)
+        }
     }
+
+    /**
+     * Pesquisa sem o Gemini. [amplo] = também tenta Wikipédia/DuckDuckGo com as palavras-chave
+     * (para quando não há outra saída). [depoisIA] = se não achar, pergunta ao Gemini.
+     */
+    private fun pesquisarSozinha(pedido: String, amplo: Boolean, depoisIA: Boolean, motivo: String?) {
+        val conhecimento = ferramentas.conhecimento
+        comTempoLimite("PESQUISANDO…") {
+            val r = Pesquisa.responderPergunta(pedido, conhecimento, amplo)
+            val acao: () -> Unit = when {
+                r != null -> {
+                    {
+                        responder(r.texto)
+                        mostrarFontes(r.fontes)
+                    }
+                }
+                depoisIA -> {
+                    { consultarIA(pedido) }
+                }
+                motivo != null -> {
+                    { semResposta(motivo, pedido) }
+                }
+                else -> {
+                    { mostrarDecisao(cerebro.usarPalpite(), pedido, semIA = true) }
+                }
+            }
+            acao
+        }
+    }
+
+    private fun semResposta(motivo: String, pedido: String) {
+        val decisao = cerebro.usarPalpite()
+        if (decisao is Cerebro.Decisao.Perguntar) {
+            mostrarDecisao(decisao, pedido)
+        } else {
+            responder("$motivo ${(decisao as? Cerebro.Decisao.Responder)?.texto ?: ""}".trim())
+        }
+    }
+
+    /** Uma linha discreta no chat (ex.: a frase que a Vênus corrigiu). */
+    private fun mostrarNota(texto: String) {
+        val vista = TextView(this).apply {
+            text = texto
+            textSize = 12f
+            setTextColor(COR_TEXTO_APAGADO)
+            setPadding(dp(6), dp(2), dp(6), 0)
+            gravity = Gravity.END
+        }
+        val params = LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT
+        ).apply { gravity = Gravity.END }
+        mensagens.addView(vista, params)
+        rolarParaBaixo()
+    }
+
+    /** Depois que o Gemini resolve, a Vênus aprende para resolver sozinha da próxima vez. */
+    private fun aprenderComResposta(pedido: String, resposta: Gemini.RespostaIA) {
+        try {
+            if (resposta.chamadas.size == 1) {
+                val (nome, args) = resposta.chamadas[0]
+                val mapa = args.keys().asSequence().associateWith { args.opt(it) }
+                cerebro.aprenderComIA(pedido, nome, mapa)
+            } else if (resposta.chamadas.isEmpty()) {
+                ferramentas.conhecimento?.lembrarResposta(pedido, resposta.texto)
+            }
+        } catch (e: Exception) {
+        }
+    }
+
+    /** Atualiza as novidades dos assuntos acompanhados, em segundo plano, a cada 6 horas. */
+    private fun atualizarConhecimentoSePreciso() {
+        val conhecimento = ferramentas.conhecimento ?: return
+        if (atualizandoConhecimento) return
+        atualizandoConhecimento = true
+        Thread {
+            try {
+                if (conhecimento.precisaAtualizar()) conhecimento.atualizar()
+            } catch (e: Exception) {
+            } finally {
+                atualizandoConhecimento = false
+            }
+        }.start()
+    }
+
+    private fun modoIndependente() = prefs.getBoolean(PREF_INDEPENDENTE, false)
 
     private fun mostrarFontes(fontes: List<Web.Fonte>) {
         if (fontes.isEmpty()) return
@@ -608,7 +715,8 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
 
     /** Envia para o Gemini, com tempo limite: se ele travar ou falhar, o cérebro local assume. */
     private fun consultarIA(pedido: String) {
-        val assistente = obterGemini() ?: return semInteligencia(pedido)
+        val assistente = obterGemini()
+            ?: return pesquisarSozinha(pedido, amplo = true, depoisIA = false, motivo = null)
         ocupado = true
         val id = ++pedidoAtual
         mudarEstado(Orbe.Estado.PENSANDO, "PENSANDO…")
@@ -634,6 +742,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
                     // Chegou depois do tempo limite: mostra, se nada novo foi pedido enquanto isso.
                     if (respostaAtrasada == id && !ocupado && resposta.ok) {
                         respostaAtrasada = 0
+                        aprenderComResposta(pedido, resposta)
                         responder(resposta.texto)
                         mostrarFontes(ferramentas.ultimasFontes)
                     }
@@ -642,26 +751,15 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
                 pedidoAtual++
                 ocupado = false
                 if (resposta.ok) {
+                    aprenderComResposta(pedido, resposta)
                     responder(resposta.texto)
                     mostrarFontes(ferramentas.ultimasFontes)
                 } else {
-                    planoB("A inteligência artificial está indisponível agora.", pedido)
+                    // Gemini fora do ar: a Vênus pesquisa sozinha antes de desistir.
+                    pesquisarSozinha(pedido, amplo = true, depoisIA = false, motivo = "A inteligência artificial está indisponível agora.")
                 }
             }
         }.start()
-    }
-
-    private fun planoB(motivo: String, pedido: String) {
-        Web.assuntoEnciclopedico(pedido)?.let {
-            buscaInteligente(it)
-            return
-        }
-        val decisao = cerebro.usarPalpite()
-        if (decisao is Cerebro.Decisao.Perguntar) {
-            mostrarDecisao(decisao, pedido)
-        } else {
-            responder("$motivo ${(decisao as? Cerebro.Decisao.Responder)?.texto ?: ""}".trim())
-        }
     }
 
     private fun responder(texto: String) {
@@ -670,6 +768,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
     }
 
     private fun obterGemini(): Gemini? {
+        if (modoIndependente()) return null
         val k = chave()
         if (k.isBlank()) return null
         return gemini ?: Gemini(k, modelo(), ferramentas) { memoria.resumoParaIA() }.also { gemini = it }
@@ -1144,6 +1243,8 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         menu.add(0, MENU_FUNDO, 0, "Ouvir \"${Marca.nome}, ativar\" com o app fechado")
             .setCheckable(true).setChecked(prefs.getBoolean(PREF_FUNDO, false))
         menu.add(0, MENU_ASSISTENTE, 1, "Abrir segurando o botão (assistente padrão)")
+        menu.add(0, MENU_INDEPENDENTE, 5, "Modo independente (sem Gemini)")
+            .setCheckable(true).setChecked(modoIndependente())
         menu.add(0, MENU_CHAVE, 5, "Chave do Gemini")
         menu.add(0, MENU_MODELO, 6, "Modelo do Gemini")
         menu.add(0, MENU_NOVA, 7, "Nova conversa")
@@ -1174,6 +1275,17 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
             MENU_MEMORIAS -> mostrarMemorias()
             MENU_FUNDO -> alternarEscutaDeFundo()
             MENU_ASSISTENTE -> definirAssistentePadrao()
+            MENU_INDEPENDENTE -> {
+                val ligado = !modoIndependente()
+                prefs.edit().putBoolean(PREF_INDEPENDENTE, ligado).apply()
+                gemini = null
+                Toast.makeText(
+                    this,
+                    if (ligado) "Modo independente: a ${Marca.nome} responde sozinha, sem o Gemini."
+                    else "Gemini ligado de novo para perguntas que ela não souber.",
+                    Toast.LENGTH_LONG
+                ).show()
+            }
             MENU_AJUSTE_VOZ -> ajustarVoz()
             MENU_CHAVE -> pedirChave()
             MENU_MODELO -> pedirModelo()
@@ -1473,6 +1585,8 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         private const val MENU_MEMORIAS = 11
         private const val MENU_FUNDO = 12
         private const val MENU_ASSISTENTE = 13
+        private const val MENU_INDEPENDENTE = 14
+        private const val PREF_INDEPENDENTE = "modo_independente"
         private const val PREF_FUNDO = "vigilia_fundo"
         const val ACAO_ATIVAR = "com.tonimarques.sextafeira.ATIVAR"
         const val ACAO_PEDIDO = "com.tonimarques.sextafeira.PEDIDO"

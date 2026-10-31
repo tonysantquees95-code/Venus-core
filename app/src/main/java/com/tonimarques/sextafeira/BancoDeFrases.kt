@@ -442,5 +442,7 @@ object BancoDeFrases {
         "Eu entendo pedidos como: liga a lanterna, abre o WhatsApp, toca Henrique e Juliano, próxima música, " +
             "aumenta o volume, alarme às 7, timer de 5 minutos, manda pra Maria dizendo chego já, liga pra Mãe, " +
             "me leva pra rodoviária, pesquisa receita de bolo, quanto tem de bateria, que horas são, conta uma piada. " +
-            "Se faltar alguma informação, eu pergunto. E para perguntas livres, uso a inteligência artificial."
+            "Também trago notícias, cotação do dólar e do euro, e acompanho assuntos: diga acompanhe lançamentos de carros, " +
+            "e eu guardo as novidades sozinha. Se faltar alguma informação, eu pergunto; se você falar algo errado, eu tento corrigir. " +
+            "E para perguntas livres, eu pesquiso por conta própria antes de recorrer à inteligência artificial."
 }

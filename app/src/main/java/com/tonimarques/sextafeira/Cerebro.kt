@@ -66,7 +66,12 @@ class Cerebro(
 
     val aguardandoResposta: Boolean get() = pendente != null
 
+    /** Quando a frase precisou ser corrigida para ser entendida, guarda aqui a versão corrigida. */
+    var ultimaCorrecao: String? = null
+        private set
+
     fun responder(entrada: String): Decisao {
+        ultimaCorrecao = null
         val frase = ComandosLocais.limpar(entrada)
         val chave = frase.chave
         val bruto = ComandosLocais.normalizar(entrada).replace(Regex("[^a-z0-9 ]"), " ").trim().replace(Regex("\\s+"), " ")
@@ -98,6 +103,25 @@ class Cerebro(
         // 3) Banco de frases
         val (melhor, nota) = classificar(alvo)
         if (melhor != null && nota >= CONFIANTE) return decidir(melhor)
+
+        // 4) Talvez o reconhecimento de voz tenha errado alguma palavra: tenta a frase corrigida.
+        val corrigida = Corretor.corrigir(entrada)
+        if (corrigida != entrada) {
+            ComandosLocais.interpretar(corrigida)?.let { r ->
+                ultimaCorrecao = corrigida
+                return when (r) {
+                    is ComandosLocais.Resultado.Acao -> Decisao.Executar(r.nome, r.args)
+                    is ComandosLocais.Resultado.Resposta -> Decisao.Responder(r.texto)
+                }
+            }
+            val chaveCorrigida = ComandosLocais.limpar(corrigida).chave.ifBlank { alvo }
+            val (outra, notaCorrigida) = classificar(chaveCorrigida)
+            if (outra != null && notaCorrigida >= CONFIANTE) {
+                ultimaCorrecao = corrigida
+                return decidir(outra)
+            }
+        }
+
         if (melhor != null && nota >= PROVAVEL) {
             palpite = melhor
             fraseDoPalpite = alvo
@@ -119,6 +143,25 @@ class Cerebro(
     }
 
     fun saudacaoDeAtivacao(): String = preencher(sortear(BancoDeFrases.RESPOSTAS_ATIVACAO))
+
+    /**
+     * Aprende uma frase que o Gemini resolveu com uma ferramenta sem detalhes variáveis
+     * (ex.: "acende o flash aí" → lanterna ligada). Da próxima vez, a Vênus resolve sozinha.
+     * Devolve true se aprendeu.
+     */
+    fun aprenderComIA(frase: String, ferramenta: String, args: Map<String, Any?>): Boolean {
+        val intencao = BancoDeFrases.INTENCOES.firstOrNull { i ->
+            i.acao == ferramenta && i.pede.isEmpty() && i.especial == null &&
+                i.args.all { (k, v) -> args[k]?.toString() == v.toString() } &&
+                args.keys.all { it in i.args.keys || args[it] == null || args[it].toString().isBlank() }
+        } ?: return false
+        val chave = ComandosLocais.limpar(frase).chave
+        val novos = conceitos(chave)
+        if (novos.isEmpty()) return false
+        aprendidas += intencao to novos
+        aoAprender?.invoke(chave, intencao.id)
+        return true
+    }
 
     fun esquecerAprendidas() {
         aprendidas.clear()
