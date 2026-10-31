@@ -267,10 +267,12 @@ object ComandosLocais {
     private fun abrirApp(f: Frase): Resultado? {
         val m = ABRIR.matchEntire(f.chave) ?: return null
         var nome = f.trecho(m.groups[1]) ?: return null
+        // "abre um aplicativo" não diz qual: o cérebro pergunta.
+        val generico = Regex("^(um |uma |algum |alguma |o |a |outro )?(app|apps|aplicativo|aplicativos|programa|aplicacao)$")
+        if (generico.matches(normalizar(nome).trim())) return null
         nome = nome.replace(Regex("(?i)\\s+(app|aplicativo)$"), "").trim()
         if (nome.isBlank() || nome.split(" ").size > 4) return null
-        // "abre um aplicativo" não diz qual: o cérebro pergunta.
-        if (Regex("^(um |uma |algum |alguma |o |a |outro )?(app|apps|aplicativo|aplicativos|programa|aplicacao)$").matches(normalizar(nome))) return null
+        if (normalizar(nome) in setOf("um", "uma", "o", "a", "algum", "alguma", "outro")) return null
         return Resultado.Acao("abrir_app", mapOf("nome" to nome))
     }
 
