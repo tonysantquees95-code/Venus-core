@@ -1,0 +1,39 @@
+name: Modelo de voz offline
+
+# Copia o modelo de reconhecimento de voz em português (Vosk) para os downloads do projeto,
+# para a Vênus baixar de um endereço confiável.
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: [".github/workflows/modelo-voz.yml"]
+
+permissions:
+  contents: write
+
+jobs:
+  modelo:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Baixar o modelo
+        run: |
+          curl -fsSL -o vosk-model-small-pt-0.3.zip https://alphacephei.com/vosk/models/vosk-model-small-pt-0.3.zip ||
+            curl -fsSL -o vosk-model-small-pt-0.3.zip https://huggingface.co/rhasspy/vosk-models/resolve/main/pt/vosk-model-small-pt-0.3.zip
+          ls -la vosk-model-small-pt-0.3.zip
+          echo "::notice::tamanho $(stat -c %s vosk-model-small-pt-0.3.zip)"
+          unzip -l vosk-model-small-pt-0.3.zip | awk '{print $4}' | grep -v '^$' | head -40 | while read -r f; do echo "::notice::arquivo $f"; done
+          unzip -q vosk-model-small-pt-0.3.zip -d m
+          for w in $(find m -name 'words.txt'); do
+            for p in vênus venus vénus ativar ativa sexta feira; do
+              echo "::notice::$w $p: $(grep -c "^$p " "$w")"
+            done
+          done
+
+      - name: Publicar o modelo
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: voz-pt
+          name: Voz offline (português)
+          body: Modelo de reconhecimento de voz usado pela Vênus para ouvir "Vênus, ativar" sem a internet. Não precisa baixar manualmente.
+          files: vosk-model-small-pt-0.3.zip
+          make_latest: false
