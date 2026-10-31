@@ -1310,16 +1310,22 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
                 )
             ),
         )
-        ajustes = TelaDeAjustes(this, BuildConfig.VERSION_NAME, secoes).also {
+        ajustes = TelaDeAjustes(this, versaoDoApp(), secoes).also {
             it.setOnDismissListener { ajustes = null }
             it.show()
         }
     }
 
+    private fun versaoDoApp(): String = try {
+        packageManager.getPackageInfo(packageName, 0).versionName.orEmpty()
+    } catch (e: Exception) {
+        ""
+    }
+
     private fun descricaoVozOffline(): String = progressoVozOffline ?: if (ModeloDeVoz.pronto(this)) {
         "Instalada. O microfone fica aberto direto, só com o pontinho verde, sem o ícone piscando. Toque para remover."
     } else {
-        "Toque para baixar (31 MB, uma vez só). Sem ela, o ícone do microfone fica piscando na barra de status enquanto a $n espera a frase."
+        "Toque para baixar (31 MB, uma vez só). Sem ela, o ícone do microfone fica piscando na barra de status enquanto a ${Marca.nome} espera a frase."
     }
 
     private fun tratarVozOffline() {
