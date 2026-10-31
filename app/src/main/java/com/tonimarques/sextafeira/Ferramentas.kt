@@ -317,7 +317,11 @@ class Ferramentas(private val activity: Activity, private val memoria: Memoria? 
         "criar_timer" -> timer(a.optInt("segundos"), a.optString("descricao"))
         "abrir_site" -> abrirSite(a.optString("endereco"))
         "pesquisar_na_web" -> pesquisar(a.optString("termo"))
-        "abrir_mapa" -> mapa(a.optString("destino"), a.optBoolean("navegar", false))
+        "abrir_mapa" -> mapa(
+            a.optString("destino"), a.optBoolean("navegar", false),
+            a.optString("modo"), a.optString("app"), a.optString("evitar")
+        )
+        "salvar_lugar_aqui" -> salvarLugarAqui(a.optString("lugar"))
         "abrir_camera" -> {
             activity.startActivity(Intent(MediaStore.INTENT_ACTION_STILL_IMAGE_CAMERA))
             "Câmera aberta."
@@ -578,10 +582,52 @@ class Ferramentas(private val activity: Activity, private val memoria: Memoria? 
         return "Pesquisa por \"$termo\" aberta."
     }
 
-    private fun mapa(destino: String, navegar: Boolean): String {
-        val local = Uri.encode(destino)
-        if (navegar && iniciar(Intent(Intent.ACTION_VIEW, Uri.parse("google.navigation:q=$local")))) {
-            return "Navegação até $destino iniciada."
+    /**
+     * "casa", "trabalho", "academia", "casa da mãe"... viram o endereço salvo.
+     * Devolve (endereço para o mapa, nome para falar) ou null se for um lugar pessoal ainda sem endereço.
+     */
+    private fun resolverLugar(destino: String): Pair<String, String>? {
+        val n = ComandosLocais.normalizar(destino).trim()
+        val pessoal = Regex("\\b(?:minha|meu|nossa|nosso)\\b").containsMatchIn(n) ||
+            n in setOf("casa", "trabalho", "servico", "emprego", "firma", "escritorio", "lar")
+        val nome = ComandosMemoria.nomeDoLugar(n) ?: return destino to destino
+        val salvo = memoria?.valor("lugar:$nome")
+        if (salvo != null) return salvo to (if (nome == "casa") "sua casa" else if (nome == "trabalho") "seu trabalho" else nome)
+        return if (pessoal || nome == "casa" || nome == "trabalho") null else destino to destino
+    }
+
+    private fun mapa(destino: String, navegar: Boolean, modo: String = "", app: String = "", evitar: String = ""): String {
+        val (endereco, nomeFalado) = resolverLugar(destino) ?: run {
+            val nome = ComandosMemoria.nomeDoLugar(ComandosLocais.normalizar(destino)) ?: destino
+            val artigo = if (nome == "casa") "da sua casa" else "de $nome"
+            return "Ainda não sei o endereço $artigo. Me diga, por exemplo: minha $nome fica na Rua tal, número tal. " +
+                "Ou, quando estiver lá: aqui é minha $nome."
+        }
+        val local = Uri.encode(endereco)
+        if (navegar && app == "waze" && iniciar(Intent(Intent.ACTION_VIEW, Uri.parse("https://waze.com/ul?q=$local&navigate=yes")))) {
+            return "Abri o Waze com a rota até $nomeFalado."
+        }
+        if (navegar && modo == "transporte") {
+            val uri = Uri.parse("https://www.google.com/maps/dir/?api=1&destination=$local&travelmode=transit")
+            if (iniciar(Intent(Intent.ACTION_VIEW, uri).setPackage("com.google.android.apps.maps")) || iniciar(Intent(Intent.ACTION_VIEW, uri))) {
+                return "Abri a rota de transporte público até $nomeFalado."
+            }
+        }
+        val letraModo = when (modo) {
+            "a_pe" -> "w"
+            "bicicleta" -> "b"
+            "moto" -> "l"
+            else -> "d"
+        }
+        val semPedagio = if (evitar == "pedagio") "&avoid=t" else ""
+        if (navegar && iniciar(Intent(Intent.ACTION_VIEW, Uri.parse("google.navigation:q=$local&mode=$letraModo$semPedagio")))) {
+            val jeito = when (modo) {
+                "a_pe" -> " a pé"
+                "bicicleta" -> " de bicicleta"
+                "moto" -> " de moto"
+                else -> ""
+            }
+            return "Rota$jeito até $nomeFalado iniciada no Maps" + (if (semPedagio.isNotEmpty()) ", evitando pedágios." else ".")
         }
         if (iniciar(Intent(Intent.ACTION_VIEW, Uri.parse("geo:0,0?q=$local")))) {
             return "Mostrei $destino no mapa."
@@ -665,6 +711,15 @@ class Ferramentas(private val activity: Activity, private val memoria: Memoria? 
         }
         ultimasFontes = listOf(Web.Fonte("Open-Meteo (localização das cidades)", "https://open-meteo.com"))
         return Calculadora.fraseDistancia(nomeA, nomeB, Calculadora.distanciaKm(lat, lon, b.latitude, b.longitude))
+    }
+
+    /** "Aqui é minha casa": guarda a localização atual com um nome. */
+    private fun salvarLugarAqui(lugar: String): String {
+        val m = memoria ?: return "Memória indisponível."
+        val local = ultimaLocalizacao() ?: return pedirLocalizacao("salvar este lugar")
+        m.definir("lugar:$lugar", "%.6f,%.6f".format(java.util.Locale.US, local.latitude, local.longitude))
+        val falado = if (lugar == "casa") "sua casa" else if (lugar == "trabalho") "seu trabalho" else lugar
+        return "Guardei este lugar como $falado. Agora é só dizer: me leva para ${if (lugar == "casa") "casa" else lugar}."
     }
 
     private fun ultimaLocalizacao(): Location? {

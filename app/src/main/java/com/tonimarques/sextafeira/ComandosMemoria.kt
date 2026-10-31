@@ -34,6 +34,23 @@ object ComandosMemoria {
             val nome = f.trecho(m.groups[1])?.trimEnd('.', '!')?.let { capitalizar(it) }
             if (!nome.isNullOrBlank() && nome.split(" ").size <= 4) return Pedido.Definir("apelido", nome)
         }
+        // Endereços com nome: "minha casa fica na Rua X, 123", "o endereço do meu trabalho é ..."
+        for (regra in LUGARES) {
+            val m = regra.matchEntire(c) ?: continue
+            val lugar = nomeDoLugar(m.groupValues[1]) ?: continue
+            val endereco = f.trecho(m.groups[2])?.trim()?.trimEnd('.', '!')
+                ?.replace(Regex("^(?i)(na|no|em|nas|nos) "), "")
+            if (!endereco.isNullOrBlank() && endereco.length >= 4) return Pedido.Definir("lugar:$lugar", endereco)
+        }
+        // "eu moro na Rua X" é endereço de casa, não cidade
+        MORO_NA_RUA.matchEntire(c)?.let { m ->
+            val endereco = f.trecho(m.groups[1])?.trim()?.trimEnd('.', '!')
+            if (!endereco.isNullOrBlank()) return Pedido.Definir("lugar:casa", endereco)
+        }
+        TRABALHO_NA_RUA.matchEntire(c)?.let { m ->
+            val endereco = f.trecho(m.groups[1])?.trim()?.trimEnd('.', '!')
+            if (!endereco.isNullOrBlank()) return Pedido.Definir("lugar:trabalho", endereco)
+        }
         CIDADE.matchEntire(c)?.let { m ->
             val cidade = f.trecho(m.groups[1])?.trimEnd('.', '!')?.let { capitalizar(it) }
             if (!cidade.isNullOrBlank() && cidade.split(" ").size <= 5) return Pedido.Definir("cidade", cidade)
@@ -55,6 +72,28 @@ object ComandosMemoria {
         }
         return null
     }
+
+    /** "casa", "trabalho", "academia"... Sinônimos viram um nome só. */
+    fun nomeDoLugar(palavra: String): String? {
+        val p = palavra.trim().replace(Regex("\\b(?:minha|meu|nossa|nosso) "), "").removePrefix("a ").removePrefix("o ").trim()
+        return when (p) {
+            "casa", "lar", "residencia", "ape", "apartamento" -> "casa"
+            "trabalho", "servico", "emprego", "firma", "escritorio", "empresa" -> "trabalho"
+            "" -> null
+            else -> p.takeIf { it.length in 3..30 && it.split(" ").size <= 3 }
+        }
+    }
+
+    private const val TIPOS_LUGAR = "casa|lar|residencia|ape|apartamento|trabalho|servico|emprego|firma|escritorio|empresa|loja|academia|faculdade|escola|" +
+        "igreja|mae|pai|vo|avo|namorada|namorado|esposa|marido|clinica|mercado|deposito|estudio|consultorio"
+    private val RUA = "(?:rua|r\\.|avenida|av\\.?|travessa|alameda|estrada|rodovia|praca|largo|beco|servidao|condominio|bairro)"
+    private val LUGARES = listOf(
+        Regex("^(?:a |o )?(?:minha |meu |nossa |nosso )?((?:$TIPOS_LUGAR)(?: d[aoe] (?:minha |meu )?\\w+)?) (?:fica|e|eh|e localizad[oa]|fica localizad[oa]) ((?:na|no|em|nas|nos) .+|$RUA .+|.*\\d.*)$"),
+        Regex("^(?:o )?endereco d[aoe] (?:minha |meu )?((?:$TIPOS_LUGAR)(?: d[aoe] (?:minha |meu )?\\w+)?) (?:e|eh) (.+)$"),
+        Regex("^(?:salva|salve|guarda|guarde|anota|anote) como (?:minha |meu |a |o )?((?:$TIPOS_LUGAR)(?: d[aoe] \\w+)?):? (?:o endereco )?(.+)$"),
+    )
+    private val MORO_NA_RUA = Regex("^(?:eu )?moro (?:na |no |em )($RUA .+)$")
+    private val TRABALHO_NA_RUA = Regex("^(?:eu )?trabalho (?:na |no |em )($RUA .+)$")
 
     private fun capitalizar(s: String) = s.split(" ").joinToString(" ") { p ->
         if (p.length <= 2 && p.lowercase() in setOf("de", "da", "do", "dos", "das", "e")) p.lowercase()

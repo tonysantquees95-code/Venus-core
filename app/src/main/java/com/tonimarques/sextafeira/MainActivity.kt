@@ -479,6 +479,11 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
                         "Prazer, ${pedido.valor}! Vou te chamar assim."
                     }
                     pedido.categoria == "cidade" -> "Anotado: você mora em ${pedido.valor}. Vou usar isso na previsão do tempo."
+                    pedido.categoria.startsWith("lugar:") -> {
+                        val lugar = pedido.categoria.removePrefix("lugar:")
+                        val falado = if (lugar == "casa") "sua casa" else if (lugar == "trabalho") "seu trabalho" else lugar
+                        "Anotado: $falado fica em ${pedido.valor}. Agora é só dizer: me leva para ${if (lugar == "casa") "casa" else lugar}."
+                    }
                     else -> {
                         val tipo = pedido.categoria.removePrefix("favorito:")
                         val feminino = tipo in setOf("musica", "banda", "cantora", "comida", "cor", "serie", "bebida", "playlist")
@@ -504,6 +509,13 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
             if (f.categoria.startsWith("favorito:")) {
                 val tipo = f.categoria.removePrefix("favorito:").let { mapOf("musica" to "música", "serie" to "série")[it] ?: it }
                 partes += "seu favorito em $tipo é ${f.texto}"
+            }
+        }
+        for (f in memoria.fatos()) {
+            if (f.categoria.startsWith("lugar:")) {
+                val lugar = f.categoria.removePrefix("lugar:")
+                val valor = if (Regex("^-?\\d+\\.\\d+,-?\\d+\\.\\d+$").matches(f.texto)) "o lugar que você marcou" else f.texto
+                partes += "${if (lugar == "casa") "sua casa" else if (lugar == "trabalho") "seu trabalho" else lugar} fica em $valor"
             }
         }
         val fatos = memoria.fatos().filter { it.categoria in setOf("fato", "gosto", "ia") }.takeLast(8).map { it.texto }

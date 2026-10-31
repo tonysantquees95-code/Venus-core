@@ -358,9 +358,40 @@ object ComandosLocais {
         normalizar(contato).trim() in setOf("alguem", "uma pessoa", "ninguem", "um contato", "um amigo", "uma amiga")
 
     private fun mapa(f: Frase): Resultado? {
+        // "aqui é minha casa", "salva onde eu estou como academia"
+        SALVAR_AQUI.matchEntire(f.chave)?.let { m ->
+            val nome = ComandosMemoria.nomeDoLugar(m.groupValues.drop(1).firstOrNull { it.isNotBlank() }.orEmpty()) ?: return null
+            return Resultado.Acao("salvar_lugar_aqui", mapOf("lugar" to nome))
+        }
         NAVEGAR.matchEntire(f.chave)?.let { m ->
-            val destino = f.trecho(m.groups[1]) ?: return null
-            if (destino.isNotBlank()) return Resultado.Acao("abrir_mapa", mapOf("destino" to destino, "navegar" to true))
+            var destino = f.trecho(m.groups[1])?.trim() ?: return null
+            // jeito de ir e app: "a pé", "de ônibus", "pelo Waze", "sem pedágio"
+            var modo = ""
+            var app = ""
+            var evitar = ""
+            var mudou = true
+            while (mudou) {
+                mudou = false
+                val n = normalizar(destino)
+                val extra = MODO_ROTA.find(n) ?: continue
+                when {
+                    extra.value.contains("waze") -> app = "waze"
+                    extra.value.contains("pedagio") -> evitar = "pedagio"
+                    extra.value.contains("pe") && !extra.value.contains("pedagio") && Regex("\\ba pe\\b|\\bandando\\b|\\bcaminhando\\b").containsMatchIn(extra.value) -> modo = "a_pe"
+                    Regex("bike|bicicleta").containsMatchIn(extra.value) -> modo = "bicicleta"
+                    Regex("moto").containsMatchIn(extra.value) -> modo = "moto"
+                    Regex("onibus|transporte|metro|trem").containsMatchIn(extra.value) -> modo = "transporte"
+                    Regex("carro|dirigindo").containsMatchIn(extra.value) -> modo = "carro"
+                }
+                destino = destino.substring(0, extra.range.first).trim().trimEnd(',')
+                mudou = true
+            }
+            if (destino.isNotBlank()) {
+                return Resultado.Acao(
+                    "abrir_mapa",
+                    mapOf("destino" to destino, "navegar" to true, "modo" to modo, "app" to app, "evitar" to evitar)
+                )
+            }
         }
         ONDE_FICA.matchEntire(f.chave)?.let { m ->
             val destino = f.trecho(m.groups[1]) ?: return null
@@ -549,8 +580,20 @@ object ComandosLocais {
             "(?:pra|para|pro|ao)\\s+(.+)$"
     )
     private val NAVEGAR = Regex(
-        "^(?:me leva|me leve|leva|navega|navegar|navegue|traca uma rota|traca rota|rota|" +
-            "como (?:eu )?(?:chego|chegar|vou))\\s+(?:(?:ate|para|pra|pro|ao|a|no|na|o|em)\\s+)*(.+)$"
+        "^(?:me leva|me leve|leve-me|leve me|me levar|leva|me guia|me guie|navega|navegar|navegue|" +
+            "(?:trace|traca|tracar|faz|faca|fazer|cria|crie|abre|abra|monta|monte|calcula|calcule|mostra|mostre|me da|me de)(?: uma| a)? rota|rota|" +
+            "como (?:eu )?(?:chego|chegar|vou|faco para chegar|faco pra chegar)|" +
+            "(?:(?:eu )?(?:quero|preciso|vou|tenho que) )?(?:ir|voltar)(?= (?:para|pra|pro|ate|de volta) )|vamos(?= (?:para|pra|pro|ate) )|bora(?= (?:para|pra|pro) ))" +
+            "\\s+(?:(?:ate|para|pra|pro|ao|a|no|na|o|em|de volta)\\s+)*(.+)$"
+    )
+    private val MODO_ROTA = Regex(
+        "\\s*,?\\s*(?:(?:indo |de |pelo |no |usando o |usando |com o |com )(?:bike|bicicleta|moto|onibus|transporte publico|carro)|" +
+            "(?:indo )?(?:a pe|andando|caminhando|dirigindo)|(?:pelo|no|usando o|usando|com o|com o app|pelo app) waze|" +
+            "(?:sem|evitando|evitar) (?:o |os )?pedagios?)\\s*$"
+    )
+    private val SALVAR_AQUI = Regex(
+        "^(?:aqui (?:e|eh) (?:a |o )?(?:minha|meu|nossa|nosso) (\\w+(?: d[aoe] \\w+)?)|" +
+            "(?:salva|salve|guarda|guarde|marca|marque) (?:aqui|onde eu estou|onde estou|essa localizacao|esse lugar|minha localizacao) como (?:a |o )?(?:minha |meu )?(\\w+(?: d[aoe] \\w+)?))$"
     )
     private val ONDE_FICA = Regex("^(?:onde fica|mostra no mapa|mostre no mapa|abre no mapa|mapa d[eoa])\\s+(?:o |a )?(.+)$")
     private val PESQUISA = Regex(
