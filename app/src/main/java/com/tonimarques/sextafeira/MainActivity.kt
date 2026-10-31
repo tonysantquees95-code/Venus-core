@@ -11,9 +11,11 @@ import android.graphics.Color
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.provider.Settings
 import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
@@ -39,28 +41,29 @@ import android.widget.TextView
 import android.widget.Toast
 import java.util.Locale
 
-class MainActivity : Activity(), TextToSpeech.OnInitListener {
+open class MainActivity : Activity(), TextToSpeech.OnInitListener {
 
     private enum class Escuta { NADA, VIGILIA, COMANDO }
 
-    private lateinit var orbe: Orbe
-    private lateinit var titulo: TextView
-    private lateinit var status: TextView
-    private lateinit var parcial: TextView
-    private lateinit var mensagens: LinearLayout
-    private lateinit var rolagem: ScrollView
-    private lateinit var campo: EditText
-    private lateinit var botaoMic: ImageButton
-    private lateinit var botaoEnviar: ImageButton
+    protected lateinit var orbe: Orbe
+    protected lateinit var titulo: TextView
+    protected lateinit var status: TextView
+    protected lateinit var parcial: TextView
+    protected lateinit var mensagens: LinearLayout
+    protected lateinit var rolagem: ScrollView
+    protected lateinit var campo: EditText
+    protected lateinit var botaoMic: ImageButton
+    protected lateinit var botaoEnviar: ImageButton
     private lateinit var ferramentas: Ferramentas
 
     private val cerebro = Cerebro()
-    private val principal = Handler(Looper.getMainLooper())
+    protected val principal = Handler(Looper.getMainLooper())
 
     private var gemini: Gemini? = null
     private var tts: TextToSpeech? = null
     private var ttsPronto = false
     private var falando = false
+    private var falaPendente: String? = null
     private var reconhecedor: SpeechRecognizer? = null
     private var escuta = Escuta.NADA
     private var errosSeguidos = 0
@@ -90,7 +93,7 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
         tts = TextToSpeech(this, this)
         setContentView(montarTela())
         carregarConversaAnterior()
-        adicionarMensagem("Olá! Diga \"${Marca.nome}, ativar\", toque no orbe ou digite abaixo.", false, salvar = false)
+        mensagemInicial()?.let { adicionarMensagem(it, false, salvar = false) }
         tratarIntent(intent)
     }
 
@@ -102,6 +105,8 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
     override fun onResume() {
         super.onResume()
         naTela = true
+        VigiliaService.pausarPorTela(true)
+        iniciarEscutaDeFundoSePreciso()
         orbe.invalidate()
         if (vigiliaLigada()) {
             if (temMicrofone()) {
@@ -116,6 +121,7 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
 
     override fun onPause() {
         naTela = false
+        VigiliaService.pausarPorTela(false)
         principal.removeCallbacks(tarefaVigilia)
         if (escuta != Escuta.NADA) {
             escuta = Escuta.NADA
@@ -131,15 +137,35 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
         super.onDestroy()
     }
 
+    protected open fun mensagemInicial(): String? = "Olá! Diga \"${Marca.nome}, ativar\", toque no orbe ou digite abaixo."
+
+    /** Quando a conversa termina e não há mais nada a ouvir. Na tela principal, volta a esperar a ativação. */
+    protected open fun aoFicarOcioso() {
+        agendarVigilia(500)
+    }
+
+    protected fun estaOcioso() = !ocupado && !falando && escuta == Escuta.NADA
+
     private fun tratarIntent(intent: Intent?) {
         val acao = intent?.action ?: return
-        if (acao == ACAO_OUVIR || acao == Intent.ACTION_ASSIST) {
-            orbe.post { ouvirComando() }
+        when (acao) {
+            ACAO_OUVIR, Intent.ACTION_ASSIST -> orbe.post {
+                ultimaFoiVoz = true
+                ouvirComando()
+            }
+            ACAO_ATIVAR -> orbe.post { ativar() }
+            ACAO_PEDIDO -> {
+                val pedido = intent.getStringExtra(EXTRA_PEDIDO).orEmpty()
+                if (pedido.isNotBlank()) orbe.post {
+                    ultimaFoiVoz = true
+                    processar(pedido)
+                }
+            }
         }
     }
 
     // --------------------------------------------------------------------- tela
-    private fun montarTela(): View {
+    protected open fun montarTela(): View {
         val raiz = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             background = GradientDrawable(
@@ -249,14 +275,14 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
         return raiz
     }
 
-    private fun aplicarCor(cor: Int) {
+    protected fun aplicarCor(cor: Int) {
         corAtual = cor
         titulo.setTextColor(cor)
         botaoMic.setColorFilter(cor)
         botaoEnviar.setColorFilter(cor)
     }
 
-    private fun botaoIcone(icone: Int, descricao: String, cor: Int, acao: () -> Unit) = ImageButton(this).apply {
+    protected fun botaoIcone(icone: Int, descricao: String, cor: Int, acao: () -> Unit) = ImageButton(this).apply {
         setImageResource(icone)
         setColorFilter(cor)
         contentDescription = descricao
@@ -265,7 +291,7 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
         setOnClickListener { acao() }
     }
 
-    private fun vidro(preenchimento: Int, borda: Int, raio: Int) = GradientDrawable().apply {
+    protected fun vidro(preenchimento: Int, borda: Int, raio: Int) = GradientDrawable().apply {
         setColor(preenchimento)
         setStroke(dp(1).coerceAtLeast(1), borda)
         cornerRadius = dp(raio).toFloat()
@@ -273,10 +299,10 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
 
     private fun comAlfa(cor: Int, alfa: Int) = Color.argb(alfa, Color.red(cor), Color.green(cor), Color.blue(cor))
 
-    private fun dp(valor: Int) = (valor * resources.displayMetrics.density).toInt()
+    protected fun dp(valor: Int) = (valor * resources.displayMetrics.density).toInt()
 
     /** Mostra as últimas mensagens da conversa anterior, para dar continuidade. */
-    private fun carregarConversaAnterior() {
+    protected open fun carregarConversaAnterior() {
         val anteriores = try {
             memoria.mensagens(null, 6)
         } catch (e: Exception) {
@@ -288,7 +314,7 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
         }
     }
 
-    private fun adicionarMensagem(texto: String, doUsuario: Boolean, salvar: Boolean = true): TextView {
+    protected open fun adicionarMensagem(texto: String, doUsuario: Boolean, salvar: Boolean = true): TextView {
         if (salvar) {
             try {
                 memoria.salvarMensagem(doUsuario, texto, topicoAtual)
@@ -686,10 +712,26 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
             }
         })
         ttsPronto = true
+        falaPendente?.let {
+            falaPendente = null
+            runOnUiThread { falar(it) }
+        }
     }
 
     private fun falar(texto: String) {
         pararVigilia()
+        if (!ttsPronto && prefs.getBoolean(PREF_FALAR, true) && tts != null) {
+            // A voz ainda está carregando (app acabou de abrir): fala assim que ficar pronta.
+            falaPendente = texto
+            falando = true
+            principal.postDelayed({
+                if (falaPendente == texto && !ttsPronto) {
+                    falaPendente = null
+                    aposFala()
+                }
+            }, 4000)
+            return
+        }
         if (!ttsPronto || !prefs.getBoolean(PREF_FALAR, true)) {
             principal.post { aposFala() }
             return
@@ -705,7 +747,7 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
         mudarEstadoOcioso()
         val continuar = ultimaFoiVoz && naTela && !ocupado &&
             (forcarEscuta || cerebro.aguardandoResposta || prefs.getBoolean(PREF_CONTINUA, true))
-        if (continuar) ouvirComando() else agendarVigilia(500)
+        if (continuar) ouvirComando() else aoFicarOcioso()
     }
 
     private fun vozesEmPortugues(): List<Voice> {
@@ -850,14 +892,13 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
     }
 
     // ------------------------------------------------------- escuta (microfone)
-    private fun vigiliaLigada() = prefs.getBoolean(PREF_VIGILIA, true)
+    protected open fun vigiliaLigada() = prefs.getBoolean(PREF_VIGILIA, true)
 
     private fun temMicrofone() =
         checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
 
     private fun obterReconhecedor(): SpeechRecognizer? {
-        if (!SpeechRecognizer.isRecognitionAvailable(this)) return null
-        return reconhecedor ?: SpeechRecognizer.createSpeechRecognizer(this).also {
+        return reconhecedor ?: (Reconhecedor.criar(this) ?: return null).also {
             it.setRecognitionListener(ouvinte)
             reconhecedor = it
         }
@@ -897,7 +938,7 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
         }
     }
 
-    private fun alternarEscuta() {
+    protected fun alternarEscuta() {
         when (escuta) {
             Escuta.COMANDO -> reconhecedor?.stopListening()
             else -> {
@@ -997,7 +1038,7 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
                     mudarEstadoOcioso()
                     if (texto.isBlank()) {
                         ultimaFoiVoz = false
-                        agendarVigilia(400)
+                        aoFicarOcioso()
                     } else {
                         ultimaFoiVoz = true
                         processar(texto)
@@ -1036,7 +1077,7 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
                         else -> STATUS_PADRAO
                     }
                     mudarEstado(Orbe.Estado.OCIOSO, texto)
-                    agendarVigilia(1500)
+                    aoFicarOcioso()
                 }
                 Escuta.NADA -> {}
             }
@@ -1100,6 +1141,9 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
             .setCheckable(true).setChecked(prefs.getBoolean(PREF_CONTINUA, true))
         menu.add(0, MENU_HISTORICO, 5, "Histórico por tópico")
         menu.add(0, MENU_MEMORIAS, 5, "O que a ${Marca.nome} sabe sobre mim")
+        menu.add(0, MENU_FUNDO, 0, "Ouvir \"${Marca.nome}, ativar\" com o app fechado")
+            .setCheckable(true).setChecked(prefs.getBoolean(PREF_FUNDO, false))
+        menu.add(0, MENU_ASSISTENTE, 1, "Abrir segurando o botão (assistente padrão)")
         menu.add(0, MENU_CHAVE, 5, "Chave do Gemini")
         menu.add(0, MENU_MODELO, 6, "Modelo do Gemini")
         menu.add(0, MENU_NOVA, 7, "Nova conversa")
@@ -1128,6 +1172,8 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
             MENU_VOZ -> escolherVoz()
             MENU_HISTORICO -> mostrarHistorico()
             MENU_MEMORIAS -> mostrarMemorias()
+            MENU_FUNDO -> alternarEscutaDeFundo()
+            MENU_ASSISTENTE -> definirAssistentePadrao()
             MENU_AJUSTE_VOZ -> ajustarVoz()
             MENU_CHAVE -> pedirChave()
             MENU_MODELO -> pedirModelo()
@@ -1234,6 +1280,86 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
             .show()
     }
 
+    // ------------------------------------------------ app fechado e pop-up
+    private fun podeSobrepor() = Settings.canDrawOverlays(this)
+
+    private fun iniciarEscutaDeFundoSePreciso() {
+        if (!prefs.getBoolean(PREF_FUNDO, false) || !temMicrofone() || !podeSobrepor()) return
+        try {
+            VigiliaService.iniciar(this)
+        } catch (e: Exception) {
+            Toast.makeText(this, "Não consegui ligar a escuta em segundo plano.", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun alternarEscutaDeFundo() {
+        val ligar = !prefs.getBoolean(PREF_FUNDO, false)
+        prefs.edit().putBoolean(PREF_FUNDO, ligar).apply()
+        if (!ligar) {
+            VigiliaService.parar(this)
+            Toast.makeText(this, "Escuta com o app fechado desligada.", Toast.LENGTH_SHORT).show()
+            return
+        }
+        if (Build.VERSION.SDK_INT >= 33 &&
+            checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+        ) {
+            requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), PEDIDO_NOTIFICACOES)
+        }
+        if (!temMicrofone()) {
+            requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO), PEDIDO_MICROFONE)
+        }
+        if (!podeSobrepor()) {
+            AlertDialog.Builder(this)
+                .setTitle("Uma permissão a mais")
+                .setMessage(
+                    "Para o orbe aparecer por cima de outros apps quando você disser \"${Marca.nome}, ativar\", " +
+                        "ative \"Sobrepor a outros apps\" (ou \"Exibir sobre outros apps\") para a ${Marca.nome} na próxima tela. " +
+                        "Depois é só voltar aqui."
+                )
+                .setPositiveButton("Abrir configuração") { _, _ ->
+                    try {
+                        startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName")))
+                    } catch (e: ActivityNotFoundException) {
+                        startActivity(Intent(Settings.ACTION_SETTINGS))
+                    }
+                }
+                .setNegativeButton("Agora não", null)
+                .show()
+        } else {
+            iniciarEscutaDeFundoSePreciso()
+        }
+        Toast.makeText(
+            this,
+            "Com o app fechado e o celular desbloqueado, diga \"${Marca.nome}, ativar\". Fica uma notificação enquanto ela escuta.",
+            Toast.LENGTH_LONG
+        ).show()
+    }
+
+    private fun definirAssistentePadrao() {
+        AlertDialog.Builder(this)
+            .setTitle("Assistente padrão")
+            .setMessage(
+                "Na próxima tela, escolha a ${Marca.nome} como \"App assistente digital\" (ou \"Assistente padrão\"). " +
+                    "Depois, segure o botão de início (ou o botão de ligar, dependendo do celular) para abrir o orbe."
+            )
+            .setPositiveButton("Abrir configuração") { _, _ ->
+                val opcoes = listOf(
+                    Intent(Settings.ACTION_VOICE_INPUT_SETTINGS),
+                    Intent(Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS),
+                    Intent(Settings.ACTION_SETTINGS),
+                )
+                for (i in opcoes) {
+                    try {
+                        startActivity(i)
+                        break
+                    } catch (e: Exception) {
+                    }
+                }
+            }
+            .setNegativeButton("Cancelar", null)
+            .show()
+    }
+
     private fun diagnosticar() {
         if (ocupado) return
         if (chave().isBlank()) {
@@ -1317,6 +1443,7 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
         const val ACAO_OUVIR = "com.tonimarques.sextafeira.OUVIR"
         private const val PEDIDO_VOZ = 10
         private const val PEDIDO_MICROFONE = 11
+        private const val PEDIDO_NOTIFICACOES = 12
         private const val LIMITE_IA_MS = 35_000L
         private const val ID_AMOSTRA = "amostra"
         private const val MODELO_PADRAO = "gemini-flash-latest"
@@ -1344,6 +1471,12 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
         private const val MENU_AJUSTE_VOZ = 9
         private const val MENU_HISTORICO = 10
         private const val MENU_MEMORIAS = 11
+        private const val MENU_FUNDO = 12
+        private const val MENU_ASSISTENTE = 13
+        private const val PREF_FUNDO = "vigilia_fundo"
+        const val ACAO_ATIVAR = "com.tonimarques.sextafeira.ATIVAR"
+        const val ACAO_PEDIDO = "com.tonimarques.sextafeira.PEDIDO"
+        const val EXTRA_PEDIDO = "pedido"
 
         private val COR_TEXTO_APAGADO = Color.parseColor("#6B769A")
     }
