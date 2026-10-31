@@ -31,6 +31,8 @@ class VigiliaService : Service() {
     private var reconhecedor: SpeechRecognizer? = null
     private var ouvindo = false
     private var errosSeguidos = 0
+    private var despertador: Despertador? = null
+    private var falhasOffline = 0
     private val tarefa = Runnable { ouvir() }
 
     override fun onBind(intent: Intent?): IBinder? = null
@@ -58,6 +60,7 @@ class VigiliaService : Service() {
 
     override fun onDestroy() {
         principal.removeCallbacksAndMessages(null)
+        despertador?.parar()
         try {
             reconhecedor?.destroy()
         } catch (e: Exception) {
@@ -104,7 +107,22 @@ class VigiliaService : Service() {
     }
 
     private fun ouvir() {
-        if (pausadoPorTela || ouvindo) return
+        if (pausadoPorTela || ouvindo || despertador?.ativo == true) return
+        // Com a voz offline instalada: microfone aberto direto, sem o ícone piscando.
+        if (falhasOffline < 5 && ModeloDeVoz.pronto(this)) {
+            val d = despertador ?: Despertador(
+                this,
+                aoOuvir = {
+                    falhasOffline = 0
+                    abrirPopup("")
+                },
+                aoFalhar = {
+                    falhasOffline++
+                    agendar(4000)
+                },
+            ).also { despertador = it }
+            if (d.iniciar()) return
+        }
         val r = reconhecedor ?: (Reconhecedor.criar(this) ?: return).also {
             it.setRecognitionListener(ouvinte)
             reconhecedor = it
@@ -126,6 +144,7 @@ class VigiliaService : Service() {
 
     private fun pausar() {
         principal.removeCallbacks(tarefa)
+        despertador?.parar()
         if (ouvindo) {
             ouvindo = false
             try {

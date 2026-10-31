@@ -319,6 +319,31 @@ class Cerebro(
             return texto.substring(m.range.last + 1).trim().trimStart(',', '.', '!', ' ').trim()
         }
 
+        /**
+         * Versão tolerante da frase de ativação, para o reconhecimento offline (que às vezes escreve
+         * "venus ativa", "vênus ativar", "vem us ativar", "sexta feira ativar"...).
+         */
+        fun pareceAtivacao(texto: String): Boolean {
+            if (texto.isBlank()) return false
+            if (restoDepoisDaAtivacao(texto) != null) return true
+            val ps = Corretor.palavras(texto)
+            for (i in ps.indices) {
+                val (ehNome, usadas) = when {
+                    i + 1 < ps.size && (ps[i] + ps[i + 1]).let { it == "sextafeira" || pareceVenus(it) } -> true to 2
+                    pareceVenus(ps[i]) -> true to 1
+                    else -> false to 0
+                }
+                if (!ehNome) continue
+                val depois = ps.drop(i + usadas).take(2)
+                if (depois.any { it.startsWith("ativ") || Corretor.distancia(it, "ativar") <= 1 || Corretor.distancia(it, "ativa") <= 1 }) {
+                    return true
+                }
+            }
+            return false
+        }
+
+        private fun pareceVenus(p: String) = p.length in 4..6 && (p == "venus" || Corretor.distancia(p, "venus") <= 1)
+
         /** Transforma uma frase em conceitos: sinônimos unificados, palavras sem importância removidas. */
         fun conceitos(texto: String): Set<String> {
             var s = " " + ComandosLocais.normalizar(texto)

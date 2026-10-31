@@ -120,4 +120,14 @@ class IndependenciaTest {
         assertEquals("USD", Pesquisa.codigoDaMoeda("dólar"))
         assertEquals("EUR", Pesquisa.codigoDaMoeda("euro"))
     }
+
+    // ------------------------------------------------------------- ativação offline
+    @Test fun ativacaoTolerante() {
+        for (f in listOf("vênus ativar", "venus ativa", "vênus ativa", "a vênus ativar", "sexta feira ativar", "vinus ativar")) {
+            assertTrue(f, Cerebro.pareceAtivacao(f))
+        }
+        for (f in listOf("", "vênus", "ativar o bluetooth", "o planeta vênus é quente", "menos atividade")) {
+            assertFalse(f, Cerebro.pareceAtivacao(f))
+        }
+    }
 }

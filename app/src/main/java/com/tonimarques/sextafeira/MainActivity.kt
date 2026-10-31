@@ -27,14 +27,12 @@ import android.text.InputType
 import android.text.TextUtils
 import android.text.method.LinkMovementMethod
 import android.view.Gravity
-import android.view.MenuItem
 import android.view.View
 import android.view.ViewGroup
 import android.view.inputmethod.EditorInfo
 import android.widget.EditText
 import android.widget.ImageButton
 import android.widget.LinearLayout
-import android.widget.PopupMenu
 import android.widget.ScrollView
 import android.widget.SeekBar
 import android.widget.TextView
@@ -81,6 +79,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
 
     private val prefs by lazy { getSharedPreferences("config", Context.MODE_PRIVATE) }
     private val tarefaVigilia = Runnable { iniciarVigilia() }
+    private var despertador: Despertador? = null
 
     // ------------------------------------------------------------ ciclo de vida
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -96,6 +95,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         carregarConversaAnterior()
         mensagemInicial()?.let { adicionarMensagem(it, false, salvar = false) }
         tratarIntent(intent)
+        if (javaClass == MainActivity::class.java) principal.postDelayed({ oferecerVozOffline() }, 1500)
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -125,6 +125,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         naTela = false
         VigiliaService.pausarPorTela(false)
         principal.removeCallbacks(tarefaVigilia)
+        despertador?.parar()
         if (escuta != Escuta.NADA) {
             escuta = Escuta.NADA
             reconhecedor?.cancel()
@@ -134,6 +135,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
 
     override fun onDestroy() {
         principal.removeCallbacksAndMessages(null)
+        despertador?.parar()
         tts?.shutdown()
         reconhecedor?.destroy()
         super.onDestroy()
@@ -1018,6 +1020,30 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
     /** Fica ouvindo em silêncio, esperando "Sexta-feira, ativar". Só com o app aberto na tela. */
     private fun iniciarVigilia() {
         if (!vigiliaLigada() || !naTela || ocupado || falando || escuta != Escuta.NADA || !temMicrofone()) return
+        // Voz offline instalada: microfone aberto direto, sem o ícone piscando na barra de status.
+        if (ModeloDeVoz.pronto(this)) {
+            val d = despertador ?: Despertador(
+                this,
+                aoOuvir = {
+                    if (escuta == Escuta.VIGILIA) {
+                        escuta = Escuta.NADA
+                        errosSeguidos = 0
+                        ativar()
+                    }
+                },
+                aoFalhar = {
+                    if (escuta == Escuta.VIGILIA) {
+                        escuta = Escuta.NADA
+                        agendarVigilia(4000)
+                    }
+                },
+            ).also { despertador = it }
+            if (d.iniciar()) {
+                escuta = Escuta.VIGILIA
+                mudarEstadoOcioso()
+                return
+            }
+        }
         val r = obterReconhecedor() ?: return
         escuta = Escuta.VIGILIA
         mudarEstadoOcioso()
@@ -1031,6 +1057,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
 
     private fun pararVigilia() {
         principal.removeCallbacks(tarefaVigilia)
+        despertador?.parar()
         if (escuta == Escuta.VIGILIA) {
             escuta = Escuta.NADA
             reconhecedor?.cancel()
@@ -1226,35 +1253,144 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         ouvirAposPermissao = false
     }
 
-    // ------------------------------------------------------------------- menu
-    private fun abrirMenu(ancora: View) {
-        val popup = PopupMenu(this, ancora)
-        val menu = popup.menu
-        menu.add(0, MENU_VIGILIA, 0, "Ouvir \"${Marca.nome}, ativar\"")
-            .setCheckable(true).setChecked(vigiliaLigada())
-        menu.add(0, MENU_VOZ, 1, "Escolher a voz")
-        menu.add(0, MENU_AJUSTE_VOZ, 2, "Velocidade e tom da voz")
-        menu.add(0, MENU_FALAR, 3, "Responder em voz alta")
-            .setCheckable(true).setChecked(prefs.getBoolean(PREF_FALAR, true))
-        menu.add(0, MENU_CONTINUA, 4, "Conversa contínua por voz")
-            .setCheckable(true).setChecked(prefs.getBoolean(PREF_CONTINUA, true))
-        menu.add(0, MENU_HISTORICO, 5, "Histórico por tópico")
-        menu.add(0, MENU_MEMORIAS, 5, "O que a ${Marca.nome} sabe sobre mim")
-        menu.add(0, MENU_FUNDO, 0, "Ouvir \"${Marca.nome}, ativar\" com o app fechado")
-            .setCheckable(true).setChecked(prefs.getBoolean(PREF_FUNDO, false))
-        menu.add(0, MENU_ASSISTENTE, 1, "Abrir segurando o botão (assistente padrão)")
-        menu.add(0, MENU_INDEPENDENTE, 5, "Modo independente (sem Gemini)")
-            .setCheckable(true).setChecked(modoIndependente())
-        menu.add(0, MENU_CHAVE, 5, "Chave do Gemini")
-        menu.add(0, MENU_MODELO, 6, "Modelo do Gemini")
-        menu.add(0, MENU_NOVA, 7, "Nova conversa")
-        menu.add(0, MENU_DIAGNOSTICO, 8, "Diagnóstico de conexão")
-        popup.setOnMenuItemClickListener { tratarMenu(it) }
-        popup.show()
+    // ---------------------------------------------------------------- ajustes
+    private var ajustes: TelaDeAjustes? = null
+    private var progressoVozOffline: String? = null
+
+    private fun abrirMenu(@Suppress("UNUSED_PARAMETER") ancora: View) {
+        if (ajustes?.isShowing == true) return
+        fun item(titulo: String, descricao: () -> String, id: Int, ligado: (() -> Boolean)? = null) =
+            TelaDeAjustes.Ajuste(titulo, descricao, ligado) { tratarMenu(id) }
+
+        val n = Marca.nome
+        val secoes = listOf(
+            TelaDeAjustes.Secao(
+                "Ativação por voz", listOf(
+                    item("Ouvir \"$n, ativar\" com o app aberto", { "Fala a frase e ela já começa a ouvir o seu pedido." },
+                        MENU_VIGILIA) { vigiliaLigada() },
+                    item("Ouvir com o app fechado", {
+                        "Diga \"$n, ativar\" de qualquer tela e o orbe aparece num pop-up, sem abrir o app inteiro."
+                    }, MENU_FUNDO) { prefs.getBoolean(PREF_FUNDO, false) },
+                    TelaDeAjustes.Ajuste("Voz offline para a ativação", { descricaoVozOffline() }) { tratarVozOffline() },
+                    item("Abrir segurando o botão", {
+                        "Define a $n como assistente padrão: segure o botão de início ou de ligar para chamar o orbe."
+                    }, MENU_ASSISTENTE),
+                )
+            ),
+            TelaDeAjustes.Secao(
+                "Voz da $n", listOf(
+                    item("Escolher a voz", { "Vozes em português instaladas no celular." }, MENU_VOZ),
+                    item("Velocidade e tom", { "Deixe a fala mais rápida, mais lenta, mais grave ou mais aguda." }, MENU_AJUSTE_VOZ),
+                    item("Responder em voz alta", { "Além de escrever, ela fala as respostas." }, MENU_FALAR) {
+                        prefs.getBoolean(PREF_FALAR, true)
+                    },
+                    item("Conversa contínua", { "Depois de responder, ela volta a ouvir sem você precisar tocar no orbe." },
+                        MENU_CONTINUA) { prefs.getBoolean(PREF_CONTINUA, true) },
+                )
+            ),
+            TelaDeAjustes.Secao(
+                "Inteligência", listOf(
+                    item("Modo independente", {
+                        "Responde só com os próprios recursos (comandos, pesquisa e notícias), sem usar o Gemini."
+                    }, MENU_INDEPENDENTE) { modoIndependente() },
+                    item("Chave do Gemini", { if (chave().isBlank()) "Não configurada" else "Configurada" }, MENU_CHAVE),
+                    item("Modelo do Gemini", { modelo() }, MENU_MODELO),
+                )
+            ),
+            TelaDeAjustes.Secao(
+                "Memória e conversas", listOf(
+                    item("Histórico por tópico", { "Todas as conversas, separadas por assunto." }, MENU_HISTORICO),
+                    item("O que a $n sabe sobre mim", { "Seus gostos, favoritos e o que ela aprendeu. Dá para apagar." }, MENU_MEMORIAS),
+                    item("Nova conversa", { "Limpa a tela e começa do zero (o histórico continua salvo)." }, MENU_NOVA),
+                )
+            ),
+            TelaDeAjustes.Secao(
+                "Sistema", listOf(
+                    item("Diagnóstico de conexão", { "Testa a internet e o Gemini e mostra o que está funcionando." }, MENU_DIAGNOSTICO),
+                )
+            ),
+        )
+        ajustes = TelaDeAjustes(this, BuildConfig.VERSION_NAME, secoes).also {
+            it.setOnDismissListener { ajustes = null }
+            it.show()
+        }
     }
 
-    private fun tratarMenu(item: MenuItem): Boolean {
-        when (item.itemId) {
+    private fun descricaoVozOffline(): String = progressoVozOffline ?: if (ModeloDeVoz.pronto(this)) {
+        "Instalada. O microfone fica aberto direto, só com o pontinho verde, sem o ícone piscando. Toque para remover."
+    } else {
+        "Toque para baixar (31 MB, uma vez só). Sem ela, o ícone do microfone fica piscando na barra de status enquanto a $n espera a frase."
+    }
+
+    private fun tratarVozOffline() {
+        if (ModeloDeVoz.baixando) return
+        if (ModeloDeVoz.pronto(this)) {
+            AlertDialog.Builder(this)
+                .setTitle("Remover a voz offline?")
+                .setMessage("Libera uns 50 MB. A ${Marca.nome} volta a usar o reconhecimento do Google para esperar a frase, e o ícone do microfone volta a piscar.")
+                .setPositiveButton("Remover") { _, _ ->
+                    pararVigilia()
+                    VigiliaService.pausarPorTela(true)
+                    Despertador.liberarModelo()
+                    ModeloDeVoz.apagar(this)
+                    VigiliaService.pausarPorTela(naTela)
+                    agendarVigilia(500)
+                    ajustes?.atualizar()
+                }
+                .setNegativeButton("Cancelar", null)
+                .show()
+        } else {
+            baixarVozOffline()
+        }
+    }
+
+    private fun baixarVozOffline() {
+        if (ModeloDeVoz.baixando || ModeloDeVoz.pronto(this)) return
+        progressoVozOffline = "Baixando… 0%"
+        ajustes?.atualizar()
+        val contexto = applicationContext
+        Thread {
+            val erro = ModeloDeVoz.baixar(contexto) { p ->
+                runOnUiThread {
+                    progressoVozOffline = if (p >= 90) "Instalando…" else "Baixando… $p%"
+                    ajustes?.atualizar()
+                }
+            }
+            // Já deixa o modelo carregado, para a primeira escuta ser rápida.
+            if (erro == null) Despertador.carregarModelo(contexto)
+            runOnUiThread {
+                progressoVozOffline = null
+                ajustes?.atualizar()
+                if (erro == null) {
+                    Toast.makeText(this, "Voz offline instalada! O microfone não vai mais ficar piscando.", Toast.LENGTH_LONG).show()
+                    if (escuta == Escuta.VIGILIA) pararVigilia()
+                    agendarVigilia(400)
+                } else {
+                    Toast.makeText(this, erro, Toast.LENGTH_LONG).show()
+                }
+            }
+        }.start()
+    }
+
+    /** Uma vez só: oferece a voz offline para quem usa a ativação por voz. */
+    private fun oferecerVozOffline(forcar: Boolean = false) {
+        if (isFinishing || ModeloDeVoz.pronto(this) || ModeloDeVoz.baixando) return
+        if (!forcar && prefs.getBoolean(PREF_OFERECEU_VOZ, false)) return
+        if (!vigiliaLigada() && !prefs.getBoolean(PREF_FUNDO, false)) return
+        prefs.edit().putBoolean(PREF_OFERECEU_VOZ, true).apply()
+        AlertDialog.Builder(this)
+            .setTitle("Microfone sem piscar")
+            .setMessage(
+                "Para esperar \"${Marca.nome}, ativar\", ela liga e desliga o microfone o tempo todo, e o ícone fica piscando ao lado da bateria. " +
+                    "Com a voz offline (31 MB, baixa uma vez só), o microfone fica aberto direto: só o pontinho verde, sem piscar, e funciona até sem internet."
+            )
+            .setPositiveButton("Baixar agora") { _, _ -> baixarVozOffline() }
+            .setNegativeButton("Depois", null)
+            .show()
+    }
+
+    private fun tratarMenu(id: Int): Boolean {
+        when (id) {
             MENU_VIGILIA -> {
                 val ligado = !vigiliaLigada()
                 prefs.edit().putBoolean(PREF_VIGILIA, ligado).apply()
@@ -1265,26 +1401,19 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
                     pararVigilia()
                 }
                 mudarEstadoOcioso()
-                Toast.makeText(
-                    this, if (ligado) "Diga \"${Marca.nome}, ativar\" com o app aberto." else "Ativação por voz desligada.",
-                    Toast.LENGTH_SHORT
-                ).show()
             }
             MENU_VOZ -> escolherVoz()
             MENU_HISTORICO -> mostrarHistorico()
             MENU_MEMORIAS -> mostrarMemorias()
-            MENU_FUNDO -> alternarEscutaDeFundo()
+            MENU_FUNDO -> {
+                alternarEscutaDeFundo()
+                if (prefs.getBoolean(PREF_FUNDO, false) && podeSobrepor()) oferecerVozOffline(forcar = true)
+            }
             MENU_ASSISTENTE -> definirAssistentePadrao()
             MENU_INDEPENDENTE -> {
                 val ligado = !modoIndependente()
                 prefs.edit().putBoolean(PREF_INDEPENDENTE, ligado).apply()
                 gemini = null
-                Toast.makeText(
-                    this,
-                    if (ligado) "Modo independente: a ${Marca.nome} responde sozinha, sem o Gemini."
-                    else "Gemini ligado de novo para perguntas que ela não souber.",
-                    Toast.LENGTH_LONG
-                ).show()
             }
             MENU_AJUSTE_VOZ -> ajustarVoz()
             MENU_CHAVE -> pedirChave()
@@ -1294,14 +1423,13 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
                 val ligado = !prefs.getBoolean(PREF_FALAR, true)
                 prefs.edit().putBoolean(PREF_FALAR, ligado).apply()
                 if (!ligado) tts?.stop()
-                Toast.makeText(this, if (ligado) "Respostas em voz alta ligadas." else "Respostas em voz alta desligadas.", Toast.LENGTH_SHORT).show()
             }
             MENU_CONTINUA -> {
                 val ligado = !prefs.getBoolean(PREF_CONTINUA, true)
                 prefs.edit().putBoolean(PREF_CONTINUA, ligado).apply()
-                Toast.makeText(this, if (ligado) "Conversa contínua ligada." else "Conversa contínua desligada.", Toast.LENGTH_SHORT).show()
             }
             MENU_NOVA -> {
+                ajustes?.dismiss()
                 gemini = null
                 cerebro.esquecerPendencias()
                 mensagens.removeAllViews()
@@ -1587,6 +1715,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         private const val MENU_ASSISTENTE = 13
         private const val MENU_INDEPENDENTE = 14
         private const val PREF_INDEPENDENTE = "modo_independente"
+        private const val PREF_OFERECEU_VOZ = "ofereceu_voz_offline"
         private const val PREF_FUNDO = "vigilia_fundo"
         const val ACAO_ATIVAR = "com.tonimarques.sextafeira.ATIVAR"
         const val ACAO_PEDIDO = "com.tonimarques.sextafeira.PEDIDO"

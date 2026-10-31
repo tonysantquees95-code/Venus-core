@@ -2,7 +2,8 @@
 <resources>
     <color name="fundo">#03040A</color>
     <color name="barra">#03040A</color>
-    <color name="destaque">#36D6FF</color>
+    <color name="destaque">#E36BD0</color>
+    <color name="texto_apagado">#8A93B8</color>
 
     <style name="Tema" parent="android:Theme.Material.NoActionBar">
         <item name="android:colorPrimary">@color/barra</item>
@@ -11,7 +12,23 @@
         <item name="android:windowBackground">@color/fundo</item>
         <item name="android:statusBarColor">@color/fundo</item>
         <item name="android:navigationBarColor">@color/fundo</item>
+        <item name="android:alertDialogTheme">@style/Tema.Dialogo</item>
     </style>
+
+    <!-- Janelas de diálogo com a cara da Vênus -->
+    <style name="Tema.Dialogo" parent="android:Theme.Material.Dialog.Alert">
+        <item name="android:windowBackground">@drawable/fundo_dialogo</item>
+        <item name="android:colorAccent">@color/destaque</item>
+        <item name="android:textColorPrimary">#FFFFFFFF</item>
+        <item name="android:textColorSecondary">@color/texto_apagado</item>
+        <item name="android:windowTitleStyle">@style/Tema.Dialogo.Titulo</item>
+    </style>
+    <style name="Tema.Dialogo.Titulo" parent="android:TextAppearance.Material.DialogWindowTitle">
+        <item name="android:textColor">@color/destaque</item>
+        <item name="android:fontFamily">sans-serif-medium</item>
+        <item name="android:letterSpacing">0.04</item>
+    </style>
+
     <!-- Pop-up do orbe: fundo transparente, escurece levemente o que está atrás, entra deslizando de baixo -->
     <style name="Tema.Popup" parent="android:Theme.Material.NoActionBar">
         <item name="android:windowIsTranslucent">true</item>
