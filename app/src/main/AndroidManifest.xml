@@ -15,6 +15,7 @@
     <!-- Mostrar o orbe por cima de outros apps -->
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
 
     <!-- Necessário a partir do Android 11 para ver os apps instalados, a voz e a fala -->
@@ -69,6 +70,12 @@
                 <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
         </activity>
+
+        <!-- Avisos da loja: olha pedidos e estoque de tempos em tempos -->
+        <service
+            android:name=".VigiaDaLoja"
+            android:exported="false"
+            android:permission="android.permission.BIND_JOB_SERVICE" />
 
         <service
             android:name=".VigiliaService"

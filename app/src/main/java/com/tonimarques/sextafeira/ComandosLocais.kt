@@ -38,6 +38,8 @@ object ComandosLocais {
         // ...mas não quando é uma mensagem: "manda pra Maria que vai chover" é mensagem, não previsão.
         val ehRecado = RECADO.containsMatchIn(c)
         // Contas, conversões, datas, tradução, CEP...: antes do clima ("30 graus em fahrenheit" é conversão).
+        // Mudanças na loja ("muda o preço do gel para 29,90") antes das contas, para o número não virar cálculo.
+        if (!ehRecado) lojaAlteracao(c)?.let { return it }
         if (!ehRecado) Calculadora.responder(c)?.let { return Resultado.Resposta(it) }
         // Conhecimentos gerais que ela sabe de cor (português, ciências, geografia, matemática)
         if (!ehRecado) Saber.responder(c)?.let { return Resultado.Resposta(it) }
@@ -329,6 +331,8 @@ object ComandosLocais {
             }
             return Resultado.Acao("loja_resumo", mapOf("periodo" to periodo))
         }
+        lojaAlteracao(c)?.let { return it }
+        if (LOJA_RETIRADAS.containsMatchIn(c)) return Resultado.Acao("loja_retiradas", emptyMap())
         if (LOJA_PEDIDOS.containsMatchIn(c)) return Resultado.Acao("loja_pedidos", emptyMap())
         if (LOJA_ACABANDO.containsMatchIn(c)) return Resultado.Acao("loja_acabando", emptyMap())
         for (regra in LOJA_ESTOQUE) {
@@ -338,6 +342,59 @@ object ComandosLocais {
             if (produto.length >= 3) return Resultado.Acao("loja_estoque", mapOf("produto" to produto))
         }
         return null
+    }
+
+    /**
+     * Mudanças na loja por voz (sempre confirmadas depois): estoque, preço, mostrar/esconder produto,
+     * agendar retirada e marcar pedido como entregue.
+     */
+    fun lojaAlteracao(chave: String): Resultado? {
+        val limpa = chave.trim().trimEnd('.', '!', '?').replace(Regex("\\s+"), " ")
+        // primeiro como foi dito (nomes como "Kit Dois Corações" ficam intactos), depois com os números por extenso convertidos
+        return lojaAlteracaoEm(limpa) ?: Calculadora.numerosPorExtenso(limpa).takeIf { it != limpa }?.let { lojaAlteracaoEm(it) }
+    }
+
+    private fun lojaAlteracaoEm(c: String): Resultado? {
+        fun produto(s: String) = s.trim().replace(Regex("^(?:o|a|os|as|do|da|dos|das|de|produto|o produto)\\s+"), "").trim()
+        fun acao(tipo: String, prod: String, valor: Int? = null): Resultado? {
+            val p = produto(prod)
+            if (p.length < 3) return null
+            val args = mutableMapOf<String, Any>("tipo" to tipo, "produto" to p)
+            if (valor != null) args["valor"] = valor
+            return Resultado.Acao("loja_alterar", args)
+        }
+        LOJA_AGENDAR.firstNotNullOfOrNull { it.matchEntire(c) }?.let {
+            return Resultado.Acao("loja_agendar", mapOf("pedido" to it.groupValues[1].toInt()))
+        }
+        LOJA_ENTREGUE.firstNotNullOfOrNull { it.matchEntire(c) }?.let {
+            return Resultado.Acao("loja_entregue", mapOf("pedido" to it.groupValues[1].toInt()))
+        }
+        val falaDeEstoque = Regex("\\b(?:unidades?|estoque|pecas?)\\b").containsMatchIn(c)
+        if (falaDeEstoque) {
+            LOJA_SOMAR.matchEntire(c)?.let { m -> return acao("estoque_somar", m.groupValues[2], m.groupValues[1].toInt()) }
+            LOJA_TIRAR.matchEntire(c)?.let { m -> return acao("estoque_tirar", m.groupValues[2], m.groupValues[1].toInt()) }
+        }
+        LOJA_VENDI.matchEntire(c)?.let { m -> return acao("estoque_tirar", m.groupValues[2], m.groupValues[1].toInt()) }
+        LOJA_DEFINIR_A.matchEntire(c)?.let { m -> return acao("estoque_definir", m.groupValues[1], m.groupValues[2].toInt()) }
+        LOJA_DEFINIR_B.matchEntire(c)?.let { m -> return acao("estoque_definir", m.groupValues[2], m.groupValues[1].toInt()) }
+        for (regra in LOJA_PRECO) {
+            val m = regra.matchEntire(c) ?: continue
+            val centavos = centavos(m.groupValues[2], m.groupValues[3]) ?: continue
+            return acao("preco", m.groupValues[1], centavos)
+        }
+        LOJA_DESATIVAR.firstNotNullOfOrNull { it.matchEntire(c) }?.let { return acao("desativar", it.groupValues[1]) }
+        LOJA_ATIVAR.firstNotNullOfOrNull { it.matchEntire(c) }?.let { return acao("ativar", it.groupValues[1]) }
+        return null
+    }
+
+    /** "129,90" → 12990; "129" + "90" (de "129 e 90") → 12990; "50" → 5000. */
+    fun centavos(valor: String, extra: String = ""): Int? {
+        val v = valor.replace(',', '.')
+        val reais = v.substringBefore('.').toIntOrNull() ?: return null
+        var cents = if ('.' in v) v.substringAfter('.').padEnd(2, '0').take(2).toIntOrNull() ?: return null else 0
+        if (extra.isNotBlank() && '.' !in v) cents = extra.padStart(2, '0').takeLast(2).toIntOrNull() ?: 0
+        if (reais > 100_000) return null
+        return reais * 100 + cents
     }
 
     /** "Dá play no Deezer", "toca a última música", "continua de onde parou": retoma, não procura música nova. */
@@ -616,6 +673,60 @@ object ComandosLocais {
         "\\b(?:como (?:foram|estao|tao|vao|anda|andam) as vendas|quanto (?:eu )?(?:vendi|faturei|a loja vendeu|a loja faturou|vendemos|faturamos)|" +
             "vendas (?:de |d[ao] )?(?:hoje|ontem|semana|mes|essa semana|esse mes|desta semana|deste mes)|resumo (?:da loja|das vendas|do dia)|" +
             "como (?:esta|ta|foi) a loja|faturamento (?:de |d[ao] )?(?:hoje|ontem|semana|mes)|quantas vendas)\\b"
+    )
+    private const val DE = "(?:de|do|da|dos|das|no|na|nos|nas|ao|a|o)"
+    private const val QTD = "(\\d{1,4})(?: (?:unidades?|pecas?|itens?))?"
+    private val LOJA_SOMAR = Regex(
+        "^(?:coloca|coloque|bota|bote|poe|adiciona|adicione|acrescenta|acrescente|soma|some|entrou|entraram|chegou|chegaram|" +
+            "repoe|reponha|repor|aumenta|aumente|inclui|inclua)(?: mais)? $QTD(?: a mais)?(?: (?:no|ao|em) estoque)? $DE (.+?)(?: (?:no|ao|em) estoque)?$"
+    )
+    private val LOJA_TIRAR = Regex(
+        "^(?:tira|tire|retira|retire|remove|remova|diminui|diminua|baixa|baixe|desconta|desconte|subtrai|subtraia)(?: mais)? $QTD" +
+            "(?: (?:do|no) estoque)? $DE (.+?)(?: (?:do|no) estoque)?$"
+    )
+    private val LOJA_VENDI = Regex(
+        "^(?:eu )?vendi $QTD(?: $DE)? (.+?)(?: (?:por fora|na mao|pessoalmente|fora do site|na rua|no whatsapp|no zap))?$"
+    )
+    private val LOJA_DEFINIR_A = Regex(
+        "^(?:(?:muda|mude|altera|altere|atualiza|atualize|ajusta|ajuste|coloca|coloque|deixa|deixe|define|defina|corrige|corrija|poe|bota) )?" +
+            "o estoque (?:de|do|da|dos|das) (.+?) (?:para|pra|em|como|agora e|e|eh|ficou|ficou com|esta|ta|passa a ser) (?:de )?(\\d{1,4})(?: unidades?)?$"
+    )
+    private val LOJA_DEFINIR_B = Regex(
+        "^(?:agora )?(?:tenho|fiquei com|ficaram|sobraram|restam|sobrou|restou) (?:so )?(\\d{1,4}) (?:unidades?|pecas?) (?:de|do|da|dos|das) (.+?)(?: (?:no|em) estoque)?$"
+    )
+    private const val VALOR = "(?:r\\$ ?)?(\\d{1,6}(?:[.,]\\d{1,2})?)(?: ?reais| ?real)?(?: (?:e|com) (\\d{1,2})(?: centavos?)?)?"
+    private val LOJA_PRECO = listOf(
+        Regex(
+            "^(?:muda|mude|altera|altere|atualiza|atualize|ajusta|ajuste|coloca|coloque|deixa|deixe|define|defina|corrige|corrija|poe|bota|troca|troque|passa|passe) " +
+                "o (?:preco|valor) (?:de|do|da|dos|das) (.+?) (?:para|pra|em|por|a) $VALOR$"
+        ),
+        Regex("^o (?:preco|valor) (?:de|do|da|dos|das) (.+?) (?:agora )?(?:e|eh|vai ser|passa a ser|fica|vai ficar) (?:de )?$VALOR$"),
+        Regex("^(?:o |a |os |as )?(.+?) agora (?:custa|vai custar|passa a custar|sai por|fica por) $VALOR$"),
+    )
+    private val LOJA_DESATIVAR = listOf(
+        Regex("^(?:desativa|desative|desativar|esconde|esconda|oculta|oculte|pausa|pause|tira|tire|remove|remova) (?:o |a |os |as )?(?:produto |anuncio )?(.+?) (?:do site|da loja|do catalogo|das vendas|da venda)$"),
+        Regex("^(?:desativa|desative|desativar|esconde|esconda|oculta|oculte|pausa|pause) o (?:produto|anuncio) (.+)$"),
+    )
+    private val LOJA_ATIVAR = listOf(
+        Regex(
+            "^(?:ativa|ative|ativar|reativa|reative|mostra|mostre|volta|volte|coloca|coloque|bota|poe|publica|publique) (?:a mostrar |a vender |de volta )?" +
+                "(?:o |a |os |as )?(?:produto |anuncio )?(.+?) (?:de volta )?(?:no site|na loja|no catalogo|a venda)$"
+        ),
+        Regex("^(?:ativa|ative|ativar|reativa|reative) o (?:produto|anuncio) (.+)$"),
+    )
+    private const val PEDIDO_N = "(?:o )?pedido (?:numero |n )?(\\d{1,6})"
+    private val LOJA_AGENDAR = listOf(
+        Regex("^(?:agenda|agende|agendar|marca|marque|combina|combine)(?: a)? retirada (?:do|no|para o|pro) $PEDIDO_N$".replace("(?:o )?pedido", "pedido")),
+        Regex("^(?:chama|chame|manda mensagem|mande mensagem|manda uma mensagem|mande uma mensagem|fala|fale|escreve|escreva|chama no whatsapp|chame no whatsapp)" +
+            "(?: (?:para|pra|com|a|o))? (?:o |a )?(?:cliente|comprador|compradora) do $PEDIDO_N$".replace("(?:o )?pedido", "pedido")),
+    )
+    private val LOJA_ENTREGUE = listOf(
+        Regex("^(?:marca|marque|coloca|coloque|muda|mude|poe|bota) $PEDIDO_N (?:como|para|pra) (?:entregue|retirado)$"),
+        Regex("^$PEDIDO_N (?:ja )?(?:foi|esta|ta) (?:entregue|retirado)$"),
+        Regex("^(?:o |a )?(?:cliente|compradora?) do pedido (?:numero )?(\\d{1,6}) (?:ja )?(?:retirou|buscou|pegou|recebeu)$"),
+    )
+    private val LOJA_RETIRADAS = Regex(
+        "\\b(?:retiradas|retirada pendente|retiradas? (?:para|pra|a) agendar|pedidos? (?:de|para|pra) retirada|pedidos? (?:para|pra) retirar|tem (?:alguma )?retirada|quem (?:vai|precisa) retirar)\\b"
     )
     private val LOJA_PEDIDOS = Regex(
         "\\b(?:tem (?:algum )?pedido(?:s)? novo|tem pedido|chegou (?:algum )?pedido|pedidos? (?:novos?|pendentes?|para (?:separar|enviar|mandar)|pra (?:separar|enviar|mandar)|de hoje|em aberto)|" +

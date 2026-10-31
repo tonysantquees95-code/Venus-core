@@ -91,6 +91,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         // A busca no Google roda numa thread de fundo, chamada pela ferramenta buscar_na_internet.
         ferramentas.buscador = { pergunta -> gemini?.buscarNaInternet(pergunta) }
         cerebro.apelido = memoria.valor("apelido") ?: "chefe"
+        VigiaDaLoja.garantir(this)
         cerebro.carregarAprendidas(memoria.aprendidas())
         cerebro.aoAprender = { frase, intencao -> memoria.aprender(frase, intencao) }
         try {
@@ -460,6 +461,19 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
                 return
             }
         }
+        // Resposta a "Mudar o preço de X para Y? Diga sim ou não."
+        if (ferramentas.lojaPendente != null) {
+            val resposta = Loja.simOuNao(pedido)
+            if (resposta != null) {
+                topicoAtual = "Loja"
+                adicionarMensagem(original, true)
+                responderConfirmacaoLoja(resposta)
+                return
+            }
+            // falou outra coisa: a alteração é deixada de lado
+            ferramentas.lojaPendente = null
+            fecharConfirmacaoLoja()
+        }
         val decisao = cerebro.responder(pedido)
         topicoAtual = when (decisao) {
             is Cerebro.Decisao.Memoria -> "Sobre mim"
@@ -650,15 +664,60 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
     }
 
     private fun executarNaRede(nome: String, args: Map<String, Any>) {
-        comTempoLimite("BUSCANDO…") {
+        comTempoLimite(if (nome == "loja_confirmar") "SALVANDO…" else "BUSCANDO…") {
             ferramentas.ultimasFontes = emptyList()
             val resultado = ferramentas.executar(nome, args)
             val fontes = ferramentas.ultimasFontes
+            val pendente = if (nome == "loja_alterar" || nome == "loja_entregue") ferramentas.lojaPendente else null
             val acao: () -> Unit = {
+                if (pendente != null) forcarEscuta = true
                 responder(resultado)
                 mostrarFontes(fontes)
+                if (pendente != null) mostrarConfirmacaoLoja(resultado)
             }
             acao
+        }
+    }
+
+    // ----------------------------------------------------------- confirmação de mudanças na loja
+    private var dialogoLoja: AlertDialog? = null
+
+    /** Mostra Confirmar/Cancelar na tela; também dá para responder "sim" ou "não" falando. */
+    private fun mostrarConfirmacaoLoja(pergunta: String) {
+        fecharConfirmacaoLoja()
+        dialogoLoja = AlertDialog.Builder(this)
+            .setTitle("Confirmar mudança na loja")
+            .setMessage(pergunta.replace(" Diga sim para confirmar ou não para cancelar.", ""))
+            .setPositiveButton("Confirmar") { _, _ ->
+                dialogoLoja = null
+                if (ferramentas.lojaPendente != null && !ocupado) {
+                    adicionarMensagem("Sim, confirmar", true)
+                    responderConfirmacaoLoja(true)
+                }
+            }
+            .setNegativeButton("Cancelar") { _, _ ->
+                dialogoLoja = null
+                if (ferramentas.lojaPendente != null) {
+                    adicionarMensagem("Cancelar", true)
+                    responderConfirmacaoLoja(false)
+                }
+            }
+            .setCancelable(false)
+            .show()
+    }
+
+    private fun fecharConfirmacaoLoja() {
+        dialogoLoja?.dismiss()
+        dialogoLoja = null
+    }
+
+    private fun responderConfirmacaoLoja(sim: Boolean) {
+        fecharConfirmacaoLoja()
+        if (sim) {
+            executarNaRede("loja_confirmar", emptyMap())
+        } else {
+            ferramentas.lojaPendente = null
+            responder("Tudo bem, não mudei nada.")
         }
     }
 
@@ -1409,6 +1468,10 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
                         ferramentas.loja.email?.let { "Conectada como $it. Pergunte: como foram as vendas hoje, tem pedido novo, o que está acabando. Toque para desconectar." }
                             ?: "Entre com o login de administrador do site para a $n consultar vendas, pedidos e estoque. A senha fica criptografada só no celular."
                     }) { conectarLoja() },
+                    TelaDeAjustes.Ajuste("Avisos de pedidos e estoque", {
+                        "A cada 15 minutos, mais ou menos, a $n olha a loja e avisa por notificação quando entra um pedido pago " +
+                            "ou um produto fica com 2 unidades ou menos."
+                    }, { VigiaDaLoja.ligado(this) }) { alternarAvisosDaLoja() },
                 )
             ),
             TelaDeAjustes.Secao(
@@ -1809,6 +1872,31 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         }.start()
     }
 
+    private fun alternarAvisosDaLoja() {
+        val ligar = !VigiaDaLoja.ligado(this)
+        if (ligar && !ferramentas.loja.conectada) {
+            Toast.makeText(this, "Conecte a loja primeiro.", Toast.LENGTH_LONG).show()
+            return
+        }
+        VigiaDaLoja.definir(this, ligar)
+        if (ligar && Build.VERSION.SDK_INT >= 33 &&
+            checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+        ) {
+            requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), PEDIDO_NOTIFICACOES)
+        }
+        if (ligar) {
+            // primeira olhada já agora: só registra o que existe, para avisar apenas o que for novo
+            Thread {
+                try {
+                    VigiaDaLoja.verificar(this)
+                } catch (e: Exception) {
+                }
+            }.start()
+        }
+        Toast.makeText(this, if (ligar) "Avisos da loja ligados." else "Avisos da loja desligados.", Toast.LENGTH_SHORT).show()
+        ajustes?.atualizar()
+    }
+
     private fun conectarLoja() {
         val loja = ferramentas.loja
         if (loja.conectada) {
@@ -1817,6 +1905,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
                 .setMessage("A ${Marca.nome} deixa de consultar vendas, pedidos e estoque até você conectar de novo.")
                 .setPositiveButton("Desconectar") { _, _ ->
                     loja.desconectar()
+                    VigiaDaLoja.definir(this, false)
                     ajustes?.atualizar()
                 }
                 .setNegativeButton("Cancelar", null)
@@ -1853,7 +1942,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
                         ajustes?.atualizar()
                         if (erro == null) {
                             Toast.makeText(this, "Loja conectada!", Toast.LENGTH_SHORT).show()
-                            responder("Loja conectada! Pode perguntar: como foram as vendas hoje, tem pedido novo, o que está acabando, ou quanto tem de estoque de um produto.")
+                            responder("Loja conectada! Pode perguntar: como foram as vendas hoje, tem pedido novo, o que está acabando, ou quanto tem de estoque de um produto. Também posso mudar estoque e preço, esconder ou mostrar produtos, sempre pedindo confirmação, e listar as retiradas para agendar.")
                         } else {
                             Toast.makeText(this, erro, Toast.LENGTH_LONG).show()
                         }
