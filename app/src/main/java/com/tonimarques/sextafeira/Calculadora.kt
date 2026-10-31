@@ -22,7 +22,7 @@ object Calculadora {
     private val BR = Locale("pt", "BR")
 
     fun responder(c: String, hoje: Calendar = Calendar.getInstance()): String? =
-        datas(c, hoje) ?: conversao(c) ?: conta(c)
+        datas(c, hoje) ?: conversao(c) ?: outrasContas(c) ?: conta(c)
 
     // ================================================================ contas
     private val PREFIXO_CONTA = Regex(
@@ -30,32 +30,202 @@ object Calculadora {
             "qual (?:e |eh )?(?:o )?resultado de|resolve|resolva|me diz quanto e|quanto vale)\\s+"
     )
 
-    /** O resultado da última conta, para "quanto é 25% desse valor", "divide isso por 2", "mais 10"... */
+    // ------------------------------------------------- memória da conversa
+    /** O resultado da última conta (reserva, quando a conversa ainda não foi carregada). */
     @Volatile
     var ultimoResultado: Double? = null
 
-    private val REF_DE = Regex("\\b(?:desse|deste|daquele|disso|do) (?:valor|numero|resultado|total)\\b|\\bdisso\\b")
-    private val REF = Regex("\\b(?:esse|este|aquele|o) (?:valor|numero|resultado|total)\\b|\\bisso\\b")
-    private val CONTINUA = Regex("^(?:e |agora )?(?:mais|menos|vezes|multiplicado por|dividido por|divide por|divida por|elevado a|ao quadrado)\\b")
+    /** Mensagens recentes da conversa (suas e da Vênus), a mais nova no fim. */
+    private val recentes = ArrayDeque<String>()
+
+    /** Guarda uma mensagem da conversa, para "25% desse valor", "o frete mais o produto"... */
+    fun lembrar(texto: String) {
+        if (texto.isBlank() || texto.startsWith("Fontes: ")) return
+        synchronized(recentes) {
+            recentes.addLast(texto)
+            while (recentes.size > 300) recentes.removeFirst()
+        }
+    }
+
+    fun conversaVazia() = synchronized(recentes) { recentes.isEmpty() }
+
+    fun esquecerConversa() {
+        synchronized(recentes) { recentes.clear() }
+        ultimoResultado = null
+    }
+
+    private const val NUM = "\\d{1,3}(?:\\.\\d{3})+(?:,\\d+)?|\\d+(?:,\\d+)?"
+    private val NUMERO_NO_TEXTO = Regex("(?<![\\d.,:/])($NUM)(?![\\d:/])")
+
+    /** Números citados na conversa, do mais recente para o mais antigo. */
+    fun numerosRecentes(maximo: Int = 30): List<Double> {
+        val lista = mutableListOf<Double>()
+        val textos = synchronized(recentes) { recentes.toList() }
+        for (t in textos.asReversed()) {
+            // "Dá 26.220. Usei 104.880, da nossa conversa." → o valor é o 26.220
+            val texto = t.substringBefore(" Usei ")
+            val nums = NUMERO_NO_TEXTO.findAll(ComandosLocais.normalizar(texto)).mapNotNull { paraNumero(it.groupValues[1]) }.toList()
+            for (n in nums.asReversed()) {
+                lista += n
+                if (lista.size >= maximo) return lista
+            }
+        }
+        if (lista.isEmpty()) ultimoResultado?.let { lista += it }
+        return lista
+    }
+
+    /** Um valor citado antes com um nome: "o frete ficou em 30 reais" → valorChamado("frete") = 30. */
+    fun valorChamado(palavra: String): Double? {
+        val p = ComandosLocais.normalizar(palavra)
+        if (p.length < 3) return null
+        val raiz = Regex.escape(if (p.length >= 6) p.dropLast(2) else p)
+        val depois = Regex("\\b$raiz\\w*\\b[^\\d]{0,30}?($NUM)")
+        val antes = Regex("($NUM)\\s*(?:reais|real|r\\$|%|unidades|pecas|itens|kg|quilos)?\\s*(?:de|do|da|no|na|em|pro|pra|para|com)?\\s*(?:o |a |os |as )?\\b$raiz")
+        val textos = synchronized(recentes) { recentes.toList() }
+        for (t in textos.asReversed()) {
+            val n = ComandosLocais.normalizar(t)
+            (depois.find(n) ?: antes.find(n))?.let { m -> return paraNumero(m.groupValues[1]) }
+        }
+        return null
+    }
+
+    private fun texto(v: Double) = java.math.BigDecimal.valueOf(v).stripTrailingZeros().toPlainString()
+
+    private val REF_DE = Regex("\\b(?:desse|deste|daquele|disso|do ultimo|do) (?:valor|numero|resultado|total|calculo|conta)\\b|\\bdisso\\b")
+    private val REF = Regex("\\b(?:esse|este|aquele|o ultimo|o) (?:valor|numero|resultado|total)\\b|\\bisso\\b")
+    private val REF_ANTERIOR = Regex("\\b(?:d?o )?(?:valor|numero|resultado) (?:anterior|de antes|passado)\\b|\\bd?o penultimo (?:valor|numero|resultado)\\b|\\bd?o outro (?:valor|numero)\\b")
+    private val OS_DOIS = Regex("\\b(?:os|dos) (?:dois|2) (?:ultimos )?(?:valores|numeros|resultados)\\b|\\b(?:os|dos) (?:dois|2)$")
+    private val CONTINUA = Regex("^(?:e |agora )?(?:mais|menos|vezes|multiplicado por|dividido por|elevado a|ao quadrado)\\b")
+    private val VERBO_SOMA = Regex("^(?:some|soma|somar|somo|adiciona|adicione|adicionar|acrescenta|acrescente|junta|junte)\\s+(?:mais\\s+)?")
+    private val VERBO_TIRA = Regex("^(?:subtrai|subtraia|subtrair|tira|tire|tirar|desconta|desconte|diminui|diminua|retira|retire)\\s+(?:menos\\s+)?")
+    private val VERBO_VEZES = Regex("^(?:multiplica|multiplique|multiplicar)\\s+")
+    private val VERBO_DIVIDE = Regex("^(?:divide|divida|dividir|reparte|reparta)\\s+")
+    private val SO_NUMERO = Regex("^[\\d.]+$")
 
     fun conta(c: String): String? {
         var e = c.trim().trimEnd('?', '.', '!', ' ')
         val temPrefixo = PREFIXO_CONTA.containsMatchIn(e)
         e = PREFIXO_CONTA.replace(e, "")
-        e = numerosPorExtenso(e)
-        // Referência ao resultado anterior
-        ultimoResultado?.let { anterior ->
-            val n = java.math.BigDecimal.valueOf(anterior).stripTrailingZeros().toPlainString()
+        val usados = mutableListOf<String>()
+        val recentesNum = numerosRecentes()
+
+        // Referências à conversa: "esse valor", "o anterior", "os dois", "o frete"...
+        if (recentesNum.isNotEmpty()) {
+            val ultimo = recentesNum[0]
+            if (OS_DOIS.containsMatchIn(e) && recentesNum.size >= 2) {
+                val a = recentesNum[1]
+                val b = recentesNum[0]
+                val juntos = when {
+                    Regex("\\b(?:multiplica|multiplique|produto|vezes)\\b").containsMatchIn(e) -> "(${texto(a)} vezes ${texto(b)})"
+                    Regex("\\b(?:diferenca|subtrai|tira)\\b").containsMatchIn(e) -> "(${texto(maxOf(a, b))} menos ${texto(minOf(a, b))})"
+                    Regex("\\bmedia\\b").containsMatchIn(e) -> "((${texto(a)} mais ${texto(b)}) dividido por 2)"
+                    else -> "(${texto(a)} mais ${texto(b)})"
+                }
+                e = OS_DOIS.replace(e, juntos)
+                    .replace(Regex("^(?:a )?(?:soma|some|somar|multiplica|multiplique|o produto|a diferenca|a media)\\s*(?:de |entre |dos? )?"), "")
+                usados += "${numero(a)} e ${numero(b)}"
+            }
+            if (REF_ANTERIOR.containsMatchIn(e) && recentesNum.size >= 2) {
+                e = REF_ANTERIOR.replace(e, texto(recentesNum[1]))
+                usados += numero(recentesNum[1])
+            }
+            val antes = e
             e = e.replace(Regex("^(?:divide|divida|dividir) (?:isso|esse valor|o resultado) por "), "isso dividido por ")
                 .replace(Regex("^(?:multiplica|multiplique|multiplicar) (?:isso|esse valor|o resultado) por "), "isso vezes ")
-            e = REF_DE.replace(e, "de $n")
-            e = REF.replace(e, n)
-            if (CONTINUA.containsMatchIn(e)) {
-                e = "$n " + e.removePrefix("e ").removePrefix("agora ").replace(Regex("^(?:divide|divida) por"), "dividido por")
-            }
+            e = REF_DE.replace(e, "de ${texto(ultimo)}")
+            e = REF.replace(e, texto(ultimo))
+            if (e != antes) usados += numero(ultimo)
+        }
+
+        e = numerosPorExtenso(e)
+        // "10.600" = dez mil e seiscentos; "1.234,56" = mil duzentos e trinta e quatro e 56 centavos
+        e = Regex("\\b(\\d{1,3}(?:\\.\\d{3})+)(,\\d+)?\\b").replace(e) { m ->
+            m.groupValues[1].replace(".", "") + m.groupValues[2].replace(",", ".")
         }
         e = e.replace(Regex("(\\d),(\\d)"), "$1.$2")
-            .replace(Regex("(\\d+(?:\\.\\d+)?)\\s*(?:%|por cento|porcento)\\s+(?:de|do|da|sobre)\\s+"), "($1/100)*")
+            .replace(Regex("\\b(?:r\\$|reais|real)\\s*"), "")
+            .replace(Regex("\\s*(?:reais|real)\\b"), "")
+
+        // Verbos: "some 10 aos 20", "some mais 10600", "tira 5 de 30", "divide por 3"
+        val ultimo = recentesNum.firstOrNull()
+        val comVerbo = VERBO_SOMA.containsMatchIn(e) || VERBO_TIRA.containsMatchIn(e) ||
+            VERBO_VEZES.containsMatchIn(e) || VERBO_DIVIDE.containsMatchIn(e)
+        when {
+            VERBO_SOMA.containsMatchIn(e) -> {
+                e = VERBO_SOMA.replace(e, "").replace(Regex("(?<=\\d)\\s+(?:a|ao|aos|as|com|e|em|no|na|mais)\\s+(?=\\d)"), " mais ")
+                if (SO_NUMERO.matches(e.trim()) && ultimo != null) {
+                    e = "${texto(ultimo)} mais $e"
+                    usados += numero(ultimo)
+                }
+            }
+            VERBO_TIRA.containsMatchIn(e) -> {
+                e = VERBO_TIRA.replace(e, "")
+                val m = Regex("^([\\d.]+)\\s+(?:de|do|da|dos|das)\\s+([\\d.]+)$").find(e.trim())
+                if (m != null) {
+                    e = "${m.groupValues[2]} menos ${m.groupValues[1]}"
+                } else if (SO_NUMERO.matches(e.trim()) && ultimo != null) {
+                    e = "${texto(ultimo)} menos $e"
+                    usados += numero(ultimo)
+                } else {
+                    return null
+                }
+            }
+            VERBO_VEZES.containsMatchIn(e) -> {
+                e = VERBO_VEZES.replace(e, "")
+                e = if (e.startsWith("por ") && ultimo != null) {
+                    usados += numero(ultimo)
+                    "${texto(ultimo)} vezes ${e.removePrefix("por ")}"
+                } else {
+                    e.replace(Regex("(?<=\\d)\\s+(?:por|com|e)\\s+(?=\\d)"), " vezes ")
+                }
+            }
+            VERBO_DIVIDE.containsMatchIn(e) -> {
+                e = VERBO_DIVIDE.replace(e, "")
+                e = if (e.startsWith("por ") && ultimo != null) {
+                    usados += numero(ultimo)
+                    "${texto(ultimo)} dividido por ${e.removePrefix("por ")}"
+                } else {
+                    e.replace(Regex("(?<=\\d)\\s+(?:por|entre|para)\\s+(?=\\d)"), " dividido por ")
+                }
+            }
+        }
+        if (CONTINUA.containsMatchIn(e) && ultimo != null) {
+            e = "${texto(ultimo)} " + e.removePrefix("e ").removePrefix("agora ")
+            usados += numero(ultimo)
+        }
+
+        // Porcentagens e frações
+        e = e.replace(Regex("\\b(?:a )?metade (?:de|do|da|dos|das) "), "0.5 vezes ")
+            .replace(Regex("\\b(?:o )?dobro (?:de|do|da|dos|das) "), "2 vezes ")
+            .replace(Regex("\\b(?:o )?triplo (?:de|do|da|dos|das) "), "3 vezes ")
+            .replace(Regex("\\b(?:um|1) terco (?:de|do|da|dos|das) "), "(1/3) vezes ")
+            .replace(Regex("\\b(?:um|1) quarto (?:de|do|da|dos|das) "), "0.25 vezes ")
+            .replace(Regex("\\bdesconto de ([\\d.]+)\\s*(?:%|por cento) (?:em|sobre|no|na|de) ([\\d.]+)"), "$2 vezes (1-$1/100)")
+            .replace(Regex("\\b(?:aumento|acrescimo|reajuste|juros) de ([\\d.]+)\\s*(?:%|por cento) (?:em|sobre|no|na|de) ([\\d.]+)"), "$2 vezes (1+$1/100)")
+            .replace(Regex("([\\d.]+) com ([\\d.]+)\\s*(?:%|por cento) de desconto"), "$1 vezes (1-$2/100)")
+            .replace(Regex("([\\d.]+) com (?:um )?desconto de ([\\d.]+)\\s*(?:%|por cento)"), "$1 vezes (1-$2/100)")
+            .replace(Regex("([\\d.]+) com ([\\d.]+)\\s*(?:%|por cento) de (?:aumento|acrescimo|juros|reajuste)"), "$1 vezes (1+$2/100)")
+            .replace(Regex("([\\d.]+)\\s*(?:mais|\\+)\\s*([\\d.]+)\\s*(?:%|por cento)(?!\\s*(?:de|do|da))"), "$1 vezes (1+$2/100)")
+            .replace(Regex("([\\d.]+)\\s*(?:menos|-)\\s*([\\d.]+)\\s*(?:%|por cento)(?!\\s*(?:de|do|da))"), "$1 vezes (1-$2/100)")
+            .replace(Regex("([\\d.]+)\\s*(?:%|por cento|porcento)\\s+(?:de|do|da|sobre)\\s+"), "($1/100)*")
+
+        // Valores com nome citados antes na conversa: "o frete", "do produto"
+        // (só quando é claramente um pedido de conta, para não confundir "toca mais uma" com matemática)
+        val pedidoDeConta = temPrefixo || comVerbo || e.contains('%') || e.contains("/100") || usados.isNotEmpty()
+        if (pedidoDeConta && Regex("[a-z]{3,}").containsMatchIn(e)) {
+            e = Regex("\\b(?:(?:o|a|os|as|do|da|dos|das|de|no|na) )?([a-z]{3,})\\b").replace(e) { m ->
+                val w = m.groupValues[1]
+                if (w in PALAVRAS_DE_CONTA) return@replace m.value
+                val v = valorChamado(w) ?: return@replace m.value
+                usados += "$w = ${numero(v)}"
+                val prefixo = if (m.value.startsWith("d")) "de " else ""
+                prefixo + texto(v)
+            }
+            // "(25/100)*de 30" → "(25/100)*30"
+            e = e.replace(Regex("\\*\\s*de\\s+"), "*")
+        }
+
+        e = e.replace(Regex("raiz cubica (?:de |do )?"), " c ")
             .replace(Regex("raiz quadrada (?:de |do )?"), " r ")
             .replace(Regex("raiz (?:de |do )?"), " r ")
             .replace(Regex("\\bao quadrado\\b"), "^2")
@@ -68,12 +238,13 @@ object Calculadora {
             .replace(Regex("\\bmenos\\b"), "-")
             .replace(Regex("\\b(?:abre parenteses|abre parentese)\\b"), "(")
             .replace(Regex("\\b(?:fecha parenteses|fecha parentese)\\b"), ")")
+            .replace(Regex("(?<=\\d)\\s*%"), "/100")
             .replace(Regex("\\s+"), " ").trim()
-        if (e.isBlank() || !Regex("^[\\d.+\\-*/^()r ]+$").matches(e)) return null
+        if (e.isBlank() || !Regex("^[\\d.+\\-*/^()rc ]+$").matches(e)) return null
         if (!Regex("\\d").containsMatchIn(e)) return null
-        val operadores = Regex("[+\\-*/^r]").findAll(e).count()
+        val operadores = Regex("[+\\-*/^rc]").findAll(e).count()
         if (operadores == 0) return null
-        // "2 3" ou só um número com sinal não é conta
+        // "-5" sozinho não é conta
         if (!temPrefixo && operadores == 1 && e.trim().startsWith("-")) return null
         val valor = try {
             Expressao(e.replace(" ", "")).avaliar()
@@ -83,7 +254,61 @@ object Calculadora {
         if (valor.isNaN()) return "Essa conta não tem resultado (raiz de número negativo)."
         if (valor.isInfinite()) return "Não dá para dividir por zero."
         ultimoResultado = valor
-        return "Dá ${numero(valor)}."
+        val base = "Dá ${numero(valor)}."
+        val distintos = usados.distinct()
+        return if (distintos.isEmpty()) base else "$base Usei ${distintos.joinToString(" e ")}, da nossa conversa."
+    }
+
+    private val PALAVRAS_DE_CONTA = setOf(
+        "mais", "menos", "vezes", "dividido", "divido", "por", "elevado", "raiz", "quadrada", "cubica", "quadrado", "cubo",
+        "potencia", "abre", "fecha", "parenteses", "parentese", "desconto", "aumento", "acrescimo", "juros", "reajuste",
+        "com", "sobre", "porcento", "cento", "metade", "dobro", "triplo", "terco", "quarto", "multiplicado",
+    )
+
+    // ---------------------------------------------- outras contas do dia a dia
+    private val PORCENTO_DE = Regex("^([\\d.,]+) (?:e|eh|representa|equivale a) (?:quantos|que|qual) (?:por cento|porcentagem|percentual|%) (?:de|do|da) ([\\d.,]+)$")
+    private val FATORIAL = Regex("^(?:(?:o )?fatorial (?:de|do) (\\d+)|(\\d+) fatorial)$")
+    private val PRIMO = Regex("^(?:o )?(?:numero )?(\\d+) (?:e|eh) (?:um )?(?:numero )?primo$")
+    private val MDC_MMC = Regex("^(?:o |qual (?:e |eh )?o )?(mdc|mmc|maximo divisor comum|minimo multiplo comum) (?:de|entre) (\\d+) e (\\d+)$")
+
+    /** Porcentagem entre dois números, fatorial, número primo, MDC e MMC. */
+    fun outrasContas(c: String): String? {
+        val e = numerosPorExtenso(PREFIXO_CONTA.replace(c.trim().trimEnd('?', '.', '!'), ""))
+        PORCENTO_DE.find(e)?.let { m ->
+            val a = paraNumero(m.groupValues[1]) ?: return null
+            val b = paraNumero(m.groupValues[2]) ?: return null
+            if (b == 0.0) return "Não dá para calcular porcentagem de zero."
+            val p = a / b * 100
+            ultimoResultado = p
+            return "${numero(a)} é ${numero(p)}% de ${numero(b)}."
+        }
+        FATORIAL.find(e)?.let { m ->
+            val n = (m.groupValues[1].ifBlank { m.groupValues[2] }).toInt()
+            if (n > 170) return "Esse fatorial é grande demais para mostrar."
+            var r = 1.0
+            for (i in 2..n) r *= i
+            ultimoResultado = r
+            return "O fatorial de $n é ${numero(r)}."
+        }
+        PRIMO.find(e)?.let { m ->
+            val n = m.groupValues[1].toLongOrNull() ?: return null
+            if (n < 2) return "Não, $n não é primo."
+            var d = 2L
+            while (d * d <= n) {
+                if (n % d == 0L) return "Não, $n não é primo: é divisível por $d."
+                d++
+            }
+            return "Sim, $n é um número primo."
+        }
+        MDC_MMC.find(e)?.let { m ->
+            val a = m.groupValues[2].toLong()
+            val b = m.groupValues[3].toLong()
+            fun mdc(x: Long, y: Long): Long = if (y == 0L) x else mdc(y, x % y)
+            val g = mdc(a, b)
+            return if (m.groupValues[1].startsWith("mdc") || m.groupValues[1].startsWith("maximo")) "O MDC de $a e $b é $g."
+            else "O MMC de $a e $b é ${if (g == 0L) 0 else a / g * b}."
+        }
+        return null
     }
 
     fun numero(v: Double): String {
@@ -142,6 +367,10 @@ object Calculadora {
             if (i < s.length && s[i] == 'r') {
                 i++
                 return sqrt(unario())
+            }
+            if (i < s.length && s[i] == 'c') {
+                i++
+                return Math.cbrt(unario())
             }
             return primario()
         }

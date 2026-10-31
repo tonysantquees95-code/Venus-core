@@ -159,11 +159,12 @@ class CapacidadesTest {
 
     // ------------------------------------------------------------- correções do teste no celular
     @Test fun lembraDoResultadoAnterior() {
+        Calculadora.esquecerConversa()
         assertEquals("Dá 9.549.120.", Calculadora.conta(c("quanto é 2436 x 3920")))
-        assertEquals("Dá 2.387.280.", Calculadora.conta(c("Quanto é 25% desse valor")))
-        assertEquals("Dá 1.193.640.", Calculadora.conta(c("divide isso por 2")))
-        assertEquals("Dá 1.193.650.", Calculadora.conta(c("mais 10")))
-        Calculadora.ultimoResultado = null
+        assertTrue(Calculadora.conta(c("Quanto é 25% desse valor"))!!.startsWith("Dá 2.387.280."))
+        assertTrue(Calculadora.conta(c("divide isso por 2"))!!.startsWith("Dá 1.193.640."))
+        assertTrue(Calculadora.conta(c("mais 10"))!!.startsWith("Dá 1.193.650."))
+        Calculadora.esquecerConversa()
     }
 
     @Test fun cepPeloEndereco() {

@@ -21,7 +21,8 @@ object Corretor {
             "euro bitcoin libra noticias noticia novidades lancamentos lancamento celular celulares smartphone acompanha " +
             "acompanhar lembra lembre esquece favorita favorito playlist spotify youtube instagram facebook telegram mapa " +
             "rota navegar ligacao contato contatos alarme acorda frio calor temperatura clima loja produto produtos estoque " +
-            "pedido pedidos vendas cadastra cadastrar preco valor quanto custa tecnologia futebol jogo resultado"
+            "pedido pedidos vendas cadastra cadastrar preco valor quanto custa tecnologia futebol jogo resultado " +
+            "some soma somar subtrai tira divide multiplica metade dobro triplo porcentagem desconto frete total significa sinonimo plural"
         ).split(" ")
 
     /** Vocabulário conhecido, com frequência (mais usado = mais provável). */

@@ -193,6 +193,14 @@ class Ferramentas(private val activity: Activity, private val memoria: Memoria? 
         )
         .put(
             funcao(
+                "dicionario", "Dicionário de português (Wikcionário): significado, sinônimos, antônimos ou plural de uma palavra.",
+                listOf("palavra"),
+                "palavra" to texto("A palavra, com acentos."),
+                "tipo" to opcoes("O que consultar.", "significado", "sinonimos", "antonimos", "plural")
+            )
+        )
+        .put(
+            funcao(
                 "consultar_cnpj", "Dados públicos de uma empresa pelo CNPJ (razão social, situação, cidade, atividade).", listOf("cnpj"),
                 "cnpj" to texto("O CNPJ, só números.")
             )
@@ -321,6 +329,8 @@ class Ferramentas(private val activity: Activity, private val memoria: Memoria? 
         "cotacao_moeda" -> Pesquisa.cotacao(a.optString("moeda"))
         "traduzir" -> Servicos.traduzir(a.optString("texto"), a.optString("para", "en"), a.optString("de", "pt-BR").ifBlank { "pt-BR" })
         "consultar_cep" -> Servicos.cep(a.optString("cep"))
+        "dicionario" -> Dicionario.consultar(a.optString("tipo", "significado"), a.optString("palavra"))
+        "ortografia" -> Dicionario.qualCerta(a.optString("a"), a.optString("b"))
         "buscar_cep" -> Servicos.buscarCep(a.optString("logradouro"), a.optString("cidade"), a.optString("estado"))
         "consultar_cnpj" -> Servicos.cnpj(a.optString("cnpj"))
         "consultar_ddd" -> Servicos.ddd(a.optString("ddd"))
@@ -727,7 +737,7 @@ class Ferramentas(private val activity: Activity, private val memoria: Memoria? 
         val USAM_REDE = setOf(
             "previsao_do_tempo", "resumo_wikipedia", "buscar_na_internet", "cotacao_moeda", "noticias",
             "acompanhar_tema", "atualizar_noticias", "traduzir", "consultar_cep", "consultar_cnpj", "consultar_ddd", "feriados",
-            "buscar_cep",
+            "buscar_cep", "dicionario", "ortografia",
         )
 
         private const val SPOTIFY = "com.spotify.music"
