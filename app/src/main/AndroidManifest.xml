@@ -8,6 +8,13 @@
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="com.android.alarm.permission.SET_ALARM" />
 
+    <!-- Escuta de "Vênus, ativar" com o app fechado -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Mostrar o orbe por cima de outros apps -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+
     <!-- Necessário a partir do Android 11 para ver os apps instalados, a voz e a fala -->
     <queries>
         <intent>
@@ -16,6 +23,9 @@
         </intent>
         <intent>
             <action android:name="android.speech.action.RECOGNIZE_SPEECH" />
+        </intent>
+        <intent>
+            <action android:name="android.speech.RecognitionService" />
         </intent>
         <intent>
             <action android:name="android.intent.action.TTS_SERVICE" />
@@ -38,13 +48,58 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-            <intent-filter>
-                <action android:name="android.intent.action.ASSIST" />
-                <category android:name="android.intent.category.DEFAULT" />
-            </intent-filter>
             <meta-data
                 android:name="android.app.shortcuts"
                 android:resource="@xml/atalhos" />
         </activity>
+
+        <!-- O pop-up do orbe, na parte de baixo da tela -->
+        <activity
+            android:name=".PopupActivity"
+            android:excludeFromRecents="true"
+            android:exported="true"
+            android:launchMode="singleTask"
+            android:taskAffinity="com.tonimarques.sextafeira.popup"
+            android:theme="@style/Tema.Popup">
+            <intent-filter>
+                <action android:name="android.intent.action.ASSIST" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
+
+        <service
+            android:name=".VigiliaService"
+            android:exported="false"
+            android:foregroundServiceType="microphone" />
+
+        <!-- Assistente padrão do celular (segurar o botão de início) -->
+        <service
+            android:name=".VenusAssistenteService"
+            android:exported="true"
+            android:permission="android.permission.BIND_VOICE_INTERACTION">
+            <meta-data
+                android:name="android.voice_interaction"
+                android:resource="@xml/assistente" />
+            <intent-filter>
+                <action android:name="android.service.voice.VoiceInteractionService" />
+            </intent-filter>
+        </service>
+
+        <service
+            android:name=".VenusSessaoService"
+            android:exported="true"
+            android:permission="android.permission.BIND_VOICE_INTERACTION" />
+
+        <service
+            android:name=".VenusReconhecimentoService"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.speech.RecognitionService" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+            <meta-data
+                android:name="android.speech"
+                android:resource="@xml/reconhecimento" />
+        </service>
     </application>
 </manifest>
