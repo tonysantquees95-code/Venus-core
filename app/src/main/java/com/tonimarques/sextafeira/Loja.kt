@@ -161,6 +161,8 @@ class Loja(private val contexto: Context) {
 
     fun acabando(): String = montarAcabando(produtos())
 
+    fun estoqueGeral(): String = montarEstoqueGeral(produtos())
+
     fun retiradas(): String = montarRetiradas(pedidos())
 
     fun pedido(id: Int): Pedido? = pedidos().firstOrNull { it.id == id }
@@ -418,6 +420,39 @@ class Loja(private val contexto: Context) {
             if (baixos.isNotEmpty()) partes += "Acabando: " + baixos.take(6).joinToString(", ") { "${it.nome} (${it.estoque})" } +
                 if (baixos.size > 6) " e mais ${baixos.size - 6}" else ""
             return partes.joinToString(". ") + "."
+        }
+
+        /** Visão geral: quantos produtos, quantas unidades, o que está esgotado ou acabando. */
+        fun montarEstoqueGeral(produtos: List<Produto>): String {
+            if (produtos.isEmpty()) return "Ainda não há produtos cadastrados na loja."
+            val ativos = produtos.filter { it.ativo }
+            val escondidos = produtos.size - ativos.size
+            val controlados = ativos.filter { it.estoque != null }
+            val unidades = controlados.sumOf { maxOf(0, it.estoque!!) }
+            val valor = controlados.sumOf { maxOf(0, it.estoque!!) * (it.precoCentavos ?: 0) }
+            val esgotados = controlados.filter { it.estoque!! <= 0 }
+            val baixos = controlados.filter { it.estoque!! in 1..ESTOQUE_BAIXO }
+            val semControle = ativos.size - controlados.size
+
+            var texto = "Você tem ${plural(ativos.size, "produto", "produtos")} no site"
+            texto += if (escondidos > 0) " e ${plural(escondidos, "escondido", "escondidos")}." else "."
+            if (controlados.isNotEmpty()) {
+                texto += " No estoque são ${plural(unidades, "unidade", "unidades")}"
+                texto += if (valor > 0) ", que valem ${dinheiro(valor)} pelo preço de venda." else "."
+            }
+            texto += when {
+                esgotados.isEmpty() && baixos.isEmpty() -> " Nada esgotado nem acabando."
+                else -> {
+                    val partes = mutableListOf<String>()
+                    if (esgotados.isNotEmpty()) partes += "${plural(esgotados.size, "esgotado", "esgotados")}: " +
+                        esgotados.take(4).joinToString(", ") { it.nome } + if (esgotados.size > 4) " e mais ${esgotados.size - 4}" else ""
+                    if (baixos.isNotEmpty()) partes += "${plural(baixos.size, "acabando", "acabando")}: " +
+                        baixos.take(4).joinToString(", ") { "${it.nome} (${it.estoque})" } + if (baixos.size > 4) " e mais ${baixos.size - 4}" else ""
+                    " " + partes.joinToString(". ").replaceFirstChar { it.uppercase() } + "."
+                }
+            }
+            if (semControle > 0) texto += " ${plural(semControle, "produto está", "produtos estão")} sem controle de estoque."
+            return texto
         }
 
         private const val CONFIRMA = " Diga sim para confirmar ou não para cancelar."

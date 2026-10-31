@@ -335,12 +335,19 @@ object ComandosLocais {
         if (LOJA_RETIRADAS.containsMatchIn(c)) return Resultado.Acao("loja_retiradas", emptyMap())
         if (LOJA_PEDIDOS.containsMatchIn(c)) return Resultado.Acao("loja_pedidos", emptyMap())
         if (LOJA_ACABANDO.containsMatchIn(c)) return Resultado.Acao("loja_acabando", emptyMap())
+        if (LOJA_ESTOQUE_GERAL.matches(c)) return Resultado.Acao("loja_estoque_geral", emptyMap())
         for (regra in LOJA_ESTOQUE) {
             val m = regra.matchEntire(c) ?: continue
             val produto = f.trecho(m.groups[1]).orEmpty().trim()
                 .replace(Regex("^(?i)(o|a|os|as|do|da|dos|das|de)\\s+"), "").trim()
+            // "quantos produtos eu tenho em estoque" é sobre o estoque todo, não sobre um produto chamado "produtos"
+            if (normalizar(produto).replace(Regex("\\b(?:diferentes|no total|ao todo|cadastrad[oa]s)\\b"), "").trim() in PALAVRAS_GERAIS) {
+                return Resultado.Acao("loja_estoque_geral", emptyMap())
+            }
             if (produto.length >= 3) return Resultado.Acao("loja_estoque", mapOf("produto" to produto))
         }
+        // Qualquer outra frase sobre o estoque: visão geral (melhor do que mandar para a IA, que não vê a loja)
+        if (Regex("\\bestoque\\b").containsMatchIn(c)) return Resultado.Acao("loja_estoque_geral", emptyMap())
         return null
     }
 
@@ -736,6 +743,16 @@ object ComandosLocais {
         "\\b(?:(?:quais|que) produtos (?:estao|tao|que estao|que tao) (?:acabando|esgotados?|em falta|com (?:o )?estoque baixo|no fim)|" +
             "o que (?:esta|ta) (?:acabando|esgotado|em falta)(?: na loja| no estoque)?|produtos? (?:esgotados?|acabando|em falta)|estoque baixo|" +
             "o que (?:eu )?(?:preciso|tenho que) (?:repor|comprar)(?: para a loja| pra loja)?)\\b"
+    )
+    private val PALAVRAS_GERAIS = setOf("produtos", "produto", "itens", "item", "unidades", "pecas", "coisas", "mercadorias", "mercadoria")
+    private val LOJA_ESTOQUE_GERAL = Regex(
+        "^(?:(?:e |e ai |me (?:diz|fala|conta) )?como (?:esta|ta|anda|vai|estao|tao|ficou|que esta|que ta) (?:o |a )?(?:meu |minha |nosso |o meu )?estoque(?: (?:da|na) loja| hoje| agora)?|" +
+            "(?:me (?:da|de|passa|passe|faz|faca) )?(?:um |o )?(?:resumo|situacao|relatorio|panorama|balanco|visao geral|levantamento) (?:do |de |da )?(?:meu |nosso |o )?estoque(?: (?:da|na) loja)?|" +
+            "estoque geral|(?:o )?meu estoque|(?:o )?estoque da loja|" +
+            "(?:quantos|quantas) (?:produtos|itens|unidades|pecas|coisas|mercadorias)(?: diferentes)? (?:eu )?(?:tenho|tem|ha|temos|existem|estao)" +
+            "(?: (?:no|em) estoque| na loja| cadastrad[oa]s| no site| ao todo| no total| a venda)*|" +
+            "o que (?:eu )?(?:tenho|tem|temos|ha) (?:no|em) estoque|" +
+            "(?:me )?(?:mostra|mostre|fala|diz|ve|veja|confere|confira|checa|cheque) (?:o |como (?:esta|ta) o )?(?:meu |nosso )?estoque(?: (?:da|na) loja)?)$"
     )
     private val LOJA_ESTOQUE = listOf(
         Regex("^(?:quanto|quantos|quantas) (?:tem|tenho|ha|ainda tem|ainda tenho|sobrou|sobraram|resta|restam) (?:de |do |da |no |em )?estoque (?:de |do |da |dos |das )(.+)$"),
