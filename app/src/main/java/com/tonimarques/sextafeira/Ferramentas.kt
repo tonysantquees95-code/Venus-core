@@ -349,6 +349,7 @@ class Ferramentas(private val activity: Activity, private val memoria: Memoria? 
         "loja_acabando" -> daLoja { it.acabando() }
         "loja_estoque" -> daLoja { it.estoqueDe(a.optString("produto")) }
         "loja_retiradas" -> daLoja { it.retiradas() }
+        "loja_estoque_geral" -> daLoja { it.estoqueGeral() }
         "loja_alterar" -> daLoja { l ->
             val valor = if (a.has("valor")) a.optInt("valor") else null
             val preparo = l.prepararAlteracao(a.optString("tipo"), a.optString("produto"), valor)
@@ -951,7 +952,7 @@ class Ferramentas(private val activity: Activity, private val memoria: Memoria? 
             "acompanhar_tema", "atualizar_noticias", "traduzir", "consultar_cep", "consultar_cnpj", "consultar_ddd", "feriados",
             "buscar_cep", "dicionario", "ortografia", "distancia",
             "loja_resumo", "loja_pedidos", "loja_acabando", "loja_estoque",
-            "loja_retiradas", "loja_alterar", "loja_entregue", "loja_confirmar", "loja_agendar",
+            "loja_retiradas", "loja_estoque_geral", "loja_alterar", "loja_entregue", "loja_confirmar", "loja_agendar",
         )
 
         private const val SPOTIFY = "com.spotify.music"

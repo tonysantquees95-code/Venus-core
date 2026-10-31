@@ -100,6 +100,27 @@ class LojaAlteracoesTest {
         assertEquals("loja_entregue", acao("o cliente do pedido 9 já retirou")!!.nome)
     }
 
+    @Test fun visaoGeralDoEstoque() {
+        for (frase in listOf(
+            "Como está o meu estoque ?", "Quantos produtos tenho em estoque ?", "como tá o estoque", "me dá um resumo do estoque",
+            "quantos itens eu tenho na loja", "o que tem no estoque", "meu estoque", "quantos produtos diferentes eu tenho",
+            "e o estoque, como anda?",
+        )) {
+            assertEquals(frase, "loja_estoque_geral", acao(frase)?.nome)
+        }
+        // de um produto continua sendo de um produto
+        assertEquals("loja_estoque", acao("quantos géis KGEL eu tenho no estoque")!!.nome)
+        assertEquals("loja_estoque", acao("qual o estoque do vibrador rosa")!!.nome)
+    }
+
+    @Test fun textoDaVisaoGeral() {
+        val t = Loja.montarEstoqueGeral(produtos)
+        assertTrue(t, t.startsWith("Você tem 3 produtos no site e 1 escondido."))
+        assertTrue(t, t.contains("8 unidades"))
+        assertTrue(t, t.contains("1 esgotado: Vibrador Rosa Bullet"))
+        assertFalse(t, t.contains("sem controle"))
+    }
+
     // ------------------------------------------------------------ montar a confirmação
     @Test fun confirmacaoDeEstoque() {
         val p = Loja.montarAlteracao(produtos, "estoque_somar", "gel kgel", 5)
