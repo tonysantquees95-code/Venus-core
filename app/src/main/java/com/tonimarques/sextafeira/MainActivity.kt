@@ -74,6 +74,9 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
     private var corAtual = Color.parseColor("#36D6FF")
     private var topicoAtual = "Conversa"
     private var respostaAtrasada = 0
+
+    /** Esperando o endereço de um lugar ("casa", "trabalho"...) depois de perguntar. */
+    private var aguardandoLugar: String? = null
     @Volatile private var atualizandoConhecimento = false
     private val memoria by lazy { Memoria(this) }
 
@@ -445,6 +448,18 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         // "muito interessante Vênus e qual é..." → "qual é..."
         val original = pedido
         pedido = Cerebro.limparFala(pedido)
+
+        // Resposta a "qual é o endereço do seu trabalho?"
+        aguardandoLugar?.let { lugar ->
+            aguardandoLugar = null
+            val endereco = Cerebro.enderecoDaResposta(pedido)
+            if (endereco != null) {
+                topicoAtual = "Sobre mim"
+                adicionarMensagem(original, true)
+                tratarMemoria(ComandosMemoria.Pedido.Definir("lugar:$lugar", endereco))
+                return
+            }
+        }
         val decisao = cerebro.responder(pedido)
         topicoAtual = when (decisao) {
             is Cerebro.Decisao.Memoria -> "Sobre mim"
@@ -540,6 +555,16 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
                     }
                 }
                 responder(resposta)
+            }
+            is ComandosMemoria.Pedido.PerguntarLugar -> {
+                aguardandoLugar = pedido.lugar
+                forcarEscuta = true
+                val falado = when (pedido.lugar) {
+                    "casa" -> "da sua casa"
+                    "trabalho" -> "do seu trabalho"
+                    else -> "de ${pedido.lugar}"
+                }
+                responder("Qual é o endereço $falado? Pode falar a rua, o número e a cidade, ou o nome do lugar.")
             }
             is ComandosMemoria.Pedido.Esquecer ->
                 responder(if (memoria.esquecer(pedido.trecho) > 0) "Pronto, esqueci." else "Não encontrei nada sobre isso na minha memória.")

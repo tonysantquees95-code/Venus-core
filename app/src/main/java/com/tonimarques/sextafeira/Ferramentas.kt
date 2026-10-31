@@ -193,6 +193,15 @@ class Ferramentas(private val activity: Activity, private val memoria: Memoria? 
         )
         .put(
             funcao(
+                "salvar_lugar",
+                "Guarda o endereço de um lugar do usuário (casa, trabalho, academia...) para rotas como 'me leva para casa'.",
+                listOf("lugar", "endereco"),
+                "lugar" to texto("Nome do lugar: casa, trabalho, academia, casa da mãe..."),
+                "endereco" to texto("Endereço completo ou nome do lugar (ex.: Hotel Intercity Aeroporto, Porto Alegre).")
+            )
+        )
+        .put(
+            funcao(
                 "dicionario", "Dicionário de português (Wikcionário): significado, sinônimos, antônimos ou plural de uma palavra.",
                 listOf("palavra"),
                 "palavra" to texto("A palavra, com acentos."),
@@ -308,7 +317,9 @@ class Ferramentas(private val activity: Activity, private val memoria: Memoria? 
     private fun executarAqui(nome: String, a: JSONObject): String = when (nome) {
         "abrir_app" -> abrirApp(a.optString("nome"))
         "tocar_musica" -> tocarMusica(a.optString("busca"), a.optString("app"))
-        "controlar_midia" -> controlarMidia(a.optString("acao"))
+        "controlar_midia" -> controlarMidia(a.optString("acao"), a.optString("app"))
+        "buscar_perto" -> buscarPerto(a.optString("oque"), a.optString("referencia"))
+        "salvar_lugar" -> salvarLugar(a.optString("lugar"), a.optString("endereco"))
         "enviar_whatsapp" -> enviarWhatsapp(a.optString("contato"), a.optString("mensagem"))
         "enviar_sms" -> enviarSms(a.optString("contato"), a.optString("mensagem"))
         "fazer_ligacao" -> ligar(a.optString("contato"))
@@ -415,7 +426,60 @@ class Ferramentas(private val activity: Activity, private val memoria: Memoria? 
         return "Abri \"$consulta\" no YouTube."
     }
 
-    private fun controlarMidia(acao: String): String {
+    private val PACOTES_MUSICA = mapOf(
+        "spotify" to SPOTIFY, "deezer" to DEEZER, "youtube music" to YOUTUBE_MUSIC, "youtube" to YOUTUBE_MUSIC,
+        "amazon music" to "com.amazon.mp3", "apple music" to "com.apple.android.music",
+    )
+
+    /**
+     * Continuar a música de onde parou: aperta "play" (vai para o último app que tocou).
+     * Se nada tocar em 1,5 s e o app foi dito, abre o app e aperta "play" de novo.
+     */
+    private fun retomarMusica(app: String): String {
+        val audio = activity.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+        fun play() {
+            audio.dispatchMediaKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_MEDIA_PLAY))
+            audio.dispatchMediaKeyEvent(KeyEvent(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_MEDIA_PLAY))
+        }
+        play()
+        val pacote = PACOTES_MUSICA[ComandosLocais.normalizar(app).trim()]
+        val principal = android.os.Handler(android.os.Looper.getMainLooper())
+        principal.postDelayed({
+            if (!audio.isMusicActive && pacote != null) {
+                activity.packageManager.getLaunchIntentForPackage(pacote)?.let { abrir ->
+                    try {
+                        activity.startActivity(abrir.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                    } catch (e: Exception) {
+                    }
+                    principal.postDelayed({ if (!audio.isMusicActive) play() }, 3000)
+                }
+            }
+        }, 1500)
+        val nome = mapOf("spotify" to "Spotify", "deezer" to "Deezer", "youtube music" to "YouTube Music", "youtube" to "YouTube Music")[ComandosLocais.normalizar(app).trim()]
+        return if (nome != null) "Continuando a música de onde parou no $nome." else "Continuando a música de onde parou."
+    }
+
+    /** Abre o Maps com a busca perto de você (ou perto de casa/trabalho). */
+    private fun buscarPerto(oque: String, referencia: String): String {
+        val endereco = if (referencia.isNotBlank()) memoria?.valor("lugar:$referencia") else null
+        val busca = if (endereco != null) "$oque perto de $endereco" else oque
+        val local = Uri.encode(busca)
+        val perto = if (endereco != null) "perto ${if (referencia == "casa") "da sua casa" else "do seu trabalho"}" else "perto de você"
+        if (iniciar(Intent(Intent.ACTION_VIEW, Uri.parse("geo:0,0?q=$local")))) return "Abri no Maps: $oque $perto. O mais próximo aparece primeiro."
+        iniciar(Intent(Intent.ACTION_VIEW, Uri.parse("https://www.google.com/maps/search/?api=1&query=$local")))
+        return "Abri a busca por $oque $perto no Google Maps."
+    }
+
+    private fun salvarLugar(lugar: String, endereco: String): String {
+        val m = memoria ?: return "Memória indisponível."
+        val nome = ComandosMemoria.nomeDoLugar(ComandosLocais.normalizar(lugar)) ?: return "Não entendi o nome do lugar."
+        if (endereco.isBlank()) return "Faltou o endereço."
+        m.definir("lugar:$nome", endereco.trim())
+        return "Endereço de $nome salvo: $endereco."
+    }
+
+    private fun controlarMidia(acao: String, app: String = ""): String {
+        if (acao == "tocar" || (acao == "tocar_pausar" && app.isNotBlank())) return retomarMusica(app)
         val audio = activity.getSystemService(Context.AUDIO_SERVICE) as AudioManager
         fun tecla(codigo: Int) {
             audio.dispatchMediaKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, codigo))

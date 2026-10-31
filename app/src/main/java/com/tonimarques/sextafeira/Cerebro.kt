@@ -362,6 +362,28 @@ class Cerebro(
             return null
         }
 
+        private val CANCELAR_ENDERECO = Regex("^(?:cancela|cancelar|esquece|deixa|deixa pra la|depois|agora nao|nao|nada)\\b")
+        private val PARECE_ENDERECO = Regex(
+            "\\d|\\b(rua|avenida|av|travessa|alameda|estrada|rodovia|praca|largo|bairro|hotel|shopping|condominio|edificio|predio|" +
+                "empresa|loja|centro|aeroporto|hospital|escola|faculdade|universidade|mercado|supermercado|posto|vila|jardim)\\b"
+        )
+
+        /**
+         * O endereço numa resposta como "é na Rua Professor Sarmento Barata 360" ou "fica no Hotel Intercity".
+         * Devolve null se a resposta não parece um endereço (aí ela é tratada como um pedido normal).
+         */
+        fun enderecoDaResposta(texto: String): String? {
+            val limpo = texto.trim().trimEnd('.', '!')
+            val n = ComandosLocais.normalizar(limpo)
+            if (CANCELAR_ENDERECO.containsMatchIn(n)) return null
+            val prefixo = Regex("^(?:(?:o endereco )?(?:e|eh|fica|esta)\\s+)?(?:(?:eu )?(?:trabalho|moro|estudo|treino)\\s+)?(?:(?:na|no|em|nas|nos)\\s+)?").find(n)
+            val endereco = if (prefixo != null) limpo.substring(prefixo.value.length).trim() else limpo
+            if (endereco.length < 4) return null
+            val disseOnde = (prefixo?.value?.isNotBlank() == true)
+            val nomesProprios = endereco.split(" ").count { it.firstOrNull()?.isUpperCase() == true } >= 2
+            return if (PARECE_ENDERECO.containsMatchIn(ComandosLocais.normalizar(endereco)) || disseOnde || nomesProprios) endereco else null
+        }
+
         private val INTERJEICAO = Regex(
             "^(?:(?:muito|que|bem|super|ah|oh) )?(?:interessante|legal|bacana|massa|top|entendi|certo|ok|okay|beleza|" +
                 "obrigad[oa]|valeu|uau|perfeito|otimo|incrivel|show de bola|que bom|hum+|hm+|ah|entao|tudo bem|ta bom|sei)" +
