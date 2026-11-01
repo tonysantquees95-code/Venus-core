@@ -312,6 +312,7 @@ class Ferramentas(private val activity: Activity, private val memoria: Memoria? 
     } catch (e: SecurityException) {
         "O Android não deixou fazer isso: ${e.message}"
     } catch (e: Exception) {
+        Registro.anotar(activity, "erro", "$nome → " + Registro.resumoDoErro(e).replace("\n", " | "))
         "Deu erro ao executar $nome: ${e.message}"
     }
 

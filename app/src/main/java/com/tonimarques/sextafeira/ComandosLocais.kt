@@ -39,6 +39,7 @@ object ComandosLocais {
         val ehRecado = RECADO.containsMatchIn(c)
         // Contas, conversões, datas, tradução, CEP...: antes do clima ("30 graus em fahrenheit" é conversão).
         // Mudanças na loja ("muda o preço do gel para 29,90") antes das contas, para o número não virar cálculo.
+        if (RELATORIO_ERROS.matches(c.trimEnd('.', '!', '?'))) return Resultado.Acao("enviar_relatorio_erros", emptyMap())
         conversaAntiga(f)?.let { return it }
         precoNaInternet(f)?.let { return it }
         if (!ehRecado) gestao(f)?.let { return it }
@@ -981,6 +982,10 @@ object ComandosLocais {
         Regex("^(?:qual|quais) (?:e )?(?:o |os )?(?:menor preco|menores precos|preco mais barato|melhor preco) (?:d[oae]s?|para|de um|de uma) (.+?)(?: $ONDE)?$"),
         Regex("^onde (?:eu )?(?:compro|encontro|acho|tem) (?:o |a |os |as |um |uma )?(.+?) mais barat[oa]s?(?: $ONDE)?$"),
         Regex("^(?:quanto|por quanto) (?:os concorrentes|a concorrencia|as outras lojas|outras lojas) (?:cobram|vendem|estao cobrando|estao vendendo|cobra|vende) (?:pelo|pela|pelos|pelas|o|a|os|as) (.+)$"),
+    )
+
+    private val RELATORIO_ERROS = Regex(
+        "^(?:manda|mande|envia|envie|mandar|enviar|gera|gere)(?: o| um)? (?:relatorio|relatorios) de (?:erros?|falhas?|problemas?)(?: (?:pro|para o|pro) (?:claude|github))?$"
     )
 
     private val CONVERSA_ANTIGA = listOf(

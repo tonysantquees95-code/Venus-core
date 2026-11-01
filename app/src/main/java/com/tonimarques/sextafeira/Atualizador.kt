@@ -40,6 +40,9 @@ class Atualizador(private val contexto: Context) {
 
     private fun token(): String? = prefs.getString(P_TOKEN, null)?.let { decifrar(it) }
 
+    /** O mesmo token, para mandar os relatórios de erro (precisa da permissão "Issues: Read and write"). */
+    fun tokenParaRelatorio(): String? = token()
+
     fun versaoInstalada(): Int = try {
         numeroDaVersao(contexto.packageManager.getPackageInfo(contexto.packageName, 0).versionName.orEmpty()) ?: 0
     } catch (e: Exception) {
