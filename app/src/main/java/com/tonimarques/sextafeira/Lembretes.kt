@@ -181,7 +181,8 @@ object Lembretes {
     fun quandoFalado(quando: Long, agora: Calendar = Calendar.getInstance()): String {
         val c = Calendar.getInstance().apply { timeInMillis = quando }
         val hora = String.format(Locale.US, "%d:%02d", c.get(Calendar.HOUR_OF_DAY), c.get(Calendar.MINUTE))
-        val minutos = ((quando - agora.timeInMillis) / 60_000).toInt()
+        // arredonda para cima: "daqui a 2 minutos" dito alguns segundos depois ainda é 2, não 1
+        val minutos = ((quando - agora.timeInMillis + 59_999) / 60_000).toInt()
         if (minutos in 0..59) return "daqui a ${if (minutos <= 1) "1 minuto" else "$minutos minutos"} (às $hora)"
         val hoje = agora.clone() as Calendar
         fun mesmoDia(a: Calendar, b: Calendar) = a.get(Calendar.YEAR) == b.get(Calendar.YEAR) && a.get(Calendar.DAY_OF_YEAR) == b.get(Calendar.DAY_OF_YEAR)

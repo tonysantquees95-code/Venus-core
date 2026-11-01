@@ -267,6 +267,9 @@ class LojaAlteracoesTest {
     // ------------------------------------------------------------ reposição
     @Test fun reposicao() {
         assertEquals("loja_reposicao", acao("o que preciso repor")!!.nome)
+        assertEquals("loja_reposicao", acao("Quais produtos eu preciso repor")!!.nome)
+        assertEquals("loja_reposicao", acao("tem algo para repor no estoque?")!!.nome)
+        assertEquals("estoque_somar", acao("repõe 5 unidades do gel kgel")!!.args["tipo"])
         assertEquals("semana", acao("lista de reposição")!!.args["periodo"])
         assertEquals("hoje", acao("o que foi vendido hoje")!!.args["periodo"])
         assertEquals("mes", acao("quais itens foram vendidos no mês")!!.args["periodo"])

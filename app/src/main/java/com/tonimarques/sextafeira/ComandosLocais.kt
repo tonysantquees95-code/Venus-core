@@ -371,6 +371,13 @@ object ComandosLocais {
         }
         // Qualquer outra frase sobre o estoque: visão geral (melhor do que mandar para a IA, que não vê a loja)
         if (Regex("\\bestoque\\b").containsMatchIn(c)) return Resultado.Acao("loja_estoque_geral", emptyMap())
+        // Pergunta sobre a loja que ela não entendeu: exemplos, em vez da IA (que não enxerga a loja)
+        if (Regex("\\b(?:minha loja|nossa loja|meus produtos|nossos produtos|meus pedidos|nossos pedidos|minhas vendas|nossas vendas|meus clientes|minhas clientes)\\b").containsMatchIn(c)) {
+            return Resultado.Resposta(
+                "Sobre a loja eu entendo pedidos assim: como foram as vendas hoje; tem pedido novo; como está o estoque; o que preciso repor; " +
+                    "mais vendidos do mês; produtos parados; quais retiradas estão para agendar; pedido 15 enviado com rastreio; coloca o gel em promoção por 24,90."
+            )
+        }
         return null
     }
 
@@ -869,7 +876,7 @@ object ComandosLocais {
             "(?:quais|que) produtos? (?:nao )?(?:estao|tao|esta|ta) (?:parados?|encalhados?|sem vender))\\b"
     )
     private val LOJA_REPOSICAO = Regex(
-        "\\b(?:lista de reposicao|reposicao|o que (?:eu |nos )?(?:preciso|precisamos|tenho que|temos que|devo) repor|o que repor|" +
+        "\\b(?:lista de reposicao|reposicao|repor|reponho|reabastecer|reabastecimento|o que repor|" +
             "(?:itens|produtos|o que) (?:que )?(?:eu |nos )?(?:foi |foram |ja foi |ja foram )?vendidos?|o que (?:eu |nos |a gente )?vend(?:i|emos|eu)|" +
             "lista (?:de|dos|das) (?:vendidos|itens vendidos|produtos vendidos|vendas))\\b"
     )
