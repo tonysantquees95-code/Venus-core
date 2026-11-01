@@ -57,6 +57,14 @@ class VigiaDaLoja : JobService() {
         private const val P_PAGOS = "pagos"
         private const val P_BAIXOS = "baixos"
         private const val P_INICIADO = "iniciado"
+        const val PREF_RESUMO = "resumo_noite"
+        private const val P_RESUMO_DIA = "resumo_dia"
+
+        fun resumoLigado(c: Context) = c.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getBoolean(PREF_RESUMO, true)
+
+        fun definirResumo(c: Context, ligar: Boolean) {
+            c.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putBoolean(PREF_RESUMO, ligar).apply()
+        }
         private val PAGOS = setOf("paid", "preparing", "shipped", "delivered")
 
         fun ligado(c: Context) = c.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getBoolean(PREF_LIGADO, false)
@@ -66,7 +74,8 @@ class VigiaDaLoja : JobService() {
             val prefs = c.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
             val agendador = c.getSystemService(JobScheduler::class.java)
             if (!ligar) {
-                prefs.edit().clear().apply()
+                val resumo = prefs.getBoolean(PREF_RESUMO, true)
+                prefs.edit().clear().putBoolean(PREF_RESUMO, resumo).apply()
                 agendador.cancel(JOB_ID)
                 return
             }
@@ -107,6 +116,13 @@ class VigiaDaLoja : JobService() {
                 .putString(P_BAIXOS, n.baixosVistos.joinToString(","))
                 .putBoolean(P_INICIADO, true)
                 .apply()
+            // resumo da noite: uma vez por dia, a partir das 21h
+            val agora = java.util.Calendar.getInstance()
+            val hoje = "%04d-%02d-%02d".format(agora.get(java.util.Calendar.YEAR), agora.get(java.util.Calendar.MONTH) + 1, agora.get(java.util.Calendar.DAY_OF_MONTH))
+            if (prefs.getBoolean(PREF_RESUMO, true) && agora.get(java.util.Calendar.HOUR_OF_DAY) >= 21 && prefs.getString(P_RESUMO_DIA, "") != hoje) {
+                prefs.edit().putString(P_RESUMO_DIA, hoje).apply()
+                avisar(c, 901, "Resumo da loja de hoje", Loja.montarResumoDoDia(pedidos, produtos, agora))
+            }
             if (primeira) return
             for (p in n.pedidosPagos.take(5)) avisar(c, 1000 + p.id, "Pedido #${p.id} pago", textoDoPedido(p))
             if (n.acabando.isNotEmpty()) avisar(c, 900, "Estoque acabando", textoDoEstoque(n.acabando))

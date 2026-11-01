@@ -225,4 +225,142 @@ class LojaAlteracoesTest {
         assertTrue(t.contains("João"))
         assertTrue(t.contains("1x Gel"))
     }
+
+    // ------------------------------------------------------------ status do pedido
+    @Test fun statusPorVoz() {
+        val e = acao("pedido 15 enviado, rastreio AB123456789BR")!!
+        assertEquals("loja_status", e.nome)
+        assertEquals("shipped", e.args["status"])
+        assertEquals(15, e.args["pedido"])
+        assertEquals("ab123456789br", e.args["rastreio"])
+        assertEquals("shipped", acao("o pedido 15 foi enviado")!!.args["status"])
+        assertEquals(null, acao("o pedido 15 foi enviado")!!.args["rastreio"])
+        assertEquals("ab 123 456 789 br", acao("enviei o pedido 15 com o código de rastreio AB 123 456 789 BR")!!.args["rastreio"])
+        assertEquals("shipped", acao("o rastreio do pedido 15 é AB123456789BR")!!.args["status"])
+        assertEquals("preparing", acao("marca o pedido 15 como em separação")!!.args["status"])
+        assertEquals("preparing", acao("estou separando o pedido 15")!!.args["status"])
+        assertEquals("paid", acao("marca o pedido 12 como pago")!!.args["status"])
+        assertEquals("loja_entregue", acao("marca o pedido 15 como entregue")!!.nome)
+        assertEquals(15, acao("pedido quinze enviado")!!.args["pedido"])
+    }
+
+    @Test fun confirmacaoDeStatus() {
+        val p = listOf(
+            Loja.Pedido(15, "paid", 8990, "Maria Souza", "sedex", 0, 0, emptyList(), telefone = "51999990000"),
+            Loja.Pedido(16, "awaiting_payment", 1990, "Ana", "sedex", 0, null, emptyList()),
+            Loja.Pedido(17, "shipped", 1990, "Bia", "sedex", 0, 0, emptyList(), rastreio = "QQ111111111BR"),
+        )
+        val env = Loja.montarStatus(p, 15, "shipped", "ab 123 456 789 br")
+        assertEquals("AB123456789BR", env.alteracao!!.rastreio)
+        assertTrue(env.texto, env.texto.contains("WhatsApp"))
+        assertNull(Loja.montarStatus(p, 16, "shipped", null).alteracao)
+        assertNotNull(Loja.montarStatus(p, 16, "paid", null).alteracao)
+        assertNull(Loja.montarStatus(p, 17, "shipped", null).alteracao)
+        assertNotNull(Loja.montarStatus(p, 17, "shipped", "AB123456789BR").alteracao)
+        assertNull(Loja.montarStatus(p, 15, "shipped", "x1").alteracao)
+        val link = Loja.linkAviso(env.alteracao!!)!!
+        assertTrue(link, link.startsWith("https://wa.me/5551999990000?text="))
+        assertTrue(link.contains("AB123456789BR"))
+        assertNull(Loja.linkAviso(Loja.montarStatus(p, 16, "paid", null).alteracao!!))
+    }
+
+    // ------------------------------------------------------------ reposição
+    @Test fun reposicao() {
+        assertEquals("loja_reposicao", acao("o que preciso repor")!!.nome)
+        assertEquals("semana", acao("lista de reposição")!!.args["periodo"])
+        assertEquals("hoje", acao("o que foi vendido hoje")!!.args["periodo"])
+        assertEquals("mes", acao("quais itens foram vendidos no mês")!!.args["periodo"])
+        assertEquals("loja_acabando", acao("o que está acabando")!!.nome)
+        assertEquals("loja_resumo", acao("como foram as vendas hoje")!!.nome)
+
+        val agora = java.util.Calendar.getInstance()
+        val ped = listOf(
+            Loja.Pedido(1, "paid", 0, "A", "sedex", agora.timeInMillis, agora.timeInMillis,
+                listOf(Loja.Item("Gel KGEL Morango 60ml", 2, 0), Loja.Item("Vibrador Rosa Bullet", 1, 0))),
+            Loja.Pedido(2, "delivered", 0, "B", "sedex", agora.timeInMillis, agora.timeInMillis, listOf(Loja.Item("Gel KGEL Morango 60ml", 1, 0))),
+            Loja.Pedido(3, "awaiting_payment", 0, "C", "sedex", agora.timeInMillis, null, listOf(Loja.Item("Kit Dois Corações", 5, 0))),
+        )
+        val r = Loja.montarReposicao(ped, produtos, "semana", agora)
+        assertTrue(r, r.startsWith("Vendidos nos últimos 7 dias: 4 itens em 2 pedidos."))
+        assertTrue(r, r.contains("• Gel KGEL Morango 60ml: 3 (restam 3)"))
+        assertTrue(r, r.contains("• Vibrador Rosa Bullet: 1 (esgotado)"))
+        assertFalse(r, r.contains("Kit"))
+    }
+
+    // ------------------------------------------------------------ promoção
+    @Test fun promocaoPorVoz() {
+        val a = acao("coloca o gel kgel em promoção por 24,90")!!
+        assertEquals("promocao", a.args["tipo"])
+        assertEquals(2490, a.args["valor"])
+        assertEquals("gel kgel", a.args["produto"])
+        assertEquals(2490, acao("coloca o gel kgel em promoção de 29,90 por 24,90")!!.args["valor"])
+        assertEquals("promocao", acao("faz uma promoção do vibrador rosa por 79 reais")!!.args["tipo"])
+        val pct = acao("dá 10% de desconto no gel kgel")!!
+        assertEquals("promocao_pct", pct.args["tipo"])
+        assertEquals(10, pct.args["valor"])
+        assertEquals("promocao_pct", acao("dá 15 por cento de desconto no vibrador")!!.args["tipo"])
+        assertEquals("fim_promocao", acao("tira o vibrador rosa da promoção")!!.args["tipo"])
+        assertEquals("vibrador rosa", acao("encerra a promoção do vibrador rosa")!!.args["produto"])
+        assertEquals("preco", acao("muda o preço do gel kgel para 30")!!.args["tipo"])
+    }
+
+    @Test fun confirmacaoDePromocao() {
+        val p = Loja.montarAlteracao(produtos, "promocao", "gel kgel", 2490)
+        assertTrue(p.texto, p.texto.contains("de R$ 29,90 por R$ 24,90 (17% a menos)"))
+        val corpo = Loja.corpoDoProduto(produtos[0].bruto, "promocao", 2490)!!
+        assertEquals(2490, corpo.getInt("priceCents"))
+        assertEquals(2990, corpo.getInt("compareAtCents"))
+        assertNull(Loja.montarAlteracao(produtos, "promocao", "gel kgel", 2990).alteracao)
+        val pct = Loja.montarAlteracao(produtos, "promocao_pct", "gel kgel", 10)
+        assertEquals(2691, pct.alteracao!!.valor)
+        // vibrador já em promoção (de 149,90 por 99,90): nova promoção usa o preço cheio
+        assertEquals(14990, Loja.corpoDoProduto(produtos[1].bruto, "promocao", 8990)!!.getInt("compareAtCents"))
+        val fim = Loja.montarAlteracao(produtos, "fim_promocao", "vibrador rosa", null)
+        assertTrue(fim.texto, fim.texto.contains("volta a custar R$ 149,90"))
+        val corpoFim = Loja.corpoDoProduto(produtos[1].bruto, "fim_promocao", null)!!
+        assertEquals(14990, corpoFim.getInt("priceCents"))
+        assertTrue(corpoFim.isNull("compareAtCents"))
+        assertNull(Loja.montarAlteracao(produtos, "fim_promocao", "gel kgel", null).alteracao)
+    }
+
+    // ------------------------------------------------------------ relatórios e resumo da noite
+    @Test fun relatoriosPorVoz() {
+        assertEquals("loja_mais_vendidos", acao("quais os produtos mais vendidos")!!.nome)
+        assertEquals("mes", acao("quais os produtos mais vendidos")!!.args["periodo"])
+        assertEquals("semana", acao("o que mais vendeu essa semana")!!.args["periodo"])
+        assertEquals("loja_comparar", acao("compara as vendas com o mês passado")!!.nome)
+        assertEquals("loja_comparar", acao("quanto vendi no mês passado")!!.nome)
+        assertEquals("loja_parados", acao("quais produtos estão parados")!!.nome)
+        assertEquals("loja_parados", acao("o que não está vendendo")!!.nome)
+        assertEquals("loja_resumo", acao("como foram as vendas hoje")!!.nome)
+    }
+
+    private fun em(dia: Int, mes: Int, hora: Int = 12) = java.util.Calendar.getInstance().apply { clear(); set(2026, mes, dia, hora, 0) }
+
+    @Test fun relatorios() {
+        val agora = em(15, java.util.Calendar.OCTOBER, 18)
+        fun ped(id: Int, total: Int, quando: java.util.Calendar, itens: List<Loja.Item>) =
+            Loja.Pedido(id, "paid", total, "X", "sedex", quando.timeInMillis, quando.timeInMillis, itens)
+        val ped = listOf(
+            ped(1, 6000, em(2, java.util.Calendar.OCTOBER), listOf(Loja.Item("Gel KGEL Morango 60ml", 2, 3000))),
+            ped(2, 10000, em(10, java.util.Calendar.OCTOBER), listOf(Loja.Item("Vibrador Rosa Bullet", 1, 10000), Loja.Item("Gel KGEL Morango 60ml", 1, 3000))),
+            ped(3, 4000, em(5, java.util.Calendar.SEPTEMBER), listOf(Loja.Item("Kit Dois Corações", 1, 4000))),
+            ped(4, 9000, em(25, java.util.Calendar.SEPTEMBER), listOf(Loja.Item("Kit Dois Corações", 1, 9000))),
+        )
+        val top = Loja.montarMaisVendidos(ped, "mes", agora)
+        assertTrue(top, top.startsWith("Mais vendidos neste mês:\n1. Gel KGEL Morango 60ml: 3 unidades"))
+        val comp = Loja.montarComparacao(ped, agora)
+        assertTrue(comp, comp.contains("Neste mês até agora: 2 vendas, R$ 160,00"))
+        assertTrue(comp, comp.contains("mesmo período do mês passado: 1 venda, R$ 40,00"))
+        assertTrue(comp, comp.contains("300% acima"))
+        assertTrue(comp, comp.contains("fechou em R$ 130,00"))
+        assertTrue(Loja.montarParados(ped, produtos, agora).startsWith("Todos os produtos"))
+        val parados = Loja.montarParados(ped, produtos, agora, 15)
+        assertTrue(parados, parados.contains("Kit Dois Corações"))
+        assertFalse(parados, parados.contains("Gel KGEL"))
+        assertFalse(parados, parados.contains("Vibrador")) // vendeu (e está esgotado)
+        assertFalse(parados, parados.contains("Óleo")) // escondido
+        val resumo = Loja.montarResumoDoDia(ped, produtos, agora)
+        assertTrue(resumo, resumo.contains("Para amanhã: 4 pedidos para separar, 1 produto esgotado"))
+    }
 }

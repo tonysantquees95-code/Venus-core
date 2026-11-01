@@ -349,6 +349,10 @@ class Ferramentas(private val activity: Activity, private val memoria: Memoria? 
         "loja_acabando" -> daLoja { it.acabando() }
         "loja_estoque" -> daLoja { it.estoqueDe(a.optString("produto")) }
         "loja_retiradas" -> daLoja { it.retiradas() }
+        "loja_reposicao" -> daLoja { it.reposicao(a.optString("periodo", "semana")) }
+        "loja_mais_vendidos" -> daLoja { it.maisVendidos(a.optString("periodo", "mes")) }
+        "loja_comparar" -> daLoja { it.comparar() }
+        "loja_parados" -> daLoja { it.parados() }
         "loja_estoque_geral" -> daLoja { it.estoqueGeral() }
         "loja_alterar" -> daLoja { l ->
             val valor = if (a.has("valor")) a.optInt("valor") else null
@@ -364,7 +368,23 @@ class Ferramentas(private val activity: Activity, private val memoria: Memoria? 
         "loja_confirmar" -> {
             val alt = lojaPendente
             lojaPendente = null
-            if (alt == null) "Não tinha nenhuma alteração esperando confirmação." else daLoja { it.aplicar(alt) }
+            if (alt == null) "Não tinha nenhuma alteração esperando confirmação." else daLoja { l ->
+                val feito = l.aplicar(alt)
+                // pedido mudou de etapa: abre o WhatsApp da cliente com o aviso pronto
+                val aviso = Loja.linkAviso(alt)
+                if (aviso != null) {
+                    val uri = Uri.parse(aviso)
+                    activity.runOnUiThread {
+                        if (WHATSAPPS.none { iniciar(Intent(Intent.ACTION_VIEW, uri).setPackage(it)) }) iniciar(Intent(Intent.ACTION_VIEW, uri))
+                    }
+                    "$feito Abri o WhatsApp da cliente com o aviso pronto, é só tocar em Enviar."
+                } else feito
+            }
+        }
+        "loja_status" -> daLoja { l ->
+            val preparo = l.prepararStatus(a.optInt("pedido"), a.optString("status"), a.optString("rastreio").ifBlank { null })
+            lojaPendente = preparo.alteracao
+            preparo.texto
         }
         "loja_agendar" -> daLoja { l -> agendarRetirada(l, a.optInt("pedido")) }
         "distancia" -> distancia(a.optString("origem"), a.optString("destino"))
@@ -952,7 +972,7 @@ class Ferramentas(private val activity: Activity, private val memoria: Memoria? 
             "acompanhar_tema", "atualizar_noticias", "traduzir", "consultar_cep", "consultar_cnpj", "consultar_ddd", "feriados",
             "buscar_cep", "dicionario", "ortografia", "distancia",
             "loja_resumo", "loja_pedidos", "loja_acabando", "loja_estoque",
-            "loja_retiradas", "loja_estoque_geral", "loja_alterar", "loja_entregue", "loja_confirmar", "loja_agendar",
+            "loja_retiradas", "loja_estoque_geral", "loja_alterar", "loja_status", "loja_reposicao", "loja_mais_vendidos", "loja_comparar", "loja_parados", "loja_entregue", "loja_confirmar", "loja_agendar",
         )
 
         private const val SPOTIFY = "com.spotify.music"

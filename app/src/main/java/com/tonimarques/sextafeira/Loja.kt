@@ -165,12 +165,22 @@ class Loja(private val contexto: Context) {
 
     fun retiradas(): String = montarRetiradas(pedidos())
 
+    fun maisVendidos(periodo: String): String = montarMaisVendidos(pedidos(), periodo, Calendar.getInstance())
+
+    fun comparar(): String = montarComparacao(pedidos(), Calendar.getInstance())
+
+    fun parados(): String = montarParados(pedidos(), produtos(), Calendar.getInstance())
+
+    fun reposicao(periodo: String): String = montarReposicao(pedidos(), produtos(), periodo, Calendar.getInstance())
+
     fun pedido(id: Int): Pedido? = pedidos().firstOrNull { it.id == id }
 
     /** Monta a pergunta de confirmação (nada muda no site ainda). */
     fun prepararAlteracao(tipo: String, falado: String, valor: Int?): Preparo = montarAlteracao(produtos(), tipo, falado, valor)
 
     fun prepararEntregue(id: Int): Preparo = montarEntregue(pedidos(), id)
+
+    fun prepararStatus(id: Int, status: String, rastreio: String?): Preparo = montarStatus(pedidos(), id, status, rastreio)
 
     /** Aplica uma alteração já confirmada. */
     fun aplicar(a: Alteracao): String {
@@ -180,7 +190,7 @@ class Loja(private val contexto: Context) {
                 enviar("/_api/admin/stock_update", JSONObject().put("productId", p.id).put("quantity", a.valor!!).put("mode", "set"))
                 return "Pronto: ${p.nome} agora tem ${plural(a.valor, "unidade", "unidades")} no estoque."
             }
-            "preco", "ativar", "desativar" -> {
+            "preco", "ativar", "desativar", "promocao", "fim_promocao" -> {
                 val p = a.produto!!
                 // relê o produto na hora, para não desfazer outra mudança feita pelo painel
                 val atual = produtos().firstOrNull { it.id == p.id } ?: throw ErroDaLoja("Não achei mais ${p.nome} na loja.")
@@ -189,6 +199,8 @@ class Loja(private val contexto: Context) {
                 enviar("/_api/admin/product_save", corpo)
                 return when (a.tipo) {
                     "preco" -> "Pronto: ${p.nome} agora custa ${dinheiro(a.valor!!)} no site."
+                    "promocao" -> "Pronto: ${p.nome} está em promoção por ${dinheiro(a.valor!!)}, com o preço antigo riscado no site."
+                    "fim_promocao" -> "Pronto: ${p.nome} saiu da promoção e voltou a custar ${dinheiro(corpo.optInt("priceCents"))}."
                     "ativar" -> "Pronto: ${p.nome} voltou a aparecer no site."
                     else -> "Pronto: ${p.nome} foi escondido do site."
                 }
@@ -197,6 +209,12 @@ class Loja(private val contexto: Context) {
                 val o = a.pedido!!
                 enviar("/_api/admin/order_update", JSONObject().put("id", o.id).put("status", "delivered").put("trackingCode", o.rastreio ?: JSONObject.NULL))
                 return "Pronto: o pedido ${o.id} está marcado como entregue."
+            }
+            "status" -> {
+                val o = a.pedido!!
+                val rastreio = a.rastreio ?: o.rastreio
+                enviar("/_api/admin/order_update", JSONObject().put("id", o.id).put("status", a.status!!).put("trackingCode", rastreio ?: JSONObject.NULL))
+                return "Pronto: o pedido ${o.id} está ${NOME_STATUS[a.status] ?: a.status}" + (if (a.rastreio != null) ", com o rastreio ${a.rastreio}." else ".")
             }
         }
         throw ErroDaLoja("Não sei fazer essa alteração.")
@@ -245,7 +263,10 @@ class Loja(private val contexto: Context) {
     )
 
     /** Uma mudança esperando o "sim". [valor]: quantidade final do estoque ou preço em centavos. */
-    data class Alteracao(val tipo: String, val produto: Produto? = null, val pedido: Pedido? = null, val valor: Int? = null)
+    data class Alteracao(
+        val tipo: String, val produto: Produto? = null, val pedido: Pedido? = null, val valor: Int? = null,
+        val status: String? = null, val rastreio: String? = null,
+    )
 
     /** O que falar e, se der para seguir, a alteração que aguarda confirmação. */
     data class Preparo(val texto: String, val alteracao: Alteracao?)
@@ -473,6 +494,21 @@ class Loja(private val contexto: Context) {
             for (k in CAMPOS_PRODUTO) corpo.put(k, bruto.get(k))
             when (tipo) {
                 "preco" -> corpo.put("priceCents", valor ?: return null)
+                "promocao" -> {
+                    val novo = valor ?: return null
+                    val preco = if (bruto.isNull("priceCents")) return null else bruto.getInt("priceCents")
+                    val antigo = if (bruto.isNull("compareAtCents")) null else bruto.getInt("compareAtCents")
+                    // o preço "de" é o preço cheio: o antigo, se já estava em promoção, ou o atual
+                    val cheio = if (antigo != null && antigo > preco) antigo else preco
+                    if (novo >= cheio) return null
+                    corpo.put("priceCents", novo).put("compareAtCents", cheio)
+                }
+                "fim_promocao" -> {
+                    val preco = if (bruto.isNull("priceCents")) return null else bruto.getInt("priceCents")
+                    val antigo = if (bruto.isNull("compareAtCents")) return null else bruto.getInt("compareAtCents")
+                    if (antigo <= preco) return null
+                    corpo.put("priceCents", antigo).put("compareAtCents", JSONObject.NULL)
+                }
                 "ativar" -> corpo.put("active", true)
                 "desativar" -> corpo.put("active", false)
                 else -> return null
@@ -526,6 +562,39 @@ class Loja(private val contexto: Context) {
                     }
                     Preparo(texto + CONFIRMA, Alteracao("preco", p, valor = novo))
                 }
+                "promocao", "promocao_pct" -> {
+                    val preco = p.precoCentavos ?: return Preparo("${p.nome} está sem preço. Defina o preço antes da promoção.", null)
+                    val antigo = p.precoAntigo
+                    val emPromocao = antigo != null && antigo > preco
+                    val cheio = if (emPromocao) antigo!! else preco
+                    val novo = if (tipo == "promocao_pct") {
+                        val pct = valor ?: return Preparo("De quantos por cento é o desconto?", null)
+                        if (pct !in 1..90) return Preparo("O desconto precisa ser entre 1 e 90 por cento.", null)
+                        ((cheio.toLong() * (100 - pct) + 50) / 100).toInt()
+                    } else valor ?: return Preparo("Por quanto fica na promoção?", null)
+                    if (novo <= 0) return Preparo("O preço da promoção precisa ser maior que zero.", null)
+                    if (novo >= cheio) return Preparo(
+                        "Na promoção o preço precisa ficar abaixo de ${dinheiro(cheio)}, que é o preço cheio de ${p.nome}. Nada foi mudado.", null
+                    )
+                    if (corpoDoProduto(p.bruto, "promocao", novo) == null) {
+                        return Preparo("Não consegui ler todos os dados de ${p.nome}. Faça a promoção pelo painel do site.", null)
+                    }
+                    val off = ((cheio - novo) * 100 + cheio / 2) / cheio
+                    var texto = if (emPromocao) "${p.nome} já está em promoção por ${dinheiro(preco)}. Mudar para de ${dinheiro(cheio)} por ${dinheiro(novo)} ($off% a menos)?"
+                    else "Colocar ${p.nome} em promoção: de ${dinheiro(cheio)} por ${dinheiro(novo)} ($off% a menos)?"
+                    texto += " No site aparece o preço antigo riscado. Produto em promoção não tem o desconto extra do Pix."
+                    if (off >= 50) texto += " É um desconto grande, confira."
+                    Preparo(texto + CONFIRMA, Alteracao("promocao", p, valor = novo))
+                }
+                "fim_promocao" -> {
+                    val preco = p.precoCentavos
+                    val antigo = p.precoAntigo
+                    if (preco == null || antigo == null || antigo <= preco) return Preparo("${p.nome} não está em promoção.", null)
+                    if (corpoDoProduto(p.bruto, "fim_promocao", null) == null) {
+                        return Preparo("Não consegui ler todos os dados de ${p.nome}. Tire a promoção pelo painel do site.", null)
+                    }
+                    Preparo("Tirar ${p.nome} da promoção? Ele volta a custar ${dinheiro(antigo)} (hoje está ${dinheiro(preco)}).$CONFIRMA", Alteracao("fim_promocao", p))
+                }
                 "desativar" -> {
                     if (!p.ativo) return Preparo("${p.nome} já está escondido do site.", null)
                     if (corpoDoProduto(p.bruto, "desativar", null) == null) {
@@ -549,6 +618,73 @@ class Loja(private val contexto: Context) {
             }
         }
 
+        /** Como o status aparece nas frases: "o pedido 15 está enviado". */
+        private val NOME_STATUS = mapOf(
+            "paid" to "como pago", "preparing" to "em separação", "shipped" to "como enviado", "delivered" to "como entregue",
+        )
+
+        /** Mudar o status de um pedido (pago, em separação, enviado com rastreio). Entregue usa [montarEntregue]. */
+        fun montarStatus(pedidos: List<Pedido>, id: Int, status: String, rastreio: String?): Preparo {
+            if (status == "delivered") return montarEntregue(pedidos, id)
+            val o = pedidos.firstOrNull { it.id == id } ?: return Preparo("Não achei o pedido $id.", null)
+            val codigo = rastreio?.uppercase()?.replace(Regex("[^A-Z0-9]"), "")?.takeIf { it.length in 8..40 }
+            if (rastreio != null && codigo == null) {
+                return Preparo("Não entendi o código de rastreio. Escreva ele aqui, por exemplo: pedido $id enviado, rastreio AB123456789BR.", null)
+            }
+            when (o.status) {
+                "canceled" -> return Preparo("O pedido $id está cancelado. Nada foi mudado.", null)
+                "delivered" -> return Preparo("O pedido $id já foi entregue. Nada foi mudado.", null)
+                "awaiting_payment" -> if (status != "paid") return Preparo(
+                    "O pedido $id ainda está aguardando pagamento. Se a cliente pagou por fora, diga primeiro: marca o pedido $id como pago.", null
+                )
+            }
+            val ordem = listOf("awaiting_payment", "paid", "preparing", "shipped", "delivered")
+            if (o.status == status && (status != "shipped" || codigo == null || codigo == o.rastreio)) {
+                return Preparo("O pedido $id já está ${NOME_STATUS[status] ?: status}.", null)
+            }
+            val voltando = ordem.indexOf(status) < ordem.indexOf(o.status)
+            val nome = o.cliente.trim().split(" ").firstOrNull().orEmpty()
+            val de = if (nome.isNotBlank()) " de $nome" else ""
+            var texto = when (status) {
+                "paid" -> "Marcar o pedido $id$de (${dinheiro(o.totalCentavos)}) como pago?"
+                "preparing" -> "Marcar o pedido $id$de como em separação?"
+                "shipped" -> if (codigo != null) "Marcar o pedido $id$de como enviado, com o rastreio $codigo?"
+                else "Marcar o pedido $id$de como enviado, sem código de rastreio?"
+                else -> return Preparo("Não sei mudar para esse status.", null)
+            }
+            if (voltando) texto += " Atenção: ele está ${STATUS[o.status]}, isso volta uma etapa."
+            if (status == "shipped" && codigo == null && o.entrega != "pickup" && o.rastreio == null) {
+                texto += " Depois dá para dizer: rastreio do pedido $id é, e o código."
+            }
+            if (o.telefone.replace(Regex("\\D"), "").length >= 10) texto += " Depois eu abro o WhatsApp da cliente com o aviso pronto."
+            return Preparo(texto + CONFIRMA, Alteracao("status", pedido = o, status = status, rastreio = codigo))
+        }
+
+        /** Link do WhatsApp da cliente com o aviso da nova etapa do pedido (null se não houver telefone). */
+        fun linkAviso(a: Alteracao): String? {
+            val p = a.pedido ?: return null
+            val status = if (a.tipo == "entregue") "delivered" else a.status ?: return null
+            val tel = p.telefone.replace(Regex("\\D"), "")
+            if (tel.length < 10) return null
+            val numero = if (tel.startsWith("55") && tel.length > 11) tel else "55$tel"
+            val nome = p.cliente.trim().split(Regex("\\s+")).firstOrNull().orEmpty()
+            val ola = "Olá${if (nome.isNotBlank()) ", $nome" else ""}!"
+            val link = "$SITE/pedido/${p.id}"
+            val rastreio = a.rastreio ?: p.rastreio
+            val texto = when (status) {
+                "paid" -> "$ola Recebemos o pagamento do seu pedido #${p.id} (${dinheiro(p.totalCentavos)}). Já estamos separando tudo com muito cuidado e discrição. 💖\nAcompanhe aqui: $link"
+                "preparing" -> "$ola Seu pedido #${p.id} já está sendo separado, com embalagem neutra e discreta. Em breve ele segue para " +
+                    (if (p.entrega == "pickup") "a retirada." else "o envio.") + " 💖\nAcompanhe aqui: $link"
+                "shipped" -> "$ola Seu pedido #${p.id} foi enviado! 📦\n" +
+                    (if (rastreio != null) "Código de rastreio: $rastreio\n" else "Assim que o código de rastreio sair, ele aparece na página do pedido.\n") +
+                    "Acompanhe aqui: $link"
+                "delivered" -> "$ola Seu pedido #${p.id} foi entregue. Esperamos que você ame! 💖\n" +
+                    "Conta pra gente o que achou do produto e do atendimento (leva 1 minuto): $SITE/avaliar/${p.id}"
+                else -> return null
+            }
+            return "https://wa.me/$numero?text=" + java.net.URLEncoder.encode(texto, "UTF-8").replace("+", "%20")
+        }
+
         fun montarEntregue(pedidos: List<Pedido>, id: Int): Preparo {
             val o = pedidos.firstOrNull { it.id == id } ?: return Preparo("Não achei o pedido $id.", null)
             return when (o.status) {
@@ -564,6 +700,129 @@ class Loja(private val contexto: Context) {
                     )
                 }
             }
+        }
+
+        private fun vendidosNoIntervalo(pedidos: List<Pedido>, ini: Long, fim: Long) =
+            pedidos.filter { it.status in PAGOS && (it.pago ?: it.criado) in ini until fim }
+
+        private fun nomeDoPeriodoMinusculo(periodo: String) = when (periodo) {
+            "hoje" -> "hoje"
+            "ontem" -> "ontem"
+            "semana" -> "nos últimos 7 dias"
+            else -> "neste mês"
+        }
+
+        /** Os campeões de venda do período (padrão: mês), por unidades. */
+        fun montarMaisVendidos(pedidos: List<Pedido>, periodo: String, agora: Calendar): String {
+            val (ini, fim) = inicioDoPeriodo(periodo, agora)
+            val pagos = vendidosNoIntervalo(pedidos, ini, fim)
+            val quando = nomeDoPeriodoMinusculo(periodo)
+            if (pagos.isEmpty()) return "Ainda não teve venda paga $quando."
+            val ranking = pagos.flatMap { it.itens }.groupBy { it.nome.trim() }
+                .map { (nome, itens) -> Triple(nome, itens.sumOf { it.quantidade }, itens.sumOf { it.quantidade * it.precoCentavos }) }
+                .sortedWith(compareByDescending<Triple<String, Int, Int>> { it.second }.thenByDescending { it.third })
+            val linhas = ranking.take(5).mapIndexed { i, (nome, qtd, valor) ->
+                "${i + 1}. $nome: ${plural(qtd, "unidade", "unidades")}, ${dinheiro(valor)}"
+            }.joinToString("\n")
+            return "Mais vendidos $quando:\n$linhas"
+        }
+
+        /** Este mês até hoje comparado com o mesmo período do mês passado. */
+        fun montarComparacao(pedidos: List<Pedido>, agora: Calendar): String {
+            fun zero(c: Calendar) = c.apply {
+                set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
+            }
+            val inicioMes = zero((agora.clone() as Calendar).apply { set(Calendar.DAY_OF_MONTH, 1) })
+            val inicioPassado = (inicioMes.clone() as Calendar).apply { add(Calendar.MONTH, -1) }
+            val dia = agora.get(Calendar.DAY_OF_MONTH)
+            // mesmo ponto do mês passado (dia de hoje, ou o último dia se o mês passado for mais curto)
+            val mesmoPonto = (inicioPassado.clone() as Calendar).apply {
+                set(Calendar.DAY_OF_MONTH, minOf(dia, getActualMaximum(Calendar.DAY_OF_MONTH)))
+                set(Calendar.HOUR_OF_DAY, agora.get(Calendar.HOUR_OF_DAY)); set(Calendar.MINUTE, agora.get(Calendar.MINUTE))
+            }
+            val agoraMs = agora.timeInMillis
+            val este = vendidosNoIntervalo(pedidos, inicioMes.timeInMillis, agoraMs + 1)
+            val passadoAteAqui = vendidosNoIntervalo(pedidos, inicioPassado.timeInMillis, mesmoPonto.timeInMillis + 1)
+            val passadoTodo = vendidosNoIntervalo(pedidos, inicioPassado.timeInMillis, inicioMes.timeInMillis)
+            val total = este.sumOf { it.totalCentavos }
+            val antes = passadoAteAqui.sumOf { it.totalCentavos }
+            var texto = "Neste mês até agora: ${plural(este.size, "venda", "vendas")}, ${dinheiro(total)}. " +
+                "No mesmo período do mês passado: ${plural(passadoAteAqui.size, "venda", "vendas")}, ${dinheiro(antes)}."
+            texto += when {
+                antes == 0 && total == 0 -> ""
+                antes == 0 -> " Melhor que o mês passado, que ainda não tinha vendas a essa altura."
+                else -> {
+                    val pct = ((total - antes) * 100L / antes).toInt()
+                    when {
+                        pct > 0 -> " Está $pct% acima. 📈"
+                        pct < 0 -> " Está ${-pct}% abaixo."
+                        else -> " Está igual."
+                    }
+                }
+            }
+            if (passadoTodo.isNotEmpty()) texto += " O mês passado inteiro fechou em ${dinheiro(passadoTodo.sumOf { it.totalCentavos })}."
+            return texto
+        }
+
+        /** Produtos à venda, com estoque, que não vendem há [dias] dias ou mais. */
+        fun montarParados(pedidos: List<Pedido>, produtos: List<Produto>, agora: Calendar, dias: Int = 30): String {
+            val desde = agora.timeInMillis - dias * 24L * 3600_000
+            val vendidos = vendidosNoIntervalo(pedidos, desde, Long.MAX_VALUE).flatMap { it.itens }
+                .map { ComandosLocais.normalizar(it.nome.trim()) }.toSet()
+            val parados = produtos.filter { it.ativo && (it.estoque == null || it.estoque > 0) && ComandosLocais.normalizar(it.nome.trim()) !in vendidos }
+            if (parados.isEmpty()) return "Todos os produtos à venda tiveram saída nos últimos $dias dias. 👏"
+            val lista = parados.sortedByDescending { (it.estoque ?: 0) * (it.precoCentavos ?: 0) }
+            val linhas = lista.take(8).joinToString("\n") { p ->
+                "• ${p.nome}" + (if (p.estoque != null) " (${p.estoque} em estoque)" else "")
+            }
+            val mais = if (lista.size > 8) "\nE mais ${lista.size - 8}." else ""
+            return "${plural(parados.size, "produto sem venda", "produtos sem venda")} nos últimos $dias dias:\n$linhas$mais\n" +
+                "Dá para colocar em promoção, por exemplo: dá 10% de desconto no, e o nome do produto."
+        }
+
+        /** Resumo da noite: como foi o dia e o que fica para amanhã. */
+        fun montarResumoDoDia(pedidos: List<Pedido>, produtos: List<Produto>, agora: Calendar): String {
+            val dia = montarResumo(pedidos, "hoje", agora)
+            val separar = pedidos.count { it.status == "paid" || it.status == "preparing" }
+            val retirar = pedidos.count { it.entrega == "pickup" && it.status in setOf("paid", "preparing", "shipped") }
+            val ativos = produtos.filter { it.ativo && it.estoque != null }
+            val esgotados = ativos.count { it.estoque!! <= 0 }
+            val baixos = ativos.count { it.estoque!! in 1..ESTOQUE_BAIXO }
+            val tarefas = mutableListOf<String>()
+            if (separar > 0) tarefas += plural(separar, "pedido para separar", "pedidos para separar")
+            if (retirar > 0) tarefas += plural(retirar, "retirada para agendar", "retiradas para agendar")
+            if (esgotados > 0) tarefas += plural(esgotados, "produto esgotado", "produtos esgotados")
+            if (baixos > 0) tarefas += plural(baixos, "produto acabando", "produtos acabando")
+            return dia + if (tarefas.isEmpty()) " Nada pendente para amanhã." else " Para amanhã: ${tarefas.joinToString(", ")}."
+        }
+
+        /** O que foi vendido no período, com quantas unidades restam de cada um: a lista para repor. */
+        fun montarReposicao(pedidos: List<Pedido>, produtos: List<Produto>, periodo: String, agora: Calendar): String {
+            val (ini, fim) = inicioDoPeriodo(periodo, agora)
+            val pagos = pedidos.filter { it.status in PAGOS && (it.pago ?: it.criado) in ini until fim }
+            val quando = when (periodo) {
+                "hoje" -> "hoje"
+                "ontem" -> "ontem"
+                "mes" -> "neste mês"
+                else -> "nos últimos 7 dias"
+            }
+            if (pagos.isEmpty()) return "Nada vendido $quando, então nada para repor."
+            val vendidos = pagos.flatMap { it.itens }.groupBy { it.nome.trim() }
+                .mapValues { (_, v) -> v.sumOf { it.quantidade } }
+                .entries.sortedWith(compareByDescending<Map.Entry<String, Int>> { it.value }.thenBy { it.key })
+            val porNome = produtos.associateBy { ComandosLocais.normalizar(it.nome.trim()) }
+            val total = vendidos.sumOf { it.value }
+            val linhas = vendidos.take(12).joinToString("\n") { (nome, qtd) ->
+                val p = porNome[ComandosLocais.normalizar(nome)]
+                val resta = when {
+                    p == null || p.estoque == null -> ""
+                    p.estoque <= 0 -> " (esgotado)"
+                    else -> " (restam ${p.estoque})"
+                }
+                "• $nome: $qtd$resta"
+            }
+            val mais = if (vendidos.size > 12) "\nE mais ${vendidos.size - 12} produtos." else ""
+            return "Vendidos $quando: ${plural(total, "item", "itens")} em ${plural(pagos.size, "pedido", "pedidos")}.\n$linhas$mais"
         }
 
         /** Pedidos pagos para retirar que ainda não foram entregues. */
