@@ -588,6 +588,7 @@ class Ferramentas(private val activity: Activity, private val memoria: Memoria? 
     private var ultimaConversa: String? = null
 
     private fun lerMensagens(de: String): String {
+        if (!LEITOR_ATIVO) return MENSAGENS_INDISPONIVEL
         if (!LeitorDeMensagens.liberado(activity)) {
             return "Para eu ler suas mensagens, libere o acesso às notificações: nos ajustes da ${Marca.nome}, toque em Ler mensagens do WhatsApp."
         }
@@ -599,6 +600,7 @@ class Ferramentas(private val activity: Activity, private val memoria: Memoria? 
 
     private fun prepararResposta(para: String, texto: String): String {
         respostaPendente = null
+        if (!LEITOR_ATIVO) return MENSAGENS_INDISPONIVEL
         if (texto.isBlank()) return "O que eu respondo?"
         if (!LeitorDeMensagens.liberado(activity)) return lerMensagens("")
         val conversas = LeitorDeMensagens.conversas().orEmpty()
@@ -1071,6 +1073,14 @@ class Ferramentas(private val activity: Activity, private val memoria: Memoria? 
             .replace(Regex("\\p{Mn}+"), "")
 
     companion object {
+        /**
+         * Ler mensagens precisa do acesso às notificações. No Brasil, o Android bloqueia a instalação de apps
+         * de fora da Play Store que pedem esse acesso (proteção contra golpes), então o leitor fica desligado.
+         */
+        const val LEITOR_ATIVO = false
+        const val MENSAGENS_INDISPONIVEL =
+            "Ler e responder mensagens do WhatsApp não funciona nesta versão: o Android bloqueia a instalação de apps de fora da Play Store " +
+                "que leem notificações. Para mandar uma mensagem nova, diga: manda mensagem para a Natália que, e a mensagem."
         const val PEDIDO_CONTATOS = 20
         const val PEDIDO_LOCALIZACAO = 21
         val USAM_REDE = setOf(
