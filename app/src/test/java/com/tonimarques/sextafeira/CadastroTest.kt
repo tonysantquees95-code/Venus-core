@@ -18,7 +18,7 @@ class CadastroTest {
         val b = acao("novo produto")!!
         assertEquals("loja_cadastrar", b.nome)
         assertNull(b.args["nome"])
-        assertEquals("Vibrador Bullet Rosa", acao("cadastrar um produto novo chamado vibrador bullet rosa")!!.args["nome"])
+        assertEquals("Vibrador bullet rosa", acao("cadastrar um produto novo chamado vibrador bullet rosa")!!.args["nome"])
     }
 
     @Test fun categoriaECorpo() {
