@@ -18,7 +18,8 @@ object Raciocinio {
         faça as contas com cuidado e confira o resultado por outro caminho; considere hipóteses alternativas.
         Na resposta, diga primeiro a conclusão, depois explique o porquê em poucas frases claras e encadeadas
         (até 8 frases). Se faltar algum dado, diga qual e qual hipótese você usou. Em decisões de negócio,
-        traga números, riscos e uma recomendação prática.
+        traga números, riscos e uma recomendação prática. Quando vierem os dados reais da loja junto da pergunta,
+        faça as contas com eles (margem, giro, ticket médio, despesas) e cite os números que usou.
     """.trimIndent()
 
     private val SINAIS = listOf(
