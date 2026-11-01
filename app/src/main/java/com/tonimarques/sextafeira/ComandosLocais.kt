@@ -937,6 +937,7 @@ object ComandosLocais {
     /** "Quando o gel vai acabar", "previsão de estoque" (antes do clima, que também entende "previsão"). */
     private fun lojaPrevisao(f: Frase): Resultado? {
         val c = f.chave
+        if (Regex("\\b(?:tempo|clima|chuva|chover|graus|temperatura|frio|calor|sol)\\b").containsMatchIn(c)) return null
         LOJA_PREVISAO.firstNotNullOfOrNull { it.matchEntire(c) }?.let { m ->
             return Resultado.Acao("loja_previsao", mapOf("produto" to f.trecho(m.groups[1]).orEmpty().replace(Regex("^(?i)(?:o|a|os|as)\\s+"), "")))
         }
@@ -947,7 +948,7 @@ object ComandosLocais {
     private val LOJA_PREVISAO = listOf(
         Regex("^(?:quando|em quantos dias|em quanto tempo) (?:o |a |os |as )?(.+?) (?:vai |vao )?(?:acaba|acabar|acabam|esgota|esgotar|esgotam)$"),
         Regex("^(?:quando|em quantos dias|em quanto tempo) (?:vai |vao )?(?:acaba|acabar|acabam|esgota|esgotar|esgotam) (?:o |a |os |as )?(?:estoque (?:d[oae]s? )?)?(.+)$"),
-        Regex("^(?:qual a )?previsao (?:de estoque |do estoque )?(?:d[oae]s? )(.+)$"),
+        Regex("^(?:qual a )?previsao (?:de|do) estoque (?:d[oae]s? )(.+)$"),
     )
     private val LOJA_PREVISAO_GERAL = Regex(
         "\\b(?:previsao (?:de|do) estoque|o que (?:vai|esta para|ta para|ta pra) acabar|o que acaba (?:logo|primeiro|essa semana|este mes)|vai faltar|quais produtos vao acabar)\\b"
