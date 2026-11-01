@@ -45,6 +45,7 @@ object ComandosLocais {
         if (LER_NOTA.containsMatchIn(c)) return Resultado.Acao("ler_nota", emptyMap())
         if (ABRIR_ARQUIVO.containsMatchIn(c)) return Resultado.Acao("abrir_arquivo", emptyMap())
         lojaPrevisao(f)?.let { return it }
+        financas(f)?.let { return it }
         if (LISTAR_POSTS.containsMatchIn(c)) return Resultado.Acao("listar_posts", emptyMap())
         if (RESPONDER_CLIENTE.containsMatchIn(c)) return Resultado.Acao("responder_cliente", emptyMap())
         PROGRAMAR_POST.matchEntire(c)?.let { m -> return programarPost(m.groupValues[1], f.trecho(m.groups[2]).orEmpty()) }
@@ -434,7 +435,9 @@ object ComandosLocais {
             LOJA_SOMAR.matchEntire(c)?.let { m -> return acao("estoque_somar", m.groupValues[2], m.groupValues[1].toInt()) }
             LOJA_TIRAR.matchEntire(c)?.let { m -> return acao("estoque_tirar", m.groupValues[2], m.groupValues[1].toInt()) }
         }
-        LOJA_VENDI.matchEntire(c)?.let { m -> return acao("estoque_tirar", m.groupValues[2], m.groupValues[1].toInt()) }
+        if (!Regex("\\bvendi (?:mais )?\\d+(?:[.,]\\d+)? ?(?:reais|real|no pix|em dinheiro|no dinheiro|no cartao|por fora)\\b|\\bvendi r\\$").containsMatchIn(c)) {
+            LOJA_VENDI.matchEntire(c)?.let { m -> return acao("estoque_tirar", m.groupValues[2], m.groupValues[1].toInt()) }
+        }
         LOJA_DEFINIR_A.matchEntire(c)?.let { m -> return acao("estoque_definir", m.groupValues[1], m.groupValues[2].toInt()) }
         LOJA_DEFINIR_B.matchEntire(c)?.let { m -> return acao("estoque_definir", m.groupValues[2], m.groupValues[1].toInt()) }
         for ((ordem, regra) in LOJA_CUSTO) {
@@ -442,7 +445,10 @@ object ComandosLocais {
             val (prod, valor, extra) = if (ordem == 0) Triple(m.groupValues[1], m.groupValues[2], m.groupValues[3])
             else Triple(m.groupValues[3], m.groupValues[1], m.groupValues[2])
             val v = centavos(valor, extra) ?: continue
-            return acao("custo", prod.replace(Regex("\\s+(?:cada|a unidade|por unidade)$"), ""), v)
+            val r = acao("custo", prod.replace(Regex("\\s+(?:cada|a unidade|por unidade)$"), ""), v)
+            // "paguei 50 no gás": se não for produto da loja, vira despesa no caixa
+            if (ordem == 1 && r is Resultado.Acao) return Resultado.Acao(r.nome, r.args + ("se_nao_achar" to "despesa"))
+            return r
         }
         LOJA_FIM_PROMO.matchEntire(c)?.let { m -> return acao("fim_promocao", m.groupValues[1].ifBlank { m.groupValues[2] }) }
         LOJA_PROMO_PCT.matchEntire(c)?.let { m -> return acao("promocao_pct", m.groupValues[2], m.groupValues[1].toInt()) }
@@ -934,6 +940,101 @@ object ComandosLocais {
         0 to Regex("^(?:o |a |os |as )?(.+?) (?:me )?custou $VALOR(?: cada| a unidade| por unidade)?$"),
         1 to Regex("^(?:eu )?paguei $VALOR (?:no|na|nos|nas|em|pelo|pela|pelos|pelas|por|cada) (.+?)$"),
     )
+    /** Caixa da loja: despesas, entradas por fora, fixas, resultado, gráficos e contas financeiras. */
+    fun financas(f: Frase): Resultado? {
+        val c = f.chave
+        val semPonto = c.trimEnd('.', '!', '?')
+        fun periodo() = when {
+            Regex("\\bmes passado\\b|\\bmes anterior\\b").containsMatchIn(c) -> "mes_passado"
+            Regex("\\bsemana\\b|\\b7 dias\\b").containsMatchIn(c) -> "semana"
+            else -> "mes"
+        }
+        fun trechoDe(m: MatchResult, i: Int) = f.trecho(m.groups[i]).orEmpty().trim().trimEnd('.', '!', '?')
+        CAIXA_APAGAR.matchEntire(semPonto)?.let { return Resultado.Acao("caixa_apagar", emptyMap()) }
+        CAIXA_REMOVER_FIXA.matchEntire(semPonto)?.let { m -> return Resultado.Acao("caixa_remover_fixa", mapOf("trecho" to trechoDe(m, 1))) }
+        for (r in CAIXA_FIXA) {
+            val m = r.matchEntire(semPonto) ?: continue
+            val v = centavosF(m.groupValues[2], m.groupValues[3]) ?: continue
+            val dia = m.groupValues.getOrNull(4)?.toIntOrNull() ?: 1
+            return Resultado.Acao("caixa_fixa", mapOf("descricao" to trechoDe(m, 1), "valor" to v, "dia" to dia))
+        }
+        for ((ordem, r) in CAIXA_DESPESA) {
+            val m = r.matchEntire(semPonto) ?: continue
+            val (desc, valor, extra) = if (ordem == 0) Triple(trechoDe(m, 3), m.groupValues[1], m.groupValues[2]) else Triple(trechoDe(m, 1), m.groupValues[2], m.groupValues[3])
+            val v = centavosF(valor, extra) ?: continue
+            if (desc.length < 2) continue
+            return Resultado.Acao("caixa_lancar", mapOf("tipo" to "saida", "valor" to v, "descricao" to desc))
+        }
+        CAIXA_ENTRADA.matchEntire(semPonto)?.let { m ->
+            val v = centavosF(m.groupValues[1], m.groupValues[2]) ?: return@let
+            val desc = trechoDe(m, 3).ifBlank { "Venda por fora" }
+            return Resultado.Acao("caixa_lancar", mapOf("tipo" to "entrada", "valor" to v, "descricao" to desc))
+        }
+        CALC_JUROS.matchEntire(semPonto)?.let { m ->
+            val anos = m.groupValues[5].startsWith("ano")
+            return Resultado.Acao("financeiro_calculo", mapOf("tipo" to "juros_compostos", "a" to num(m.groupValues[1]), "b" to num(m.groupValues[2]),
+                "c" to (m.groupValues[4].toDouble() * if (anos && m.groupValues[3].contains("mes")) 12 else 1), "taxa_anual" to (m.groupValues[3].contains("ano"))))
+        }
+        CALC_PARCELA.matchEntire(semPonto)?.let { m ->
+            return Resultado.Acao("financeiro_calculo", mapOf("tipo" to "parcela", "a" to num(m.groupValues[1]), "b" to num(m.groupValues[3]), "c" to m.groupValues[2].toDouble()))
+        }
+        CALC_DESCONTO.find(semPonto)?.let { m ->
+            return Resultado.Acao("financeiro_calculo", mapOf("tipo" to "desconto_venda", "a" to num(m.groupValues[1])))
+        }
+        CALC_MARGEM.find(semPonto)?.let { m ->
+            val args = mutableMapOf<String, Any>("tipo" to "markup", "a" to num(m.groupValues[1]))
+            if (m.groupValues[2].isNotBlank()) args["b"] = num(m.groupValues[2])
+            return Resultado.Acao("financeiro_calculo", args)
+        }
+        if (CAIXA_EQUILIBRIO.containsMatchIn(c)) return Resultado.Acao("caixa_equilibrio", emptyMap())
+        if (CAIXA_PREVISAO.containsMatchIn(c)) return Resultado.Acao("caixa_previsao", emptyMap())
+        if (CAIXA_RELATORIO.containsMatchIn(c)) return Resultado.Acao("caixa_relatorio", mapOf("periodo" to periodo()))
+        if (CAIXA_GRAFICO.containsMatchIn(c)) return Resultado.Acao("caixa_grafico", emptyMap())
+        if (CAIXA_DESPESAS.containsMatchIn(c)) return Resultado.Acao("caixa_despesas", mapOf("periodo" to periodo()))
+        if (CAIXA_RESULTADO.containsMatchIn(c)) return Resultado.Acao("caixa_resultado", mapOf("periodo" to periodo()))
+        return null
+    }
+
+    /** "1.500" → 1500; "2,5" → 2.5; "2.5" → 2.5. */
+    fun num(s: String): Double {
+        val t = if (',' in s) s.replace(".", "").replace(',', '.') else s.replace(Regex("\\.(?=\\d{3}(?:\\D|$))"), "")
+        return t.toDoubleOrNull() ?: 0.0
+    }
+
+    /** Igual a [centavos], mas aceita milhar com ponto ("1.500,50"). */
+    fun centavosF(valor: String, extra: String = ""): Int? = centavos(valor.replace(Regex("\\.(?=\\d{3}(?:\\D|$))"), ""), extra)
+
+    private const val VALOR_F = "(?:r\\$ ?)?((?:\\d{1,3}(?:\\.\\d{3})+|\\d{1,6})(?:[.,]\\d{1,2})?)(?: ?reais| ?real)?(?: (?:e|com) (\\d{1,2})(?: centavos?)?)?"
+
+    private const val N = "(\\d{1,9}(?:[.,]\\d{1,3})*)"
+    private val CAIXA_APAGAR = Regex("^(?:apaga|apague|desfaz|desfaca|cancela|cancele|remove|remova|exclui|exclua) (?:o |a )?(?:ultimo lancamento|ultima despesa|ultima entrada|ultimo gasto|ultima saida)$")
+    private val CAIXA_REMOVER_FIXA = Regex("^(?:tira|tire|remove|remova|apaga|apague|cancela|cancele|exclui|exclua) (?:a |o )?(?:despesa|conta|gasto) fix[oa] (?:de |do |da |com )?(.+)$")
+    private val CAIXA_FIXA = listOf(
+        Regex("^(?:(?:tenho|temos|cadastra|cadastre|anota|anote|coloca|coloque) (?:uma |um )?)?(?:despesa|conta|gasto|custo) fix[oa] (?:de |do |da |com )?(.+?) (?:de|no valor de|por) $VALOR_F(?: (?:por|todo|ao) mes| mensal| (?:todo|no|vence|vence no) dia (\\d{1,2}))*$"),
+        Regex("^(?:o |a |os |as )?(.+?) (?:e|eh|custa|sai|fica) $VALOR_F (?:por|todo|ao) mes(?: (?:todo |no )?dia (\\d{1,2}))?$"),
+    )
+    /** 0: valor antes da descrição ("paguei 120 de internet"); 1: descrição antes ("paguei a internet de 120"). */
+    private val CAIXA_DESPESA = listOf(
+        0 to Regex(
+            "^(?:eu )?(?:paguei|gastei|gastamos|pagamos|comprei|compramos|saiu|sairam|tive (?:um gasto|uma despesa) de|(?:lanca|lance|anota|anote|registra|registre) (?:uma |um )?(?:despesa|saida|gasto) de|despesa de|saida de|gasto de) " +
+                "$VALOR_F(?: reais| real| conto| pila)? (?:de|com|em|pro|pra|para|do|da|dos|das|no|na|nos|nas) (.+)$"
+        ),
+        1 to Regex("^(?:eu )?(?:paguei|pagamos) (?:a |o |as |os )?(.+?) (?:de|por|no valor de|:) $VALOR_F(?: reais)?$"),
+    )
+    private val CAIXA_ENTRADA = Regex(
+        "^(?:eu )?(?:recebi|entrou|entraram|ganhei|vendi|faturei|fiz)(?: mais)? $VALOR_F(?: reais| real)?(?: (?:de|com|em|no|na|por|pelo|pela|numa|em uma|de uma|vendendo) (.+))?$"
+    )
+    private val CALC_JUROS = Regex("^quanto (?:rende|rendem|fica|ficam|vira|viram|da|dao) (?:r\\$ ?)?$N(?: reais)? (?:a|com|em|aplicados? a) $N ?(?:%|por cento) (ao mes|ao ano|a\\.?m\\.?|a\\.?a\\.?) (?:por|em|durante|depois de) (\\d{1,3}) (meses|mes|anos|ano)$")
+    private val CALC_PARCELA = Regex("^(?:qual|quanto) (?:a |o |e |eh |fica |fica a |da |sai )*(?:parcela|prestacao|valor da parcela) de (?:r\\$ ?)?$N(?: reais)? em (\\d{1,3}) ?(?:x|vezes) (?:com|a) (?:juros de )?$N ?(?:%|por cento)(?: ao mes| a\\.?m\\.?)?$")
+    private val CALC_DESCONTO = Regex("\\bse (?:eu )?(?:der|dar|fizer|fazer|colocar) (?:um )?(?:desconto de )?$N ?(?:%|por cento)(?: de desconto)?,? (?:quanto|o quanto) (?:eu )?(?:preciso|tenho que|teria que) vender a mais\\b")
+    private val CALC_MARGEM = Regex("\\b(?:qual|que) preco (?:eu )?(?:cobro|coloco|devo cobrar|vendo|cobrar) (?:para|pra) (?:ter )?(?:uma )?margem de $N ?(?:%|por cento)(?:,? (?:com|se o|sendo o) custo (?:de |e |eh |for )?(?:r\\$ ?)?$N)?")
+    private val CAIXA_EQUILIBRIO = Regex("\\b(?:ponto de equilibrio|quanto (?:eu )?(?:preciso|tenho que) vender (?:pra|para|por mes pra|por mes para) (?:empatar|pagar as contas|cobrir as despesas|nao ter prejuizo|ficar no zero)|meta minima de vendas)\\b")
+    private val CAIXA_PREVISAO = Regex("\\b(?:previsao (?:de|do|das) (?:faturamento|vendas|despesas|caixa|mes que vem|proximo mes|gastos)|quanto (?:eu )?vou (?:faturar|vender|gastar)(?: (?:no|este|esse) (?:proximo )?mes)?|faturamento previsto|projecao (?:de|do|das) (?:vendas|faturamento|caixa))\\b")
+    private val CAIXA_RELATORIO = Regex("\\b(?:relatorio (?:financeiro|do mes|mensal|em pdf|completo|da loja|do mes passado)|gera(?:r)? (?:o |um )?relatorio|pdf do mes|pdf financeiro)\\b")
+    private val CAIXA_GRAFICO = Regex("\\bgraficos?\\b")
+    private val CAIXA_DESPESAS = Regex("\\b(?:quanto (?:eu |nos |a gente )?(?:gastei|gastamos|paguei|pagamos)|(?:minhas|nossas|as) despesas|lista de (?:gastos|despesas)|quais (?:foram )?(?:as )?(?:minhas )?despesas|meus gastos|gastos do mes|despesas do mes|despesas fixas|com o que (?:eu )?(?:gastei|gasto))\\b")
+    private val CAIXA_RESULTADO = Regex("\\b(?:resultado (?:do|deste|desse|no) mes|resultado financeiro|resultado do mes passado|como (?:esta|ta|anda|vai|foi) (?:o )?(?:meu |nosso )?(?:caixa|financeiro|mes)|balanco(?: do mes)?|fluxo de caixa|lucro (?:real|liquido)|dre|fechamento do mes|quanto (?:sobrou|sobra|ficou) (?:de lucro|no caixa|pra mim|limpo)|como fechou o mes|meu caixa)\\b")
+
     /** "Quando o gel vai acabar", "previsão de estoque" (antes do clima, que também entende "previsão"). */
     private fun lojaPrevisao(f: Frase): Resultado? {
         val c = f.chave
