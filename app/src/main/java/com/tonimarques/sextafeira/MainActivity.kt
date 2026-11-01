@@ -501,6 +501,12 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
             ferramentas.esquecerPendentes()
             fecharConfirmacaoLoja()
         }
+        // Memória da conversa: "esse pedido" → o pedido 15; "coloca ele em promoção" → coloca o gel em promoção
+        Contexto.comPedido(pedido)?.let { pedido = it }
+        Contexto.comProduto(pedido)?.let { trocado ->
+            val r = ComandosLocais.interpretar(trocado)
+            if (r is ComandosLocais.Resultado.Acao && (r.nome.startsWith("loja_") || r.nome == "programar_post")) pedido = trocado
+        }
         val decisao = cerebro.responder(pedido)
         topicoAtual = when (decisao) {
             is Cerebro.Decisao.Memoria -> "Sobre mim"
@@ -509,17 +515,56 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         }
         adicionarMensagem(original, true)
         cerebro.ultimaCorrecao?.let { mostrarNota("Entendi: “$it”") }
-        if (decisao is Cerebro.Decisao.Incerto) {
-            responderPergunta(pedido)
+        val naoEntendeuLoja = decisao is Cerebro.Decisao.Responder && decisao.texto.startsWith("Sobre a loja eu entendo")
+        if (decisao is Cerebro.Decisao.Incerto || naoEntendeuLoja) {
+            rotearOuPerguntar(pedido)
         } else {
             mostrarDecisao(decisao, pedido)
+        }
+    }
+
+    /**
+     * As regras não entenderam: primeiro vê se já aprendeu essa frase; senão o Gemini só interpreta qual ação é
+     * (a Vênus executa no celular). Se for conversa ou pergunta geral, segue o caminho de sempre.
+     */
+    private fun rotearOuPerguntar(pedido: String) {
+        if (documentoAtivo() != null) {
+            responderPergunta(pedido)
+            return
+        }
+        Roteador.lembrada(this, pedido)?.let {
+            mostrarDecisao(Cerebro.Decisao.Executar(it.acao, it.args), pedido)
+            return
+        }
+        val k = chave()
+        if (k.isBlank() || modoIndependente()) {
+            responderPergunta(pedido)
+            return
+        }
+        val m = modelo()
+        val contexto = Contexto.descrever()
+        comTempoLimite("ENTENDENDO…") {
+            val rota = Roteador.rotear(k, m, pedido, contexto)
+            val acao: () -> Unit = if (rota != null) {
+                {
+                    // frases que dependem do assunto anterior ("e o dele?") não viram regra fixa
+                    val dependeDoContexto = contexto.isNotBlank() &&
+                        Regex("\\b(?:ele|ela|dele|dela|nele|nela|mesmo|esse|essa|este|esta|aquele|aquela|isso)\\b|^e ").containsMatchIn(Roteador.chave(pedido))
+                    if (!dependeDoContexto) Roteador.lembrar(this, pedido, rota)
+                    topicoAtual = Topicos.classificar(pedido, rota.acao)
+                    mostrarDecisao(Cerebro.Decisao.Executar(rota.acao, rota.args), pedido)
+                }
+            } else {
+                { responderPergunta(pedido) }
+            }
+            acao
         }
     }
 
     private fun mostrarDecisao(decisao: Cerebro.Decisao, pedido: String, semIA: Boolean = false) {
         when (decisao) {
             is Cerebro.Decisao.Executar -> when {
-                decisao.nome == "pesquisar_na_web" ->
+                decisao.nome.also { Contexto.registrar(it, decisao.args) } == "pesquisar_na_web" ->
                     buscaInteligente(decisao.args["termo"]?.toString().orEmpty().ifBlank { pedido })
                 decisao.nome == "loja_cadastrar" -> abrirCadastro(decisao.args)
                 decisao.nome == "editar_fundo" -> editarFundo(null)
@@ -528,6 +573,8 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
                 decisao.nome == "programar_post" -> programarPost(decisao.args)
                 decisao.nome == "listar_posts" -> listarPosts()
                 decisao.nome == "responder_cliente" -> responderCliente(null)
+                decisao.nome == "caixa_grafico" -> mostrarGrafico()
+                decisao.nome == "caixa_relatorio" -> gerarRelatorio(decisao.args["periodo"]?.toString() ?: "mes")
                 decisao.nome in Ferramentas.USAM_REDE -> executarNaRede(decisao.nome, decisao.args)
                 decisao.nome == "controlar_midia" || decisao.nome == "tocar_musica" -> {
                     // A música estava pausada só para ouvir você: devolve o som e só então aperta o botão.
@@ -2326,6 +2373,107 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
             .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         i.clipData = android.content.ClipData.newRawUri("foto", uri)
         startActivity(Intent.createChooser(i, "Compartilhar foto"))
+    }
+
+    // ----------------------------------------------------------- finanças: gráfico e relatório
+    private fun mostrarGrafico() {
+        comTempoLimite("MONTANDO O GRÁFICO…") {
+            val (pedidos, produtos) = try {
+                ferramentas.dadosDoCaixa()
+            } catch (e: Loja.ErroDaLoja) {
+                return@comTempoLimite { responder(e.message ?: "Não consegui buscar as vendas.") }
+            }
+            val agora = java.util.Calendar.getInstance()
+            val hist = Financas.historico(pedidos, produtos, Financas.lancamentos(this), Financas.fixas(this), 6, agora)
+            val imagem = Relatorio.grafico(hist)
+            val jpeg = Relatorio.jpeg(imagem)
+            val atual = hist.last().second
+            val fala = if (atual.receita == 0L && hist.all { it.second.receita == 0L }) {
+                "Ainda não tem vendas para mostrar no gráfico, mas já deixei ele pronto: conforme as vendas e despesas entrarem, ele vai se enchendo."
+            } else {
+                "Aqui está o gráfico dos últimos 6 meses. Neste mês, até agora: vendas de ${Loja.dinheiro(atual.receita.toInt())} e " +
+                    (if (atual.lucro >= 0) "lucro de ${Loja.dinheiro(atual.lucro.toInt())}." else "prejuízo de ${Loja.dinheiro((-atual.lucro).toInt())}.")
+            }
+            val acao: () -> Unit = {
+                responder(fala)
+                mostrarImagem("Gráfico financeiro", imagem, jpeg)
+            }
+            acao
+        }
+    }
+
+    private fun mostrarImagem(titulo: String, imagem: android.graphics.Bitmap, jpeg: ByteArray) {
+        val vista = android.widget.ImageView(this).apply {
+            setImageBitmap(imagem)
+            adjustViewBounds = true
+            setPadding(dp(8), dp(8), dp(8), dp(8))
+        }
+        AlertDialog.Builder(this)
+            .setTitle(titulo)
+            .setView(ScrollView(this).apply { addView(vista) })
+            .setPositiveButton("Compartilhar") { _, _ -> compartilharFoto(jpeg) }
+            .setNeutralButton("Salvar na galeria") { _, _ ->
+                Toast.makeText(this, if (salvarNaGaleria(jpeg)) "Salvo na galeria, na pasta Vênus." else "Não consegui salvar.", Toast.LENGTH_SHORT).show()
+            }
+            .setNegativeButton("Fechar", null)
+            .show()
+    }
+
+    private fun gerarRelatorio(periodo: String) {
+        comTempoLimite("GERANDO O RELATÓRIO…") {
+            val (pedidos, produtos) = try {
+                ferramentas.dadosDoCaixa()
+            } catch (e: Loja.ErroDaLoja) {
+                return@comTempoLimite { responder(e.message ?: "Não consegui buscar as vendas.") }
+            }
+            val agora = java.util.Calendar.getInstance()
+            val p = Financas.periodo(periodo, agora)
+            val lancamentos = Financas.lancamentos(this)
+            val fixas = Financas.fixas(this)
+            val res = Financas.resultado(pedidos, produtos, lancamentos, fixas, p)
+            val hist = Financas.historico(pedidos, produtos, lancamentos, fixas, 6, agora)
+            val nomeDoMes = java.text.SimpleDateFormat("MMMM 'de' yyyy", Locale("pt", "BR"))
+            val titulo = when (periodo) {
+                "mes_passado" -> nomeDoMes.format(java.util.Date(p.ini))
+                "semana" -> "últimos 7 dias"
+                else -> nomeDoMes.format(agora.time) + " (até hoje)"
+            }
+            val previsao = if (periodo == "mes") Financas.textoPrevisao(hist, fixas.sumOf { it.valorCentavos.toLong() }, agora) else ""
+            val bytes = Relatorio.pdf(
+                Relatorio.Dados(p, titulo, res, hist, lancamentos, fixas, Financas.maisVendidos(pedidos, p), previsao)
+            )
+            val (arquivo, uri) = FotoProvider.novoArquivo(this, "relatorio_${System.currentTimeMillis()}.pdf")
+            arquivo.writeBytes(bytes)
+            val fala = "O relatório de $titulo está pronto. " +
+                (if (res.lucro >= 0) "Lucro de ${Loja.dinheiro(res.lucro.toInt())}" else "Prejuízo de ${Loja.dinheiro((-res.lucro).toInt())}") +
+                " sobre ${Loja.dinheiro(res.receita.toInt())} em vendas. Você pode abrir, imprimir ou mandar para a Natália."
+            val acao: () -> Unit = {
+                responder(fala)
+                oferecerPdf(uri)
+            }
+            acao
+        }
+    }
+
+    private fun oferecerPdf(uri: Uri) {
+        AlertDialog.Builder(this)
+            .setTitle("Relatório financeiro (PDF)")
+            .setMessage("O que você quer fazer com o relatório?")
+            .setPositiveButton("Compartilhar") { _, _ ->
+                val i = Intent(Intent.ACTION_SEND).setType("application/pdf").putExtra(Intent.EXTRA_STREAM, uri)
+                    .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                i.clipData = android.content.ClipData.newRawUri("relatorio", uri)
+                startActivity(Intent.createChooser(i, "Enviar relatório"))
+            }
+            .setNeutralButton("Abrir") { _, _ ->
+                try {
+                    startActivity(Intent(Intent.ACTION_VIEW).setDataAndType(uri, "application/pdf").addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION))
+                } catch (e: ActivityNotFoundException) {
+                    Toast.makeText(this, "Nenhum app de PDF encontrado. Use Compartilhar e abra no Drive.", Toast.LENGTH_LONG).show()
+                }
+            }
+            .setNegativeButton("Fechar", null)
+            .show()
     }
 
     // ----------------------------------------------------------- responder clientes

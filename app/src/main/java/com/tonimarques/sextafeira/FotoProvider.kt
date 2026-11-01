@@ -22,12 +22,16 @@ class FotoProvider : ContentProvider() {
 
     override fun openFile(uri: Uri, mode: String): ParcelFileDescriptor {
         val ctx = context ?: throw IllegalStateException()
-        val nome = uri.lastPathSegment?.takeIf { Regex("^[a-z0-9_-]+\\.jpg$").matches(it) } ?: throw SecurityException("arquivo inválido")
+        val nome = uri.lastPathSegment?.takeIf { Regex("^[a-z0-9_-]+\\.(?:jpg|png|pdf)$").matches(it) } ?: throw SecurityException("arquivo inválido")
         val arquivo = File(pasta(ctx), nome)
         return ParcelFileDescriptor.open(arquivo, ParcelFileDescriptor.parseMode(mode))
     }
 
-    override fun getType(uri: Uri) = "image/jpeg"
+    override fun getType(uri: Uri) = when (uri.lastPathSegment?.substringAfterLast('.')) {
+        "pdf" -> "application/pdf"
+        "png" -> "image/png"
+        else -> "image/jpeg"
+    }
     override fun query(uri: Uri, p: Array<out String>?, s: String?, a: Array<out String>?, o: String?): Cursor? = null
     override fun insert(uri: Uri, values: ContentValues?): Uri? = null
     override fun delete(uri: Uri, s: String?, a: Array<out String>?) = 0
@@ -42,6 +46,12 @@ class FotoProvider : ContentProvider() {
         fun novaFoto(ctx: Context): Pair<File, Uri> {
             pasta(ctx).listFiles()?.forEach { if (System.currentTimeMillis() - it.lastModified() > 24 * 3600_000L) it.delete() }
             val nome = "produto_${System.currentTimeMillis()}.jpg"
+            return File(pasta(ctx), nome) to Uri.parse("content://$AUTORIDADE/$nome")
+        }
+
+        /** Um arquivo novo com o nome dado (ex.: "relatorio_123.pdf"), e o endereço dele para compartilhar. */
+        fun novoArquivo(ctx: Context, nome: String): Pair<File, Uri> {
+            pasta(ctx).listFiles()?.forEach { if (System.currentTimeMillis() - it.lastModified() > 24 * 3600_000L) it.delete() }
             return File(pasta(ctx), nome) to Uri.parse("content://$AUTORIDADE/$nome")
         }
 

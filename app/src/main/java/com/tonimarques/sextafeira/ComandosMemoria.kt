@@ -25,6 +25,8 @@ object ComandosMemoria {
         val f = ComandosLocais.limpar(texto)
         val c = f.chave
         if (c.isBlank()) return null
+        // "anota uma despesa de 30 de gasolina", "registra uma entrada de 200": é o caixa da loja, não a memória
+        if (ComandosLocais.financas(f) != null) return null
 
         if (APAGAR_TUDO.matches(c)) return Pedido.ApagarTudo
         if (LISTAR.matches(c)) return Pedido.Listar

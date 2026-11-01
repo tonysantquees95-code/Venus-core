@@ -165,6 +165,8 @@ class Loja(private val contexto: Context) {
 
     fun retiradas(): String = montarRetiradas(pedidos())
 
+    fun infoProduto(produto: String): String = montarInfoProduto(produtos(), produto)
+
     fun margem(produto: String): String = montarMargem(produtos(), produto)
 
     fun margens(): String = montarMargens(produtos())
@@ -580,6 +582,31 @@ class Loja(private val contexto: Context) {
         const val SEM_CAMPO_CUSTO = "O site ainda não tem o campo de preço de custo. Assim que ele for criado no painel, eu passo a guardar e calcular a margem."
 
         private fun pct(parte: Long, todo: Long) = if (todo == 0L) 0 else ((parte * 100 + todo / 2) / todo).toInt()
+
+        /** Tudo sobre um produto: preço, Pix, promoção, estoque, custo e margem. */
+        fun montarInfoProduto(produtos: List<Produto>, falado: String): String {
+            val achados = acharProdutos(produtos, falado)
+            if (achados.isEmpty()) return "Não achei nenhum produto com \"$falado\" na loja."
+            if (achados.size > 1) return "Achei ${achados.size} produtos: ${achados.take(4).joinToString(", ") { it.nome }}. De qual você quer saber?"
+            val p = achados[0]
+            val partes = mutableListOf<String>()
+            val preco = p.precoCentavos
+            if (preco == null) partes += "${p.nome} está sem preço"
+            else {
+                val promo = p.precoAntigo?.takeIf { it > preco }
+                partes += if (promo != null) "${p.nome} está em promoção: de ${dinheiro(promo)} por ${dinheiro(preco)} (no Pix também ${dinheiro(preco)})"
+                else "${p.nome} custa ${dinheiro(preco)}, ou ${dinheiro(preco - (preco * 5 + 50) / 100)} no Pix"
+            }
+            partes += when {
+                p.estoque == null -> "sem controle de estoque"
+                p.estoque <= 0 -> "esgotado"
+                else -> plural(p.estoque, "unidade", "unidades") + " em estoque"
+            }
+            val custo = p.custoCentavos
+            if (custo != null && preco != null) partes += "custou ${dinheiro(custo)}, lucro de ${dinheiro(preco - custo)} por unidade (${pct((preco - custo).toLong(), preco.toLong())}%)"
+            if (!p.ativo) partes += "está escondido do site"
+            return partes.joinToString("; ") + "."
+        }
 
         /** Margem de um produto: preço, custo, lucro por unidade. */
         fun montarMargem(produtos: List<Produto>, falado: String): String {

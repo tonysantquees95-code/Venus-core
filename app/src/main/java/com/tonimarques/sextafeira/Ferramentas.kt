@@ -26,6 +26,7 @@ import android.view.KeyEvent
 import org.json.JSONArray
 import org.json.JSONObject
 import java.text.Normalizer
+import java.util.Calendar
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 
@@ -381,12 +382,65 @@ class Ferramentas(private val activity: Activity, private val memoria: Memoria? 
         "loja_margens" -> daLoja { it.margens() }
         "loja_lucro" -> daLoja { it.lucro(a.optString("periodo", "mes")) }
         "loja_previsao" -> daLoja { it.previsao(a.optString("produto")) }
+        "loja_produto" -> daLoja { it.infoProduto(a.optString("produto")) }
         "loja_estoque_geral" -> daLoja { it.estoqueGeral() }
-        "loja_alterar" -> daLoja { l ->
+        "caixa_lancar" -> {
+            val valor = a.optInt("valor")
+            if (valor <= 0) "Qual o valor? Diga, por exemplo: paguei 120 de internet."
+            else {
+                val tipo = if (a.optString("tipo") == "entrada") "entrada" else "saida"
+                var desc = a.optString("descricao").trim().ifBlank { if (tipo == "entrada") "Venda por fora" else "Despesa" }
+                if (tipo == "entrada" && Regex("^(?:pix|dinheiro|cartao|cartão|credito|crédito|debito|débito)$", RegexOption.IGNORE_CASE).matches(desc)) desc = "Venda por fora ($desc)"
+                Financas.textoLancado(Financas.lancar(activity, tipo, valor, desc))
+            }
+        }
+        "caixa_apagar" -> Financas.apagarUltimo(activity)?.let {
+            "Pronto, apaguei o último lançamento: ${if (it.entrada) "entrada" else "despesa"} de ${Loja.dinheiro(it.valorCentavos)}, ${it.descricao.replaceFirstChar { c -> c.lowercase() }}."
+        } ?: "O livro caixa ainda está vazio."
+        "caixa_fixa" -> {
+            val valor = a.optInt("valor")
+            if (valor <= 0) "Qual o valor da despesa fixa?" else Financas.textoFixa(Financas.salvarFixa(activity, a.optString("descricao"), valor, a.optInt("dia", 1)))
+        }
+        "caixa_remover_fixa" -> when (val n = Financas.removerFixa(activity, a.optString("trecho"))) {
+            0 -> "Não achei essa despesa fixa. " + Financas.fixas(activity).let { f -> if (f.isEmpty()) "Não tem nenhuma cadastrada." else "As cadastradas são: " + f.joinToString(", ") { it.descricao } + "." }
+            1 -> "Pronto, tirei essa despesa fixa."
+            else -> "Pronto, tirei $n despesas fixas."
+        }
+        "caixa_resultado" -> comCaixa { pedidos, produtos ->
+            val p = Financas.periodo(a.optString("periodo", "mes"), Calendar.getInstance())
+            Financas.textoResultado(Financas.resultado(pedidos, produtos, Financas.lancamentos(activity), Financas.fixas(activity), p), p)
+        }
+        "caixa_despesas" -> {
+            val p = Financas.periodo(a.optString("periodo", "mes"), Calendar.getInstance())
+            Financas.textoDespesas(Financas.lancamentos(activity), Financas.fixas(activity), p)
+        }
+        "caixa_equilibrio" -> comCaixa { pedidos, produtos ->
+            val agora = Calendar.getInstance()
+            val hist = Financas.historico(pedidos, produtos, Financas.lancamentos(activity), Financas.fixas(activity), 4, agora)
+            val anteriores = hist.dropLast(1).filter { it.second.receita > 0 || it.second.despesas > 0 }
+            val variaveis = if (anteriores.isNotEmpty()) anteriores.map { it.second.despesas }.average().toLong()
+            else (hist.last().second.despesas / Financas.fracaoDoMes(agora)).toLong()
+            val comVenda = hist.filter { it.second.receita > 0 && it.second.itensSemCusto == 0 }.ifEmpty { hist.filter { it.second.receita > 0 } }
+            val margem = if (comVenda.isEmpty()) margemDoCatalogo(produtos) else comVenda.map { it.second.margemContribuicao }.average()
+            Financas.textoEquilibrio(Financas.fixas(activity), variaveis, margem)
+        }
+        "caixa_previsao" -> comCaixa { pedidos, produtos ->
+            val agora = Calendar.getInstance()
+            val hist = Financas.historico(pedidos, produtos, Financas.lancamentos(activity), Financas.fixas(activity), 6, agora)
+            Financas.textoPrevisao(hist, Financas.fixas(activity).sumOf { it.valorCentavos.toLong() }, agora)
+        }
+        "financeiro_calculo" -> Financas.textoCalculo(
+            a.optString("tipo"), a.optDouble("a", 0.0), a.optDouble("b", 0.0), a.optDouble("c", 0.0), a.optBoolean("taxa_anual", false),
+        )
+        "loja_alterar" -> if (!loja.conectada && a.optString("se_nao_achar") == "despesa" && a.has("valor")) {
+            Financas.textoLancado(Financas.lancar(activity, "saida", a.optInt("valor"), a.optString("produto")))
+        } else daLoja { l ->
             val valor = if (a.has("valor")) a.optInt("valor") else null
             val preparo = l.prepararAlteracao(a.optString("tipo"), a.optString("produto"), valor)
             lojaPendente = preparo.alteracao
-            preparo.texto
+            if (preparo.alteracao == null && a.optString("se_nao_achar") == "despesa" && valor != null && preparo.texto.startsWith("Não achei nenhum produto")) {
+                Financas.textoLancado(Financas.lancar(activity, "saida", valor, a.optString("produto")))
+            } else preparo.texto
         }
         "loja_entregue" -> daLoja { l ->
             val preparo = l.prepararEntregue(a.optInt("pedido"))
@@ -533,6 +587,34 @@ class Ferramentas(private val activity: Activity, private val memoria: Memoria? 
     val loja by lazy { Loja(activity) }
 
     /** Consulta a loja. Os dados ficam no celular (estas ferramentas não são oferecidas ao Gemini). */
+    /** Pedidos e produtos da loja para as contas do caixa (vazios se a loja não estiver conectada). Roda fora da thread principal. */
+    fun dadosDoCaixa(): Pair<List<Loja.Pedido>, List<Loja.Produto>> {
+        if (!loja.conectada) return emptyList<Loja.Pedido>() to emptyList()
+        return try {
+            loja.pedidos() to loja.produtos()
+        } catch (e: Exception) {
+            throw Loja.ErroDaLoja("Não consegui buscar as vendas da loja agora. Confira a internet.")
+        }
+    }
+
+    private fun comCaixa(conta: (List<Loja.Pedido>, List<Loja.Produto>) -> String): String = try {
+        val (pedidos, produtos) = dadosDoCaixa()
+        val aviso = if (!loja.conectada) " (Sem as vendas do site: a loja não está conectada.)" else ""
+        conta(pedidos, produtos) + aviso
+    } catch (e: Loja.ErroDaLoja) {
+        e.message ?: "Não consegui buscar as vendas da loja."
+    }
+
+    /** Margem média do catálogo (preço − custo) ÷ preço, dos produtos com custo cadastrado. */
+    private fun margemDoCatalogo(produtos: List<Loja.Produto>): Double {
+        val m = produtos.mapNotNull { p ->
+            val preco = p.precoCentavos ?: return@mapNotNull null
+            val custo = p.custoCentavos ?: return@mapNotNull null
+            if (preco <= 0) null else (preco - custo).toDouble() / preco
+        }
+        return if (m.isEmpty()) 0.0 else m.average()
+    }
+
     private fun daLoja(consulta: (Loja) -> String): String {
         if (!loja.conectada) return "A loja ainda não está conectada. Abra os ajustes e toque em Conectar à loja."
         ultimasFontes = listOf(Web.Fonte("Painel da loja", Loja.SITE + "/admin"))
@@ -1093,7 +1175,8 @@ class Ferramentas(private val activity: Activity, private val memoria: Memoria? 
             "buscar_cep", "dicionario", "ortografia", "distancia",
             "loja_resumo", "loja_pedidos", "loja_acabando", "loja_estoque",
             "rotina_bom_dia", "responder_mensagem", "confirmar_resposta",
-            "loja_retiradas", "loja_estoque_geral", "loja_alterar", "loja_status", "loja_reposicao", "loja_mais_vendidos", "loja_comparar", "loja_parados", "loja_margem", "loja_margens", "loja_lucro", "loja_previsao", "loja_entregue", "loja_confirmar", "loja_agendar",
+            "loja_retiradas", "loja_estoque_geral", "loja_alterar", "loja_status", "loja_reposicao", "loja_mais_vendidos", "loja_comparar", "loja_parados", "loja_margem", "loja_margens", "loja_lucro", "loja_previsao", "loja_produto", "loja_entregue", "loja_confirmar", "loja_agendar",
+            "caixa_resultado", "caixa_equilibrio", "caixa_previsao",
         )
 
         private const val SPOTIFY = "com.spotify.music"
