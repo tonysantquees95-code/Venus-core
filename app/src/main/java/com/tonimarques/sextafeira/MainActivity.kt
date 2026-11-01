@@ -1276,9 +1276,9 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         orbe.pulsar()
         ultimaFoiVoz = true
         forcarEscuta = true
-        val saudacao = cerebro.saudacaoDeAtivacao()
-        adicionarMensagem(saudacao, false)
-        principal.postDelayed({ falar(saudacao) }, 450)
+        // a saudação fica só escrita: ela não fala, já começa a ouvir (o som de ativação avisa que está pronta)
+        adicionarMensagem(cerebro.saudacaoDeAtivacao(), false, salvar = false)
+        principal.postDelayed({ if (!falando && !ocupado) aposFala() }, 450)
     }
 
     private fun restoDepoisDaAtivacao(texto: String): String? = Cerebro.restoDepoisDaAtivacao(texto)
