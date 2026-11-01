@@ -683,7 +683,8 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
      * (a Vênus executa no celular). Se for conversa ou pergunta geral, segue o caminho de sempre.
      */
     private fun rotearOuPerguntar(pedido: String) {
-        if (documentoAtivo() != null) {
+        // pergunta de raciocínio não é comando: vai direto para quem pensa (sem a consulta extra ao roteador)
+        if (documentoAtivo() != null || Raciocinio.precisaPensar(pedido)) {
             responderPergunta(pedido)
             return
         }
@@ -993,7 +994,8 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
             perguntarAoDocumento(pedido)
             return
         }
-        try {
+        // resposta guardada só para perguntas simples: num problema, um número diferente muda tudo
+        if (Raciocinio.precisaPensar(pedido)) null else try {
             ferramentas.conhecimento?.respostaGuardada(pedido)
         } catch (e: Exception) {
             null

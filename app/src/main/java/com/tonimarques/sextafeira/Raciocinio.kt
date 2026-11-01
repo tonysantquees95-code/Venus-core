@@ -9,7 +9,7 @@ package com.tonimarques.sextafeira
 object Raciocinio {
 
     /** Quanto o modelo pode "pensar" (tokens internos) numa pergunta difícil. */
-    const val ORCAMENTO = 6144
+    const val ORCAMENTO = 2048
 
     val INSTRUCOES_PROFUNDAS = """
         Responda em português do Brasil e sem markdown (a resposta pode ser falada em voz alta).
