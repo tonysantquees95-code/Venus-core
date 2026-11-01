@@ -87,6 +87,9 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
     private var interruptor: Interruptor? = null
     /** Até quando continuar tentando ouvir depois que ela fala (o reconhecedor desiste rápido no silêncio). */
     private var escutaAte = 0L
+    /** O último pedido e a ação feita, para anotar quando você diz "não foi isso". */
+    private var ultimoPedido: String? = null
+    private var ultimaAcaoFeita: String? = null
     private val apagarTela = Runnable { window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) }
 
     // ------------------------------------------------------------ ciclo de vida
@@ -109,12 +112,15 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         }
         tts = TextToSpeech(this, this)
         setContentView(montarTela())
+        val antes = mensagens.childCount
         carregarConversaAnterior()
-        mensagemInicial()?.let { adicionarMensagem(it, false, salvar = false) }
+        // a saudação só aparece numa conversa nova (não embaixo das mensagens de uma conversa em andamento)
+        if (mensagens.childCount == antes) mensagemInicial()?.let { adicionarMensagem(it, false, salvar = false) }
         tratarIntent(intent)
         if (javaClass == MainActivity::class.java) principal.postDelayed({ oferecerVozOffline() }, 1500)
         if (javaClass == MainActivity::class.java) principal.postDelayed({ procurarAtualizacao(manual = false) }, 4000)
         if (javaClass == MainActivity::class.java) principal.postDelayed({ resumirConversasAntigas() }, 8000)
+        if (javaClass == MainActivity::class.java) principal.postDelayed({ enviarRelatorioDeErros(manual = false) }, 12_000)
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -444,6 +450,21 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         }
     }
 
+    /** Manda o relatório de erros para o GitHub (sozinho a cada 12 horas, ou na hora se o app travou). */
+    private fun enviarRelatorioDeErros(manual: Boolean) {
+        if (!manual && !Registro.deveEnviar(this)) return
+        if (manual && Registro.pendentes(this).isEmpty()) {
+            Toast.makeText(this, "Nenhum erro anotado desde o último relatório. 👏", Toast.LENGTH_SHORT).show()
+            return
+        }
+        Thread {
+            val erro = Registro.enviar(this, atualizador.tokenParaRelatorio())
+            if (manual) runOnUiThread {
+                Toast.makeText(this, erro ?: "Relatório enviado. Na próxima atualização o Claude lê e corrige.", Toast.LENGTH_LONG).show()
+            }
+        }.start()
+    }
+
     /** Começa uma conversa nova: tela em branco, a anterior fica arquivada no histórico. */
     private fun comecarConversaNova() {
         memoria.novaConversa()
@@ -610,6 +631,19 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         val original = pedido
         pedido = Cerebro.limparFala(pedido)
 
+        // "Não foi isso", "você entendeu errado": anota o erro (vai no relatório) e pede para repetir
+        if (Registro.ehCorrecao(pedido) && ultimoPedido != null) {
+            topicoAtual = "Conversa"
+            adicionarMensagem(original, true)
+            Registro.anotar(this, "corrigido", "ação: ${ultimaAcaoFeita ?: "resposta"}", ultimoPedido.orEmpty())
+            ultimoPedido = null
+            forcarEscuta = true
+            responder("Desculpa! Anotei esse erro para melhorar. O que você queria? Pode falar de outro jeito.")
+            return
+        }
+        ultimoPedido = pedido
+        ultimaAcaoFeita = null
+
         // Resposta a "qual é o endereço do seu trabalho?"
         aguardandoLugar?.let { lugar ->
             aguardandoLugar = null
@@ -720,7 +754,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
     private fun mostrarDecisao(decisao: Cerebro.Decisao, pedido: String, semIA: Boolean = false) {
         when (decisao) {
             is Cerebro.Decisao.Executar -> when {
-                decisao.nome.also { Contexto.registrar(it, decisao.args) } == "pesquisar_na_web" ->
+                decisao.nome.also { Contexto.registrar(it, decisao.args); ultimaAcaoFeita = it } == "pesquisar_na_web" ->
                     buscaInteligente(decisao.args["termo"]?.toString().orEmpty().ifBlank { pedido })
                 decisao.nome == "loja_cadastrar" -> abrirCadastro(decisao.args)
                 decisao.nome == "editar_fundo" -> editarFundo(null)
@@ -730,6 +764,14 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
                 decisao.nome == "listar_posts" -> listarPosts()
                 decisao.nome == "responder_cliente" -> responderCliente(null)
                 decisao.nome == "caixa_grafico" -> mostrarGrafico()
+                decisao.nome == "enviar_relatorio_erros" -> {
+                    val n = Registro.pendentes(this).sumOf { it.vezes }
+                    if (n == 0) responder("Não tem nenhum erro anotado desde o último relatório.")
+                    else {
+                        responder("Mandando o relatório com $n ${if (n == 1) "ocorrência" else "ocorrências"} para o GitHub.")
+                        enviarRelatorioDeErros(manual = true)
+                    }
+                }
                 decisao.nome == "buscar_conversa" -> retomarConversa(decisao.args["assunto"]?.toString().orEmpty().ifBlank { pedido }, pedido)
                 decisao.nome == "caixa_relatorio" -> gerarRelatorio(decisao.args["periodo"]?.toString() ?: "mes")
                 decisao.nome in Ferramentas.USAM_REDE -> executarNaRede(decisao.nome, decisao.args)
@@ -750,6 +792,9 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
                     " Para perguntas livres, configure a chave do Gemini no menu."
                 } else {
                     ""
+                }
+                if (decisao.texto in BancoDeFrases.NAO_ENTENDI || decisao.texto.startsWith("Sobre a loja eu entendo")) {
+                    Registro.anotar(this, "nao_entendi", "sem ação para a frase", pedido)
                 }
                 responder(decisao.texto + aviso)
             }
@@ -886,7 +931,9 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
             val mostrar = try {
                 trabalho()
             } catch (e: Exception) {
-                { responder("Não consegui buscar isso agora. Confira sua internet e tente de novo.") }
+                if (e !is java.io.IOException) Registro.anotar(this, "erro", "$estado → " + Registro.resumoDoErro(e).replace("\n", " | "))
+                val aviso: () -> Unit = { responder("Não consegui buscar isso agora. Confira sua internet e tente de novo.") }
+                aviso
             }
             runOnUiThread {
                 if (id != pedidoAtual) return@runOnUiThread
@@ -1132,6 +1179,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
                 pedidoAtual++
                 ocupado = false
                 respostaAtrasada = id
+                Registro.anotar(this, "lento", "a IA passou do tempo limite", pedido)
                 responder("A resposta está demorando mais que o normal. Se ela chegar, eu mostro aqui.")
             }
         }, if (pensarMais) LIMITE_IA_PROFUNDO_MS else LIMITE_IA_MS)
@@ -1160,6 +1208,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
                     responder(resposta.texto)
                     mostrarFontes(ferramentas.ultimasFontes)
                 } else {
+                    Registro.anotar(this, "ia", resposta.texto, pedido)
                     // Gemini fora do ar: a Vênus pesquisa sozinha antes de desistir.
                     pesquisarSozinha(pedido, amplo = true, depoisIA = false, motivo = "Essa eu ainda não sei sozinha, e o Gemini não respondeu agora.")
                 }
@@ -1813,6 +1862,11 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
                         "Versão ${versaoDoApp()} instalada. A ${Marca.nome} avisa sozinha quando sai uma nova; toque para procurar agora."
                     }) { procurarAtualizacao(manual = true) },
                     item("Diagnóstico de conexão", { "Testa a internet e o Gemini e mostra o que está funcionando." }, MENU_DIAGNOSTICO),
+                    TelaDeAjustes.Ajuste("Relatório de erros", {
+                        val n = Registro.pendentes(this).sumOf { it.vezes }
+                        "A ${Marca.nome} anota sozinha o que deu errado e manda para o GitHub do app, para o Claude corrigir nas próximas versões. " +
+                            (if (n == 0) "Nada pendente agora." else "$n ${if (n == 1) "ocorrência esperando" else "ocorrências esperando"} envio; toque para mandar agora.")
+                    }) { enviarRelatorioDeErros(manual = true) },
                 )
             ),
         )
