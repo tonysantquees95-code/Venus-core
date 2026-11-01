@@ -209,6 +209,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
             }
             ACAO_ATIVAR -> orbe.post { ativar() }
             Atualizador.ACAO_INSTALAR -> resultadoDaInstalacao(intent)
+            Postagens.ACAO_POSTAR -> intent.getIntExtra("id", 0).takeIf { it > 0 }?.let { id -> orbe.post { postarAgora(id) } }
             Intent.ACTION_VIEW -> intent.data?.takeIf { it.scheme == "content" || it.scheme == "file" }?.let { u -> orbe.post { abrirDocumento(u) } }
             Intent.ACTION_SEND -> {
                 @Suppress("DEPRECATION")
@@ -523,6 +524,8 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
                 decisao.nome == "editar_fundo" -> editarFundo(null)
                 decisao.nome == "ler_nota" -> lerNota(null)
                 decisao.nome == "abrir_arquivo" -> escolherArquivo()
+                decisao.nome == "programar_post" -> programarPost(decisao.args)
+                decisao.nome == "listar_posts" -> listarPosts()
                 decisao.nome in Ferramentas.USAM_REDE -> executarNaRede(decisao.nome, decisao.args)
                 decisao.nome == "controlar_midia" || decisao.nome == "tocar_musica" -> {
                     // A música estava pausada só para ouvir você: devolve o som e só então aperta o botão.
@@ -2314,6 +2317,221 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
             .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         i.clipData = android.content.ClipData.newRawUri("foto", uri)
         startActivity(Intent.createChooser(i, "Compartilhar foto"))
+    }
+
+    // ----------------------------------------------------------- posts do Instagram
+    /** Formulário de post programado: foto (com troca de fundo), feed ou story, dia e hora, legenda pela IA. */
+    private fun programarPost(args: Map<String, Any>) {
+        var foto: ByteArray? = null
+        var quando = (args["quando"] as? Long)?.takeIf { it > System.currentTimeMillis() } ?: Postagens.proximoHorario(this)
+        val produtoFalado = args["produto"]?.toString().orEmpty()
+        var contexto = produtoFalado
+        val caixa = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(20), dp(8), dp(20), 0)
+        }
+        val previa = android.widget.ImageView(this).apply {
+            adjustViewBounds = true
+            maxHeight = dp(220)
+            visibility = View.GONE
+        }
+        val aviso = TextView(this).apply { textSize = 12f }
+        val linhaFoto = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        val tirar = android.widget.Button(this).apply { text = "Tirar foto" }
+        val galeria = android.widget.Button(this).apply { text = "Da galeria" }
+        linhaFoto.addView(tirar, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+        linhaFoto.addView(galeria, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+        val fundo = android.widget.Button(this).apply { text = "Trocar o fundo" }
+        val tipos = android.widget.RadioGroup(this).apply { orientation = LinearLayout.HORIZONTAL }
+        val feed = android.widget.RadioButton(this).apply { text = "Post no feed"; id = View.generateViewId() }
+        val story = android.widget.RadioButton(this).apply { text = "Story"; id = View.generateViewId() }
+        tipos.addView(feed)
+        tipos.addView(story)
+        tipos.check(if (args["tipo"] == "story") story.id else feed.id)
+        val horario = android.widget.Button(this)
+        fun mostrarHorario() {
+            horario.text = "Quando: " + Lembretes.quandoFalado(quando)
+        }
+        mostrarHorario()
+        val legenda = EditText(this).apply {
+            hint = "Legenda"
+            minLines = 3
+            maxLines = 8
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE or InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
+        }
+        val ia = android.widget.Button(this).apply { text = "Escrever a legenda com IA" }
+        caixa.addView(linhaFoto)
+        caixa.addView(previa)
+        caixa.addView(aviso)
+        caixa.addView(fundo)
+        caixa.addView(tipos)
+        caixa.addView(horario)
+        caixa.addView(legenda)
+        if (chave().isNotBlank()) caixa.addView(ia)
+
+        fun mostrarFoto(b: ByteArray) {
+            foto = b
+            previa.setImageBitmap(android.graphics.BitmapFactory.decodeByteArray(b, 0, b.size))
+            previa.visibility = View.VISIBLE
+            aviso.text = ""
+        }
+        val anterior = cadastroFoto
+        cadastroFoto = { uri ->
+            aviso.text = "Preparando a foto…"
+            Thread {
+                val b = FotoProvider.prepararParaEnviar(this, uri, 1440)
+                runOnUiThread { if (b == null) aviso.text = "Não consegui ler essa foto." else mostrarFoto(b) }
+            }.start()
+        }
+        tirar.setOnClickListener { pedirFotoCamera() }
+        galeria.setOnClickListener { pedirFotoGaleria() }
+        fundo.setOnClickListener {
+            val f = foto
+            if (f == null) Toast.makeText(this, "Escolha a foto primeiro.", Toast.LENGTH_SHORT).show()
+            else editarFundo(f) { nova -> mostrarFoto(nova) }
+        }
+        horario.setOnClickListener {
+            val c = java.util.Calendar.getInstance().apply { timeInMillis = quando }
+            android.app.DatePickerDialog(this, { _, a, m, d ->
+                android.app.TimePickerDialog(this, { _, h, min ->
+                    quando = java.util.Calendar.getInstance().apply { clear(); set(a, m, d, h, min) }.timeInMillis
+                    mostrarHorario()
+                }, c.get(java.util.Calendar.HOUR_OF_DAY), c.get(java.util.Calendar.MINUTE), true).show()
+            }, c.get(java.util.Calendar.YEAR), c.get(java.util.Calendar.MONTH), c.get(java.util.Calendar.DAY_OF_MONTH)).show()
+        }
+        ia.setOnClickListener {
+            ia.isEnabled = false
+            ia.text = "Escrevendo…"
+            val k = chave()
+            val m = modelo()
+            val f = foto
+            val ehStory = tipos.checkedRadioButtonId == story.id
+            val ctx = contexto
+            Thread {
+                val t = Gemini.legendaInstagram(k, m, f, ctx, ehStory)
+                runOnUiThread {
+                    ia.isEnabled = true
+                    ia.text = "Escrever a legenda com IA"
+                    if (t != null) legenda.setText(t) else Toast.makeText(this, "A IA não conseguiu agora. Tente de novo.", Toast.LENGTH_LONG).show()
+                }
+            }.start()
+        }
+
+        // "post do gel": usa a foto e os dados do produto da loja
+        if (produtoFalado.isNotBlank() && ferramentas.loja.conectada) {
+            aviso.text = "Buscando $produtoFalado na loja…"
+            Thread {
+                val achado = try {
+                    Loja.acharProdutos(ferramentas.loja.produtos(), produtoFalado).firstOrNull()
+                } catch (e: Exception) {
+                    null
+                }
+                val url = achado?.bruto?.optString("imageUrl")?.takeIf { it.startsWith("http") }
+                val bytes = url?.let {
+                    try {
+                        java.net.URL(it).openStream().use { s -> s.readBytes() }
+                    } catch (e: Exception) {
+                        null
+                    }
+                }
+                runOnUiThread {
+                    if (achado != null) {
+                        contexto = "produto ${achado.nome}" + (achado.precoCentavos?.let { ", por ${Loja.dinheiro(it)}" } ?: "") +
+                            (achado.bruto?.optString("description")?.takeIf { it.isNotBlank() && it != "null" }?.let { ". $it" } ?: "")
+                        aviso.text = if (bytes != null) "Foto do produto da loja. Pode trocar o fundo ou escolher outra." else "Achei ${achado.nome}, mas sem foto. Escolha uma."
+                        if (bytes != null) mostrarFoto(bytes)
+                    } else aviso.text = "Não achei $produtoFalado na loja. Escolha a foto."
+                }
+            }.start()
+        }
+
+        val dialogo = AlertDialog.Builder(this)
+            .setTitle("Programar post")
+            .setView(ScrollView(this).apply { addView(caixa) })
+            .setPositiveButton("Programar", null)
+            .setNeutralButton("Programar e fazer outro", null)
+            .setNegativeButton("Cancelar", null)
+            .create()
+        dialogo.setOnDismissListener { cadastroFoto = anterior }
+        fun salvar(): Boolean {
+            val f = foto ?: run {
+                Toast.makeText(this, "Escolha a foto.", Toast.LENGTH_SHORT).show()
+                return false
+            }
+            if (quando <= System.currentTimeMillis()) {
+                Toast.makeText(this, "Escolha um horário no futuro.", Toast.LENGTH_SHORT).show()
+                return false
+            }
+            val p = Postagens.criar(this, quando, if (tipos.checkedRadioButtonId == story.id) "story" else "feed", legenda.text.toString(), f)
+            if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), PEDIDO_NOTIFICACOES)
+            }
+            responder("Programado: ${if (p.ehStory) "story" else "post"} ${Lembretes.quandoFalado(p.quando)}. Na hora eu te aviso com tudo pronto.")
+            return true
+        }
+        dialogo.setOnShowListener {
+            dialogo.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener { if (salvar()) dialogo.dismiss() }
+            dialogo.getButton(AlertDialog.BUTTON_NEUTRAL).setOnClickListener {
+                if (salvar()) {
+                    dialogo.dismiss()
+                    programarPost(mapOf("tipo" to if (tipos.checkedRadioButtonId == story.id) "story" else "feed"))
+                }
+            }
+        }
+        dialogo.show()
+    }
+
+    private fun listarPosts() {
+        val lista = Postagens.pendentes(this)
+        if (lista.isEmpty()) {
+            responder("Nenhum post programado. Diga, por exemplo: programa um post do gel amanhã às 19h.")
+            return
+        }
+        responder("Você tem ${lista.size} ${if (lista.size == 1) "post programado" else "posts programados"}. O próximo é ${Lembretes.quandoFalado(lista[0].quando)}.")
+        val itens = lista.map { p ->
+            "${Lembretes.quandoFalado(p.quando)} · ${if (p.ehStory) "Story" else "Feed"}" + (if (p.legenda.isNotBlank()) "\n" + p.legenda.take(60) else "")
+        }
+        AlertDialog.Builder(this)
+            .setTitle("Posts programados")
+            .setItems(itens.toTypedArray()) { _, i ->
+                val p = lista[i]
+                AlertDialog.Builder(this)
+                    .setTitle(if (p.ehStory) "Story" else "Post")
+                    .setMessage(p.legenda.ifBlank { "(sem legenda)" })
+                    .setPositiveButton("Postar agora") { _, _ -> postarAgora(p.id) }
+                    .setNegativeButton("Cancelar este post") { _, _ ->
+                        Postagens.cancelar(this, p.id)
+                        responder("Post cancelado.")
+                    }
+                    .setNeutralButton("Voltar", null)
+                    .show()
+            }
+            .setNegativeButton("Fechar", null)
+            .show()
+    }
+
+    /** Copia a legenda e abre o Instagram com a foto (feed ou story, você escolhe lá). */
+    private fun postarAgora(id: Int) {
+        val p = Postagens.achar(this, id) ?: return responder("Esse post não existe mais.")
+        val arquivo = java.io.File(p.foto)
+        if (!arquivo.exists()) return responder("A foto desse post sumiu. Programe de novo.")
+        if (p.legenda.isNotBlank()) {
+            (getSystemService(CLIPBOARD_SERVICE) as android.content.ClipboardManager)
+                .setPrimaryClip(android.content.ClipData.newPlainText("Legenda", p.legenda))
+        }
+        val (copia, uri) = FotoProvider.novaFoto(this)
+        arquivo.copyTo(copia, overwrite = true)
+        val envio = Intent(Intent.ACTION_SEND).setType("image/jpeg").putExtra(Intent.EXTRA_STREAM, uri)
+            .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        envio.clipData = android.content.ClipData.newRawUri("foto", uri)
+        val instagram = Intent(envio).setPackage("com.instagram.android")
+        try {
+            startActivity(if (instagram.resolveActivity(packageManager) != null) instagram else Intent.createChooser(envio, "Publicar"))
+            Postagens.marcarPublicado(this, id)
+            responder(if (p.legenda.isNotBlank()) "Abri o Instagram com a foto. A legenda já está copiada: é só colar e publicar." else "Abri o Instagram com a foto.")
+        } catch (e: Exception) {
+            responder("Não consegui abrir o Instagram.")
+        }
     }
 
     // ----------------------------------------------------------- arquivos (PDF, Word, Excel, áudio...)
