@@ -85,6 +85,8 @@ object Corretor {
         if (limpa.length < 4) return false
         if (limpa.any { it.isDigit() }) return false
         if (limpa in VOCABULARIO) return false
+        // palavra que existe no português não é "corrigida" ("charada" não vira "chamada")
+        if (Lexico.existe(limpa)) return false
         // Nome próprio no meio da frase: deixa como está ("toca Anitta", "manda pra Marcela").
         if (posicao > 0 && original.firstOrNull()?.isUpperCase() == true) return false
         return true

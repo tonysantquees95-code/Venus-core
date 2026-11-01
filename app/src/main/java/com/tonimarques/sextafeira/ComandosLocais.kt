@@ -40,6 +40,7 @@ object ComandosLocais {
         // Contas, conversões, datas, tradução, CEP...: antes do clima ("30 graus em fahrenheit" é conversão).
         // Mudanças na loja ("muda o preço do gel para 29,90") antes das contas, para o número não virar cálculo.
         if (RELATORIO_ERROS.matches(c.trimEnd('.', '!', '?'))) return Resultado.Acao("enviar_relatorio_erros", emptyMap())
+        palavraExiste(f)?.let { return it }
         conversaAntiga(f)?.let { return it }
         precoNaInternet(f)?.let { return it }
         if (!ehRecado) gestao(f)?.let { return it }
@@ -155,13 +156,25 @@ object ComandosLocais {
         val c = f.chave
         if (!CLIMA.containsMatchIn(c)) return null
         if (Regex("\\b(timer|alarme|temporizador|cronometro|minutos?|segundos?)\\b").containsMatchIn(c)) return null
-        val dia = if (Regex("\\bamanha\\b").containsMatchIn(c)) "amanha" else "hoje"
+        val amanha = Regex("\\bamanha\\b").containsMatchIn(c)
+        val dia = when {
+            Regex("\\b(?:que horas?|qual (?:o )?horario|em que horario|a que horas?|horario (?:com|de) mais|hora de chuva|vai chover a que horas)\\b").containsMatchIn(c) &&
+                Regex("\\bchuv|\\bchove").containsMatchIn(c) -> if (amanha) "horas_amanha" else "horas"
+            Regex("\\b(?:fim de semana|final de semana|sabado e domingo)\\b").containsMatchIn(c) -> "fim_de_semana"
+            Regex("\\b(?:semana|proximos dias|proximos \\d+ dias|essa semana|esta semana)\\b").containsMatchIn(c) -> "semana"
+            amanha -> "amanha"
+            else -> "hoje"
+        }
         var cidade = ""
-        LUGAR_CLIMA.find(c)?.let { m ->
+        // tira "no fim de semana", "para semana que vem"… (com espaços do mesmo tamanho, para não perder a posição no texto)
+        val semPeriodo = Regex("\\b(?:(?:n[oa]|para|pra|neste|nesse|nessa|nesta|esse|essa|este|esta|da|de|do) )?(?:proxim[oa]s? )?(?:fim de semana|final de semana|semana que vem|semana|proximos \\d+ dias|proximos dias)\\b")
+            .replace(c) { " ".repeat(it.value.length) }
+        LUGAR_CLIMA.find(semPeriodo)?.let { m ->
             val bruto = f.trecho(m.groups[1]).orEmpty()
                 .replace(Regex("(?i)\\s+(hoje|amanh[ãa]|agora|de manh[ãa]|a tarde|à tarde|a noite|à noite)$"), "")
                 .trim()
-            if (bruto.isNotBlank() && normalizar(bruto) !in LUGARES_GENERICOS) cidade = bruto
+            val periodo = Regex("\\b(?:semana|dias|fim de semana|final de semana|horas?|horario|manha|tarde|noite|hoje|amanha)\\b")
+            if (bruto.isNotBlank() && normalizar(bruto) !in LUGARES_GENERICOS && !periodo.containsMatchIn(normalizar(bruto))) cidade = bruto
         }
         return Resultado.Acao("previsao_do_tempo", mapOf("cidade" to cidade, "dia" to dia))
     }
@@ -986,6 +999,28 @@ object ComandosLocais {
 
     private val RELATORIO_ERROS = Regex(
         "^(?:manda|mande|envia|envie|mandar|enviar|gera|gere)(?: o| um)? (?:relatorio|relatorios) de (?:erros?|falhas?|problemas?)(?: (?:pro|para o|pro) (?:claude|github))?$"
+    )
+
+    /** "A palavra dacueba existe?", "charada está no dicionário?": resposta pelo dicionário do app (sem internet). */
+    fun palavraExiste(f: Frase): Resultado? {
+        if (!Lexico.pronto) return null
+        val c = f.chave.trimEnd('.', '!', '?').trim()
+        for ((i, r) in PALAVRA_EXISTE.withIndex()) {
+            val m = r.matchEntire(c) ?: continue
+            val palavra = f.trecho(m.groups[1]).orEmpty().trim()
+            // "Deus existe?" é outra pergunta: sem "palavra"/"dicionário", só responde se a palavra não existir mesmo
+            if (i == 0 && !c.contains("palavra") && Lexico.existe(palavra)) return null
+            return Resultado.Resposta(Lexico.responderExiste(palavra))
+        }
+        return null
+    }
+
+    private val PALAVRA_EXISTE = listOf(
+        Regex("^(?:a palavra )?([a-z-]{3,30}) existe(?: (?:em|no) portugues| no dicionario)?$"),
+        Regex("^(?:existe|tem) (?:a palavra )?([a-z-]{3,30})(?: (?:em|no) portugues| no dicionario)$"),
+        Regex("^existe a palavra ([a-z-]{3,30})(?: (?:em|no) portugues| no dicionario)?$"),
+        Regex("^(?:a palavra )?([a-z-]{3,30}) (?:e|eh) (?:uma )?palavra(?: de verdade| do portugues| que existe| correta| certa)?$"),
+        Regex("^(?:a palavra )?([a-z-]{3,30}) (?:esta|ta|tem) no dicionario$"),
     )
 
     private val CONVERSA_ANTIGA = listOf(

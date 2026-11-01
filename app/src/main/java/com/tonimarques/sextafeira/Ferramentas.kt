@@ -165,9 +165,9 @@ class Ferramentas(private val activity: Activity, private val memoria: Memoria? 
         )
         .put(
             funcao(
-                "previsao_do_tempo", "Temperatura atual e previsão do tempo de hoje ou amanhã.", emptyList(),
+                "previsao_do_tempo", "Temperatura atual e previsão do tempo: hoje, amanhã, próximos 7 dias, fim de semana ou a que horas chove.", emptyList(),
                 "cidade" to texto("Cidade; vazio para a cidade do usuário."),
-                "dia" to opcoes("Qual dia.", "hoje", "amanha")
+                "dia" to opcoes("Qual período. horas = a que horas chove hoje.", "hoje", "amanha", "semana", "fim_de_semana", "horas", "horas_amanha")
             )
         )
         .put(

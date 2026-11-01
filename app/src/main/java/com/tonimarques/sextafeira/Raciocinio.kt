@@ -24,6 +24,7 @@ object Raciocinio {
 
     private val SINAIS = listOf(
         // lógica, enigmas e dedução
+        "\\bo que e o que e\\b|\\b(?:adivinha|adivinhacao|adivinhe)\\b",
         "\\b(?:charada|enigma|logica|raciocinio|deduz|deducao|pegadinha|silogismo|paradoxo|sequencia logica|qual (?:e )?o proximo numero)\\b",
         "\\bse (?:todo|todos|toda|todas|nenhum|nenhuma|alguns|algumas)\\b",
         "\\b(?:quem (?:e|eh) (?:o|a) (?:mais|culpad)|quem esta mentindo|quem mente|verdade ou mentira)\\b",
