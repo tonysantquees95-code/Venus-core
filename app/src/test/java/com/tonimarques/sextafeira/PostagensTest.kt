@@ -22,5 +22,9 @@ class PostagensTest {
         assertEquals("programar_post", acao("faz um post no instagram sobre o conjunto renda noir")!!.nome)
         assertEquals("listar_posts", acao("quais os posts programados")!!.nome)
         assertEquals("listar_posts", acao("meus posts programados")!!.nome)
+        assertEquals("responder_cliente", acao("responde uma cliente")!!.nome)
+        assertEquals("responder_cliente", acao("me ajuda a responder a cliente")!!.nome)
+        val catalogo = Loja.catalogoParaIA(listOf(Loja.Produto(7, "Gel KGEL", true, 3, 2990), Loja.Produto(8, "Escondido", false, 1, 100)))
+        assertEquals("Gel KGEL | R$ 29,90 | R$ 28,40 | 3 un. | https://desejo-de-intimidade.floot.app/produto/7", catalogo)
     }
 }

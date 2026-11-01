@@ -45,6 +45,7 @@ object ComandosLocais {
         if (LER_NOTA.containsMatchIn(c)) return Resultado.Acao("ler_nota", emptyMap())
         if (ABRIR_ARQUIVO.containsMatchIn(c)) return Resultado.Acao("abrir_arquivo", emptyMap())
         if (LISTAR_POSTS.containsMatchIn(c)) return Resultado.Acao("listar_posts", emptyMap())
+        if (RESPONDER_CLIENTE.containsMatchIn(c)) return Resultado.Acao("responder_cliente", emptyMap())
         PROGRAMAR_POST.matchEntire(c)?.let { m -> return programarPost(m.groupValues[1], f.trecho(m.groups[2]).orEmpty()) }
         if (!ehRecado) Calculadora.responder(c)?.let { return Resultado.Resposta(it) }
         // Conhecimentos gerais que ela sabe de cor (português, ciências, geografia, matemática)
@@ -338,6 +339,10 @@ object ComandosLocais {
             Regex("\\b(mes|mensal|30 dias|trinta dias)\\b").containsMatchIn(c) -> "mes"
             else -> padrao
         }
+        LOJA_PREVISAO.firstNotNullOfOrNull { it.matchEntire(c) }?.let { m ->
+            return Resultado.Acao("loja_previsao", mapOf("produto" to f.trecho(m.groups[1]).orEmpty().replace(Regex("^(?i)(?:o|a|os|as)\\s+"), "")))
+        }
+        if (LOJA_PREVISAO_GERAL.containsMatchIn(c)) return Resultado.Acao("loja_previsao", mapOf("produto" to ""))
         if (LOJA_MARGENS.containsMatchIn(c)) return Resultado.Acao("loja_margens", emptyMap())
         LOJA_MARGEM.firstNotNullOfOrNull { it.matchEntire(c) }?.let { m ->
             val prod = f.trecho(m.groups[1]).orEmpty().trim()
@@ -864,6 +869,9 @@ object ComandosLocais {
         "^(?:programa|programe|programar|agenda|agende|agendar|cria|crie|criar|faz|faca|fazer|prepara|prepare|preparar|monta|monte|montar|posta|poste|postar)" +
             "(?: um| uma| o| a)? (?:novo |nova )?(post|postagem|publicacao|story|stories|storie)(?: (?:no|do|para o|pro|pra) instagram)?(?:,? (.+))?$"
     )
+    private val RESPONDER_CLIENTE = Regex(
+        "^(?:me ajuda a |ajuda a |quero )?(?:responde|responda|responder|atende|atenda|atender|escreve|escreva|escrever)(?: uma resposta)?(?: (?:pra|para|a|o))? (?:uma |um |a |o |essa |esse )?(?:cliente|compradora?|mensagem de cliente|mensagem da cliente)\\b"
+    )
     private val LISTAR_POSTS = Regex(
         "\\b(?:(?:meus|minhas|quais|os|as|lista|ver|mostra) (?:os |as )?(?:posts|postagens|publicacoes|stories) (?:programad|agendad)\\w*|posts programados|postagens programadas|fila de posts)\\b"
     )
@@ -927,6 +935,14 @@ object ComandosLocais {
         ),
         0 to Regex("^(?:o |a |os |as )?(.+?) (?:me )?custou $VALOR(?: cada| a unidade| por unidade)?$"),
         1 to Regex("^(?:eu )?paguei $VALOR (?:no|na|nos|nas|em|pelo|pela|pelos|pelas|por|cada) (.+?)$"),
+    )
+    private val LOJA_PREVISAO = listOf(
+        Regex("^(?:quando|em quantos dias|em quanto tempo) (?:o |a |os |as )?(.+?) (?:vai |vao )?(?:acaba|acabar|acabam|esgota|esgotar|esgotam)$"),
+        Regex("^(?:quando|em quantos dias|em quanto tempo) (?:vai |vao )?(?:acaba|acabar|acabam|esgota|esgotar|esgotam) (?:o |a |os |as )?(?:estoque (?:d[oae]s? )?)?(.+)$"),
+        Regex("^(?:qual a )?previsao (?:de estoque |do estoque )?(?:d[oae]s? )(.+)$"),
+    )
+    private val LOJA_PREVISAO_GERAL = Regex(
+        "\\b(?:previsao (?:de|do) estoque|o que (?:vai|esta para|ta para|ta pra) acabar|o que acaba (?:logo|primeiro|essa semana|este mes)|vai faltar|quais produtos vao acabar)\\b"
     )
     private val LOJA_MARGENS = Regex(
         "\\b(?:margem media|margem de lucro media|margem (?:de lucro )?(?:media )?(?:dos|das|de todos os) produtos|media de margem|margem geral|" +

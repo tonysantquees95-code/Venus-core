@@ -217,6 +217,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
                 else intent.getParcelableExtra<Uri>(Intent.EXTRA_STREAM)
                 if (uri != null && intent.type?.startsWith("image/") == true) orbe.post { fotoCompartilhada(uri) }
                 else if (uri != null) orbe.post { abrirDocumento(uri) }
+                else intent.getStringExtra(Intent.EXTRA_TEXT)?.takeIf { it.isNotBlank() }?.let { t -> orbe.post { textoCompartilhado(t) } }
             }
             ACAO_PEDIDO -> {
                 val pedido = intent.getStringExtra(EXTRA_PEDIDO).orEmpty()
@@ -526,6 +527,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
                 decisao.nome == "abrir_arquivo" -> escolherArquivo()
                 decisao.nome == "programar_post" -> programarPost(decisao.args)
                 decisao.nome == "listar_posts" -> listarPosts()
+                decisao.nome == "responder_cliente" -> responderCliente(null)
                 decisao.nome in Ferramentas.USAM_REDE -> executarNaRede(decisao.nome, decisao.args)
                 decisao.nome == "controlar_midia" || decisao.nome == "tocar_musica" -> {
                     // A música estava pausada só para ouvir você: devolve o som e só então aperta o botão.
@@ -1520,6 +1522,13 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
                         "A cada 15 minutos, mais ou menos, a $n olha a loja e avisa por notificação quando entra um pedido pago " +
                             "ou um produto fica com 2 unidades ou menos."
                     }, { VigiaDaLoja.ligado(this) }) { alternarAvisosDaLoja() },
+                    TelaDeAjustes.Ajuste("Relatório da semana (segunda, 9h)", {
+                        "Com os avisos ligados, toda segunda chega o resumo da semana: vendas, comparação, mais vendidos e o que vai acabar. " +
+                            "Também avisa quando uma retirada fica 2 dias sem agendar."
+                    }, { VigiaDaLoja.semanalLigado(this) }) {
+                        VigiaDaLoja.definirSemanal(this, !VigiaDaLoja.semanalLigado(this))
+                        ajustes?.atualizar()
+                    },
                     TelaDeAjustes.Ajuste("Resumo da loja às 21h", {
                         "Com os avisos ligados, toda noite chega uma notificação com as vendas do dia e o que fica para amanhã."
                     }, { VigiaDaLoja.resumoLigado(this) }) {
@@ -2317,6 +2326,87 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
             .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         i.clipData = android.content.ClipData.newRawUri("foto", uri)
         startActivity(Intent.createChooser(i, "Compartilhar foto"))
+    }
+
+    // ----------------------------------------------------------- responder clientes
+    /** Texto recebido pelo "Compartilhar" (ex.: mensagem de uma cliente no WhatsApp). */
+    private fun textoCompartilhado(texto: String) {
+        AlertDialog.Builder(this)
+            .setTitle("O que fazer com o texto?")
+            .setMessage(texto.take(300))
+            .setPositiveButton("Responder a cliente") { _, _ -> responderCliente(texto) }
+            .setNeutralButton("Perguntar à ${Marca.nome}") { _, _ ->
+                ultimaFoiVoz = false
+                processar(texto)
+            }
+            .setNegativeButton("Cancelar", null)
+            .show()
+    }
+
+    /** Escreve a resposta para a cliente com os preços, o estoque e os links da loja; você confere, copia e cola no WhatsApp. */
+    private fun responderCliente(mensagem: String?) {
+        if (chave().isBlank() || modoIndependente()) {
+            responder("Para escrever respostas para clientes eu uso o Gemini. Configure a chave do Gemini nos ajustes.")
+            return
+        }
+        if (mensagem.isNullOrBlank()) {
+            val campo = EditText(this).apply {
+                hint = "Cole aqui a mensagem da cliente"
+                minLines = 3
+                inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE
+                setPadding(dp(24), dp(16), dp(24), dp(16))
+            }
+            AlertDialog.Builder(this)
+                .setTitle("Responder cliente")
+                .setMessage("Dica: no WhatsApp, segure a mensagem da cliente, toque em Compartilhar e escolha a ${Marca.nome}.")
+                .setView(campo)
+                .setPositiveButton("Escrever resposta") { _, _ -> campo.text.toString().takeIf { it.isNotBlank() }?.let { responderCliente(it) } }
+                .setNegativeButton("Cancelar", null)
+                .show()
+            return
+        }
+        val k = chave()
+        val m = modelo()
+        comTempoLimite("ESCREVENDO…") {
+            val catalogo = try {
+                if (ferramentas.loja.conectada) Loja.catalogoParaIA(ferramentas.loja.produtos()) else ""
+            } catch (e: Exception) {
+                ""
+            }
+            val r = Gemini.respostaCliente(k, m, mensagem, catalogo.ifBlank { "(catálogo indisponível agora)" })
+            val acao: () -> Unit = {
+                if (r == null) responder("O Gemini não respondeu agora. Tente de novo em instantes.")
+                else {
+                    val campo = EditText(this).apply {
+                        setText(r)
+                        minLines = 4
+                        inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE or InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
+                        setPadding(dp(24), dp(16), dp(24), dp(16))
+                    }
+                    responder("Escrevi uma resposta para a cliente. Confira na tela, copie e cole no WhatsApp.")
+                    AlertDialog.Builder(this)
+                        .setTitle("Resposta para a cliente")
+                        .setView(campo)
+                        .setPositiveButton("Copiar") { _, _ ->
+                            (getSystemService(CLIPBOARD_SERVICE) as android.content.ClipboardManager)
+                                .setPrimaryClip(android.content.ClipData.newPlainText("Resposta", campo.text.toString()))
+                            Toast.makeText(this, "Copiada. É só colar no WhatsApp.", Toast.LENGTH_LONG).show()
+                        }
+                        .setNeutralButton("Abrir no WhatsApp") { _, _ ->
+                            val i = Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, campo.text.toString())
+                            val zap = listOf("com.whatsapp.w4b", "com.whatsapp").map { Intent(i).setPackage(it) }.firstOrNull { it.resolveActivity(packageManager) != null }
+                            try {
+                                startActivity(zap ?: Intent.createChooser(i, "Enviar resposta"))
+                            } catch (e: Exception) {
+                                Toast.makeText(this, "Não achei o WhatsApp.", Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                        .setNegativeButton("Fechar", null)
+                        .show()
+                }
+            }
+            acao
+        }
     }
 
     // ----------------------------------------------------------- posts do Instagram

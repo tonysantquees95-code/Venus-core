@@ -211,6 +211,8 @@ class Loja(private val contexto: Context) {
 
     fun resumoDaManha(): String = montarResumoDaManha(pedidos(), produtos(), Calendar.getInstance())
 
+    fun previsao(produto: String): String = montarPrevisao(pedidos(), produtos(), produto, Calendar.getInstance())
+
     fun comparar(): String = montarComparacao(pedidos(), Calendar.getInstance())
 
     fun parados(): String = montarParados(pedidos(), produtos(), Calendar.getInstance())
@@ -662,6 +664,19 @@ class Loja(private val contexto: Context) {
             ItemDeCompra(desc, qtd, unit, if (achados.size == 1) achados[0] else null)
         }
 
+        /** Catálogo em texto curto (para a IA responder clientes): só produtos à venda, com preço, Pix, estoque e link. */
+        fun catalogoParaIA(produtos: List<Produto>): String = produtos.filter { it.ativo && it.precoCentavos != null }.take(80).joinToString("\n") { p ->
+            val preco = p.precoCentavos!!
+            val promo = p.precoAntigo?.takeIf { it > preco }
+            val pix = if (promo != null) preco else preco - (preco * 5 + 50) / 100
+            val estoque = when {
+                p.estoque == null -> "disponível"
+                p.estoque <= 0 -> "esgotado"
+                else -> "${p.estoque} un."
+            }
+            "${p.nome} | ${dinheiro(preco)}${if (promo != null) " (promoção, de ${dinheiro(promo)})" else ""} | ${dinheiro(pix)} | $estoque | $SITE/produto/${p.id}"
+        }
+
         /** As categorias do site (id, nome). */
         val CATEGORIAS = listOf(
             "geis_lubrificantes" to "Géis e lubrificantes",
@@ -1042,6 +1057,83 @@ class Loja(private val contexto: Context) {
             if (tarefas.isNotEmpty()) texto += " Para hoje: ${tarefas.joinToString(", ")}."
             return texto
         }
+
+        /** Unidades vendidas por dia de cada produto, nos últimos [dias] dias. */
+        fun ritmoDeVendas(pedidos: List<Pedido>, produtos: List<Produto>, agora: Calendar, dias: Int = 30): Map<Int, Double> {
+            val desde = agora.timeInMillis - dias * 24L * 3600_000
+            val porNome = produtos.associateBy { ComandosLocais.normalizar(it.nome.trim()) }
+            val total = mutableMapOf<Int, Int>()
+            for (o in vendidosNoIntervalo(pedidos, desde, Long.MAX_VALUE)) for (i in o.itens) {
+                val p = i.produtoId?.let { id -> produtos.firstOrNull { it.id == id } } ?: porNome[ComandosLocais.normalizar(i.nome.trim())] ?: continue
+                total[p.id] = (total[p.id] ?: 0) + i.quantidade
+            }
+            return total.mapValues { it.value.toDouble() / dias }
+        }
+
+        /** Em quantos dias acaba, no ritmo de venda atual, e quanto repor para 30 dias. Sem produto: os que acabam em até 14 dias. */
+        fun montarPrevisao(pedidos: List<Pedido>, produtos: List<Produto>, falado: String, agora: Calendar): String {
+            val ritmo = ritmoDeVendas(pedidos, produtos, agora)
+            fun linha(p: Produto): String {
+                val r = ritmo[p.id] ?: 0.0
+                val e = p.estoque
+                return when {
+                    e == null -> "${p.nome}: sem controle de estoque"
+                    e <= 0 -> "${p.nome}: já está esgotado" + if (r > 0) "; para 30 dias, repor ${kotlin.math.ceil(r * 30).toInt()}" else ""
+                    r == 0.0 -> "${p.nome}: ${plural(e, "unidade", "unidades")} e nenhuma venda nos últimos 30 dias"
+                    else -> {
+                        val dias = (e / r).toInt()
+                        val repor = maxOf(0, kotlin.math.ceil(r * 30).toInt() - e)
+                        "${p.nome}: ${plural(e, "unidade", "unidades")}, vende ${"%.1f".format(r * 7).replace('.', ',')} por semana, " +
+                            (if (dias <= 0) "acaba a qualquer momento" else "acaba em uns ${plural(dias, "dia", "dias")}") +
+                            if (repor > 0) "; para 30 dias, repor $repor" else ""
+                    }
+                }
+            }
+            if (falado.isNotBlank()) {
+                val achados = acharProdutos(produtos, falado)
+                if (achados.isEmpty()) return "Não achei nenhum produto com \"$falado\" na loja."
+                return achados.take(3).joinToString(". ") { linha(it) } + "."
+            }
+            val logo = produtos.filter { it.ativo && it.estoque != null && it.estoque > 0 && (ritmo[it.id] ?: 0.0) > 0 }
+                .map { it to it.estoque!! / ritmo[it.id]!! }
+                .filter { it.second <= 14 }
+                .sortedBy { it.second }
+            if (logo.isEmpty()) return "No ritmo atual, nenhum produto acaba nas próximas 2 semanas."
+            return "Vão acabar nas próximas 2 semanas: " + logo.take(6).joinToString("; ") { linha(it.first) } + "."
+        }
+
+        /** Relatório da semana passada (segunda a domingo) para a notificação de segunda-feira. */
+        fun montarRelatorioSemanal(pedidos: List<Pedido>, produtos: List<Produto>, agora: Calendar): String {
+            fun zero(c: Calendar) = c.apply {
+                set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
+            }
+            val estaSegunda = zero((agora.clone() as Calendar).apply {
+                val volta = (get(Calendar.DAY_OF_WEEK) - Calendar.MONDAY + 7) % 7
+                add(Calendar.DAY_OF_YEAR, -volta)
+            })
+            val ini = (estaSegunda.clone() as Calendar).apply { add(Calendar.DAY_OF_YEAR, -7) }.timeInMillis
+            val antes = (estaSegunda.clone() as Calendar).apply { add(Calendar.DAY_OF_YEAR, -14) }.timeInMillis
+            val semana = vendidosNoIntervalo(pedidos, ini, estaSegunda.timeInMillis)
+            val anterior = vendidosNoIntervalo(pedidos, antes, ini)
+            val total = semana.sumOf { it.totalCentavos }
+            var texto = "Semana passada: ${plural(semana.size, "venda", "vendas")}, ${dinheiro(total)}"
+            val t0 = anterior.sumOf { it.totalCentavos }
+            texto += if (t0 > 0) " (${if (total >= t0) "+" else ""}${((total - t0) * 100L / t0)}% sobre a semana anterior)." else "."
+            val top = semana.flatMap { it.itens }.groupBy { it.nome.trim() }.mapValues { (_, v) -> v.sumOf { it.quantidade } }
+                .entries.sortedByDescending { it.value }.take(3)
+            if (top.isNotEmpty()) texto += " Mais vendidos: " + top.joinToString(", ") { "${it.key} (${it.value})" } + "."
+            if (produtos.any { it.bruto?.has(CAMPO_CUSTO) == true }) {
+                val l = montarLucro(semana, produtos, "mes", agora)
+                if (l.startsWith("Lucro")) texto += " " + l.substringAfter(": ").substringBefore(" em ").let { "Lucro: $it." }
+            }
+            val prev = montarPrevisao(pedidos, produtos, "", agora)
+            if (!prev.startsWith("No ritmo")) texto += " " + prev
+            return texto
+        }
+
+        /** Pedidos de retirada pagos há mais de [horas] horas que ainda não foram entregues (provavelmente sem agendar). */
+        fun retiradasEsquecidas(pedidos: List<Pedido>, agora: Long, horas: Int = 48): List<Pedido> =
+            pedidos.filter { it.entrega == "pickup" && it.status in setOf("paid", "preparing") && agora - (it.pago ?: it.criado) > horas * 3600_000L }
 
         /** Resumo da noite: como foi o dia e o que fica para amanhã. */
         fun montarResumoDoDia(pedidos: List<Pedido>, produtos: List<Produto>, agora: Calendar): String {

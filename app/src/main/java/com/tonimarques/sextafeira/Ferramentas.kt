@@ -380,6 +380,7 @@ class Ferramentas(private val activity: Activity, private val memoria: Memoria? 
         "loja_margem" -> daLoja { it.margem(a.optString("produto")) }
         "loja_margens" -> daLoja { it.margens() }
         "loja_lucro" -> daLoja { it.lucro(a.optString("periodo", "mes")) }
+        "loja_previsao" -> daLoja { it.previsao(a.optString("produto")) }
         "loja_estoque_geral" -> daLoja { it.estoqueGeral() }
         "loja_alterar" -> daLoja { l ->
             val valor = if (a.has("valor")) a.optInt("valor") else null
@@ -1092,7 +1093,7 @@ class Ferramentas(private val activity: Activity, private val memoria: Memoria? 
             "buscar_cep", "dicionario", "ortografia", "distancia",
             "loja_resumo", "loja_pedidos", "loja_acabando", "loja_estoque",
             "rotina_bom_dia", "responder_mensagem", "confirmar_resposta",
-            "loja_retiradas", "loja_estoque_geral", "loja_alterar", "loja_status", "loja_reposicao", "loja_mais_vendidos", "loja_comparar", "loja_parados", "loja_margem", "loja_margens", "loja_lucro", "loja_entregue", "loja_confirmar", "loja_agendar",
+            "loja_retiradas", "loja_estoque_geral", "loja_alterar", "loja_status", "loja_reposicao", "loja_mais_vendidos", "loja_comparar", "loja_parados", "loja_margem", "loja_margens", "loja_lucro", "loja_previsao", "loja_entregue", "loja_confirmar", "loja_agendar",
         )
 
         private const val SPOTIFY = "com.spotify.music"
