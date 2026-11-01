@@ -60,7 +60,7 @@ class ArquivosTest {
 
     @Test fun analise() {
         val a = Gemini.lerAnalise("""{"tipo":"boleto","resumo":"Boleto da Enel de R$ 187,40.","vencimento":"2026-11-10","valor":187.4,
-            "linha_digitavel":"8364 0000001 8 74000 1234567 8 90123456789 0 12345678901 2"}""")!!
+            "linha_digitavel":"83640000001 8 74000123456 7 89012345678 9 01234567890 1"}""")!!
         assertEquals("boleto", a.tipo)
         assertEquals("2026-11-10", a.vencimento)
         assertEquals(18740, a.valorCentavos)
