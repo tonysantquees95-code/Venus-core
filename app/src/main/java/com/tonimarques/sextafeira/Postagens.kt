@@ -21,7 +21,11 @@ import java.io.File
  */
 object Postagens {
 
-    data class Post(val id: Int, val quando: Long, val tipo: String, val legenda: String, val foto: String, val publicado: Boolean = false) {
+    data class Post(
+        val id: Int, val quando: Long, val tipo: String, val legenda: String, val foto: String, val publicado: Boolean = false,
+        /** Página do produto no site (vai escrita no story). */
+        val link: String = "",
+    ) {
         val ehStory get() = tipo == "story"
     }
 
@@ -39,20 +43,20 @@ object Postagens {
             JSONArray()
         }
         return (0 until arr.length()).mapNotNull { arr.optJSONObject(it) }.map {
-            Post(it.optInt("id"), it.optLong("quando"), it.optString("tipo", "feed"), it.optString("legenda"), it.optString("foto"), it.optBoolean("publicado"))
+            Post(it.optInt("id"), it.optLong("quando"), it.optString("tipo", "feed"), it.optString("legenda"), it.optString("foto"), it.optBoolean("publicado"), it.optString("link"))
         }.toMutableList()
     }
 
     private fun gravar(ctx: Context, lista: List<Post>) {
         val arr = JSONArray()
         for (p in lista) arr.put(
-            JSONObject().put("id", p.id).put("quando", p.quando).put("tipo", p.tipo).put("legenda", p.legenda).put("foto", p.foto).put("publicado", p.publicado)
+            JSONObject().put("id", p.id).put("quando", p.quando).put("tipo", p.tipo).put("legenda", p.legenda).put("foto", p.foto).put("publicado", p.publicado).put("link", p.link)
         )
         ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putString("lista", arr.toString()).apply()
     }
 
     /** Guarda a foto e agenda o post. */
-    fun criar(ctx: Context, quando: Long, tipo: String, legenda: String, jpeg: ByteArray): Post {
+    fun criar(ctx: Context, quando: Long, tipo: String, legenda: String, jpeg: ByteArray, link: String = ""): Post {
         val lista = ler(ctx)
         val id = (lista.maxOfOrNull { it.id } ?: 0) + 1
         val arquivo = File(pasta(ctx), "post_$id.jpg").apply { writeBytes(jpeg) }
@@ -250,11 +254,100 @@ object Postagens {
     fun publicarPelaApi(ctx: Context, p: Post): String {
         val original = File(p.foto)
         if (!original.exists()) throw Instagram.ErroDoInstagram("A foto desse post sumiu.")
-        val bytes = if (p.ehStory) original.readBytes() else ajustarParaFeed(original.readBytes())
+        val bytes = if (p.ehStory) montarStory(original.readBytes(), p.legenda, p.link) else ajustarParaFeed(original.readBytes())
         val url = Loja(ctx).enviarFoto(bytes)
         val link = Instagram.publicar(ctx, url, p.legenda, p.ehStory)
         marcarPublicado(ctx, p.id)
         return link
+    }
+
+    /**
+     * Story pela API vai só como imagem (sem texto nem adesivos), e o Instagram corta o que não for 9:16.
+     * Então a Vênus monta a arte 1080×1920: fundo com a própria foto desfocada, a foto inteira no meio,
+     * o texto escrito embaixo e o endereço do produto (ou do site) num selo rosa.
+     */
+    fun montarStory(jpeg: ByteArray, texto: String, link: String): ByteArray {
+        val foto = android.graphics.BitmapFactory.decodeByteArray(jpeg, 0, jpeg.size) ?: return jpeg
+        val w = 1080
+        val h = 1920
+        val arte = android.graphics.Bitmap.createBitmap(w, h, android.graphics.Bitmap.Config.ARGB_8888)
+        val tela = android.graphics.Canvas(arte)
+        val suave = android.graphics.Paint(android.graphics.Paint.FILTER_BITMAP_FLAG or android.graphics.Paint.ANTI_ALIAS_FLAG)
+
+        // fundo: a foto cobrindo tudo, bem desfocada (reduz e amplia) e escurecida
+        val cobre = maxOf(w.toFloat() / foto.width, h.toFloat() / foto.height)
+        val fw = foto.width * cobre
+        val fh = foto.height * cobre
+        val miniatura = android.graphics.Bitmap.createBitmap(36, 64, android.graphics.Bitmap.Config.ARGB_8888)
+        android.graphics.Canvas(miniatura).apply {
+            scale(36f / w, 64f / h)
+            drawBitmap(foto, null, android.graphics.RectF((w - fw) / 2, (h - fh) / 2, (w + fw) / 2, (h + fh) / 2), suave)
+        }
+        tela.drawBitmap(miniatura, null, android.graphics.Rect(0, 0, w, h), suave)
+        tela.drawColor(android.graphics.Color.argb(150, 8, 0, 12))
+
+        // a foto inteira, sem cortar
+        val area = android.graphics.RectF(50f, 190f, w - 50f, 1230f)
+        val cabe = minOf(area.width() / foto.width, area.height() / foto.height)
+        val pw = foto.width * cabe
+        val ph = foto.height * cabe
+        val destino = android.graphics.RectF(area.centerX() - pw / 2, area.centerY() - ph / 2, area.centerX() + pw / 2, area.centerY() + ph / 2)
+        val sombra = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+            color = android.graphics.Color.BLACK
+            setShadowLayer(40f, 0f, 12f, android.graphics.Color.argb(160, 0, 0, 0))
+        }
+        tela.drawRoundRect(destino, 28f, 28f, sombra)
+        tela.save()
+        tela.clipPath(android.graphics.Path().apply { addRoundRect(destino, 28f, 28f, android.graphics.Path.Direction.CW) })
+        tela.drawBitmap(foto, null, destino, suave)
+        tela.restore()
+
+        // o texto
+        val limpo = texto.replace(Regex("#\\S+"), "").replace(Regex("\\s+"), " ").trim()
+        if (limpo.isNotBlank()) {
+            val pincel = android.text.TextPaint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+                color = android.graphics.Color.WHITE
+                textSize = if (limpo.length > 70) 54f else 62f
+                typeface = android.graphics.Typeface.create(android.graphics.Typeface.SANS_SERIF, android.graphics.Typeface.BOLD)
+                setShadowLayer(10f, 0f, 3f, android.graphics.Color.argb(200, 0, 0, 0))
+            }
+            val bloco = android.text.StaticLayout.Builder.obtain(limpo, 0, limpo.length, pincel, w - 140)
+                .setAlignment(android.text.Layout.Alignment.ALIGN_CENTER)
+                .setMaxLines(4)
+                .setEllipsize(android.text.TextUtils.TruncateAt.END)
+                .setLineSpacing(6f, 1f)
+                .build()
+            tela.save()
+            tela.translate(70f, 1280f + maxOf(0f, (250f - bloco.height) / 2))
+            bloco.draw(tela)
+            tela.restore()
+        }
+
+        // selo com o endereço
+        val endereco = link.ifBlank { Loja.SITE }.removePrefix("https://").removePrefix("http://").removeSuffix("/")
+        val chamada = if (link.isNotBlank()) "Compre este produto no site" else "Compre no site, entrega discreta"
+        val p1 = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+            color = android.graphics.Color.WHITE
+            textSize = 42f
+            textAlign = android.graphics.Paint.Align.CENTER
+            typeface = android.graphics.Typeface.create(android.graphics.Typeface.SANS_SERIF, android.graphics.Typeface.BOLD)
+        }
+        val p2 = android.graphics.Paint(p1).apply {
+            typeface = android.graphics.Typeface.SANS_SERIF
+            textSize = if (endereco.length > 42) 30f else 34f
+        }
+        val largura = maxOf(p1.measureText(chamada), p2.measureText(endereco)) + 90f
+        val selo = android.graphics.RectF((w - largura) / 2, 1560f, (w + largura) / 2, 1700f)
+        tela.drawRoundRect(selo, 70f, 70f, android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+            color = android.graphics.Color.rgb(255, 46, 151)
+            setShadowLayer(30f, 0f, 0f, android.graphics.Color.argb(170, 255, 46, 151))
+        })
+        tela.drawText(chamada, w / 2f, 1620f, p1)
+        tela.drawText(endereco, w / 2f, 1672f, p2)
+
+        val saida = java.io.ByteArrayOutputStream()
+        arte.compress(android.graphics.Bitmap.CompressFormat.JPEG, 92, saida)
+        return saida.toByteArray()
     }
 
     /** O feed só aceita proporção entre 4:5 (vertical) e 1,91:1 (deitada): corta o excesso pelo centro. */

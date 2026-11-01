@@ -2866,6 +2866,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         var quando = (args["quando"] as? Long)?.takeIf { it > System.currentTimeMillis() } ?: Postagens.proximoHorario(this)
         val produtoFalado = args["produto"]?.toString().orEmpty()
         var contexto = produtoFalado
+        var linkDoProduto = ""
         val caixa = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(20), dp(8), dp(20), 0)
@@ -2976,6 +2977,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
                 }
                 runOnUiThread {
                     if (achado != null) {
+                        linkDoProduto = "${Loja.SITE}/produto/${achado.id}"
                         contexto = "produto ${achado.nome}" + (achado.precoCentavos?.let { ", por ${Loja.dinheiro(it)}" } ?: "") +
                             (achado.bruto?.optString("description")?.takeIf { it.isNotBlank() && it != "null" }?.let { ". $it" } ?: "")
                         aviso.text = if (bytes != null) "Foto do produto da loja. Pode trocar o fundo ou escolher outra." else "Achei ${achado.nome}, mas sem foto. Escolha uma."
@@ -3002,7 +3004,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
                 Toast.makeText(this, "Escolha um horário no futuro.", Toast.LENGTH_SHORT).show()
                 return false
             }
-            val p = Postagens.criar(this, quando, if (tipos.checkedRadioButtonId == story.id) "story" else "feed", legenda.text.toString(), f)
+            val p = Postagens.criar(this, quando, if (tipos.checkedRadioButtonId == story.id) "story" else "feed", legenda.text.toString(), f, linkDoProduto)
             focarPost(p.id)
             if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
                 requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), PEDIDO_NOTIFICACOES)
