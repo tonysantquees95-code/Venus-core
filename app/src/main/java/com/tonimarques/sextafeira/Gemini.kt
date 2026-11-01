@@ -424,7 +424,7 @@ class Gemini(
          * Lê a foto de uma nota fiscal, pedido de fornecedor ou print de compra.
          * Devolve (descrição, quantidade, custo unitário em centavos) de cada item; null se não conseguir ler.
          */
-        fun lerNotaDeCompra(chave: String, modelo: String, foto: ByteArray): List<Triple<String, Int, Int>>? {
+        fun lerNotaDeCompra(chave: String, modelo: String, foto: ByteArray, tipo: String = "image/jpeg"): List<Triple<String, Int, Int>>? {
             if (chave.isBlank()) return null
             val pedido = "Esta imagem é uma nota fiscal, cupom, pedido de fornecedor ou print de uma compra de produtos para revenda. " +
                 "Liste cada produto comprado. Responda só com JSON no formato " +
@@ -432,7 +432,7 @@ class Gemini(
                 "Valores em reais com ponto decimal. Se só houver o total da linha, calcule o unitário dividindo pela quantidade. " +
                 "Não inclua frete, impostos separados, descontos gerais nem a linha de total."
             val corpo = JSONObject()
-                .put("contents", JSONArray().put(JSONObject().put("role", "user").put("parts", JSONArray().put(imagem(foto)).put(JSONObject().put("text", pedido)))))
+                .put("contents", JSONArray().put(JSONObject().put("role", "user").put("parts", JSONArray().put(imagem(foto, tipo)).put(JSONObject().put("text", pedido)))))
                 .put("generationConfig", JSONObject().put("temperature", 0.1).put("responseMimeType", "application/json"))
                 .toString().toByteArray()
             val json = chamarAvulso(chave, listOf(modelo, "gemini-2.5-flash", "gemini-flash-lite-latest"), corpo) ?: return null
@@ -483,6 +483,71 @@ class Gemini(
                 if (dados.isNotBlank()) return android.util.Base64.decode(dados, android.util.Base64.DEFAULT)
             }
             return null
+        }
+
+        /** O que a Vênus entendeu de um arquivo aberto. */
+        data class Analise(
+            val tipo: String, val resumo: String, val vencimento: String?, val valorCentavos: Int?, val linhaDigitavel: String?,
+        )
+
+        private fun partesDoDocumento(doc: Arquivos.Documento, texto: String): JSONArray {
+            val partes = JSONArray()
+            if (doc.bytes != null) partes.put(imagem(doc.bytes, doc.mime))
+            else partes.put(JSONObject().put("text", "Conteúdo do arquivo \"${doc.nome}\":\n${doc.texto}"))
+            partes.put(JSONObject().put("text", texto))
+            return partes
+        }
+
+        /** Primeira leitura: o que é o arquivo, um resumo e, se for boleto, vencimento, valor e linha digitável. */
+        fun analisarDocumento(chave: String, modelo: String, doc: Arquivos.Documento): Analise? {
+            if (chave.isBlank()) return null
+            val audio = doc.mime.startsWith("audio/")
+            val pedido = (if (audio) "Transcreva este áudio em português e depois resuma. " else "Leia este arquivo. ") +
+                "Responda só com JSON: {\"tipo\":\"boleto|nota_fiscal|contrato|catalogo|planilha|audio|outro\"," +
+                "\"resumo\":\"até 6 frases em português do Brasil, diretas, com os números e datas importantes" +
+                (if (audio) ", começando pela transcrição curta do que foi dito" else "") + "\"," +
+                "\"vencimento\":\"AAAA-MM-DD ou vazio\",\"valor\":0.00,\"linha_digitavel\":\"só os números do boleto ou vazio\"}. " +
+                "Sem markdown no resumo."
+            val corpo = JSONObject()
+                .put("contents", JSONArray().put(JSONObject().put("role", "user").put("parts", partesDoDocumento(doc, pedido))))
+                .put("generationConfig", JSONObject().put("temperature", 0.2).put("responseMimeType", "application/json"))
+                .toString().toByteArray()
+            val json = chamarAvulso(chave, listOf(modelo, "gemini-2.5-flash", "gemini-flash-lite-latest"), corpo, tempo = 120_000) ?: return null
+            return lerAnalise(textoBruto(json) ?: return null)
+        }
+
+        /** Interpreta o JSON da análise (separado para poder ser testado). */
+        fun lerAnalise(texto: String): Analise? {
+            val o = try {
+                JSONObject("{" + texto.substringAfter("{").substringBeforeLast("}") + "}")
+            } catch (e: Exception) {
+                return texto.trim().takeIf { it.isNotBlank() }?.let { Analise("outro", it.take(1500), null, null, null) }
+            }
+            val resumo = o.optString("resumo").trim().ifBlank { return null }
+            val venc = o.optString("vencimento").trim().takeIf { Regex("^\\d{4}-\\d{2}-\\d{2}$").matches(it) }
+            val valor = o.optDouble("valor", Double.NaN).takeIf { !it.isNaN() && it > 0 }?.let { Math.round(it * 100).toInt() }
+            val linha = o.optString("linha_digitavel").replace(Regex("\\D"), "").takeIf { it.length in 44..48 }
+            return Analise(o.optString("tipo", "outro").ifBlank { "outro" }, resumo, venc, valor, linha)
+        }
+
+        /** Pergunta sobre o arquivo aberto (cada pergunta manda o arquivo de novo, com as últimas trocas). */
+        fun perguntarDocumento(chave: String, modelo: String, doc: Arquivos.Documento, pergunta: String, conversa: List<Pair<String, String>>): String? {
+            if (chave.isBlank()) return null
+            val antes = if (conversa.isEmpty()) "" else "Conversa até aqui sobre o arquivo:\n" +
+                conversa.takeLast(4).joinToString("\n") { "Usuário: ${it.first}\nVênus: ${it.second}" } + "\n\n"
+            val pedido = antes + "Responda em português do Brasil, de forma curta e direta, usando só o conteúdo do arquivo. " +
+                "Se a resposta não estiver no arquivo, diga isso. Sem markdown. Pergunta: $pergunta"
+            val corpo = JSONObject()
+                .put("contents", JSONArray().put(JSONObject().put("role", "user").put("parts", partesDoDocumento(doc, pedido))))
+                .put("generationConfig", JSONObject().put("temperature", 0.3))
+                .toString().toByteArray()
+            val json = chamarAvulso(chave, listOf(modelo, "gemini-2.5-flash", "gemini-flash-lite-latest"), corpo, tempo = 120_000) ?: return null
+            return textoDaResposta(json)
+        }
+
+        private fun textoBruto(json: JSONObject): String? {
+            val partes = json.optJSONArray("candidates")?.optJSONObject(0)?.optJSONObject("content")?.optJSONArray("parts") ?: return null
+            return (0 until partes.length()).joinToString("") { partes.optJSONObject(it)?.optString("text").orEmpty() }.ifBlank { null }
         }
 
         /** Junta os textos da primeira resposta do Gemini e limpa sobras de formatação. */

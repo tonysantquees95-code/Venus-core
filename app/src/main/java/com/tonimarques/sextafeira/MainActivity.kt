@@ -209,11 +209,13 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
             }
             ACAO_ATIVAR -> orbe.post { ativar() }
             Atualizador.ACAO_INSTALAR -> resultadoDaInstalacao(intent)
+            Intent.ACTION_VIEW -> intent.data?.takeIf { it.scheme == "content" || it.scheme == "file" }?.let { u -> orbe.post { abrirDocumento(u) } }
             Intent.ACTION_SEND -> {
                 @Suppress("DEPRECATION")
                 val uri = if (Build.VERSION.SDK_INT >= 33) intent.getParcelableExtra(Intent.EXTRA_STREAM, Uri::class.java)
                 else intent.getParcelableExtra<Uri>(Intent.EXTRA_STREAM)
                 if (uri != null && intent.type?.startsWith("image/") == true) orbe.post { fotoCompartilhada(uri) }
+                else if (uri != null) orbe.post { abrirDocumento(uri) }
             }
             ACAO_PEDIDO -> {
                 val pedido = intent.getStringExtra(EXTRA_PEDIDO).orEmpty()
@@ -469,6 +471,21 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
                 return
             }
         }
+        // Arquivo aberto: "resume", "o que diz esse pdf", "fecha o documento"
+        if (documentoAtivo() != null) {
+            val chave = ComandosLocais.normalizar(pedido)
+            if (Regex("^(?:fecha|feche|fechar|esquece|esqueca|sai|sair) (?:d?o |d?a |desse |deste )?(?:documento|arquivo|pdf|audio|planilha|boleto|nota)\\b").containsMatchIn(chave)) {
+                adicionarMensagem(original, true)
+                documentoAberto = null
+                responder("Pronto, fechei o arquivo.")
+                return
+            }
+            if (Regex("\\b(?:arquivo|documento|pdf|boleto|contrato|planilha|audio|nota fiscal|nesse|neste|nele|dele|desse|deste|resume|resumo|resuma)\\b").containsMatchIn(chave)) {
+                adicionarMensagem(original, true)
+                perguntarAoDocumento(pedido)
+                return
+            }
+        }
         // Resposta a "Mudar o preço de X para Y? Diga sim ou não."
         if (ferramentas.temPendente) {
             val resposta = Loja.simOuNao(pedido)
@@ -505,6 +522,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
                 decisao.nome == "loja_cadastrar" -> abrirCadastro(decisao.args)
                 decisao.nome == "editar_fundo" -> editarFundo(null)
                 decisao.nome == "ler_nota" -> lerNota(null)
+                decisao.nome == "abrir_arquivo" -> escolherArquivo()
                 decisao.nome in Ferramentas.USAM_REDE -> executarNaRede(decisao.nome, decisao.args)
                 decisao.nome == "controlar_midia" || decisao.nome == "tocar_musica" -> {
                     // A música estava pausada só para ouvir você: devolve o som e só então aperta o botão.
@@ -767,6 +785,10 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
      *  3. só então o Gemini (se houver chave e o modo independente estiver desligado).
      */
     private fun responderPergunta(pedido: String) {
+        if (documentoAtivo() != null) {
+            perguntarAoDocumento(pedido)
+            return
+        }
         try {
             ferramentas.conhecimento?.respostaGuardada(pedido)
         } catch (e: Exception) {
@@ -1400,6 +1422,10 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
     @Deprecated("API clássica, suficiente para este app")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == PEDIDO_ARQUIVO) {
+            if (resultCode == RESULT_OK) data?.data?.let { abrirDocumento(it) }
+            return
+        }
         if (requestCode == PEDIDO_FOTO_CAMERA || requestCode == PEDIDO_FOTO_GALERIA) {
             if (resultCode == RESULT_OK) {
                 val uri = if (requestCode == PEDIDO_FOTO_GALERIA) data?.data else fotoDaCamera
@@ -2290,6 +2316,150 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         startActivity(Intent.createChooser(i, "Compartilhar foto"))
     }
 
+    // ----------------------------------------------------------- arquivos (PDF, Word, Excel, áudio...)
+    private var documentoAberto: Arquivos.Documento? = null
+    private var documentoQuando = 0L
+    private val conversaDocumento = mutableListOf<Pair<String, String>>()
+
+    /** O arquivo continua "aberto" para perguntas por 30 minutos. */
+    private fun documentoAtivo(): Arquivos.Documento? =
+        documentoAberto?.takeIf { System.currentTimeMillis() - documentoQuando < 30 * 60_000L }
+
+    private fun escolherArquivo() {
+        try {
+            startActivityForResult(
+                Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("*/*"),
+                PEDIDO_ARQUIVO,
+            )
+        } catch (e: Exception) {
+            responder("Não consegui abrir o seletor de arquivos.")
+        }
+    }
+
+    /** Abre o arquivo, manda ao Gemini e mostra o resumo; boleto vira lembrete e nota vira compra, se você quiser. */
+    private fun abrirDocumento(uri: Uri, avisado: Boolean = false) {
+        if (chave().isBlank() || modoIndependente()) {
+            responder("Para ler arquivos eu uso o Gemini. Configure a chave do Gemini e deixe o modo independente desligado.")
+            return
+        }
+        if (!avisado && !prefs.getBoolean(PREF_AVISO_ARQUIVOS, false)) {
+            AlertDialog.Builder(this)
+                .setTitle("Ler arquivo")
+                .setMessage("Para ler o arquivo, a ${Marca.nome} envia o conteúdo ao Google (Gemini). Evite documentos com senhas ou dados muito sensíveis.")
+                .setPositiveButton("Ler") { _, _ -> abrirDocumento(uri, true) }
+                .setNeutralButton("Ler e não perguntar mais") { _, _ ->
+                    prefs.edit().putBoolean(PREF_AVISO_ARQUIVOS, true).apply()
+                    abrirDocumento(uri, true)
+                }
+                .setNegativeButton("Cancelar", null)
+                .show()
+            return
+        }
+        val k = chave()
+        val m = modelo()
+        topicoAtual = "Arquivos"
+        comTempoLimite("LENDO O ARQUIVO…") {
+            val doc = try {
+                Arquivos.abrir(this, uri)
+            } catch (e: Exception) {
+                val msg = (e as? Arquivos.ErroDeArquivo)?.message ?: "Não consegui abrir esse arquivo."
+                return@comTempoLimite { responder(msg) }
+            }
+            val analise = Gemini.analisarDocumento(k, m, doc)
+            val acao: () -> Unit = {
+                if (analise == null) {
+                    responder("Abri ${doc.nome}, mas o Gemini não conseguiu ler agora. Tente de novo em instantes.")
+                } else {
+                    documentoAberto = doc
+                    documentoQuando = System.currentTimeMillis()
+                    conversaDocumento.clear()
+                    adicionarMensagem("📎 ${doc.nome}", true)
+                    responder(analise.resumo + " Pode me perguntar sobre ${if (doc.tipoFalado == "áudio") "o áudio" else "o arquivo"}.")
+                    oferecerAcoesDoDocumento(doc, analise)
+                }
+            }
+            acao
+        }
+    }
+
+    private fun oferecerAcoesDoDocumento(doc: Arquivos.Documento, a: Gemini.Analise) {
+        when {
+            a.tipo == "boleto" && (a.vencimento != null || a.linhaDigitavel != null) -> {
+                val opcoes = mutableListOf<Pair<String, () -> Unit>>()
+                a.vencimento?.let { v ->
+                    opcoes += "Me lembrar no dia do vencimento" to {
+                        val (ano, mes, dia) = v.split("-").map { it.toInt() }
+                        val quando = java.util.Calendar.getInstance().apply { clear(); set(ano, mes - 1, dia, 9, 0) }.timeInMillis
+                        val texto = "Pagar boleto" + (a.valorCentavos?.let { " de " + Loja.dinheiro(it) } ?: "") + " (${doc.nome.substringBeforeLast('.')})"
+                        if (quando > System.currentTimeMillis()) {
+                            val l = Lembretes.criar(this, Lembretes.Pedido(quando, texto))
+                            responder("Combinado: ${Lembretes.quandoFalado(l.quando)} eu te lembro de pagar esse boleto.")
+                        } else responder("Esse boleto já venceu (${dia}/${mes}/${ano}).")
+                    }
+                }
+                a.linhaDigitavel?.let { linha ->
+                    opcoes += "Copiar a linha digitável" to {
+                        (getSystemService(CLIPBOARD_SERVICE) as android.content.ClipboardManager)
+                            .setPrimaryClip(android.content.ClipData.newPlainText("Linha digitável", linha))
+                        Toast.makeText(this, "Linha digitável copiada. É só colar no app do banco.", Toast.LENGTH_LONG).show()
+                    }
+                }
+                AlertDialog.Builder(this)
+                    .setTitle("Boleto" + (a.valorCentavos?.let { " de " + Loja.dinheiro(it) } ?: ""))
+                    .setItems(opcoes.map { it.first }.toTypedArray()) { _, i -> opcoes[i].second() }
+                    .setNegativeButton("Agora não", null)
+                    .show()
+            }
+            a.tipo == "nota_fiscal" && doc.bytes != null && ferramentas.loja.conectada -> {
+                AlertDialog.Builder(this)
+                    .setTitle("Nota de compra?")
+                    .setMessage("Se for uma compra de produtos para a loja, eu posso somar ao estoque e guardar o custo de cada um.")
+                    .setPositiveButton("Lançar a compra") { _, _ -> lerNotaDoDocumento(doc) }
+                    .setNegativeButton("Agora não", null)
+                    .show()
+            }
+        }
+    }
+
+    private fun lerNotaDoDocumento(doc: Arquivos.Documento) {
+        val bytes = doc.bytes ?: return
+        val k = chave()
+        val m = modelo()
+        comTempoLimite("LENDO A NOTA…") {
+            val linhas = Gemini.lerNotaDeCompra(k, m, bytes, doc.mime)
+            val produtos = if (linhas != null) try {
+                ferramentas.loja.produtos()
+            } catch (e: Exception) {
+                null
+            } else null
+            val acao: () -> Unit = when {
+                linhas == null -> { { responder("Não consegui separar os itens dessa nota.") } }
+                produtos == null -> { { responder("Li a nota, mas não consegui falar com a loja. Confira a internet.") } }
+                else -> { { confirmarCompra(Loja.casarCompra(produtos, linhas), produtos) } }
+            }
+            acao
+        }
+    }
+
+    private fun perguntarAoDocumento(pergunta: String) {
+        val doc = documentoAtivo() ?: return responder("Nenhum arquivo aberto. Compartilhe um arquivo comigo ou diga: abre um arquivo.")
+        documentoQuando = System.currentTimeMillis()
+        val k = chave()
+        val m = modelo()
+        val historico = conversaDocumento.toList()
+        comTempoLimite("LENDO O ARQUIVO…") {
+            val r = Gemini.perguntarDocumento(k, m, doc, pergunta, historico)
+            val acao: () -> Unit = {
+                if (r == null) responder("O Gemini não respondeu agora. Pode perguntar de novo?")
+                else {
+                    conversaDocumento += pergunta to r
+                    responder(r)
+                }
+            }
+            acao
+        }
+    }
+
     // ----------------------------------------------------------- nota de compra
     /** Lê a nota (foto ou print), mostra cada item ligado a um produto e, com a confirmação, soma ao estoque e salva o custo. */
     private fun lerNota(uri: Uri?) {
@@ -2666,6 +2836,8 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         private const val PEDIDO_NOTIFICACOES = 12
         private const val PEDIDO_FOTO_CAMERA = 40
         private const val PEDIDO_FOTO_GALERIA = 41
+        private const val PEDIDO_ARQUIVO = 42
+        private const val PREF_AVISO_ARQUIVOS = "aviso_arquivos"
         private const val LIMITE_IA_MS = 35_000L
         private const val ID_AMOSTRA = "amostra"
         private const val MODELO_PADRAO = "gemini-flash-latest"
