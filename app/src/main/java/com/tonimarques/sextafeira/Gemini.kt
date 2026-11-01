@@ -28,6 +28,11 @@ class Gemini(
     /** [chamadas]: ferramentas que a IA usou para responder (nome e argumentos), para a Vênus aprender. */
     data class RespostaIA(val ok: Boolean, val texto: String, val chamadas: List<Pair<String, JSONObject>> = emptyList())
 
+    /** O que a Vênus entendeu de um arquivo aberto. */
+    data class Analise(
+        val tipo: String, val resumo: String, val vencimento: String?, val valorCentavos: Int?, val linhaDigitavel: String?,
+    )
+
     fun enviar(pedido: String): RespostaIA {
         val inicio = historico.length()
         val usadas = mutableListOf<Pair<String, JSONObject>>()
@@ -485,10 +490,27 @@ class Gemini(
             return null
         }
 
-        /** O que a Vênus entendeu de um arquivo aberto. */
-        data class Analise(
-            val tipo: String, val resumo: String, val vencimento: String?, val valorCentavos: Int?, val linhaDigitavel: String?,
-        )
+        /** Legenda para Instagram (feed ou story) a partir da foto e do que se sabe do produto. */
+        fun legendaInstagram(chave: String, modelo: String, foto: ByteArray?, contexto: String, story: Boolean): String? {
+            if (chave.isBlank()) return null
+            val pedido = "Você cuida do Instagram da Desejo de Intimidade, loja de moda íntima e sex shop com entrega discreta em todo o Brasil " +
+                "(site desejo-de-intimidade.floot.app). Tom elegante, provocante na medida e acolhedor, sem palavras explícitas nem vulgares " +
+                "(o Instagram remove conteúdo sexual explícito). " +
+                (if (story) "Escreva um texto curto para um story (até 90 caracteres) com uma chamada para ação. "
+                else "Escreva a legenda de um post do feed: 2 a 4 frases curtas, uma chamada para ação (link na bio ou chamar no WhatsApp), " +
+                    "no máximo 3 emojis e, no fim, 6 a 8 hashtags em português. ") +
+                "Sobre o post: ${contexto.ifBlank { "use a foto" }}. Responda só com o texto, sem aspas e sem markdown."
+            val partes = JSONArray()
+            if (foto != null) partes.put(imagem(foto))
+            partes.put(JSONObject().put("text", pedido))
+            val corpo = JSONObject()
+                .put("contents", JSONArray().put(JSONObject().put("role", "user").put("parts", partes)))
+                .put("generationConfig", JSONObject().put("temperature", 0.8))
+                .toString().toByteArray()
+            val json = chamarAvulso(chave, listOf(modelo, "gemini-2.5-flash", "gemini-flash-lite-latest"), corpo) ?: return null
+            return textoBruto(json)?.replace(Regex("[*`]"), "")?.trim()?.trim('"', '“', '”')?.take(2000)
+        }
+
 
         private fun partesDoDocumento(doc: Arquivos.Documento, texto: String): JSONArray {
             val partes = JSONArray()

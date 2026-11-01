@@ -123,6 +123,16 @@
             android:grantUriPermissions="true" />
 
 
+        <!-- Posts programados do Instagram -->
+        <receiver
+            android:name=".AvisoDePost"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
+
         <!-- Lembretes: dispara na hora marcada e reagenda depois de reiniciar o celular ou atualizar o app -->
         <receiver
             android:name=".AvisoDeLembrete"

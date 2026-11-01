@@ -44,6 +44,8 @@ object ComandosLocais {
         if (EDITAR_FUNDO.containsMatchIn(c)) return Resultado.Acao("editar_fundo", emptyMap())
         if (LER_NOTA.containsMatchIn(c)) return Resultado.Acao("ler_nota", emptyMap())
         if (ABRIR_ARQUIVO.containsMatchIn(c)) return Resultado.Acao("abrir_arquivo", emptyMap())
+        if (LISTAR_POSTS.containsMatchIn(c)) return Resultado.Acao("listar_posts", emptyMap())
+        PROGRAMAR_POST.matchEntire(c)?.let { m -> return programarPost(m.groupValues[1], f.trecho(m.groups[2]).orEmpty()) }
         if (!ehRecado) Calculadora.responder(c)?.let { return Resultado.Resposta(it) }
         // Conhecimentos gerais que ela sabe de cor (português, ciências, geografia, matemática)
         if (!ehRecado) Saber.responder(c)?.let { return Resultado.Resposta(it) }
@@ -858,6 +860,29 @@ object ComandosLocais {
         "\\b(?:(?:troca|troque|trocar|muda|mude|mudar|tira|tire|tirar|remove|remova|remover|apaga|apague|edita|edite|editar|coloca|coloque|poe) (?:o |um )?fundo|" +
             "fundo (?:da|de uma|dessa|desta) foto|edita(?:r)? (?:a |uma )?foto(?: do produto)?|editor de fotos?)\\b"
     )
+    private val PROGRAMAR_POST = Regex(
+        "^(?:programa|programe|programar|agenda|agende|agendar|cria|crie|criar|faz|faca|fazer|prepara|prepare|preparar|monta|monte|montar|posta|poste|postar)" +
+            "(?: um| uma| o| a)? (?:novo |nova )?(post|postagem|publicacao|story|stories|storie)(?: (?:no|do|para o|pro|pra) instagram)?(?:,? (.+))?$"
+    )
+    private val LISTAR_POSTS = Regex(
+        "\\b(?:(?:meus|minhas|quais|os|as|lista|ver|mostra) (?:os |as )?(?:posts|postagens|publicacoes|stories) (?:programad|agendad)\\w*|posts programados|postagens programadas|fila de posts)\\b"
+    )
+
+    /** "programa um post do gel amanhã às 19h" → tipo, produto (o que sobrar) e horário, se tiver. */
+    fun programarPost(tipo: String, resto: String): Resultado {
+        val args = mutableMapOf<String, Any>("tipo" to if (tipo.startsWith("stor")) "story" else "feed")
+        var produto = resto.trim()
+        if (produto.isNotBlank()) {
+            Lembretes.interpretar("lembrete $produto")?.let { p ->
+                args["quando"] = p.quando
+                produto = if (p.texto == "Lembrete") "" else p.texto
+            }
+        }
+        produto = produto.replace(Regex("^(?i)(?:d[oae]s?|sobre o|sobre a|com o|com a|para o|para a)\\s+"), "").trim().trim(',', '.')
+        if (produto.length >= 3) args["produto"] = produto
+        return Resultado.Acao("programar_post", args)
+    }
+
     private val ABRIR_ARQUIVO = Regex(
         "^(?:(?:abre|abra|abrir|le|leia|ler|escolhe|escolha|escolher|carrega|carregue|analisa|analise|analisar) (?:um |o |uma |meu |a |esse |este )?(?:arquivo|pdf|documento|planilha|boleto|contrato)|quero (?:mandar|enviar|ler) um (?:arquivo|pdf|documento))$"
     )
