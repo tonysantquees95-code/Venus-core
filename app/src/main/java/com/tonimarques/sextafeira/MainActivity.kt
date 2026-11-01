@@ -105,6 +105,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         cerebro.apelido = memoria.valor("apelido") ?: "chefe"
         VigiaDaLoja.garantir(this)
         cerebro.carregarAprendidas(memoria.aprendidas())
+        Lexico.iniciar(this)
         cerebro.aoAprender = { frase, intencao -> memoria.aprender(frase, intencao) }
         try {
             if (Calculadora.conversaVazia()) for (m in memoria.mensagens(null, 120)) Calculadora.lembrar(m.texto)

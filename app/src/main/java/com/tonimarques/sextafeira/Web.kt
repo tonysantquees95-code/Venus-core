@@ -54,12 +54,16 @@ object Web {
         return Lugar(nomeCompleto, r.getDouble("latitude"), r.getDouble("longitude"))
     }
 
-    /** [dia] = "hoje" ou "amanha". [nomeLugar] vazio quando veio do GPS. */
+    /**
+     * [dia] = "hoje", "amanha", "semana" (próximos 7 dias), "fim_de_semana", "horas" (a que horas chove hoje)
+     * ou "horas_amanha". [nomeLugar] vazio quando veio do GPS.
+     */
     fun previsao(latitude: Double, longitude: Double, nomeLugar: String, dia: String): Resposta {
         val url = "https://api.open-meteo.com/v1/forecast?latitude=$latitude&longitude=$longitude" +
             "&current=temperature_2m,apparent_temperature,weather_code,relative_humidity_2m" +
             "&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max,weather_code" +
-            "&timezone=auto&forecast_days=2"
+            (if (dia.startsWith("horas")) "&hourly=precipitation_probability,weather_code" else "") +
+            "&timezone=auto&forecast_days=" + (if (dia == "semana" || dia == "fim_de_semana") 8 else 2)
         val json = JSONObject(texto(url))
         return Resposta(montarPrevisao(json, nomeLugar, dia), listOf(Fonte("Open-Meteo", "https://open-meteo.com")))
     }
@@ -68,6 +72,10 @@ object Web {
     fun montarPrevisao(json: JSONObject, nomeLugar: String, dia: String): String {
         val onde = if (nomeLugar.isBlank()) "Aí onde você está" else "Em $nomeLugar"
         val diario = json.getJSONObject("daily")
+        when (dia) {
+            "semana", "fim_de_semana" -> return montarSemana(diario, onde, dia == "fim_de_semana")
+            "horas", "horas_amanha" -> json.optJSONObject("hourly")?.let { return montarHoras(it, onde, dia == "horas_amanha", json.optJSONObject("current")?.optString("time")) }
+        }
         val i = if (dia == "amanha") 1 else 0
         val max = diario.getJSONArray("temperature_2m_max").getDouble(i).roundToInt()
         val min = diario.getJSONArray("temperature_2m_min").getDouble(i).roundToInt()
@@ -84,6 +92,60 @@ object Web {
         val ceu = descricaoTempo(atual.getInt("weather_code"))
         val sens = if (sensacao != agora) ", sensação de $sensacao" else ""
         return "$onde agora faz $agora graus$sens, $ceu. Hoje a máxima é de $max e a mínima de $min$textoChuva."
+    }
+
+    private val DIAS_SEMANA = listOf("domingo", "segunda", "terça", "quarta", "quinta", "sexta", "sábado")
+
+    private fun diaDaSemana(data: String): String {
+        val c = java.util.Calendar.getInstance().apply {
+            clear()
+            val (a, m, d) = data.take(10).split("-").map { it.toInt() }
+            set(a, m - 1, d)
+        }
+        return DIAS_SEMANA[c.get(java.util.Calendar.DAY_OF_WEEK) - 1]
+    }
+
+    /** Próximos 7 dias (a partir de amanhã) ou só sábado e domingo. */
+    fun montarSemana(diario: JSONObject, onde: String, soFimDeSemana: Boolean): String {
+        val datas = diario.getJSONArray("time")
+        val dias = (1 until datas.length()).map { i ->
+            val nome = diaDaSemana(datas.getString(i))
+            val max = diario.getJSONArray("temperature_2m_max").getDouble(i).roundToInt()
+            val min = diario.getJSONArray("temperature_2m_min").getDouble(i).roundToInt()
+            val chuva = diario.optJSONArray("precipitation_probability_max")?.optInt(i, -1) ?: -1
+            val ceu = descricaoTempo(diario.getJSONArray("weather_code").getInt(i)).removePrefix("com ")
+            Triple(nome, "$nome: $min a $max graus, $ceu" + (if (chuva >= 40) ", $chuva% de chuva" else ""), chuva)
+        }.let { lista -> if (soFimDeSemana) lista.filter { it.first == "sábado" || it.first == "domingo" }.take(2) else lista.take(7) }
+        if (dias.isEmpty()) return "$onde: não consegui a previsão desses dias."
+        val chuvosos = dias.filter { it.third >= 60 }.map { it.first }
+        val resumo = when {
+            chuvosos.isEmpty() -> "Sem dias com chuva forte prevista."
+            chuvosos.size == 1 -> "Leve guarda-chuva na ${chuvosos[0]}."
+            else -> "Dias com mais chance de chuva: ${chuvosos.dropLast(1).joinToString(", ")} e ${chuvosos.last()}."
+        }
+        return (if (soFimDeSemana) "$onde no fim de semana: " else "$onde nos próximos dias: ") + dias.joinToString("; ") { it.second } + ". " + resumo
+    }
+
+    /** A que horas tem mais chance de chover (hoje, a partir de agora, ou amanhã). */
+    fun montarHoras(horario: JSONObject, onde: String, amanha: Boolean, agoraIso: String?): String {
+        val horas = horario.getJSONArray("time")
+        val prob = horario.getJSONArray("precipitation_probability")
+        val hoje = (agoraIso ?: horas.getString(0)).take(10)
+        val alvo = if (amanha) horas.getString(minOf(24, horas.length() - 1)).take(10) else hoje
+        val desde = if (amanha || agoraIso == null) "" else agoraIso.take(13)
+        val pontos = (0 until horas.length()).mapNotNull { i ->
+            val t = horas.getString(i)
+            if (t.take(10) != alvo || t.take(13) < desde) null else t.substring(11, 13).toInt() to prob.optInt(i, 0)
+        }
+        val quando = if (amanha) "Amanhã" else "Hoje"
+        if (pontos.isEmpty()) return "$onde: não consegui a previsão por hora."
+        val pico = pontos.maxByOrNull { it.second }!!
+        if (pico.second < 20) return "$onde, ${quando.lowercase()} a chance de chuva é baixa o tempo todo: no máximo ${pico.second}%, por volta das ${pico.first}h."
+        val acima = pontos.filter { it.second >= 40 }
+        var t = "$onde, ${quando.lowercase()} a maior chance de chuva é por volta das ${pico.first}h (${pico.second}%)."
+        if (acima.size >= 2) t += " Entre ${acima.first().first}h e ${acima.last().first + 1}h a chance fica acima de 40%."
+        else if (acima.isEmpty()) t += " No resto do dia fica abaixo de 40%."
+        return t
     }
 
     /** Códigos de tempo da OMM usados pela Open-Meteo. */
