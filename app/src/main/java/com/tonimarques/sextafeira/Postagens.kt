@@ -149,13 +149,30 @@ object Postagens {
         }
     }
 
-    internal fun disparou(ctx: Context, id: Int, terminou: () -> Unit = {}) {
+    /** Na hora marcada: publica sozinha (num trabalho em segundo plano que espera a internet) ou avisa para postar. */
+    internal fun disparou(ctx: Context, id: Int) {
+        val p = achar(ctx, id) ?: return
+        if (p.publicado) return
+        if (!podePublicarSozinho(ctx)) return avisar(ctx, p)
+        val info = android.app.job.JobInfo.Builder(JOB_BASE + id, android.content.ComponentName(ctx, PublicadorDePosts::class.java))
+            .setRequiredNetworkType(android.app.job.JobInfo.NETWORK_TYPE_ANY)
+            .setOverrideDeadline(60_000)
+            .setExtras(android.os.PersistableBundle().apply { putInt("id", id) })
+            .build()
+        val ok = try {
+            ctx.getSystemService(android.app.job.JobScheduler::class.java).schedule(info) == android.app.job.JobScheduler.RESULT_SUCCESS
+        } catch (e: Exception) {
+            false
+        }
+        if (!ok) avisar(ctx, p, erro = "Não consegui começar a publicação.")
+    }
+
+    private const val JOB_BASE = 72_000
+
+    /** Publica (chamado pelo trabalho em segundo plano). */
+    internal fun publicarAgendado(ctx: Context, id: Int, terminou: () -> Unit = {}) {
         val p = achar(ctx, id)
         if (p == null || p.publicado) return terminou()
-        if (!podePublicarSozinho(ctx)) {
-            avisar(ctx, p)
-            return terminou()
-        }
         Thread {
             try {
                 val link = publicarPelaApi(ctx, p)
@@ -170,6 +187,26 @@ object Postagens {
     }
 
     fun podePublicarSozinho(ctx: Context) = Instagram.conectado(ctx) && Loja(ctx).conectada
+
+    /** Muda o horário de um post da fila. */
+    fun reprogramar(ctx: Context, id: Int, quando: Long): Post? {
+        val lista = ler(ctx)
+        val p = lista.firstOrNull { it.id == id && !it.publicado } ?: return null
+        ctx.getSystemService(AlarmManager::class.java).cancel(intencao(ctx, p))
+        val novo = p.copy(quando = quando)
+        gravar(ctx, lista.map { if (it.id == id) novo else it })
+        agendar(ctx, novo)
+        return novo
+    }
+
+    /** Troca entre feed e story. */
+    fun mudarTipo(ctx: Context, id: Int, tipo: String): Post? {
+        val lista = ler(ctx)
+        val p = lista.firstOrNull { it.id == id && !it.publicado } ?: return null
+        val novo = p.copy(tipo = tipo)
+        gravar(ctx, lista.map { if (it.id == id) novo else it })
+        return novo
+    }
 
     /** Sobe a foto para o site e publica pela API. Devolve o link do post ("" em story). */
     fun publicarPelaApi(ctx: Context, p: Post): String {
@@ -242,11 +279,18 @@ class AvisoDePost : BroadcastReceiver() {
     override fun onReceive(ctx: Context, intent: Intent) {
         when (intent.action) {
             Intent.ACTION_BOOT_COMPLETED, Intent.ACTION_MY_PACKAGE_REPLACED -> Postagens.reagendarTodos(ctx)
-            else -> {
-                // publicar pela internet leva alguns segundos: segura o aviso aberto até terminar
-                val pendente = goAsync()
-                Postagens.disparou(ctx, intent.getIntExtra("id", 0)) { pendente.finish() }
-            }
+            else -> Postagens.disparou(ctx, intent.getIntExtra("id", 0))
         }
     }
+}
+
+/** Publica o post programado em segundo plano (o Android dá tempo e espera a internet, mesmo com o app fechado). */
+class PublicadorDePosts : android.app.job.JobService() {
+    override fun onStartJob(params: android.app.job.JobParameters): Boolean {
+        val id = params.extras.getInt("id", 0)
+        Postagens.publicarAgendado(applicationContext, id) { jobFinished(params, false) }
+        return true
+    }
+
+    override fun onStopJob(params: android.app.job.JobParameters): Boolean = false
 }

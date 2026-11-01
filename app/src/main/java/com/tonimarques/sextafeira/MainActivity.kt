@@ -684,6 +684,13 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
             ferramentas.esquecerPendentes()
             fecharConfirmacaoLoja()
         }
+        // Post que acabou de ser programado: "muda para hoje às 19h", "no feed"
+        postEmFoco()?.let { id ->
+            if (ajustarPostEmFoco(id, pedido)) {
+                adicionarMensagem(original, true)
+                return
+            }
+        }
         // Memória da conversa: "esse pedido" → o pedido 15; "coloca ele em promoção" → coloca o gel em promoção
         Contexto.comPedido(pedido)?.let { pedido = it }
         Contexto.comProduto(pedido)?.let { trocado ->
@@ -764,6 +771,10 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
                 decisao.nome == "programar_post" -> programarPost(decisao.args)
                 decisao.nome == "listar_posts" -> listarPosts()
                 decisao.nome == "instagram_conectar" -> conectarInstagram()
+                decisao.nome == "postar_agora" -> {
+                    val alvo = postEmFoco() ?: Postagens.pendentes(this).firstOrNull()?.id
+                    if (alvo == null) responder("Não tem post na fila. Diga, por exemplo: programa um story do gel.") else postarAgora(alvo)
+                }
                 decisao.nome == "instagram_comentarios" -> comentariosInstagram()
                 decisao.nome == "responder_cliente" -> responderCliente(null)
                 decisao.nome == "caixa_grafico" -> mostrarGrafico()
@@ -2946,7 +2957,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
                 } catch (e: Exception) {
                     null
                 }
-                val url = achado?.bruto?.optString("imageUrl")?.takeIf { it.startsWith("http") }
+                val url = achado?.bruto?.optString("imageUrl")?.let { Loja.enderecoCompleto(it) }?.takeIf { it.startsWith("http") }
                 val bytes = url?.let {
                     try {
                         java.net.URL(it).openStream().use { s -> s.readBytes() }
@@ -2983,10 +2994,15 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
                 return false
             }
             val p = Postagens.criar(this, quando, if (tipos.checkedRadioButtonId == story.id) "story" else "feed", legenda.text.toString(), f)
+            focarPost(p.id)
             if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
                 requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), PEDIDO_NOTIFICACOES)
             }
-            responder("Programado: ${if (p.ehStory) "story" else "post"} ${Lembretes.quandoFalado(p.quando)}. Na hora eu te aviso com tudo pronto.")
+            responder(
+                "Programado: ${if (p.ehStory) "story" else "post"} ${Lembretes.quandoFalado(p.quando)}. " +
+                    if (Postagens.podePublicarSozinho(this)) "Na hora eu publico sozinha. Para mudar, diga: muda para hoje às 20h, no feed, ou posta agora."
+                    else "Na hora eu te aviso com tudo pronto."
+            )
             return true
         }
         dialogo.setOnShowListener {
@@ -3077,6 +3093,46 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         } catch (e: Exception) {
             responder("Não consegui abrir o Instagram.")
         }
+    }
+
+    // ----------------------------------------------------------- post em foco (o último programado)
+    private var postFocado: Int? = null
+    private var postFocadoEm = 0L
+
+    private fun focarPost(id: Int) {
+        postFocado = id
+        postFocadoEm = System.currentTimeMillis()
+    }
+
+    /** O post programado há menos de 20 minutos e ainda não publicado. */
+    private fun postEmFoco(): Int? {
+        val id = postFocado ?: return null
+        if (System.currentTimeMillis() - postFocadoEm > 20 * 60_000L) return null
+        return id.takeIf { Postagens.achar(this, it)?.publicado == false }
+    }
+
+    /** "muda para hoje às 19h" / "no feed": ajusta o post em foco. Devolve true se era isso. */
+    private fun ajustarPostEmFoco(id: Int, pedido: String): Boolean {
+        val c = ComandosLocais.normalizar(pedido).replace(Regex("[^a-z0-9: ]"), " ").replace(Regex("\\s+"), " ").trim()
+        ComandosLocais.TIPO_POST.find(c)?.let { m ->
+            if (c.split(" ").size <= 10) {
+                val tipo = if (m.groupValues[1] == "feed") "feed" else "story"
+                val p = Postagens.mudarTipo(this, id, tipo) ?: return false
+                focarPost(id)
+                responder("Combinado: vai ${if (tipo == "feed") "no feed" else "no story"}, ${Lembretes.quandoFalado(p.quando)}.")
+                return true
+            }
+        }
+        val m = ComandosLocais.REPROGRAMAR_POST.matchEntire(c) ?: return false
+        val quando = Lembretes.interpretar("lembrete ${m.groupValues[1]}")?.quando ?: return false
+        if (quando <= System.currentTimeMillis()) {
+            responder("Esse horário já passou. Para publicar já, diga: posta agora.")
+            return true
+        }
+        val p = Postagens.reprogramar(this, id, quando) ?: return false
+        focarPost(id)
+        responder("Mudei: ${if (p.ehStory) "story" else "post"} ${Lembretes.quandoFalado(p.quando)}.")
+        return true
     }
 
     // ----------------------------------------------------------- Instagram da loja (API da Meta)

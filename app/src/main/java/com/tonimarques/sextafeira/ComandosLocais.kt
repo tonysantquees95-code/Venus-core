@@ -908,9 +908,23 @@ object ComandosLocais {
             "(?:responde|responder|responda|ver|mostra|le|ler|leia)(?: os| as| aos)? comentarios?)"
     )
 
+    private const val PUBLICAR = "(?:postar|posta|poste|postem|publicar|publica|publique)"
+    private val POSTAR_AGORA = Regex(
+        "^(?:(?:pode|podes|entao|ok|sim|beleza|ta|tudo bem),? $PUBLICAR(?: (?:ele|ela|isso|o post|o story|a postagem|o stories))?(?: (?:agora|ja|logo|como (?:esta|ta)|assim mesmo|assim))?|" +
+            "$PUBLICAR(?: (?:ele|ela|isso|o post|o story|a postagem|o stories))? (?:agora|ja|logo|agora mesmo|como (?:esta|ta)|assim mesmo))$"
+    )
+    /** "muda para hoje às 19h" (vale para o post que acabou de ser programado). */
+    val REPROGRAMAR_POST = Regex(
+        "^(?:muda|mudar|mude|troca|trocar|troque|passa|passar|passe|reprograma|reprogramar|remarca|remarcar|deixa|deixar|coloca|colocar|bota|botar)" +
+            "(?: (?:o|a) (?:post|story|stories|postagem|horario|publicacao))?(?: d[oa] (?:post|story|postagem))? (?:para|pra|pro) (.+)$"
+    )
+    /** "no feed", "poste no feed", "troca para story". */
+    val TIPO_POST = Regex("^(?:(?:muda|mudar|mude|troca|trocar|troque|passa|poste|posta|postar|publica|publicar|faz|faca|coloca|bota)(?: (?:ele|ela|isso|o post|a postagem))? )?(?:no|pro|para o|pra|para|pelo|como) (feed|story|stories)\\b")
+
     /** "conecta o Instagram", "como está o Instagram?", "comentários do Instagram". */
     fun instagram(c: String): Resultado? {
         val t = c.trimEnd('.', '!', '?')
+        if (POSTAR_AGORA.matches(t)) return Resultado.Acao("postar_agora", emptyMap())
         if (IG_CONECTAR.containsMatchIn(t)) return Resultado.Acao("instagram_conectar", emptyMap())
         if (IG_COMENTARIOS.containsMatchIn(t)) return Resultado.Acao("instagram_comentarios", emptyMap())
         if (IG_RESUMO.containsMatchIn(t)) return Resultado.Acao("instagram_resumo", emptyMap())
