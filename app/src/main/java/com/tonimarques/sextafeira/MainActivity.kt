@@ -104,6 +104,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         mensagemInicial()?.let { adicionarMensagem(it, false, salvar = false) }
         tratarIntent(intent)
         if (javaClass == MainActivity::class.java) principal.postDelayed({ oferecerVozOffline() }, 1500)
+        if (javaClass == MainActivity::class.java) principal.postDelayed({ procurarAtualizacao(manual = false) }, 4000)
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -207,6 +208,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
                 ouvirComando()
             }
             ACAO_ATIVAR -> orbe.post { ativar() }
+            Atualizador.ACAO_INSTALAR -> resultadoDaInstalacao(intent)
             ACAO_PEDIDO -> {
                 val pedido = intent.getStringExtra(EXTRA_PEDIDO).orEmpty()
                 if (pedido.isNotBlank()) orbe.post {
@@ -1491,6 +1493,9 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
             ),
             TelaDeAjustes.Secao(
                 "Sistema", listOf(
+                    TelaDeAjustes.Ajuste("Atualizações", {
+                        "Versão ${versaoDoApp()} instalada. A ${Marca.nome} avisa sozinha quando sai uma nova; toque para procurar agora."
+                    }) { procurarAtualizacao(manual = true) },
                     item("Diagnóstico de conexão", { "Testa a internet e o Gemini e mostra o que está funcionando." }, MENU_DIAGNOSTICO),
                 )
             ),
@@ -1895,6 +1900,117 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         }
         Toast.makeText(this, if (ligar) "Avisos da loja ligados." else "Avisos da loja desligados.", Toast.LENGTH_SHORT).show()
         ajustes?.atualizar()
+    }
+
+    // ----------------------------------------------------------- atualização automática
+    private val atualizador by lazy { Atualizador(this) }
+
+    /** Procura versão nova. Automática (ao abrir, no máximo a cada 6 h e sem incomodar) ou pelo menu. */
+    private fun procurarAtualizacao(manual: Boolean) {
+        if (!manual && (atualizador.procurouRecentemente() || !atualizador.temToken)) return
+        if (manual) Toast.makeText(this, "Procurando atualização…", Toast.LENGTH_SHORT).show()
+        Thread {
+            val resultado = try {
+                Result.success(atualizador.procurar())
+            } catch (e: Exception) {
+                Result.failure(e)
+            }
+            runOnUiThread {
+                if (isFinishing) return@runOnUiThread
+                resultado.onSuccess { v ->
+                    if (v != null) oferecerAtualizacao(v)
+                    else if (manual) Toast.makeText(this, "Você já está com a versão mais nova (${versaoDoApp()}).", Toast.LENGTH_LONG).show()
+                }.onFailure { e ->
+                    if (!manual) return@onFailure
+                    if (e is Atualizador.ErroDeAtualizacao && e.precisaToken) pedirTokenDoGithub(e.message)
+                    else Toast.makeText(this, e.message ?: "Não consegui procurar agora. Confira a internet.", Toast.LENGTH_LONG).show()
+                }
+            }
+        }.start()
+    }
+
+    private fun oferecerAtualizacao(v: Atualizador.Versao) {
+        val novidades = v.notas.ifBlank { "Melhorias e correções." }
+        AlertDialog.Builder(this)
+            .setTitle("Nova versão da ${Marca.nome}: 1.${v.numero}")
+            .setMessage("$novidades\n\nA atualização mantém suas memórias, ajustes e a conexão com a loja.")
+            .setPositiveButton("Atualizar agora") { _, _ -> instalarAtualizacao(v) }
+            .setNegativeButton("Depois", null)
+            .show()
+    }
+
+    private fun instalarAtualizacao(v: Atualizador.Versao) {
+        val aviso = TextView(this).apply {
+            text = "Baixando… 0%"
+            setPadding(dp(24), dp(16), dp(24), dp(8))
+            textSize = 16f
+        }
+        val dialogo = AlertDialog.Builder(this).setTitle("Atualizando a ${Marca.nome}").setView(aviso).setCancelable(false).show()
+        Thread {
+            try {
+                atualizador.baixarEInstalar(v) { pct -> runOnUiThread { aviso.text = "Baixando… $pct%" } }
+                runOnUiThread {
+                    aviso.text = "Pronto. Confirme a instalação na próxima tela."
+                    principal.postDelayed({ if (dialogo.isShowing) dialogo.dismiss() }, 2500)
+                }
+            } catch (e: Exception) {
+                runOnUiThread {
+                    dialogo.dismiss()
+                    Toast.makeText(this, e.message ?: "Não consegui baixar a atualização.", Toast.LENGTH_LONG).show()
+                }
+            }
+        }.start()
+    }
+
+    /** O Android avisa como foi a instalação; quando precisa da confirmação, abre a tela dele. */
+    private fun resultadoDaInstalacao(intent: Intent) {
+        when (intent.getIntExtra(android.content.pm.PackageInstaller.EXTRA_STATUS, -999)) {
+            android.content.pm.PackageInstaller.STATUS_PENDING_USER_ACTION -> {
+                @Suppress("DEPRECATION")
+                val confirmar = if (Build.VERSION.SDK_INT >= 33) intent.getParcelableExtra(Intent.EXTRA_INTENT, Intent::class.java)
+                else intent.getParcelableExtra<Intent>(Intent.EXTRA_INTENT)
+                if (confirmar != null) {
+                    try {
+                        startActivity(confirmar.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                    } catch (e: Exception) {
+                        Toast.makeText(this, "Não consegui abrir a instalação.", Toast.LENGTH_LONG).show()
+                    }
+                }
+            }
+            android.content.pm.PackageInstaller.STATUS_SUCCESS -> Toast.makeText(this, "${Marca.nome} atualizada!", Toast.LENGTH_SHORT).show()
+            -999 -> {}
+            else -> {
+                val msg = intent.getStringExtra(android.content.pm.PackageInstaller.EXTRA_STATUS_MESSAGE).orEmpty()
+                Toast.makeText(this, "A instalação não foi concluída. $msg".trim(), Toast.LENGTH_LONG).show()
+            }
+        }
+    }
+
+    private fun pedirTokenDoGithub(motivo: String?) {
+        val campo = campoDeDialogo("", "Cole o token aqui (github_pat_…)")
+        AlertDialog.Builder(this)
+            .setTitle("Token do GitHub")
+            .setMessage(
+                (motivo?.let { "$it\n\n" } ?: "") +
+                    "Como as versões ficam num repositório privado, a ${Marca.nome} precisa de uma chave só de leitura:\n\n" +
+                    "1. No GitHub: Settings → Developer settings → Personal access tokens → Fine-grained tokens → Generate new token.\n" +
+                    "2. Repository access: Only select repositories → Sexta-feira-.\n" +
+                    "3. Permissions → Repository → Contents: Read-only.\n" +
+                    "4. Gere, copie e cole aqui.\n\n" +
+                    "Ela fica criptografada só no celular e não deixa mudar nada no GitHub."
+            )
+            .setView(campo)
+            .setPositiveButton("Salvar e procurar") { _, _ ->
+                val t = campo.text.toString().trim()
+                if (t.length < 20) {
+                    Toast.makeText(this, "Esse token parece incompleto.", Toast.LENGTH_LONG).show()
+                    return@setPositiveButton
+                }
+                atualizador.guardarToken(t)
+                procurarAtualizacao(manual = true)
+            }
+            .setNegativeButton("Cancelar", null)
+            .show()
     }
 
     private fun conectarLoja() {
