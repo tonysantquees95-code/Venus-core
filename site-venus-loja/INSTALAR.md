@@ -19,5 +19,7 @@ Código pronto aqui; o cérebro passou em 45 testes (teste/t.ts, `node --experim
 - Avisos push no iPhone: verificar o que a Floot permite (sem service worker próprio).
 
 ## Pedido extra do Toni (31/10)
-- Nome da loja no topo do site (SiteHeader): hoje em fonte pontilhada, rosa escuro, pouco contraste → deixar maior e mais legível,
-  com o rosa neon vivo e brilho (text-shadow). Mostrar 2–3 opções no preview antes de publicar. Conferir no celular também.
+- Nome da loja no topo do site (SiteHeader) e onde mais o nome aparece em letra vazada (ex.: faixa grande "DESEJO DE INTIMIDADE"):
+  DECIDIDO pelo Toni: deixar bem parecido com o LOGO — letra de neon vazada, traço bem mais grosso (-webkit-text-stroke ~2-3px),
+  rosa neon vivo (igual ao do logo, magenta forte), e bem iluminado (várias camadas de text-shadow/drop-shadow rosa: 0 0 4px, 0 0 10px, 0 0 22px, 0 0 40px).
+  Talvez preencher levemente o miolo com rosa translúcido. Conferir no computador e no celular; mostrar no preview antes de publicar.
