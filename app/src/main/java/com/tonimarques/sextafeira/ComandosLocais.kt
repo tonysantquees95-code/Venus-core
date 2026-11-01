@@ -40,6 +40,7 @@ object ComandosLocais {
         // Contas, conversões, datas, tradução, CEP...: antes do clima ("30 graus em fahrenheit" é conversão).
         // Mudanças na loja ("muda o preço do gel para 29,90") antes das contas, para o número não virar cálculo.
         if (RELATORIO_ERROS.matches(c.trimEnd('.', '!', '?'))) return Resultado.Acao("enviar_relatorio_erros", emptyMap())
+        instagram(c)?.let { return it }
         palavraExiste(f)?.let { return it }
         conversaAntiga(f)?.let { return it }
         precoNaInternet(f)?.let { return it }
@@ -893,6 +894,29 @@ object ComandosLocais {
     private val RESPONDER_CLIENTE = Regex(
         "^(?:me ajuda a |ajuda a |quero )?(?:responde|responda|responder|atende|atenda|atender|escreve|escreva|escrever)(?: uma resposta)?(?: (?:pra|para|a|o))? (?:uma |um |a |o |essa |esse )?(?:cliente|compradora?|mensagem de cliente|mensagem da cliente)\\b"
     )
+    // ================================================================== Instagram da loja
+    private val IG = "(?:o |no |do |meu |nosso |a conta do |conta do )?(?:insta|instagram|ig)\\b"
+    private val IG_CONECTAR = Regex(
+        "^(?:conecta|conectar|conecte|liga|ligar|ligue|configura|configurar|configure|vincula|vincular|vincule|cadastra|cadastrar|coloca|colocar|trocar? o token d[oe]|token d[oe]) $IG"
+    )
+    private val IG_RESUMO = Regex(
+        "\\b(?:como (?:esta|ta|anda|vai|estao|tao) $IG|(?:quantos )?seguidores (?:d[oe]|n[oe]|tem n[oe]) $IG|quantos seguidores|" +
+            "(?:desempenho|resumo|resultado|engajamento|numeros|metricas|alcance)(?: d[oe]s?)? $IG|como (?:foram|estao|tao) (?:os |meus |nossos )?(?:ultimos )?posts)"
+    )
+    private val IG_COMENTARIOS = Regex(
+        "\\b(?:comentarios? (?:d[oe]|n[oe]) $IG|(?:tem |algum |ha |chegou )?comentarios? nov|comentarios? sem resposta|" +
+            "(?:responde|responder|responda|ver|mostra|le|ler|leia)(?: os| as| aos)? comentarios?)"
+    )
+
+    /** "conecta o Instagram", "como está o Instagram?", "comentários do Instagram". */
+    fun instagram(c: String): Resultado? {
+        val t = c.trimEnd('.', '!', '?')
+        if (IG_CONECTAR.containsMatchIn(t)) return Resultado.Acao("instagram_conectar", emptyMap())
+        if (IG_COMENTARIOS.containsMatchIn(t)) return Resultado.Acao("instagram_comentarios", emptyMap())
+        if (IG_RESUMO.containsMatchIn(t)) return Resultado.Acao("instagram_resumo", emptyMap())
+        return null
+    }
+
     private val LISTAR_POSTS = Regex(
         "\\b(?:(?:meus|minhas|quais|os|as|lista|ver|mostra) (?:os |as )?(?:posts|postagens|publicacoes|stories) (?:programad|agendad)\\w*|posts programados|postagens programadas|fila de posts)\\b"
     )
