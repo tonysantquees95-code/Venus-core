@@ -31,6 +31,11 @@ class InstagramTest {
         assertNotEquals("instagram_conectar", acao("abre o Instagram"))
     }
 
+    @Test fun tipoDeToken() {
+        assertTrue(Instagram.ehFacebook(Instagram.limparToken(" EAAGm0PX4ZCpsBAxyz ")))
+        assertTrue(!Instagram.ehFacebook("IGAAabc123"))
+    }
+
     @Test fun token() {
         assertEquals("IGAAabc123", Instagram.limparToken("  \"IGAAabc123\" "))
         assertEquals("IGAAabc123", Instagram.limparToken("https://x?access_token=IGAAabc123&expires_in=5183944"))

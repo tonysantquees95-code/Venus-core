@@ -17,12 +17,22 @@ import java.util.TimeZone
  * O que dá para fazer: publicar foto no feed e story (a foto sobe antes para o site da loja, porque o Instagram
  * busca a imagem por um endereço público), ver seguidores e como foram os últimos posts, ler os comentários que
  * ainda não foram respondidos e responder.
- * O token vale 60 dias; a Vênus renova sozinha quando ele passa de uma semana de idade.
+ * Aceita os dois tipos de token da Meta:
+ *  - "IG…" (login do Instagram): usa graph.instagram.com, vale 60 dias e a Vênus renova sozinha toda semana;
+ *  - "EAA…" (login unificado, o padrão dos apps novos): usa graph.facebook.com, é de usuário do sistema e não vence.
  * As funções com rede rodam fora da thread principal.
  */
 object Instagram {
 
     private const val API = "https://graph.instagram.com"
+    private const val API_FACEBOOK = "https://graph.facebook.com"
+    /** Conta do Instagram da loja (o número aparece embaixo do nome no painel da Meta), usada se a busca automática falhar. */
+    const val CONTA_DA_LOJA = "17841459911574652"
+
+    /** Token do login unificado (usuário do sistema): fala com graph.facebook.com e usa o id da conta no lugar de /me. */
+    fun ehFacebook(token: String) = token.startsWith("EAA")
+    private fun base(token: String) = if (ehFacebook(token)) API_FACEBOOK else API
+    private fun perfil(token: String, id: String) = if (ehFacebook(token)) "/$id" else "/me"
     private const val PREFS = "instagram"
 
     class ErroDoInstagram(mensagem: String) : Exception(mensagem)
@@ -43,13 +53,29 @@ object Instagram {
     /** Testa o token e, se servir, guarda. Devolve a conta ligada. */
     fun conectar(ctx: Context, tokenColado: String): Conta {
         val token = limparToken(tokenColado)
-        if (token.length < 40) throw ErroDoInstagram("Isso não parece um token. Ele é um texto comprido que começa com IG.")
-        val conta = conta(pedir("GET", "/me", mapOf("fields" to "user_id,username,account_type"), token))
+        if (token.length < 40) throw ErroDoInstagram("Isso não parece um token. Ele é um texto comprido que começa com IG ou EAA.")
+        val conta = if (ehFacebook(token)) contaPeloFacebook(token) else conta(pedir("GET", "/me", mapOf("fields" to "user_id,username,account_type"), token))
         prefs(ctx).edit()
             .putString("token", token).putString("id", conta.id).putString("usuario", conta.usuario)
             .putLong("token_desde", System.currentTimeMillis())
             .apply()
         return conta
+    }
+
+    /** Com token do login unificado: acha a conta do Instagram ligada (pelas páginas ou pela conta da loja). */
+    private fun contaPeloFacebook(token: String): Conta {
+        try {
+            val r = pedir("GET", "/me/accounts", mapOf("fields" to "instagram_business_account{id,username}"), token)
+            val a = r.optJSONArray("data") ?: JSONArray()
+            for (i in 0 until a.length()) {
+                val ig = a.optJSONObject(i)?.optJSONObject("instagram_business_account") ?: continue
+                if (ig.optString("id").isNotBlank()) return Conta(ig.optString("id"), ig.optString("username"), "BUSINESS")
+            }
+        } catch (e: ErroDoInstagram) {
+            // usuário do sistema sem páginas: segue para a conta da loja
+        }
+        val r = pedir("GET", "/$CONTA_DA_LOJA", mapOf("fields" to "id,username"), token)
+        return Conta(r.optString("id").ifBlank { CONTA_DA_LOJA }, r.optString("username"), "BUSINESS")
     }
 
     fun desconectar(ctx: Context) {
@@ -71,7 +97,7 @@ object Instagram {
         var token = p.getString("token", null) ?: throw ErroDoInstagram(SEM_CONTA)
         val id = p.getString("id", null) ?: throw ErroDoInstagram(SEM_CONTA)
         val desde = p.getLong("token_desde", 0)
-        if (System.currentTimeMillis() - desde > 7 * 24 * 3600_000L) {
+        if (!ehFacebook(token) && System.currentTimeMillis() - desde > 7 * 24 * 3600_000L) {
             try {
                 val r = pedir("GET", "/refresh_access_token", mapOf("grant_type" to "ig_refresh_token"), token)
                 r.optString("access_token").takeIf { it.isNotBlank() }?.let {
@@ -114,17 +140,17 @@ object Instagram {
 
     // ------------------------------------------------------------- desempenho
     fun resumo(ctx: Context): String {
-        val (token, _) = credenciais(ctx)
-        val perfil = pedir("GET", "/me", mapOf("fields" to "username,followers_count,follows_count,media_count"), token)
-        val posts = postsRecentes(token, 12)
+        val (token, id) = credenciais(ctx)
+        val perfil = pedir("GET", perfil(token, id), mapOf("fields" to "username,followers_count,follows_count,media_count"), token)
+        val posts = postsRecentes(token, id, 12)
         val anterior = prefs(ctx).getInt("seguidores", -1)
         val agora = perfil.optInt("followers_count", -1)
         if (agora >= 0) prefs(ctx).edit().putInt("seguidores", agora).apply()
         return montarResumo(perfil, posts, anterior, System.currentTimeMillis())
     }
 
-    private fun postsRecentes(token: String, quantos: Int): List<Post> {
-        val r = pedir("GET", "/me/media", mapOf("fields" to "id,caption,media_type,timestamp,like_count,comments_count,permalink", "limit" to quantos.toString()), token)
+    private fun postsRecentes(token: String, id: String, quantos: Int): List<Post> {
+        val r = pedir("GET", perfil(token, id) + "/media", mapOf("fields" to "id,caption,media_type,timestamp,like_count,comments_count,permalink", "limit" to quantos.toString()), token)
         return lerPosts(r.optJSONArray("data") ?: JSONArray())
     }
 
@@ -170,10 +196,10 @@ object Instagram {
     // ------------------------------------------------------------- comentários
     /** Comentários dos últimos posts que a loja ainda não respondeu (mais novos primeiro). */
     fun comentariosSemResposta(ctx: Context, posts: Int = 10): List<Comentario> {
-        val (token, _) = credenciais(ctx)
+        val (token, id) = credenciais(ctx)
         val eu = prefs(ctx).getString("usuario", "").orEmpty()
         val lista = mutableListOf<Comentario>()
-        for (p in postsRecentes(token, posts).filter { it.comentarios > 0 }) {
+        for (p in postsRecentes(token, id, posts).filter { it.comentarios > 0 }) {
             val r = pedir("GET", "/${p.id}/comments", mapOf("fields" to "id,text,username,timestamp,replies{username}", "limit" to "50"), token)
             lista += semResposta(r.optJSONArray("data") ?: JSONArray(), p, eu)
         }
@@ -197,7 +223,8 @@ object Instagram {
     // ------------------------------------------------------------- rede
     private fun pedir(metodo: String, caminho: String, campos: Map<String, String>, token: String): JSONObject {
         val pares = (campos + ("access_token" to token)).entries.joinToString("&") { (k, v) -> "$k=" + URLEncoder.encode(v, "UTF-8") }
-        val url = if (metodo == "GET") "$API$caminho?$pares" else "$API$caminho"
+        val api = base(token)
+        val url = if (metodo == "GET") "$api$caminho?$pares" else "$api$caminho"
         val c = URL(url).openConnection() as HttpURLConnection
         try {
             c.requestMethod = metodo

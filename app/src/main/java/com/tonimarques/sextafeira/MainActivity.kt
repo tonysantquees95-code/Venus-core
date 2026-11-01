@@ -3084,16 +3084,15 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
     private fun conectarInstagram() {
         val usuario = Instagram.usuario(this)
         val campo = EditText(this).apply {
-            hint = "Cole aqui o token (começa com IG…)"
+            hint = "Cole aqui o token (começa com IG… ou EAA…)"
             minLines = 2
             inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS or InputType.TYPE_TEXT_FLAG_MULTI_LINE
             setPadding(dp(24), dp(16), dp(24), dp(16))
         }
-        val passos = "1. Toque em Abrir a Meta e entre com o seu Facebook.\n" +
-            "2. Criar app → caso de uso Outro → tipo Empresa → nome Vênus da Loja e seu e-mail.\n" +
-            "3. No produto Instagram, toque em Configurar.\n" +
-            "4. Em Gerar tokens de acesso, toque em Adicionar conta e entre com o Instagram da loja (a conta precisa ser profissional e pública).\n" +
-            "5. Toque em Gerar token, aceite, copie o token e cole aqui."
+        val passos = "1. Toque em Abrir a Meta e entre com o seu Facebook. Abra o app Vênus da loja.\n" +
+            "2. Casos de uso → API do Instagram → Personalizar.\n" +
+            "3. Em Gerar tokens de acesso, toque em Gerar token ao lado da conta da loja (se pedir, dê a ela a função Testador do Instagram e aceite o convite no Instagram).\n" +
+            "4. Entre com o Instagram, escolha o portfólio e a conta da loja, continue, copie o token e cole aqui."
         val d = AlertDialog.Builder(this)
             .setTitle(if (usuario != null) "Instagram: @$usuario" else "Conectar o Instagram")
             .setMessage((if (usuario != null) "Conectado. Para trocar, cole um token novo.\n\n" else "") + passos)
