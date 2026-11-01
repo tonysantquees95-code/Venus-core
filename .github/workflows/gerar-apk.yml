@@ -52,11 +52,15 @@ jobs:
       - name: Renomear o APK
         run: cp app/build/outputs/apk/release/app-release.apk Venus.apk
 
+      - name: Notas da versão
+        run: |
+          { git log -1 --format=%B | grep -v -i -e "^Co-Authored-By" -e "^Claude-Session" || true; echo; echo "Baixe o arquivo Venus.apk abaixo e toque nele para instalar. Ele atualiza a Vênus mantendo seus dados."; } > notas.txt
+
       - name: Publicar para download
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v1.${{ github.run_number }}
           name: Vênus 1.${{ github.run_number }}
-          body: Baixe o arquivo Venus.apk abaixo e toque nele para instalar. Ele atualiza a Sexta-feira mantendo seus dados.
+          body_path: notas.txt
           files: Venus.apk
           make_latest: true
