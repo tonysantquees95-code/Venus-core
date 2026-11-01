@@ -40,20 +40,30 @@ export type VLIntencao =
   | { tipo: "retiradas" }
   | { tipo: "agendar"; pedido: number }
   | { tipo: "entregue"; pedido: number }
+  | { tipo: "status"; pedido: number; status: "paid" | "preparing" | "shipped"; rastreio: string | null }
   | { tipo: "alterar"; mudanca: VLMudanca; produto: string; valor: number | null }
+  | { tipo: "reposicao"; periodo: VLPeriodo }
+  | { tipo: "mais_vendidos"; periodo: VLPeriodo }
+  | { tipo: "comparar" }
+  | { tipo: "parados" }
   | { tipo: "novidades" }
   | { tipo: "ajuda" }
   | { tipo: "saudacao" }
   | { tipo: "obrigado" };
 
-export type VLMudanca = "estoque_somar" | "estoque_tirar" | "estoque_definir" | "preco" | "ativar" | "desativar";
+export type VLMudanca =
+  | "estoque_somar" | "estoque_tirar" | "estoque_definir" | "preco" | "ativar" | "desativar" | "promocao" | "promocao_pct" | "fim_promocao";
+export type VLPeriodo = "hoje" | "ontem" | "semana" | "mes";
 
 /** Uma mudança esperando o "sim". valor: quantidade final do estoque ou preço em centavos. */
 export type VLAlteracao =
   | { tipo: "estoque"; produto: VLProduto; valor: number }
   | { tipo: "preco"; produto: VLProduto; valor: number }
   | { tipo: "ativar" | "desativar"; produto: VLProduto }
-  | { tipo: "entregue"; pedido: VLPedido };
+  | { tipo: "promocao"; produto: VLProduto; valor: number }
+  | { tipo: "fim_promocao"; produto: VLProduto }
+  | { tipo: "entregue"; pedido: VLPedido }
+  | { tipo: "status"; pedido: VLPedido; status: "paid" | "preparing" | "shipped"; rastreio: string | null };
 
 export type VLAcao = { rotulo: string; url: string };
 export type VLResposta = { texto: string; alteracao?: VLAlteracao; acoes?: VLAcao[] };
@@ -138,7 +148,44 @@ const PEDIDO_N = "pedido (?:numero |n |#)?(\\d{1,6})";
 const VERBO_MUDAR =
   "(?:muda|mude|altera|altere|atualiza|atualize|ajusta|ajuste|coloca|coloque|deixa|deixe|define|defina|corrige|corrija|poe|bota|troca|troque|passa|passe)";
 
+const MARCAR = "(?:(?:marca|marque|coloca|coloque|muda|mude|poe|bota|atualiza|atualize) )?(?:o )?";
+const RASTREIO =
+  "(?:,? (?:com )?(?:o )?(?:codigo de rastreio|codigo de rastreamento|codigo do rastreio|rastreio|rastreamento|codigo)(?: e)?:? ?([a-z0-9 ]{8,40}))?";
+const PRECO_DE = "(?: de (?:r\\$ ?)?\\d{1,6}(?:[.,]\\d{1,2})?(?: ?reais)?)?";
+
 const R = {
+  status: [
+    ["shipped", [
+      new RegExp(`^${MARCAR}${PEDIDO_N},? (?:como |para |pra )?(?:ja )?(?:foi |esta |ta )?(?:enviado|despachado|postado|mandado)${RASTREIO}$`),
+      new RegExp(`^(?:eu )?(?:enviei|despachei|postei|mandei) o pedido (?:numero |n )?(\\d{1,6})${RASTREIO}$`),
+      /^(?:o )?(?:codigo de )?(?:rastreio|rastreamento) do pedido (?:numero |n )?(\d{1,6}) (?:e|eh|fica) ([a-z0-9 ]{8,40})$/,
+    ]],
+    ["preparing", [
+      new RegExp(`^${MARCAR}${PEDIDO_N} (?:como |para |pra )?(?:esta |ta )?(?:em separacao|separando|sendo separado)$`),
+      /^(?:eu )?(?:estou|to|tou|vou|ja estou) separa(?:ndo|r) o pedido (?:numero |n )?(\d{1,6})$/,
+    ]],
+    ["paid", [
+      new RegExp(`^${MARCAR}${PEDIDO_N} (?:como |para |pra )?(?:ja )?(?:foi )?pago$`),
+      /^(?:o |a )?(?:cliente|compradora?) do pedido (?:numero |n )?(\d{1,6}) (?:ja )?pagou$/,
+    ]],
+  ] as [("shipped" | "preparing" | "paid"), RegExp[]][],
+  promo: [
+    new RegExp(`^(?:coloca|coloque|bota|bote|poe|deixa|deixe|faz|faca|cria|crie|lanca|lance)(?: uma)? (?:o |a |os |as )?(.+?) (?:em|na) promocao${PRECO_DE} (?:por|a|pra|para) ${VALOR}$`),
+    new RegExp(`^(?:faz|faca|cria|crie|coloca|coloque|lanca|lance)(?: uma)? promocao (?:d[oae]s?|n[oa]s?|para o|para a|pro|pra) (.+?)${PRECO_DE} (?:por|a|pra|para) ${VALOR}$`),
+    new RegExp(`^promocao (?:d[oae]s?|n[oa]s?) (.+?)${PRECO_DE} (?:por|a) ${VALOR}$`),
+  ],
+  promoPct:
+    /^(?:da|de|dar|coloca|coloque|faz|faca|aplica|aplique|bota|poe)(?: um| uma)? (?:desconto de |promocao de )?(\d{1,2}) ?(?:%|por cento)(?: de desconto| off)? (?:no|na|nos|nas|em|para o|para a|pro|pra|ao) (.+)$/,
+  fimPromo:
+    /^(?:tira|tire|remove|remova|acaba|acabe|encerra|encerre|termina|termine|finaliza|finalize|cancela|cancele)(?: com)? (?:a )?(?:promocao (?:d[oae]s?|n[oa]s?) (.+)|(?:o |a |os |as )?(.+?) da promocao)$/,
+  maisVendidos:
+    /\b(?:mais vendidos?|que mais (?:vende|vendeu|vendem|venderam|sai|saiu|saem|sairam)|campeoes de venda|top \d* ?(?:produtos|vendas)|ranking (?:de|das|dos) (?:vendas|produtos))\b/,
+  comparar:
+    /(?:\bcompar\w*\b.*\bmes (?:passado|anterior)\b|\bmes (?:passado|anterior)\b.*\b(?:vend|fatur)\w*|\b(?:vendas|faturamento|vendi|faturei|vendemos) (?:d[oe] |n[oa] )?mes (?:passado|anterior)\b|\b(?:melhor|pior) (?:que|do que) o mes (?:passado|anterior)\b|\bcomparacao (?:de|das) vendas\b)/,
+  parados:
+    /\b(?:produtos? parados?|produtos? encalhados?|produtos? sem venda|produtos? que nao (?:vendem|vende|saem|sai)|o que (?:nao )?(?:esta|ta|estao|tao) (?:parado|encalhado|sem vender)|o que nao (?:vende|vendeu|esta vendendo|ta vendendo|sai)|(?:quais|que) produtos? (?:nao )?(?:estao|tao|esta|ta) (?:parados?|encalhados?|sem vender))\b/,
+  reposicao:
+    /\b(?:lista de reposicao|reposicao|o que (?:eu |nos )?(?:preciso|precisamos|tenho que|temos que|devo) repor|o que repor|(?:itens|produtos|o que) (?:que )?(?:eu |nos )?(?:foi |foram |ja foi |ja foram )?vendidos?|o que (?:eu |nos |a gente )?vend(?:i|emos|eu)|lista (?:de|dos|das) (?:vendidos|itens vendidos|produtos vendidos|vendas))\b/,
   somar: new RegExp(
     `^(?:coloca|coloque|bota|bote|poe|adiciona|adicione|acrescenta|acrescente|soma|some|entrou|entraram|chegou|chegaram|` +
       `repoe|reponha|repor|aumenta|aumente|inclui|inclua)(?: mais)? ${QTD}(?: a mais)?(?: (?:no|ao|em) estoque)? ${DE} (.+?)(?: (?:no|ao|em) estoque)?$`,
@@ -190,7 +237,7 @@ const R = {
   pedidos:
     /\b(?:tem (?:algum )?pedidos? novos?|tem pedido|chegou (?:algum )?pedido|pedidos? (?:novos?|pendentes?|para (?:separar|enviar|mandar)|pra (?:separar|enviar|mandar)|de hoje|em aberto)|(?:quais|que) pedidos (?:eu |nos |a gente )?(?:tenho|temos|preciso|precisamos|tenho que|falta)|o que (?:eu |nos |a gente )?(?:tenho|temos|preciso|precisamos) (?:que |para |pra )?(?:enviar|separar|mandar)|^pedidos$)\b/,
   acabando:
-    /\b(?:(?:quais|que) produtos (?:estao|tao|que estao|que tao) (?:acabando|esgotados?|em falta|com (?:o )?estoque baixo|no fim)|o que (?:esta|ta) (?:acabando|esgotado|em falta)(?: na loja| no estoque)?|produtos? (?:esgotados?|acabando|em falta)|estoque baixo|o que (?:eu |nos )?(?:preciso|precisamos|tenho que|temos que) (?:repor|comprar)(?: para a loja| pra loja)?|esgotados|acabando)\b/,
+    /\b(?:(?:quais|que) produtos (?:estao|tao|que estao|que tao) (?:acabando|esgotados?|em falta|com (?:o )?estoque baixo|no fim)|o que (?:esta|ta) (?:acabando|esgotado|em falta)(?: na loja| no estoque)?|produtos? (?:esgotados?|acabando|em falta)|estoque baixo|o que (?:eu |nos )?(?:preciso|precisamos|tenho que|temos que) comprar(?: para a loja| pra loja)?|esgotados|acabando)\b/,
   estoqueGeral: new RegExp(
     "^(?:(?:e |e ai |me (?:diz|fala|conta) )?como (?:esta|ta|anda|vai|estao|tao|ficou|que esta|que ta) (?:o |a )?(?:meu |minha |nosso |o meu |o nosso )?estoque(?: (?:da|na) loja)?(?: hoje| agora)?|" +
       "(?:me (?:da|de|passa|passe|faz|faca) )?(?:um |o )?(?:resumo|situacao|relatorio|panorama|balanco|visao geral|levantamento) (?:do |de |da )?(?:meu |nosso |o )?estoque(?: (?:da|na) loja)?|" +
@@ -231,6 +278,12 @@ function alteracaoEm(c: string): VLIntencao | null {
     const m = c.match(r);
     if (m) return { tipo: "entregue", pedido: parseInt(m[1], 10) };
   }
+  for (const [status, regras] of R.status) {
+    for (const r of regras) {
+      const m = c.match(r);
+      if (m) return { tipo: "status", pedido: parseInt(m[1], 10), status, rastreio: m[2]?.trim() || null };
+    }
+  }
   if (/\b(?:unidades?|estoque|pecas?)\b/.test(c)) {
     let m = c.match(R.somar);
     if (m) return alterar("estoque_somar", m[2], parseInt(m[1], 10));
@@ -243,6 +296,16 @@ function alteracaoEm(c: string): VLIntencao | null {
   if (m) return alterar("estoque_definir", m[1], parseInt(m[2], 10));
   m = c.match(R.definirB);
   if (m) return alterar("estoque_definir", m[2], parseInt(m[1], 10));
+  const fim = c.match(R.fimPromo);
+  if (fim) return alterar("fim_promocao", fim[1] || fim[2]);
+  const pct = c.match(R.promoPct);
+  if (pct) return alterar("promocao_pct", pct[2], parseInt(pct[1], 10));
+  for (const r of R.promo) {
+    const p = c.match(r);
+    if (!p) continue;
+    const v = centavos(p[2], p[3] ?? "");
+    if (v !== null) return alterar("promocao", p[1], v);
+  }
   for (const r of R.preco) {
     const p = c.match(r);
     if (!p) continue;
@@ -268,6 +331,12 @@ function consultaEm(c: string): VLIntencao | null {
     const m = c.match(r);
     if (m) return { tipo: "pedido", id: parseInt(m[1], 10) };
   }
+  const periodo = (padrao: VLPeriodo): VLPeriodo =>
+    /\bhoje\b/.test(c) ? "hoje" : /\bontem\b/.test(c) ? "ontem" : /\b(?:semana|7 dias|sete dias)\b/.test(c) ? "semana" : /\b(?:mes|mensal|30 dias|trinta dias)\b/.test(c) ? "mes" : padrao;
+  if (R.maisVendidos.test(c)) return { tipo: "mais_vendidos", periodo: periodo("mes") };
+  if (R.comparar.test(c)) return { tipo: "comparar" };
+  if (R.parados.test(c)) return { tipo: "parados" };
+  if (R.reposicao.test(c)) return { tipo: "reposicao", periodo: periodo("semana") === "mes" ? "mes" : periodo("semana") };
   if (R.retiradas.test(c)) return { tipo: "retiradas" };
   if (R.estoqueGeral.test(c)) return { tipo: "estoque_geral" };
   if (R.acabando.test(c)) return { tipo: "acabando" };
@@ -562,14 +631,38 @@ const CAMPOS_PRODUTO = [
  * Corpo do product_save a partir do produto como veio do painel, mudando só preço ou ativo.
  * Se faltar algum campo, devolve null: melhor não salvar do que apagar algo sem querer.
  */
-function corpoDoProduto(bruto: Record<string, unknown>, mudanca: "preco" | "ativar" | "desativar", valor?: number): Record<string, unknown> | null {
+function corpoDoProduto(
+  bruto: Record<string, unknown>,
+  mudanca: "preco" | "ativar" | "desativar" | "promocao" | "fim_promocao",
+  valor?: number,
+): Record<string, unknown> | null {
   if (!bruto || CAMPOS_PRODUTO.some((k) => !(k in bruto))) return null;
   const corpo: Record<string, unknown> = {};
   for (const k of CAMPOS_PRODUTO) corpo[k] = bruto[k] === undefined ? null : bruto[k];
-  if (mudanca === "preco") {
-    if (valor === undefined) return null;
-    corpo.priceCents = valor;
-  } else corpo.active = mudanca === "ativar";
+  const preco = typeof bruto.priceCents === "number" ? bruto.priceCents : null;
+  const antigo = typeof bruto.compareAtCents === "number" ? bruto.compareAtCents : null;
+  switch (mudanca) {
+    case "preco":
+      if (valor === undefined) return null;
+      corpo.priceCents = valor;
+      break;
+    case "promocao": {
+      // o preço "de" é o preço cheio: o antigo, se já estava em promoção, ou o atual
+      if (valor === undefined || preco === null) return null;
+      const cheio = antigo !== null && antigo > preco ? antigo : preco;
+      if (valor >= cheio) return null;
+      corpo.priceCents = valor;
+      corpo.compareAtCents = cheio;
+      break;
+    }
+    case "fim_promocao":
+      if (preco === null || antigo === null || antigo <= preco) return null;
+      corpo.priceCents = antigo;
+      corpo.compareAtCents = null;
+      break;
+    default:
+      corpo.active = mudanca === "ativar";
+  }
   return corpo;
 }
 
@@ -611,6 +704,38 @@ function prepararAlteracao(produtos: VLProduto[], mudanca: VLMudanca, falado: st
         texto += ` Ele está em promoção (de ${dinheiro(p.compareAtCents)}); com esse preço a promoção deixa de aparecer.`;
       return { texto: texto + CONFIRMA, alteracao: { tipo: "preco", produto: p, valor } };
     }
+    case "promocao":
+    case "promocao_pct": {
+      const preco = p.priceCents;
+      if (preco === null) return { texto: `${p.name} está sem preço. Defina o preço antes da promoção.` };
+      const emPromocao = p.compareAtCents !== null && p.compareAtCents > preco;
+      const cheio = emPromocao ? (p.compareAtCents as number) : preco;
+      let novo: number;
+      if (mudanca === "promocao_pct") {
+        if (valor === null || valor < 1 || valor > 90) return { texto: "O desconto precisa ser entre 1 e 90 por cento." };
+        novo = Math.round((cheio * (100 - valor)) / 100);
+      } else {
+        if (valor === null) return { texto: "Por quanto fica na promoção?" };
+        novo = valor;
+      }
+      if (novo <= 0) return { texto: "O preço da promoção precisa ser maior que zero." };
+      if (novo >= cheio) return { texto: `Na promoção o preço precisa ficar abaixo de ${dinheiro(cheio)}, que é o preço cheio de ${p.name}. Nada foi mudado.` };
+      if (!corpoDoProduto(p.bruto, "promocao", novo)) return { texto: `Não consegui ler todos os dados de ${p.name}. Faça a promoção pelo painel.` };
+      const off = Math.round(((cheio - novo) * 100) / cheio);
+      let texto = emPromocao
+        ? `${p.name} já está em promoção por ${dinheiro(preco)}. Mudar para de ${dinheiro(cheio)} por ${dinheiro(novo)} (${off}% a menos)?`
+        : `Colocar ${p.name} em promoção: de ${dinheiro(cheio)} por ${dinheiro(novo)} (${off}% a menos)?`;
+      texto += " No site aparece o preço antigo riscado. Produto em promoção não tem o desconto extra do Pix.";
+      if (off >= 50) texto += " É um desconto grande, confira.";
+      return { texto: texto + CONFIRMA, alteracao: { tipo: "promocao", produto: p, valor: novo } };
+    }
+    case "fim_promocao": {
+      const preco = p.priceCents;
+      const antigo = p.compareAtCents;
+      if (preco === null || antigo === null || antigo <= preco) return { texto: `${p.name} não está em promoção.` };
+      if (!corpoDoProduto(p.bruto, "fim_promocao")) return { texto: `Não consegui ler todos os dados de ${p.name}. Tire a promoção pelo painel.` };
+      return { texto: `Tirar ${p.name} da promoção? Ele volta a custar ${dinheiro(antigo)} (hoje está ${dinheiro(preco)}).${CONFIRMA}`, alteracao: { tipo: "fim_promocao", produto: p } };
+    }
     case "desativar":
       if (!p.active) return { texto: `${p.name} já está escondido do site.` };
       if (!corpoDoProduto(p.bruto, "desativar")) return { texto: `Não consegui ler todos os dados de ${p.name}. Esconda pelo painel.` };
@@ -627,6 +752,135 @@ function prepararAlteracao(produtos: VLProduto[], mudanca: VLMudanca, falado: st
       return { texto: `Mostrar ${p.name} no site de novo?${aviso}${CONFIRMA}`, alteracao: { tipo: "ativar", produto: p } };
     }
   }
+}
+
+const NOME_STATUS: Record<string, string> = { paid: "como pago", preparing: "em separação", shipped: "como enviado", delivered: "como entregue" };
+
+function prepararStatus(pedidos: VLPedido[], id: number, status: "paid" | "preparing" | "shipped", rastreio: string | null): VLResposta {
+  const o = pedidos.find((x) => x.id === id);
+  if (!o) return { texto: `Não achei o pedido ${id}.` };
+  const codigo = rastreio ? rastreio.toUpperCase().replace(/[^A-Z0-9]/g, "") : null;
+  if (rastreio && (!codigo || codigo.length < 8 || codigo.length > 40))
+    return { texto: `Não entendi o código de rastreio. Escreva assim: pedido ${id} enviado, rastreio AB123456789BR.` };
+  if (o.status === "canceled") return { texto: `O pedido ${id} está cancelado. Nada foi mudado.` };
+  if (o.status === "delivered") return { texto: `O pedido ${id} já foi entregue. Nada foi mudado.` };
+  if (o.status === "awaiting_payment" && status !== "paid")
+    return { texto: `O pedido ${id} ainda está aguardando pagamento. Se a cliente pagou por fora, diga primeiro: marca o pedido ${id} como pago.` };
+  if (o.status === status && (status !== "shipped" || !codigo || codigo === o.trackingCode))
+    return { texto: `O pedido ${id} já está ${NOME_STATUS[status]}.` };
+  const ordem = ["awaiting_payment", "paid", "preparing", "shipped", "delivered"];
+  const nome = primeiroNome(o.customerName);
+  const de = nome ? ` de ${nome}` : "";
+  let texto =
+    status === "paid"
+      ? `Marcar o pedido ${id}${de} (${dinheiro(o.totalCents)}) como pago?`
+      : status === "preparing"
+        ? `Marcar o pedido ${id}${de} como em separação?`
+        : codigo
+          ? `Marcar o pedido ${id}${de} como enviado, com o rastreio ${codigo}?`
+          : `Marcar o pedido ${id}${de} como enviado, sem código de rastreio?`;
+  if (ordem.indexOf(status) < ordem.indexOf(o.status)) texto += ` Atenção: ele está ${STATUS[o.status]}, isso volta uma etapa.`;
+  if (whatsappDoCliente(o)) texto += " Depois aparece o botão para avisar a cliente no WhatsApp.";
+  return { texto: texto + CONFIRMA, alteracao: { tipo: "status", pedido: o, status, rastreio: codigo } };
+}
+
+/** Link do WhatsApp da cliente com o aviso da nova etapa do pedido. */
+function linkAviso(a: VLAlteracao, site = "https://desejo-de-intimidade.floot.app"): string | null {
+  if (a.tipo !== "status" && a.tipo !== "entregue") return null;
+  const p = a.pedido;
+  const numero = whatsappDoCliente(p);
+  if (!numero) return null;
+  const status = a.tipo === "entregue" ? "delivered" : a.status;
+  const nome = primeiroNome(p.customerName);
+  const ola = `Olá${nome ? `, ${nome}` : ""}!`;
+  const link = `${site}/pedido/${p.id}`;
+  const rastreio = (a.tipo === "status" ? a.rastreio : null) ?? p.trackingCode;
+  const texto =
+    status === "paid"
+      ? `${ola} Recebemos o pagamento do seu pedido #${p.id} (${dinheiro(p.totalCents)}). Já estamos separando tudo com muito cuidado e discrição. 💖\nAcompanhe aqui: ${link}`
+      : status === "preparing"
+        ? `${ola} Seu pedido #${p.id} já está sendo separado, com embalagem neutra e discreta. Em breve ele segue para ${p.deliveryMethod === "pickup" ? "a retirada" : "o envio"}. 💖\nAcompanhe aqui: ${link}`
+        : status === "shipped"
+          ? `${ola} Seu pedido #${p.id} foi enviado! 📦\n${rastreio ? `Código de rastreio: ${rastreio}` : "Assim que o código de rastreio sair, ele aparece na página do pedido."}\nAcompanhe aqui: ${link}`
+          : `${ola} Seu pedido #${p.id} foi entregue. Esperamos que você ame! 💖\nConta pra gente o que achou do produto e do atendimento (leva 1 minuto): ${site}/avaliar/${p.id}`;
+  return `https://wa.me/${numero}?text=${encodeURIComponent(texto)}`;
+}
+
+function vendidosEntre(pedidos: VLPedido[], ini: number, fim: number) {
+  return pedidos.filter((p) => PAGOS.has(p.status) && (p.paidAt ?? p.createdAt).getTime() >= ini && (p.paidAt ?? p.createdAt).getTime() < fim);
+}
+
+const NOME_PERIODO: Record<string, string> = { hoje: "hoje", ontem: "ontem", semana: "nos últimos 7 dias", mes: "neste mês" };
+
+/** O que foi vendido no período, com quanto resta de cada um: a lista para repor. */
+function reposicao(pedidos: VLPedido[], produtos: VLProduto[], periodo: VLPeriodo, agora = new Date()): string {
+  const [ini, fim] = intervalo(periodo, agora);
+  const pagos = vendidosEntre(pedidos, ini, fim);
+  const quando = NOME_PERIODO[periodo];
+  if (pagos.length === 0) return `Nada vendido ${quando}, então nada para repor.`;
+  const conta = new Map<string, number>();
+  for (const p of pagos) for (const i of p.items) conta.set(i.name.trim(), (conta.get(i.name.trim()) ?? 0) + i.quantity);
+  const lista = [...conta.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+  const porNome = new Map(produtos.map((p) => [normalizar(p.name.trim()), p]));
+  const total = lista.reduce((s, [, q]) => s + q, 0);
+  const linhas = lista
+    .slice(0, 12)
+    .map(([nome, q]) => {
+      const p = porNome.get(normalizar(nome));
+      const resta = !p || p.stockQuantity === null ? "" : p.stockQuantity <= 0 ? " (esgotado)" : ` (restam ${p.stockQuantity})`;
+      return `• ${nome}: ${q}${resta}`;
+    })
+    .join("\n");
+  const mais = lista.length > 12 ? `\nE mais ${lista.length - 12} produtos.` : "";
+  return `Vendidos ${quando}: ${plural(total, "item", "itens")} em ${plural(pagos.length, "pedido", "pedidos")}.\n${linhas}${mais}`;
+}
+
+function maisVendidos(pedidos: VLPedido[], periodo: VLPeriodo, agora = new Date()): string {
+  const [ini, fim] = intervalo(periodo, agora);
+  const pagos = vendidosEntre(pedidos, ini, fim);
+  const quando = NOME_PERIODO[periodo];
+  if (pagos.length === 0) return `Ainda não teve venda paga ${quando}.`;
+  const conta = new Map<string, { q: number; v: number }>();
+  for (const p of pagos)
+    for (const i of p.items) {
+      const x = conta.get(i.name.trim()) ?? { q: 0, v: 0 };
+      conta.set(i.name.trim(), { q: x.q + i.quantity, v: x.v + i.quantity * i.unitPriceCents });
+    }
+  const ranking = [...conta.entries()].sort((a, b) => b[1].q - a[1].q || b[1].v - a[1].v);
+  return `Mais vendidos ${quando}:\n` + ranking.slice(0, 5).map(([n, x], k) => `${k + 1}. ${n}: ${plural(x.q, "unidade", "unidades")}, ${dinheiro(x.v)}`).join("\n");
+}
+
+function comparar(pedidos: VLPedido[], agora = new Date()): string {
+  const inicioMes = new Date(agora.getFullYear(), agora.getMonth(), 1);
+  const inicioPassado = new Date(agora.getFullYear(), agora.getMonth() - 1, 1);
+  const ultimoDiaPassado = new Date(agora.getFullYear(), agora.getMonth(), 0).getDate();
+  const mesmoPonto = new Date(agora.getFullYear(), agora.getMonth() - 1, Math.min(agora.getDate(), ultimoDiaPassado), agora.getHours(), agora.getMinutes());
+  const este = vendidosEntre(pedidos, inicioMes.getTime(), agora.getTime() + 1);
+  const antes = vendidosEntre(pedidos, inicioPassado.getTime(), mesmoPonto.getTime() + 1);
+  const todo = vendidosEntre(pedidos, inicioPassado.getTime(), inicioMes.getTime());
+  const soma = (l: VLPedido[]) => l.reduce((s, p) => s + p.totalCents, 0);
+  const t = soma(este);
+  const a = soma(antes);
+  let texto = `Neste mês até agora: ${plural(este.length, "venda", "vendas")}, ${dinheiro(t)}. No mesmo período do mês passado: ${plural(antes.length, "venda", "vendas")}, ${dinheiro(a)}.`;
+  if (a === 0 && t > 0) texto += " Melhor que o mês passado, que ainda não tinha vendas a essa altura.";
+  else if (a > 0) {
+    const pct = Math.trunc(((t - a) * 100) / a);
+    texto += pct > 0 ? ` Está ${pct}% acima. 📈` : pct < 0 ? ` Está ${-pct}% abaixo.` : " Está igual.";
+  }
+  if (todo.length) texto += ` O mês passado inteiro fechou em ${dinheiro(soma(todo))}.`;
+  return texto;
+}
+
+function parados(pedidos: VLPedido[], produtos: VLProduto[], agora = new Date(), dias = 30): string {
+  const desde = agora.getTime() - dias * 24 * 3600 * 1000;
+  const vendidos = new Set(vendidosEntre(pedidos, desde, Infinity).flatMap((p) => p.items.map((i) => normalizar(i.name.trim()))));
+  const lista = produtos
+    .filter((p) => p.active && (p.stockQuantity === null || p.stockQuantity > 0) && !vendidos.has(normalizar(p.name.trim())))
+    .sort((a, b) => (b.stockQuantity ?? 0) * (b.priceCents ?? 0) - (a.stockQuantity ?? 0) * (a.priceCents ?? 0));
+  if (lista.length === 0) return `Todos os produtos à venda tiveram saída nos últimos ${dias} dias. 👏`;
+  const linhas = lista.slice(0, 8).map((p) => `• ${p.name}${p.stockQuantity !== null ? ` (${p.stockQuantity} em estoque)` : ""}`).join("\n");
+  const mais = lista.length > 8 ? `\nE mais ${lista.length - 8}.` : "";
+  return `${plural(lista.length, "produto sem venda", "produtos sem venda")} nos últimos ${dias} dias:\n${linhas}${mais}\nDá para colocar em promoção, por exemplo: dá 10% de desconto no, e o nome do produto.`;
 }
 
 function prepararEntregue(pedidos: VLPedido[], id: number): VLResposta {
@@ -662,7 +916,8 @@ function novidades(pedidos: VLPedido[], produtos: VLProduto[], agora = new Date(
 const AJUDA =
   "Pode falar ou escrever. Por exemplo: como foram as vendas hoje; tem pedido novo; como está o estoque; quanto tem do gel de morango; " +
   "coloca mais 5 unidades do gel; muda o preço do vibrador para 129,90; esconde o kit do site; quais retiradas estão para agendar; " +
-  "agendar retirada do pedido 15; marca o pedido 15 como entregue. Antes de mudar qualquer coisa eu sempre peço confirmação.";
+  "agendar retirada do pedido 15; pedido 15 enviado, rastreio AB123456789BR; marca o pedido 15 como entregue; " +
+  "coloca o gel em promoção por 24,90; o que preciso repor; mais vendidos do mês; compara com o mês passado; produtos parados. Antes de mudar qualquer coisa eu sempre peço confirmação.";
 
 /** Responde a uma intenção já entendida (sem rede: recebe a loja já carregada). */
 function responder(i: VLIntencao, pedidos: VLPedido[], produtos: VLProduto[], agora = new Date()): VLResposta {
@@ -687,6 +942,16 @@ function responder(i: VLIntencao, pedidos: VLPedido[], produtos: VLProduto[], ag
       return prepararEntregue(pedidos, i.pedido);
     case "alterar":
       return prepararAlteracao(produtos, i.mudanca, i.produto, i.valor);
+    case "status":
+      return prepararStatus(pedidos, i.pedido, i.status, i.rastreio);
+    case "reposicao":
+      return { texto: reposicao(pedidos, produtos, i.periodo, agora) };
+    case "mais_vendidos":
+      return { texto: maisVendidos(pedidos, i.periodo, agora) };
+    case "comparar":
+      return { texto: comparar(pedidos, agora) };
+    case "parados":
+      return { texto: parados(pedidos, produtos, agora) };
     case "novidades":
       return novidades(pedidos, produtos, agora);
     case "ajuda":
@@ -711,6 +976,12 @@ function confirmado(a: VLAlteracao): string {
       return `Pronto: ${a.produto.name} foi escondido do site.`;
     case "entregue":
       return `Pronto: o pedido ${a.pedido.id} está marcado como entregue.`;
+    case "status":
+      return `Pronto: o pedido ${a.pedido.id} está ${NOME_STATUS[a.status]}${a.rastreio ? `, com o rastreio ${a.rastreio}` : ""}.`;
+    case "promocao":
+      return `Pronto: ${a.produto.name} está em promoção por ${dinheiro(a.valor)}, com o preço antigo riscado no site.`;
+    case "fim_promocao":
+      return `Pronto: ${a.produto.name} saiu da promoção e voltou a custar ${dinheiro(a.produto.compareAtCents ?? 0)}.`;
   }
 }
 
@@ -724,6 +995,7 @@ export const venusLoja = {
   corpoDoProduto,
   confirmado,
   linkAgendar,
+  linkAviso,
   novidades,
   centavos,
   NAO_ENTENDI,

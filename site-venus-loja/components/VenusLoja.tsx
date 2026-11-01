@@ -76,17 +76,22 @@ async function aplicar(a: VLAlteracao): Promise<void> {
       return;
     case "preco":
     case "ativar":
-    case "desativar": {
+    case "desativar":
+    case "promocao":
+    case "fim_promocao": {
       // relê o produto na hora, para não desfazer outra mudança feita pelo painel
       const atual = (await carregarLoja()).produtos.find((p) => p.id === a.produto.id);
       if (!atual) throw new Error(`Não achei mais ${a.produto.name} na loja.`);
-      const corpo = venusLoja.corpoDoProduto(atual.bruto, a.tipo, a.tipo === "preco" ? a.valor : undefined);
+      const corpo = venusLoja.corpoDoProduto(atual.bruto, a.tipo, a.tipo === "preco" || a.tipo === "promocao" ? a.valor : undefined);
       if (!corpo) throw new Error(`Não consegui ler todos os dados de ${a.produto.name}. Faça pelo painel.`);
       await pedirAoPainel("/_api/admin/product_save", corpo);
       return;
     }
     case "entregue":
       await pedirAoPainel("/_api/admin/order_update", { id: a.pedido.id, status: "delivered", trackingCode: a.pedido.trackingCode });
+      return;
+    case "status":
+      await pedirAoPainel("/_api/admin/order_update", { id: a.pedido.id, status: a.status, trackingCode: a.rastreio ?? a.pedido.trackingCode });
       return;
   }
 }
@@ -231,7 +236,8 @@ export const VenusLoja = () => {
       queryClient.invalidateQueries({ queryKey: ["venus-loja", "dados"] });
       queryClient.invalidateQueries({ queryKey: ["admin"] });
       const t = venusLoja.confirmado(alteracao);
-      adicionar({ de: "venus", texto: t });
+      const aviso = venusLoja.linkAviso(alteracao, window.location.origin);
+      adicionar({ de: "venus", texto: t, acoes: aviso ? [{ rotulo: "Avisar a cliente no WhatsApp", url: aviso }] : undefined });
       dizer(t);
     } catch (e) {
       mudarSituacao(id, "erro");
