@@ -1508,13 +1508,6 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
             ),
             TelaDeAjustes.Secao(
                 "Sistema", listOf(
-                    TelaDeAjustes.Ajuste("Ler mensagens do WhatsApp", {
-                        "Pergunte \"tem mensagem nova?\" e ela lê; diga \"responde para a Natália que chego às 8\" e ela responde, sempre confirmando antes. " +
-                            "Precisa liberar o acesso às notificações (ela só olha as do WhatsApp e não guarda nada)."
-                    }, { LeitorDeMensagens.liberado(this) }) {
-                        LeitorDeMensagens.abrirPermissao(this)
-                        Toast.makeText(this, "Ative a ${Marca.nome} na lista e volte.", Toast.LENGTH_LONG).show()
-                    },
                     TelaDeAjustes.Ajuste("Atualizações", {
                         "Versão ${versaoDoApp()} instalada. A ${Marca.nome} avisa sozinha quando sai uma nova; toque para procurar agora."
                     }) { procurarAtualizacao(manual = true) },
