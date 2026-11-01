@@ -39,6 +39,7 @@ object ComandosLocais {
         val ehRecado = RECADO.containsMatchIn(c)
         // Contas, conversões, datas, tradução, CEP...: antes do clima ("30 graus em fahrenheit" é conversão).
         // Mudanças na loja ("muda o preço do gel para 29,90") antes das contas, para o número não virar cálculo.
+        conversaAntiga(f)?.let { return it }
         if (!ehRecado) gestao(f)?.let { return it }
         if (!ehRecado) lojaAlteracao(c)?.let { return it }
         LOJA_CADASTRAR.matchEntire(c)?.let { m -> return cadastro(f.trecho(m.groups[1] ?: m.groups[2]).orEmpty()) }
@@ -941,6 +942,32 @@ object ComandosLocais {
         0 to Regex("^(?:o |a |os |as )?(.+?) (?:me )?custou $VALOR(?: cada| a unidade| por unidade)?$"),
         1 to Regex("^(?:eu )?paguei $VALOR (?:no|na|nos|nas|em|pelo|pela|pelos|pelas|por|cada) (.+?)$"),
     )
+    /**
+     * "Lembra do que falamos sobre investir em lingerie?", "volta na conversa sobre o site":
+     * procura a conversa antiga e continua dali. [assunto] é só o tema (sem o resto da frase).
+     */
+    fun conversaAntiga(f: Frase): Resultado? {
+        val c = f.chave.trimEnd('.', '!', '?')
+        for (r in CONVERSA_ANTIGA) {
+            val m = r.find(c) ?: continue
+            var assunto = f.trecho(m.groups[1]).orEmpty()
+            // "…sobre lingerie, acho que vou investir mesmo" → assunto "lingerie"
+            assunto = assunto.split(Regex(",|;|\\.|\\?|!| (?:acho que|porque|pois|entao|e agora|agora|decidi|resolvi|vou|quero|e eu)\\b", RegexOption.IGNORE_CASE))
+                .first().trim()
+            if (BuscaDeConversas.palavras(assunto).isEmpty()) continue
+            return Resultado.Acao("buscar_conversa", mapOf("assunto" to assunto))
+        }
+        return null
+    }
+
+    private val CONVERSA_ANTIGA = listOf(
+        Regex("^(?:(?:voce|vc|tu) )?(?:se )?(?:lembra|lembras|recorda|lembrou)(?: (?:d[oa]|de|da gente))?(?: (?:aquilo|aquela conversa|aquele assunto))?(?: o)? (?:que|q) (?:a gente |nos |eu e voce |tu e eu |voce e eu )?(?:falamos|conversamos|combinamos|comentamos|vimos|discutimos|planejamos|pesquisamos|falei|conversei|te falei|te contei|te perguntei|perguntei|conversou|falou|comentou|combinou)(?: (?:sobre|de|do|da|dos|das|a respeito de|em relacao a))? (.+)$"),
+        Regex("^(?:(?:voce|vc|tu) )?(?:se )?(?:lembra|lembras|recorda)(?: d[ao])? (?:conversa|assunto|papo) (?:sobre|de|do|da|dos|das) (.+)$"),
+        Regex("^(?:busca|procura|acha|encontra|abre|retoma|continua|recupera|puxa)(?: (?:a|aquela|nossa))? conversa (?:sobre|de|do|da|dos|das|em que falamos de|que tivemos sobre) (.+)$"),
+        Regex("^(?:vamos )?(?:continuar|retomar|voltar (?:a|para|pra|na)|volta (?:a|para|pra|na)|volte (?:a|para|pra|na))(?: a| aquela| nossa)? (?:conversa|assunto|papo) (?:sobre|de|do|da|dos|das) (.+)$"),
+        Regex("^o que (?:a gente |nos |eu )?(?:falamos|conversamos|combinamos|decidimos|tinhamos falado|tinhamos combinado) (?:sobre|de|do|da|dos|das|a respeito de) (.+)$"),
+    )
+
     /** Gestão da loja: curva ABC, o que comprar, prazo do fornecedor, recompra, datas comerciais e promoção em lote. */
     fun gestao(f: Frase): Resultado? {
         val c = f.chave.trimEnd('.', '!', '?')

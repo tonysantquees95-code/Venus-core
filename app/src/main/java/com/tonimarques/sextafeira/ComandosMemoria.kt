@@ -27,6 +27,8 @@ object ComandosMemoria {
         if (c.isBlank()) return null
         // "anota uma despesa de 30 de gasolina", "registra uma entrada de 200": é o caixa da loja, não a memória
         if (ComandosLocais.financas(f) != null) return null
+        // "lembra do que falamos sobre…": é buscar uma conversa antiga, não guardar uma memória
+        if (ComandosLocais.conversaAntiga(f) != null) return null
 
         if (APAGAR_TUDO.matches(c)) return Pedido.ApagarTudo
         if (LISTAR.matches(c)) return Pedido.Listar

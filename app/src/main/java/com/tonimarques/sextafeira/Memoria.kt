@@ -12,15 +12,23 @@ import android.database.sqlite.SQLiteOpenHelper
  *  - aprendidas: frases novas que ela aprendeu quando você confirmou o que queria dizer;
  *  - uso: o que você mais usa (apps, músicas, contatos), para entender "o de sempre".
  */
-class Memoria(contexto: Context) : SQLiteOpenHelper(contexto, "sexta.db", null, 2) {
+class Memoria(contexto: Context) : SQLiteOpenHelper(contexto, "sexta.db", null, 3) {
 
-    data class Mensagem(val quando: Long, val doUsuario: Boolean, val texto: String, val topico: String)
+    data class Mensagem(val quando: Long, val doUsuario: Boolean, val texto: String, val topico: String, val conversa: Long = 0)
+
+    /** Uma conversa: começa quando você pede "nova conversa" ou volta depois de umas horas sem falar. */
+    data class Conversa(
+        val id: Long, val inicio: Long, val ultimo: Long, val titulo: String, val resumo: String,
+        val quantidade: Int, val previa: String, val topico: String, val trecho: String? = null, val nota: Double = 0.0,
+    )
     data class ResumoTopico(val topico: String, val quantidade: Int, val ultimo: Long, val previa: String)
     data class Fato(val id: Long, val quando: Long, val texto: String, val categoria: String)
 
     override fun onCreate(db: SQLiteDatabase) {
-        db.execSQL("CREATE TABLE mensagens (id INTEGER PRIMARY KEY AUTOINCREMENT, quando INTEGER, autor TEXT, texto TEXT, topico TEXT)")
+        db.execSQL("CREATE TABLE mensagens (id INTEGER PRIMARY KEY AUTOINCREMENT, quando INTEGER, autor TEXT, texto TEXT, topico TEXT, conversa INTEGER DEFAULT 0)")
         db.execSQL("CREATE INDEX idx_topico ON mensagens(topico)")
+        db.execSQL("CREATE INDEX idx_conversa ON mensagens(conversa)")
+        db.execSQL(TABELA_CONVERSAS)
         db.execSQL("CREATE TABLE memorias (id INTEGER PRIMARY KEY AUTOINCREMENT, quando INTEGER, texto TEXT, categoria TEXT)")
         db.execSQL("CREATE TABLE aprendidas (id INTEGER PRIMARY KEY AUTOINCREMENT, frase TEXT UNIQUE, intencao TEXT)")
         db.execSQL("CREATE TABLE uso (chave TEXT PRIMARY KEY, contagem INTEGER, ultimo INTEGER)")
@@ -29,6 +37,46 @@ class Memoria(contexto: Context) : SQLiteOpenHelper(contexto, "sexta.db", null, 
 
     override fun onUpgrade(db: SQLiteDatabase, antiga: Int, nova: Int) {
         if (antiga < 2) criarTabelasDeConhecimento(db)
+        if (antiga < 3) separarEmConversas(db)
+    }
+
+    /** Versão 3: o histórico antigo (que era um só) é dividido em conversas pelas pausas de mais de 3 horas. */
+    private fun separarEmConversas(db: SQLiteDatabase) {
+        db.execSQL("ALTER TABLE mensagens ADD COLUMN conversa INTEGER DEFAULT 0")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_conversa ON mensagens(conversa)")
+        db.execSQL(TABELA_CONVERSAS)
+        var conversa = 0L
+        var ultimo = 0L
+        var titulo = ""
+        val linhas = mutableListOf<Triple<Long, Long, Boolean>>()
+        val textos = mutableMapOf<Long, String>()
+        db.rawQuery("SELECT id, quando, autor, texto FROM mensagens ORDER BY id", null).use { c ->
+            while (c.moveToNext()) {
+                linhas += Triple(c.getLong(0), c.getLong(1), c.getString(2) == "eu")
+                textos[c.getLong(0)] = c.getString(3).orEmpty()
+            }
+        }
+        db.beginTransaction()
+        try {
+            for ((id, quando, doUsuario) in linhas) {
+                if (conversa == 0L || quando - ultimo > PAUSA) {
+                    conversa = db.insert("conversas", null, ContentValues().apply {
+                        put("inicio", quando); put("ultimo", quando); put("titulo", ""); put("resumo", "")
+                    })
+                    titulo = ""
+                }
+                if (titulo.isBlank() && doUsuario) {
+                    titulo = BuscaDeConversas.tituloProvisorio(textos[id].orEmpty())
+                    db.execSQL("UPDATE conversas SET titulo = ? WHERE id = ?", arrayOf(titulo, conversa))
+                }
+                db.execSQL("UPDATE mensagens SET conversa = ? WHERE id = ?", arrayOf(conversa, id))
+                db.execSQL("UPDATE conversas SET ultimo = ? WHERE id = ?", arrayOf(quando, conversa))
+                ultimo = quando
+            }
+            db.setTransactionSuccessful()
+        } finally {
+            db.endTransaction()
+        }
     }
 
     /** Versão 2: novidades acompanhadas, assuntos, respostas guardadas e informações de controle. */
@@ -46,14 +94,142 @@ class Memoria(contexto: Context) : SQLiteOpenHelper(contexto, "sexta.db", null, 
     }
 
     // ------------------------------------------------------------- conversas
+    private fun controle(chave: String): String? = readableDatabase.rawQuery(
+        "SELECT valor FROM controle WHERE chave = ?", arrayOf(chave)
+    ).use { if (it.moveToFirst()) it.getString(0) else null }
+
+    private fun definirControle(chave: String, valor: String) {
+        writableDatabase.insertWithOnConflict("controle", null, ContentValues().apply {
+            put("chave", chave); put("valor", valor)
+        }, SQLiteDatabase.CONFLICT_REPLACE)
+    }
+
+    /** A conversa em andamento (0 = a próxima mensagem começa uma conversa nova). */
+    fun conversaAtual(): Long = controle("conversa_atual")?.toLongOrNull() ?: 0L
+
+    private fun ultimoDa(id: Long): Long = readableDatabase.rawQuery(
+        "SELECT ultimo FROM conversas WHERE id = ?", arrayOf(id.toString())
+    ).use { if (it.moveToFirst()) it.getLong(0) else 0L }
+
+    /** A conversa atual, se ainda está "viva" (última mensagem há menos de 3 horas). */
+    fun conversaRecente(agora: Long = System.currentTimeMillis()): Long? {
+        val id = conversaAtual()
+        if (id == 0L) return null
+        return id.takeIf { agora - ultimoDa(it) < PAUSA }
+    }
+
+    private fun garantirConversa(agora: Long): Long {
+        conversaRecente(agora)?.let { return it }
+        val id = writableDatabase.insert("conversas", null, ContentValues().apply {
+            put("inicio", agora); put("ultimo", agora); put("titulo", ""); put("resumo", "")
+        })
+        definirControle("conversa_atual", id.toString())
+        return id
+    }
+
+    /** "Nova conversa": a atual fica arquivada e a próxima mensagem começa outra, em branco. */
+    fun novaConversa() = definirControle("conversa_atual", "0")
+
+    /** Volta para uma conversa antiga: as próximas mensagens entram nela. */
+    fun continuarConversa(id: Long) {
+        definirControle("conversa_atual", id.toString())
+        writableDatabase.execSQL("UPDATE conversas SET ultimo = ? WHERE id = ?", arrayOf(System.currentTimeMillis(), id))
+    }
+
     fun salvarMensagem(doUsuario: Boolean, texto: String, topico: String) {
+        val agora = System.currentTimeMillis()
+        val conversa = garantirConversa(agora)
         val v = ContentValues().apply {
-            put("quando", System.currentTimeMillis())
+            put("quando", agora)
             put("autor", if (doUsuario) "eu" else "sexta")
             put("texto", texto)
             put("topico", topico)
+            put("conversa", conversa)
         }
         writableDatabase.insert("mensagens", null, v)
+        writableDatabase.execSQL("UPDATE conversas SET ultimo = ? WHERE id = ?", arrayOf(agora, conversa))
+        if (doUsuario && !texto.startsWith("Fontes: ")) {
+            writableDatabase.execSQL(
+                "UPDATE conversas SET titulo = ? WHERE id = ? AND (titulo IS NULL OR titulo = '')",
+                arrayOf(BuscaDeConversas.tituloProvisorio(texto), conversa),
+            )
+        }
+    }
+
+    /** Tira a última mensagem do usuário da conversa (ela vai para a conversa retomada). Apaga a conversa se ficar vazia. */
+    fun moverUltimaMensagem(de: Long) {
+        if (de == 0L) return
+        writableDatabase.execSQL(
+            "DELETE FROM mensagens WHERE id = (SELECT MAX(id) FROM mensagens WHERE conversa = ? AND autor = 'eu')", arrayOf(de)
+        )
+        val resta = readableDatabase.rawQuery("SELECT COUNT(*) FROM mensagens WHERE conversa = ?", arrayOf(de.toString()))
+            .use { if (it.moveToFirst()) it.getInt(0) else 0 }
+        if (resta == 0) writableDatabase.delete("conversas", "id = ?", arrayOf(de.toString()))
+    }
+
+    fun mensagensDaConversa(id: Long, limite: Int = 300): List<Mensagem> {
+        val lista = mutableListOf<Mensagem>()
+        readableDatabase.rawQuery(
+            "SELECT quando, autor, texto, topico, conversa FROM mensagens WHERE conversa = ? ORDER BY id DESC LIMIT $limite", arrayOf(id.toString())
+        ).use { c ->
+            while (c.moveToNext()) lista += Mensagem(c.getLong(0), c.getString(1) == "eu", c.getString(2), c.getString(3), c.getLong(4))
+        }
+        return lista.reversed()
+    }
+
+    /** Todas as conversas, das mais recentes para as mais antigas. */
+    fun conversas(limite: Int = 300): List<Conversa> {
+        val lista = mutableListOf<Conversa>()
+        readableDatabase.rawQuery(
+            "SELECT c.id, c.inicio, c.ultimo, c.titulo, c.resumo, COUNT(m.id) FROM conversas c JOIN mensagens m ON m.conversa = c.id " +
+                "WHERE m.texto NOT LIKE 'Fontes: %' GROUP BY c.id ORDER BY c.ultimo DESC LIMIT $limite", null
+        ).use { c ->
+            while (c.moveToNext()) {
+                val id = c.getLong(0)
+                val previa = readableDatabase.rawQuery(
+                    "SELECT texto FROM mensagens WHERE conversa = ? AND autor = 'eu' ORDER BY id DESC LIMIT 1", arrayOf(id.toString())
+                ).use { p -> if (p.moveToFirst()) p.getString(0) else "" }
+                val topico = readableDatabase.rawQuery(
+                    "SELECT topico FROM mensagens WHERE conversa = ? AND topico != 'Conversa' GROUP BY topico ORDER BY COUNT(*) DESC LIMIT 1",
+                    arrayOf(id.toString())
+                ).use { p -> if (p.moveToFirst()) p.getString(0) else "Conversa" }
+                lista += Conversa(id, c.getLong(1), c.getLong(2), c.getString(3).orEmpty(), c.getString(4).orEmpty(), c.getInt(5), previa, topico)
+            }
+        }
+        return lista
+    }
+
+    fun conversa(id: Long): Conversa? = conversas(1000).firstOrNull { it.id == id }
+
+    /** Procura conversas pelo assunto (aceita plural, erros de digitação e palavras soltas). Melhores primeiro. */
+    fun buscarConversas(assunto: String, excluir: Long = -1, minimo: Double = 0.5): List<Conversa> {
+        val consulta = BuscaDeConversas.palavras(assunto)
+        if (consulta.isEmpty()) return emptyList()
+        val achadas = mutableListOf<Conversa>()
+        for (c in conversas(1000)) {
+            if (c.id == excluir) continue
+            val textos = mensagensDaConversa(c.id, 400).map { it.texto }
+            val nota = BuscaDeConversas.nota(consulta, textos, c.titulo, c.resumo)
+            if (nota >= minimo) achadas += c.copy(trecho = BuscaDeConversas.melhorTrecho(consulta, textos), nota = nota)
+        }
+        // mais palavras encontradas primeiro; no empate, a mais recente
+        return achadas.sortedWith(compareByDescending<Conversa> { it.nota }.thenByDescending { it.ultimo })
+    }
+
+    fun definirResumo(id: Long, titulo: String, resumo: String) {
+        writableDatabase.execSQL("UPDATE conversas SET titulo = ?, resumo = ? WHERE id = ?", arrayOf(titulo, resumo, id))
+    }
+
+    /** Conversas já encerradas, com pelo menos 4 mensagens, que a IA ainda não resumiu. */
+    fun conversasSemResumo(limite: Int = 3): List<Conversa> {
+        val atual = conversaRecente()
+        return conversas(200).filter { it.id != atual && it.quantidade >= 4 && it.resumo.isBlank() }.take(limite)
+    }
+
+    fun apagarConversa(id: Long) {
+        writableDatabase.delete("mensagens", "conversa = ?", arrayOf(id.toString()))
+        writableDatabase.delete("conversas", "id = ?", arrayOf(id.toString()))
+        if (conversaAtual() == id) novaConversa()
     }
 
     fun topicos(): List<Pair<String, Int>> {
@@ -112,6 +288,15 @@ class Memoria(contexto: Context) : SQLiteOpenHelper(contexto, "sexta.db", null, 
 
     fun apagarHistorico() {
         writableDatabase.delete("mensagens", null, null)
+        writableDatabase.delete("conversas", null, null)
+        novaConversa()
+    }
+
+    companion object {
+        /** Mais de 3 horas sem falar: a próxima mensagem começa uma conversa nova. */
+        const val PAUSA = 3 * 3600_000L
+        private const val TABELA_CONVERSAS =
+            "CREATE TABLE IF NOT EXISTS conversas (id INTEGER PRIMARY KEY AUTOINCREMENT, inicio INTEGER, ultimo INTEGER, titulo TEXT, resumo TEXT)"
     }
 
     // ----------------------------------------------------- fatos e preferências

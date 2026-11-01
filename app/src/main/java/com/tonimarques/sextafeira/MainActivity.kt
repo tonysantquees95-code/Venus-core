@@ -110,6 +110,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         tratarIntent(intent)
         if (javaClass == MainActivity::class.java) principal.postDelayed({ oferecerVozOffline() }, 1500)
         if (javaClass == MainActivity::class.java) principal.postDelayed({ procurarAtualizacao(manual = false) }, 4000)
+        if (javaClass == MainActivity::class.java) principal.postDelayed({ resumirConversasAntigas() }, 8000)
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -381,17 +382,104 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
 
     protected fun dp(valor: Int) = (valor * resources.displayMetrics.density).toInt()
 
-    /** Mostra as últimas mensagens da conversa anterior, para dar continuidade. */
+    /**
+     * Se a conversa atual ainda está em andamento (menos de 3 horas sem falar), mostra as últimas mensagens dela.
+     * Senão, a tela abre em branco: a conversa antiga fica guardada no histórico e a próxima começa do zero.
+     */
     protected open fun carregarConversaAnterior() {
         val anteriores = try {
-            memoria.mensagens(null, 6)
+            memoria.conversaRecente()?.let { memoria.mensagensDaConversa(it, 12) }.orEmpty()
         } catch (e: Exception) {
             emptyList()
         }
         for (m in anteriores) {
             if (m.texto.startsWith("Fontes: ")) continue
-            adicionarMensagem(m.texto, m.doUsuario, salvar = false).alpha = 0.55f
+            adicionarMensagem(m.texto, m.doUsuario, salvar = false).alpha = 0.7f
         }
+    }
+
+    /** Começa uma conversa nova: tela em branco, a anterior fica arquivada no histórico. */
+    private fun comecarConversaNova() {
+        memoria.novaConversa()
+        gemini = null
+        cerebro.esquecerPendencias()
+        Contexto.limpar()
+        documentoAberto = null
+        mensagens.removeAllViews()
+        resumirConversasAntigas()
+    }
+
+    /** Abre uma conversa antiga na tela e passa a continuar nela. */
+    private fun abrirConversa(id: Long, aviso: Boolean = true) {
+        memoria.continuarConversa(id)
+        gemini = null
+        cerebro.esquecerPendencias()
+        Contexto.limpar()
+        documentoAberto = null
+        mensagens.removeAllViews()
+        val c = try { memoria.conversa(id) } catch (e: Exception) { null }
+        if (aviso && c != null) {
+            val data = java.text.SimpleDateFormat("dd/MM 'às' HH:mm", Locale("pt", "BR")).format(java.util.Date(c.ultimo))
+            mostrarNota("Conversa de $data: ${c.titulo.ifBlank { "sem título" }}")
+        }
+        for (m in memoria.mensagensDaConversa(id, 16)) {
+            if (m.texto.startsWith("Fontes: ")) continue
+            adicionarMensagem(m.texto, m.doUsuario, salvar = false).alpha = 0.7f
+        }
+        rolarParaBaixo()
+    }
+
+    /** "Lembra do que falamos sobre…": acha a conversa, volta para ela e continua dali. */
+    private fun retomarConversa(assunto: String, pedido: String) {
+        val atual = memoria.conversaAtual()
+        val achadas = try {
+            memoria.buscarConversas(assunto, excluir = atual)
+        } catch (e: Exception) {
+            emptyList()
+        }
+        val c = achadas.firstOrNull()
+        if (c == null) {
+            responder("Procurei nas nossas conversas e não achei nada sobre $assunto. Me conta de novo que eu continuo daqui.")
+            return
+        }
+        // a pergunta vai junto para a conversa retomada (e sai da atual, que pode ficar vazia)
+        try {
+            memoria.moverUltimaMensagem(atual)
+        } catch (e: Exception) {
+        }
+        abrirConversa(c.id)
+        topicoAtual = c.topico
+        adicionarMensagem(pedido, true)
+        if (obterGemini() != null) {
+            consultarIA(pedido)
+        } else {
+            val data = java.text.SimpleDateFormat("dd/MM", Locale("pt", "BR")).format(java.util.Date(c.ultimo))
+            val ultima = memoria.mensagensDaConversa(c.id, 40).lastOrNull { !it.doUsuario && !it.texto.startsWith("Fontes: ") }?.texto
+            responder(
+                "Achei nossa conversa de $data: ${c.titulo}." +
+                    (if (c.resumo.isNotBlank()) " ${c.resumo}" else if (ultima != null) " A última coisa que eu disse foi: ${ultima.take(220)}" else "") +
+                    " Pode continuar daqui."
+            )
+        }
+        if (achadas.size > 1) mostrarNota("Também falamos disso em outras ${achadas.size - 1} conversas. Veja no histórico.")
+    }
+
+    /** Dá título e resumo às conversas encerradas (com a IA), para a busca achar melhor. Roda em segundo plano. */
+    private fun resumirConversasAntigas() {
+        val k = chave()
+        if (k.isBlank() || modoIndependente()) return
+        val m = modelo()
+        Thread {
+            try {
+                for (c in memoria.conversasSemResumo(3)) {
+                    val transcricao = memoria.mensagensDaConversa(c.id, 120).filter { !it.texto.startsWith("Fontes: ") }
+                        .joinToString("\n") { (if (it.doUsuario) "Usuário: " else "Vênus: ") + it.texto }
+                    val (titulo, resumo) = Gemini.resumirConversa(k, m, transcricao) ?: continue
+                    memoria.definirResumo(c.id, titulo, resumo)
+                }
+            } catch (e: Exception) {
+            }
+        }.start()
     }
 
     protected open fun adicionarMensagem(texto: String, doUsuario: Boolean, salvar: Boolean = true): TextView {
@@ -588,6 +676,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
                 decisao.nome == "listar_posts" -> listarPosts()
                 decisao.nome == "responder_cliente" -> responderCliente(null)
                 decisao.nome == "caixa_grafico" -> mostrarGrafico()
+                decisao.nome == "buscar_conversa" -> retomarConversa(decisao.args["assunto"]?.toString().orEmpty().ifBlank { pedido }, pedido)
                 decisao.nome == "caixa_relatorio" -> gerarRelatorio(decisao.args["periodo"]?.toString() ?: "mes")
                 decisao.nome in Ferramentas.USAM_REDE -> executarNaRede(decisao.nome, decisao.args)
                 decisao.nome == "controlar_midia" || decisao.nome == "tocar_musica" -> {
@@ -616,11 +705,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
             }
             is Cerebro.Decisao.Especial -> {
                 when (decisao.tipo) {
-                    "nova_conversa" -> {
-                        gemini = null
-                        cerebro.esquecerPendencias()
-                        mensagens.removeAllViews()
-                    }
+                    "nova_conversa" -> comecarConversaNova()
                     "desativar" -> {
                         ultimaFoiVoz = false
                         forcarEscuta = false
@@ -1032,7 +1117,14 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         if (modoIndependente()) return null
         val k = chave()
         if (k.isBlank()) return null
-        return gemini ?: Gemini(k, modelo(), ferramentas) { memoria.resumoParaIA() }.also { gemini = it }
+        return gemini ?: Gemini(k, modelo(), ferramentas) { memoria.resumoParaIA() }.also { g ->
+            // continua a conversa em andamento (mesmo depois de fechar o app), sem misturar com as outras
+            try {
+                memoria.conversaRecente()?.let { id -> g.carregarHistorico(memoria.mensagensDaConversa(id, 40).map { it.doUsuario to it.texto }) }
+            } catch (e: Exception) {
+            }
+            gemini = g
+        }
     }
 
     private fun chave() = prefs.getString(PREF_CHAVE, "").orEmpty()
@@ -1653,7 +1745,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
             TelaDeAjustes.Secao(
                 "Memória e conversas", listOf(
                     item("O que a $n sabe sobre mim", { "Seus gostos, favoritos e o que ela aprendeu. Dá para apagar." }, MENU_MEMORIAS),
-                    item("Nova conversa", { "Limpa a tela e começa do zero (o histórico continua salvo)." }, MENU_NOVA),
+                    item("Nova conversa", { "Abre uma conversa em branco; a atual fica guardada no histórico. Para voltar a um assunto, diga: lembra do que falamos sobre, e o assunto." }, MENU_NOVA),
                 )
             ),
             TelaDeAjustes.Secao(
@@ -1803,9 +1895,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
             }
             MENU_NOVA -> {
                 ajustes?.dismiss()
-                gemini = null
-                cerebro.esquecerPendencias()
-                mensagens.removeAllViews()
+                comecarConversaNova()
                 adicionarMensagem("Conversa nova. Em que posso ajudar?", false, salvar = false)
             }
             else -> return false
@@ -1815,7 +1905,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
 
     // --------------------------------------------------- histórico e memórias
     private fun mostrarHistorico() {
-        TelaDeHistorico(this, memoria, corAtual).show()
+        TelaDeHistorico(this, memoria, corAtual) { id -> abrirConversa(id) }.show()
     }
 
     private fun mostrarMemorias() {
