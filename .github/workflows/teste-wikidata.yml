@@ -40,7 +40,17 @@ jobs:
                   if m not in vistos: fila.add(m)
           tudo = "\n".join(vistos.values())
           print("arquivos:", len(vistos))
-          for marca in ["_api/venus/chat", "Atendimento da Vênus", "Dúvidas?", "VenusOrbe", "ponto de retirada", "Retirar na loja"]:
-              print("::notice::", marca, "=>", "SIM" if marca in tudo else "nao")
+          import os
+          os.makedirs("out", exist_ok=True)
+          with open("out/upload.txt", "w") as f:
+              for m in re.finditer(r"_api/admin/upload|uploadUrl|publicUrl|presign|signedUrl|putUrl|product_save", tudo):
+                  f.write("=== " + m.group(0) + "\n" + tudo[max(0, m.start() - 600): m.end() + 2500] + "\n\n")
           PY
           cat out/qtd.txt out/endpoints.txt
+      - name: Guardar resultado num ramo separado
+        run: |
+          cd out
+          git init -q -b diagnostico
+          git config user.name "ci"; git config user.email "ci@users.noreply.github.com"
+          git add -A && git commit -qm "diagnostico"
+          git push -fq "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" diagnostico
