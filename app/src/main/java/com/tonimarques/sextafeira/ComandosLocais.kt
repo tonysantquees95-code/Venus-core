@@ -911,7 +911,7 @@ object ComandosLocais {
     private const val PUBLICAR = "(?:postar|posta|poste|postem|publicar|publica|publique)"
     private val POSTAR_AGORA = Regex(
         "^(?:(?:pode|podes|entao|ok|sim|beleza|ta|tudo bem),? $PUBLICAR(?: (?:ele|ela|isso|o post|o story|a postagem|o stories))?(?: (?:agora|ja|logo|como (?:esta|ta)|assim mesmo|assim))?|" +
-            "$PUBLICAR(?: (?:ele|ela|isso|o post|o story|a postagem|o stories))? (?:agora|ja|logo|agora mesmo|como (?:esta|ta)|assim mesmo))$"
+            "$PUBLICAR(?: (?:ele|ela|isso|o post|o story|a postagem|o stories))?(?: (?:agora|ja|logo|agora mesmo|como (?:esta|ta)|assim mesmo))?)$"
     )
     /** "muda para hoje às 19h" (vale para o post que acabou de ser programado). */
     val REPROGRAMAR_POST = Regex(
