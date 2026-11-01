@@ -43,6 +43,7 @@ object ComandosLocais {
         LOJA_CADASTRAR.matchEntire(c)?.let { m -> return cadastro(f.trecho(m.groups[1] ?: m.groups[2]).orEmpty()) }
         if (EDITAR_FUNDO.containsMatchIn(c)) return Resultado.Acao("editar_fundo", emptyMap())
         if (LER_NOTA.containsMatchIn(c)) return Resultado.Acao("ler_nota", emptyMap())
+        if (ABRIR_ARQUIVO.containsMatchIn(c)) return Resultado.Acao("abrir_arquivo", emptyMap())
         if (!ehRecado) Calculadora.responder(c)?.let { return Resultado.Resposta(it) }
         // Conhecimentos gerais que ela sabe de cor (português, ciências, geografia, matemática)
         if (!ehRecado) Saber.responder(c)?.let { return Resultado.Resposta(it) }
@@ -857,7 +858,10 @@ object ComandosLocais {
         "\\b(?:(?:troca|troque|trocar|muda|mude|mudar|tira|tire|tirar|remove|remova|remover|apaga|apague|edita|edite|editar|coloca|coloque|poe) (?:o |um )?fundo|" +
             "fundo (?:da|de uma|dessa|desta) foto|edita(?:r)? (?:a |uma )?foto(?: do produto)?|editor de fotos?)\\b"
     )
-    private val LER_NOTA = Regex(
+    private val ABRIR_ARQUIVO = Regex(
+        "^(?:(?:abre|abra|abrir|le|leia|ler|escolhe|escolha|escolher|carrega|carregue|analisa|analise|analisar) (?:um |o |uma |meu |a |esse |este )?(?:arquivo|pdf|documento|planilha|boleto|contrato)|quero (?:mandar|enviar|ler) um (?:arquivo|pdf|documento))$"
+    )
+        private val LER_NOTA = Regex(
         "\\b(?:(?:le|leia|ler|lanca|lance|lancar|registra|registre|registrar|cadastra|cadastre|cadastrar|importa|importe|importar|processa|processe) (?:a |uma |essa |esta )?(?:nota|notinha|nota fiscal|compra|cupom)|" +
             "nota (?:de compra|fiscal da compra|do fornecedor)|(?:entrou|chegou) (?:a )?mercadoria|compra do fornecedor)\\b"
     )
