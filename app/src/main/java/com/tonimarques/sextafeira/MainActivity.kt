@@ -670,7 +670,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
             ferramentas.ultimasFontes = emptyList()
             val resultado = ferramentas.executar(nome, args)
             val fontes = ferramentas.ultimasFontes
-            val pendente = if (nome == "loja_alterar" || nome == "loja_entregue") ferramentas.lojaPendente else null
+            val pendente = if (nome == "loja_alterar" || nome == "loja_entregue" || nome == "loja_status") ferramentas.lojaPendente else null
             val acao: () -> Unit = {
                 if (pendente != null) forcarEscuta = true
                 responder(resultado)
@@ -1474,6 +1474,12 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
                         "A cada 15 minutos, mais ou menos, a $n olha a loja e avisa por notificação quando entra um pedido pago " +
                             "ou um produto fica com 2 unidades ou menos."
                     }, { VigiaDaLoja.ligado(this) }) { alternarAvisosDaLoja() },
+                    TelaDeAjustes.Ajuste("Resumo da loja às 21h", {
+                        "Com os avisos ligados, toda noite chega uma notificação com as vendas do dia e o que fica para amanhã."
+                    }, { VigiaDaLoja.resumoLigado(this) }) {
+                        VigiaDaLoja.definirResumo(this, !VigiaDaLoja.resumoLigado(this))
+                        ajustes?.atualizar()
+                    },
                 )
             ),
             TelaDeAjustes.Secao(
