@@ -12,7 +12,7 @@ object Topicos {
         "pesquisar_na_web", "buscar_na_internet", "abrir_site", "resumo_wikipedia" -> "Pesquisas"
         "abrir_app", "abrir_camera", "abrir_configuracao", "lanterna", "nivel_bateria" -> "Celular"
         "salvar_memoria" -> "Sobre mim"
-        "loja_resumo", "loja_pedidos", "loja_acabando", "loja_estoque", "loja_retiradas", "loja_estoque_geral", "loja_alterar", "loja_status", "loja_reposicao", "loja_mais_vendidos", "loja_comparar", "loja_parados",
+        "loja_resumo", "loja_pedidos", "loja_acabando", "loja_estoque", "loja_retiradas", "loja_estoque_geral", "loja_alterar", "loja_status", "loja_reposicao", "loja_mais_vendidos", "loja_comparar", "loja_parados", "loja_margem", "loja_margens", "loja_lucro",
         "loja_entregue", "loja_confirmar", "loja_agendar" -> "Loja"
         "traduzir", "dicionario", "ortografia" -> "Português e idiomas"
         "distancia", "salvar_lugar_aqui", "salvar_lugar", "buscar_perto" -> "Lugares e rotas"

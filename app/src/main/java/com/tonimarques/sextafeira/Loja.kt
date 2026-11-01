@@ -165,6 +165,48 @@ class Loja(private val contexto: Context) {
 
     fun retiradas(): String = montarRetiradas(pedidos())
 
+    fun margem(produto: String): String = montarMargem(produtos(), produto)
+
+    fun margens(): String = montarMargens(produtos())
+
+    fun lucro(periodo: String): String = montarLucro(pedidos(), produtos(), periodo, Calendar.getInstance())
+
+    /** Liga as linhas da nota de compra aos produtos da loja. */
+    fun casarCompra(linhas: List<Triple<String, Int, Int>>): List<ItemDeCompra> = casarCompra(produtos(), linhas)
+
+    /** Aplica a compra confirmada: soma ao estoque e (se o site já guarda) salva o custo. Devolve o resumo. */
+    fun aplicarCompra(itens: List<ItemDeCompra>, somarEstoque: Boolean, salvarCusto: Boolean): String {
+        var estoque = 0
+        var custos = 0
+        val erros = mutableListOf<String>()
+        for (i in itens) {
+            val p = i.produto ?: continue
+            try {
+                if (somarEstoque && i.quantidade > 0) {
+                    val atual = p.estoque
+                    if (atual == null) enviar("/_api/admin/stock_update", JSONObject().put("productId", p.id).put("quantity", i.quantidade).put("mode", "set"))
+                    else enviar("/_api/admin/stock_update", JSONObject().put("productId", p.id).put("quantity", i.quantidade).put("mode", "add"))
+                    estoque++
+                }
+                if (salvarCusto) {
+                    val atual = produtos().firstOrNull { it.id == p.id }
+                    val corpo = corpoDoProduto(atual?.bruto, "custo", i.custoUnitario)
+                    if (corpo != null) {
+                        enviar("/_api/admin/product_save", corpo)
+                        custos++
+                    }
+                }
+            } catch (e: Exception) {
+                erros += p.nome
+            }
+        }
+        var texto = "Pronto:"
+        if (somarEstoque) texto += " estoque somado em ${plural(estoque, "produto", "produtos")}."
+        if (salvarCusto) texto += " Custo salvo em ${plural(custos, "produto", "produtos")}."
+        if (erros.isNotEmpty()) texto += " Não consegui atualizar: ${erros.joinToString(", ")}."
+        return texto
+    }
+
     fun maisVendidos(periodo: String): String = montarMaisVendidos(pedidos(), periodo, Calendar.getInstance())
 
     fun resumoDaManha(): String = montarResumoDaManha(pedidos(), produtos(), Calendar.getInstance())
@@ -226,7 +268,7 @@ class Loja(private val contexto: Context) {
                 enviar("/_api/admin/stock_update", JSONObject().put("productId", p.id).put("quantity", a.valor!!).put("mode", "set"))
                 return "Pronto: ${p.nome} agora tem ${plural(a.valor, "unidade", "unidades")} no estoque."
             }
-            "preco", "ativar", "desativar", "promocao", "fim_promocao" -> {
+            "preco", "ativar", "desativar", "promocao", "fim_promocao", "custo" -> {
                 val p = a.produto!!
                 // relê o produto na hora, para não desfazer outra mudança feita pelo painel
                 val atual = produtos().firstOrNull { it.id == p.id } ?: throw ErroDaLoja("Não achei mais ${p.nome} na loja.")
@@ -235,6 +277,7 @@ class Loja(private val contexto: Context) {
                 enviar("/_api/admin/product_save", corpo)
                 return when (a.tipo) {
                     "preco" -> "Pronto: ${p.nome} agora custa ${dinheiro(a.valor!!)} no site."
+                    "custo" -> "Pronto: custo de ${p.nome} cadastrado em ${dinheiro(a.valor!!)}."
                     "promocao" -> "Pronto: ${p.nome} está em promoção por ${dinheiro(a.valor!!)}, com o preço antigo riscado no site."
                     "fim_promocao" -> "Pronto: ${p.nome} saiu da promoção e voltou a custar ${dinheiro(corpo.optInt("priceCents"))}."
                     "ativar" -> "Pronto: ${p.nome} voltou a aparecer no site."
@@ -287,16 +330,23 @@ class Loja(private val contexto: Context) {
     }
 
     // ================================================================ parte testável
-    data class Item(val nome: String, val quantidade: Int, val precoCentavos: Int)
+    data class Item(val nome: String, val quantidade: Int, val precoCentavos: Int, val produtoId: Int? = null)
     data class Pedido(
         val id: Int, val status: String, val totalCentavos: Int, val cliente: String,
         val entrega: String, val criado: Long, val pago: Long?, val itens: List<Item>,
         val telefone: String = "", val rastreio: String? = null,
+        val descontoCentavos: Int = 0, val freteCentavos: Int = 0,
     )
     data class Produto(
         val id: Int, val nome: String, val ativo: Boolean, val estoque: Int?, val precoCentavos: Int?,
         val precoAntigo: Int? = null, val bruto: JSONObject? = null,
-    )
+    ) {
+        /** Quanto o produto custou para a loja (null se ainda não cadastrado ou se o site ainda não guarda custo). */
+        val custoCentavos: Int? get() = bruto?.takeIf { it.has(CAMPO_CUSTO) && !it.isNull(CAMPO_CUSTO) }?.optInt(CAMPO_CUSTO)
+    }
+
+    /** Uma linha da nota de compra já ligada a um produto da loja. */
+    data class ItemDeCompra(val descricao: String, val quantidade: Int, val custoUnitario: Int, val produto: Produto?)
 
     /** Produto novo para cadastrar (o que veio da fala e do formulário). */
     data class NovoProduto(
@@ -366,8 +416,11 @@ class Loja(private val contexto: Context) {
                 criado = data(o.optString("createdAt")) ?: 0L,
                 pago = data(o.optString("paidAt")),
                 itens = (0 until itens.length()).mapNotNull { itens.optJSONObject(it) }.map { i ->
-                    Item(i.optString("name"), i.optInt("quantity", 1), i.optInt("unitPriceCents"))
+                    Item(i.optString("name"), i.optInt("quantity", 1), i.optInt("unitPriceCents"),
+                        if (i.isNull("productId") || !i.has("productId")) null else i.optInt("productId"))
                 },
+                descontoCentavos = o.optInt("discountCents"),
+                freteCentavos = o.optInt("shippingCents"),
                 telefone = o.optString("customerPhone"),
                 rastreio = if (o.isNull("trackingCode")) null else o.optString("trackingCode").ifBlank { null },
             )
@@ -520,6 +573,95 @@ class Loja(private val contexto: Context) {
 
         private const val CONFIRMA = " Diga sim para confirmar ou não para cancelar."
 
+        /** Nome do campo de custo no site (criado no painel). */
+        const val CAMPO_CUSTO = "costCents"
+        const val SEM_CAMPO_CUSTO = "O site ainda não tem o campo de preço de custo. Assim que ele for criado no painel, eu passo a guardar e calcular a margem."
+
+        private fun pct(parte: Long, todo: Long) = if (todo == 0L) 0 else ((parte * 100 + todo / 2) / todo).toInt()
+
+        /** Margem de um produto: preço, custo, lucro por unidade. */
+        fun montarMargem(produtos: List<Produto>, falado: String): String {
+            val achados = acharProdutos(produtos, falado)
+            if (achados.isEmpty()) return "Não achei nenhum produto com \"$falado\" na loja."
+            if (achados.size > 1) return "Achei ${achados.size} produtos parecidos: ${achados.take(4).joinToString(", ") { it.nome }}. Diga o nome mais completo."
+            val p = achados[0]
+            if (produtos.none { it.bruto?.has(CAMPO_CUSTO) == true }) return SEM_CAMPO_CUSTO
+            val custo = p.custoCentavos ?: return "${p.nome} ainda não tem custo cadastrado. Diga, por exemplo: o custo do ${p.nome} é 15 reais."
+            val preco = p.precoCentavos ?: return "${p.nome} está sem preço de venda."
+            val lucro = preco - custo
+            var texto = "${p.nome}: vende por ${dinheiro(preco)}, custou ${dinheiro(custo)}. Lucro de ${dinheiro(lucro)} por unidade, " +
+                "${pct(lucro.toLong(), preco.toLong())}% do preço (markup de ${pct(lucro.toLong(), custo.toLong())}% sobre o custo)."
+            val promo = p.precoAntigo
+            if (promo == null || promo <= preco) {
+                val pix = preco - (preco * 5 + 50) / 100
+                texto += " No Pix, com 5% de desconto, o lucro fica ${dinheiro(pix - custo)}."
+            }
+            return texto
+        }
+
+        /** Margem média e os produtos que menos dão lucro. */
+        fun montarMargens(produtos: List<Produto>): String {
+            if (produtos.none { it.bruto?.has(CAMPO_CUSTO) == true }) return SEM_CAMPO_CUSTO
+            val ativos = produtos.filter { it.ativo && it.precoCentavos != null && it.precoCentavos > 0 }
+            val comCusto = ativos.filter { it.custoCentavos != null }
+            if (comCusto.isEmpty()) return "Nenhum produto tem custo cadastrado ainda. Diga, por exemplo: o custo do gel é 15 reais, ou me mande a foto da nota de compra."
+            val margens = comCusto.map { it to pct((it.precoCentavos!! - it.custoCentavos!!).toLong(), it.precoCentavos.toLong()) }
+            val media = margens.sumOf { it.second } / margens.size
+            val piores = margens.sortedBy { it.second }.take(3)
+            var texto = "Margem média de ${media}% do preço, em ${plural(comCusto.size, "produto", "produtos")} com custo cadastrado. " +
+                "Menor margem: " + piores.joinToString(", ") { "${it.first.nome} (${it.second}%)" } + "."
+            val sem = ativos.size - comCusto.size
+            if (sem > 0) texto += " Faltam ${plural(sem, "produto", "produtos")} sem custo: " + ativos.filter { it.custoCentavos == null }.take(4).joinToString(", ") { it.nome } +
+                (if (sem > 4) " e mais ${sem - 4}" else "") + "."
+            return texto
+        }
+
+        /** Lucro das vendas do período: valor vendido (já com o desconto do Pix) menos o custo dos itens. Frete só informativo. */
+        fun montarLucro(pedidos: List<Pedido>, produtos: List<Produto>, periodo: String, agora: Calendar): String {
+            if (produtos.none { it.bruto?.has(CAMPO_CUSTO) == true }) return SEM_CAMPO_CUSTO
+            val (ini, fim) = inicioDoPeriodo(periodo, agora)
+            val pagos = pedidos.filter { it.status in PAGOS && (it.pago ?: it.criado) in ini until fim }
+            val quando = when (periodo) { "hoje" -> "hoje"; "ontem" -> "ontem"; "semana" -> "nos últimos 7 dias"; else -> "neste mês" }
+            if (pagos.isEmpty()) return "Ainda não teve venda paga $quando."
+            val porId = produtos.associateBy { it.id }
+            val porNome = produtos.associateBy { ComandosLocais.normalizar(it.nome.trim()) }
+            var vendido = 0L
+            var custo = 0L
+            var semCusto = 0
+            val faltando = mutableSetOf<String>()
+            for (o in pagos) {
+                val bruto = o.itens.sumOf { it.precoCentavos.toLong() * it.quantidade }
+                for (i in o.itens) {
+                    val linha = i.precoCentavos.toLong() * i.quantidade
+                    // o desconto do Pix do pedido é repartido entre os itens pelo valor de cada um
+                    val desconto = if (bruto > 0) o.descontoCentavos * linha / bruto else 0
+                    val p = i.produtoId?.let { porId[it] } ?: porNome[ComandosLocais.normalizar(i.nome.trim())]
+                    val c = p?.custoCentavos
+                    if (c == null) {
+                        semCusto += i.quantidade
+                        faltando += i.nome
+                        continue
+                    }
+                    vendido += linha - desconto
+                    custo += c.toLong() * i.quantidade
+                }
+            }
+            val frete = pagos.sumOf { it.freteCentavos }
+            if (vendido == 0L) return "As vendas $quando são de produtos sem custo cadastrado (${faltando.take(4).joinToString(", ")}). Cadastre o custo para eu calcular o lucro."
+            val lucro = vendido - custo
+            var texto = "Lucro $quando: ${dinheiro(lucro.toInt())} em ${plural(pagos.size, "pedido", "pedidos")} " +
+                "(vendido ${dinheiro(vendido.toInt())}, custo ${dinheiro(custo.toInt())}, margem de ${pct(lucro, vendido)}%)."
+            if (frete > 0) texto += " Frete cobrado dos clientes: ${dinheiro(frete)}, repassado ao envio."
+            if (semCusto > 0) texto += " Ficaram de fora ${plural(semCusto, "unidade", "unidades")} sem custo cadastrado: ${faltando.take(4).joinToString(", ")}."
+            return texto
+        }
+
+        /** Liga cada linha (descrição, quantidade, custo unitário) ao produto mais parecido da loja. */
+        fun casarCompra(produtos: List<Produto>, linhas: List<Triple<String, Int, Int>>): List<ItemDeCompra> = linhas.map { (desc, qtd, unit) ->
+            val achados = acharProdutos(produtos, desc)
+            ItemDeCompra(desc, qtd, unit, if (achados.size == 1) achados[0] else null)
+        }
+
         /** As categorias do site (id, nome). */
         val CATEGORIAS = listOf(
             "geis_lubrificantes" to "Géis e lubrificantes",
@@ -576,6 +718,7 @@ class Loja(private val contexto: Context) {
             if (bruto == null || CAMPOS_PRODUTO.any { !bruto.has(it) }) return null
             val corpo = JSONObject()
             for (k in CAMPOS_PRODUTO) corpo.put(k, bruto.get(k))
+            if (bruto.has(CAMPO_CUSTO)) corpo.put(CAMPO_CUSTO, bruto.get(CAMPO_CUSTO)) // não apaga o custo ao mudar outra coisa
             when (tipo) {
                 "preco" -> corpo.put("priceCents", valor ?: return null)
                 "promocao" -> {
@@ -592,6 +735,10 @@ class Loja(private val contexto: Context) {
                     val antigo = if (bruto.isNull("compareAtCents")) return null else bruto.getInt("compareAtCents")
                     if (antigo <= preco) return null
                     corpo.put("priceCents", antigo).put("compareAtCents", JSONObject.NULL)
+                }
+                "custo" -> {
+                    if (!bruto.has(CAMPO_CUSTO)) return null // o site ainda não guarda custo
+                    corpo.put(CAMPO_CUSTO, valor ?: return null)
                 }
                 "ativar" -> corpo.put("active", true)
                 "desativar" -> corpo.put("active", false)
@@ -678,6 +825,19 @@ class Loja(private val contexto: Context) {
                         return Preparo("Não consegui ler todos os dados de ${p.nome}. Tire a promoção pelo painel do site.", null)
                     }
                     Preparo("Tirar ${p.nome} da promoção? Ele volta a custar ${dinheiro(antigo)} (hoje está ${dinheiro(preco)}).$CONFIRMA", Alteracao("fim_promocao", p))
+                }
+                "custo" -> {
+                    val custo = valor ?: return Preparo("Quanto custou?", null)
+                    if (custo <= 0) return Preparo("O custo precisa ser maior que zero.", null)
+                    if (p.bruto?.has(CAMPO_CUSTO) != true) return Preparo(SEM_CAMPO_CUSTO, null)
+                    val antes = p.custoCentavos
+                    var texto = if (antes == null) "Cadastrar o custo de ${p.nome} em ${dinheiro(custo)}?"
+                    else "Mudar o custo de ${p.nome} de ${dinheiro(antes)} para ${dinheiro(custo)}?"
+                    p.precoCentavos?.let { preco ->
+                        texto += if (custo < preco) " Com o preço de ${dinheiro(preco)}, o lucro fica ${dinheiro(preco - custo)} por unidade (${(preco - custo) * 100 / preco}% do preço)."
+                        else " Atenção: o custo fica igual ou acima do preço de venda (${dinheiro(preco)})."
+                    }
+                    Preparo(texto + CONFIRMA, Alteracao("custo", p, valor = custo))
                 }
                 "desativar" -> {
                     if (!p.ativo) return Preparo("${p.nome} já está escondido do site.", null)

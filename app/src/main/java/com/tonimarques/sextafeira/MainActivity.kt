@@ -209,6 +209,12 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
             }
             ACAO_ATIVAR -> orbe.post { ativar() }
             Atualizador.ACAO_INSTALAR -> resultadoDaInstalacao(intent)
+            Intent.ACTION_SEND -> {
+                @Suppress("DEPRECATION")
+                val uri = if (Build.VERSION.SDK_INT >= 33) intent.getParcelableExtra(Intent.EXTRA_STREAM, Uri::class.java)
+                else intent.getParcelableExtra<Uri>(Intent.EXTRA_STREAM)
+                if (uri != null && intent.type?.startsWith("image/") == true) orbe.post { fotoCompartilhada(uri) }
+            }
             ACAO_PEDIDO -> {
                 val pedido = intent.getStringExtra(EXTRA_PEDIDO).orEmpty()
                 if (pedido.isNotBlank()) orbe.post {
@@ -497,6 +503,8 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
                 decisao.nome == "pesquisar_na_web" ->
                     buscaInteligente(decisao.args["termo"]?.toString().orEmpty().ifBlank { pedido })
                 decisao.nome == "loja_cadastrar" -> abrirCadastro(decisao.args)
+                decisao.nome == "editar_fundo" -> editarFundo(null)
+                decisao.nome == "ler_nota" -> lerNota(null)
                 decisao.nome in Ferramentas.USAM_REDE -> executarNaRede(decisao.nome, decisao.args)
                 decisao.nome == "controlar_midia" || decisao.nome == "tocar_musica" -> {
                     // A música estava pausada só para ouvir você: devolve o som e só então aperta o botão.
@@ -1922,7 +1930,28 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
     private var cadastroFoto: ((Uri) -> Unit)? = null
 
     /** Formulário de produto novo, já preenchido com o que foi falado. Foto pela câmera ou galeria e descrição pela IA. */
-    private fun abrirCadastro(args: Map<String, Any>) {
+    private fun pedirFotoCamera() {
+        val (_, uri) = FotoProvider.novaFoto(this)
+        fotoDaCamera = uri
+        val i = Intent(android.provider.MediaStore.ACTION_IMAGE_CAPTURE).putExtra(android.provider.MediaStore.EXTRA_OUTPUT, uri)
+            .addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION or Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        i.clipData = android.content.ClipData.newRawUri("foto", uri)
+        try {
+            startActivityForResult(i, PEDIDO_FOTO_CAMERA)
+        } catch (e: Exception) {
+            Toast.makeText(this, "Não achei o app da câmera.", Toast.LENGTH_LONG).show()
+        }
+    }
+
+    private fun pedirFotoGaleria() {
+        try {
+            startActivityForResult(Intent(Intent.ACTION_GET_CONTENT).setType("image/*").addCategory(Intent.CATEGORY_OPENABLE), PEDIDO_FOTO_GALERIA)
+        } catch (e: Exception) {
+            Toast.makeText(this, "Não achei a galeria.", Toast.LENGTH_LONG).show()
+        }
+    }
+
+    private fun abrirCadastro(args: Map<String, Any>, fotoInicial: ByteArray? = null) {
         val loja = ferramentas.loja
         if (!loja.conectada) {
             responder("A loja ainda não está conectada. Abra os ajustes e toque em Conectar à loja.")
@@ -1930,7 +1959,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         }
         val nomeFalado = args["nome"]?.toString().orEmpty()
         responder(if (nomeFalado.isBlank()) "Vamos cadastrar. Preencha o produto na tela." else "Vamos cadastrar $nomeFalado. Confira os dados na tela e adicione a foto.")
-        var foto: ByteArray? = null
+        var foto: ByteArray? = fotoInicial
 
         val caixa = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -1990,6 +2019,20 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         caixa.addView(botoesFoto)
         caixa.addView(previa)
         caixa.addView(avisoFoto)
+        val trocarFundo = android.widget.Button(this).apply { text = "Trocar o fundo da foto" }
+        caixa.addView(trocarFundo)
+        fun mostrarFoto(bytes: ByteArray) {
+            foto = bytes
+            previa.setImageBitmap(android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size))
+            previa.visibility = View.VISIBLE
+            avisoFoto.text = "Foto pronta (${bytes.size / 1024} KB)."
+        }
+        fotoInicial?.let { mostrarFoto(it) }
+        trocarFundo.setOnClickListener {
+            val atual = foto
+            if (atual == null) Toast.makeText(this, "Escolha a foto primeiro.", Toast.LENGTH_SHORT).show()
+            else editarFundo(atual) { nova -> mostrarFoto(nova) }
+        }
         caixa.addView(rotulo("Descrição"))
         caixa.addView(descricao)
         if (chave().isNotBlank()) caixa.addView(ia)
@@ -2003,33 +2046,13 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
                     if (bytes == null) {
                         avisoFoto.text = "Não consegui ler essa foto. Tente outra."
                     } else {
-                        foto = bytes
-                        previa.setImageBitmap(android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size))
-                        previa.visibility = View.VISIBLE
-                        avisoFoto.text = "Foto pronta (${bytes.size / 1024} KB)."
+                        mostrarFoto(bytes)
                     }
                 }
             }.start()
         }
-        tirar.setOnClickListener {
-            val (_, uri) = FotoProvider.novaFoto(this)
-            fotoDaCamera = uri
-            val i = Intent(android.provider.MediaStore.ACTION_IMAGE_CAPTURE).putExtra(android.provider.MediaStore.EXTRA_OUTPUT, uri)
-                .addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION or Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            i.clipData = android.content.ClipData.newRawUri("foto", uri)
-            try {
-                startActivityForResult(i, PEDIDO_FOTO_CAMERA)
-            } catch (e: Exception) {
-                Toast.makeText(this, "Não achei o app da câmera.", Toast.LENGTH_LONG).show()
-            }
-        }
-        galeria.setOnClickListener {
-            try {
-                startActivityForResult(Intent(Intent.ACTION_GET_CONTENT).setType("image/*").addCategory(Intent.CATEGORY_OPENABLE), PEDIDO_FOTO_GALERIA)
-            } catch (e: Exception) {
-                Toast.makeText(this, "Não achei a galeria.", Toast.LENGTH_LONG).show()
-            }
-        }
+        tirar.setOnClickListener { pedirFotoCamera() }
+        galeria.setOnClickListener { pedirFotoGaleria() }
         ia.setOnClickListener {
             val n = nome.text.toString().trim()
             if (n.isBlank()) {
@@ -2103,6 +2126,319 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
             }
         }
         dialogo.show()
+    }
+
+    // ----------------------------------------------------------- trocar o fundo da foto
+    /**
+     * Editor de fundo: recorta o produto e coloca no fundo da loja, branco ou rosa; ou pede um fundo livre à IA.
+     * [aoUsar]: quando veio do cadastro, devolve a foto pronta; sem ele, oferece salvar na galeria ou compartilhar.
+     */
+    private fun editarFundo(fotoInicial: ByteArray?, aoUsar: ((ByteArray) -> Unit)? = null) {
+        var foto: ByteArray? = fotoInicial
+        var pronta: ByteArray? = null
+        val caixa = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(20), dp(8), dp(20), 0)
+        }
+        val previa = android.widget.ImageView(this).apply {
+            adjustViewBounds = true
+            maxHeight = dp(260)
+        }
+        val aviso = TextView(this).apply {
+            textSize = 13f
+            setPadding(0, dp(6), 0, dp(6))
+        }
+        fun mostrar(b: ByteArray) = previa.setImageBitmap(android.graphics.BitmapFactory.decodeByteArray(b, 0, b.size))
+        val linhaFoto = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        val tirar = android.widget.Button(this).apply { text = "Tirar foto" }
+        val galeria = android.widget.Button(this).apply { text = "Da galeria" }
+        linhaFoto.addView(tirar, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+        linhaFoto.addView(galeria, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+        val estilos = Fundo.Estilo.values().map { e -> android.widget.Button(this).apply { text = e.nome; tag = e } }
+        val pedido = EditText(this).apply {
+            hint = "Ou descreva um fundo (ex.: lençol de cetim vermelho)"
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
+        }
+        val ia = android.widget.Button(this).apply { text = "Pedir esse fundo à IA" }
+
+        caixa.addView(linhaFoto)
+        caixa.addView(previa)
+        caixa.addView(aviso)
+        estilos.forEach { caixa.addView(it) }
+        if (chave().isNotBlank()) {
+            caixa.addView(pedido)
+            caixa.addView(ia)
+        }
+        if (foto != null) {
+            mostrar(foto!!)
+            aviso.text = "Escolha o fundo."
+        } else aviso.text = "Escolha a foto do produto."
+
+        fun processar(rotulo: String, trabalho: (ByteArray) -> ByteArray) {
+            val base = foto ?: run {
+                Toast.makeText(this, "Escolha a foto primeiro.", Toast.LENGTH_SHORT).show()
+                return
+            }
+            aviso.text = "$rotulo…"
+            (estilos + ia).forEach { it.isEnabled = false }
+            Thread {
+                val r = try {
+                    Result.success(trabalho(base))
+                } catch (e: Exception) {
+                    Result.failure(e)
+                }
+                runOnUiThread {
+                    (estilos + ia).forEach { it.isEnabled = true }
+                    r.onSuccess {
+                        pronta = it
+                        mostrar(it)
+                        aviso.text = "Pronto! Se não gostar, escolha outro fundo."
+                    }.onFailure {
+                        aviso.text = it.message ?: "Não consegui trocar o fundo dessa foto."
+                    }
+                }
+            }.start()
+        }
+        estilos.forEach { b -> b.setOnClickListener { processar("Recortando o produto") { Fundo.trocar(it, b.tag as Fundo.Estilo) } } }
+        ia.setOnClickListener {
+            val texto = pedido.text.toString().trim()
+            if (texto.isBlank()) {
+                Toast.makeText(this, "Descreva o fundo que você quer.", Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
+            val k = chave()
+            processar("Pedindo à IA (pode levar até um minuto)") {
+                val r = Gemini.trocarFundoComIA(k, it, texto)
+                    ?: throw Exception("A IA não fez essa edição (ela recusa algumas fotos de produtos íntimos). Use um dos fundos da loja.")
+                // a IA pode devolver PNG: converte para JPEG quadrado como as outras
+                val b = android.graphics.BitmapFactory.decodeByteArray(r, 0, r.size) ?: throw Exception("A IA devolveu uma imagem inválida.")
+                java.io.ByteArrayOutputStream().use { out -> b.compress(android.graphics.Bitmap.CompressFormat.JPEG, 90, out); out.toByteArray() }
+            }
+        }
+
+        val anterior = cadastroFoto
+        cadastroFoto = { uri ->
+            aviso.text = "Preparando a foto…"
+            Thread {
+                val bytes = FotoProvider.prepararParaEnviar(this, uri, 1600)
+                runOnUiThread {
+                    if (bytes == null) aviso.text = "Não consegui ler essa foto."
+                    else {
+                        foto = bytes
+                        pronta = null
+                        mostrar(bytes)
+                        aviso.text = "Escolha o fundo."
+                    }
+                }
+            }.start()
+        }
+        tirar.setOnClickListener { pedirFotoCamera() }
+        galeria.setOnClickListener { pedirFotoGaleria() }
+
+        val dialogo = AlertDialog.Builder(this)
+            .setTitle("Trocar o fundo")
+            .setView(ScrollView(this).apply { addView(caixa) })
+            .setPositiveButton(if (aoUsar != null) "Usar esta foto" else "Salvar na galeria", null)
+            .setNegativeButton("Fechar", null)
+            .apply { if (aoUsar == null) setNeutralButton("Compartilhar", null) }
+            .create()
+        dialogo.setOnDismissListener { cadastroFoto = anterior }
+        dialogo.setOnShowListener {
+            dialogo.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+                val r = pronta ?: run {
+                    Toast.makeText(this, "Escolha um fundo antes.", Toast.LENGTH_SHORT).show()
+                    return@setOnClickListener
+                }
+                if (aoUsar != null) {
+                    aoUsar(r)
+                    dialogo.dismiss()
+                } else {
+                    Toast.makeText(this, if (salvarNaGaleria(r)) "Foto salva na galeria (pasta Vênus)." else "Não consegui salvar. Use Compartilhar.", Toast.LENGTH_LONG).show()
+                }
+            }
+            dialogo.getButton(AlertDialog.BUTTON_NEUTRAL)?.setOnClickListener {
+                val r = pronta ?: run {
+                    Toast.makeText(this, "Escolha um fundo antes.", Toast.LENGTH_SHORT).show()
+                    return@setOnClickListener
+                }
+                compartilharFoto(r)
+            }
+        }
+        dialogo.show()
+    }
+
+    private fun salvarNaGaleria(jpeg: ByteArray): Boolean = try {
+        if (Build.VERSION.SDK_INT < 29) false else {
+            val valores = android.content.ContentValues().apply {
+                put(android.provider.MediaStore.Images.Media.DISPLAY_NAME, "venus_${System.currentTimeMillis()}.jpg")
+                put(android.provider.MediaStore.Images.Media.MIME_TYPE, "image/jpeg")
+                put(android.provider.MediaStore.Images.Media.RELATIVE_PATH, "Pictures/Vênus")
+            }
+            val uri = contentResolver.insert(android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI, valores)
+            uri != null && contentResolver.openOutputStream(uri)?.use { it.write(jpeg); true } == true
+        }
+    } catch (e: Exception) {
+        false
+    }
+
+    private fun compartilharFoto(jpeg: ByteArray) {
+        val (arquivo, uri) = FotoProvider.novaFoto(this)
+        arquivo.writeBytes(jpeg)
+        val i = Intent(Intent.ACTION_SEND).setType("image/jpeg").putExtra(Intent.EXTRA_STREAM, uri)
+            .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        i.clipData = android.content.ClipData.newRawUri("foto", uri)
+        startActivity(Intent.createChooser(i, "Compartilhar foto"))
+    }
+
+    // ----------------------------------------------------------- nota de compra
+    /** Lê a nota (foto ou print), mostra cada item ligado a um produto e, com a confirmação, soma ao estoque e salva o custo. */
+    private fun lerNota(uri: Uri?) {
+        if (!ferramentas.loja.conectada) {
+            responder("A loja ainda não está conectada. Abra os ajustes e toque em Conectar à loja.")
+            return
+        }
+        if (chave().isBlank()) {
+            responder("Para ler a nota eu uso o Gemini. Configure a chave do Gemini nos ajustes.")
+            return
+        }
+        if (uri == null) {
+            responder("Mande a foto ou o print da nota de compra.")
+            val anterior = cadastroFoto
+            cadastroFoto = { u ->
+                cadastroFoto = anterior
+                lerNota(u)
+            }
+            AlertDialog.Builder(this)
+                .setTitle("Nota de compra")
+                .setMessage("Tire uma foto da nota ou escolha o print na galeria.")
+                .setPositiveButton("Tirar foto") { _, _ -> pedirFotoCamera() }
+                .setNeutralButton("Da galeria") { _, _ -> pedirFotoGaleria() }
+                .setNegativeButton("Cancelar") { _, _ -> cadastroFoto = anterior }
+                .show()
+            return
+        }
+        val k = chave()
+        val m = modelo()
+        comTempoLimite("LENDO A NOTA…") {
+            val foto = FotoProvider.prepararParaEnviar(this, uri, 2000)
+            val linhas = foto?.let { Gemini.lerNotaDeCompra(k, m, it) }
+            val produtos = if (linhas != null) try {
+                ferramentas.loja.produtos()
+            } catch (e: Exception) {
+                null
+            } else null
+            val acao: () -> Unit = when {
+                foto == null -> { { responder("Não consegui abrir essa imagem.") } }
+                linhas == null -> { { responder("Não consegui ler os itens dessa nota. Tente uma foto mais nítida, de frente e com boa luz.") } }
+                produtos == null -> { { responder("Li a nota, mas não consegui falar com a loja. Confira a internet e tente de novo.") } }
+                else -> { { confirmarCompra(Loja.casarCompra(produtos, linhas), produtos) } }
+            }
+            acao
+        }
+    }
+
+    private fun confirmarCompra(itens: List<Loja.ItemDeCompra>, produtos: List<Loja.Produto>) {
+        val podeCusto = produtos.any { it.bruto?.has(Loja.CAMPO_CUSTO) == true }
+        val opcoes = listOf("— ignorar este item —") + produtos.sortedBy { it.nome }.map { it.nome }
+        val ordenados = produtos.sortedBy { it.nome }
+        val caixa = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(20), dp(8), dp(20), 0)
+        }
+        data class Linha(val item: Loja.ItemDeCompra, val produto: android.widget.Spinner, val qtd: EditText, val custo: EditText)
+        val linhas = itens.map { item ->
+            caixa.addView(TextView(this).apply {
+                text = "Na nota: ${item.descricao}"
+                textSize = 13f
+                setPadding(0, dp(12), 0, 0)
+            })
+            val sp = android.widget.Spinner(this).apply {
+                adapter = android.widget.ArrayAdapter(this@MainActivity, android.R.layout.simple_spinner_dropdown_item, opcoes)
+                setSelection(item.produto?.let { p -> ordenados.indexOfFirst { it.id == p.id } + 1 } ?: 0)
+            }
+            caixa.addView(sp)
+            val linha = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+            val qtd = EditText(this).apply {
+                setText(item.quantidade.toString())
+                inputType = InputType.TYPE_CLASS_NUMBER
+                hint = "Qtd."
+            }
+            val custo = EditText(this).apply {
+                setText("%d,%02d".format(item.custoUnitario / 100, item.custoUnitario % 100))
+                inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_FLAG_DECIMAL
+                hint = "Custo por unidade"
+            }
+            linha.addView(TextView(this).apply { text = "Qtd." }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT))
+            linha.addView(qtd, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+            linha.addView(TextView(this).apply { text = "  R$/un." }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT))
+            linha.addView(custo, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1.4f))
+            caixa.addView(linha)
+            Linha(item, sp, qtd, custo)
+        }
+        val somar = android.widget.CheckBox(this).apply {
+            text = "Somar as quantidades ao estoque"
+            isChecked = true
+            setPadding(0, dp(14), 0, 0)
+        }
+        val salvar = android.widget.CheckBox(this).apply {
+            text = if (podeCusto) "Salvar o custo de cada produto" else "Salvar o custo (o site ainda não tem esse campo)"
+            isChecked = podeCusto
+            isEnabled = podeCusto
+        }
+        caixa.addView(somar)
+        caixa.addView(salvar)
+        val reconhecidos = itens.count { it.produto != null }
+        responder("Li ${itens.size} ${if (itens.size == 1) "item" else "itens"} na nota e reconheci $reconhecidos. Confira na tela antes de salvar.")
+        AlertDialog.Builder(this)
+            .setTitle("Compra lida da nota")
+            .setView(ScrollView(this).apply { addView(caixa) })
+            .setPositiveButton("Salvar") { _, _ ->
+                val escolhidos = linhas.mapNotNull { l ->
+                    val pos = l.produto.selectedItemPosition
+                    if (pos <= 0) return@mapNotNull null
+                    val q = l.qtd.text.toString().trim().toIntOrNull() ?: return@mapNotNull null
+                    val c = ComandosLocais.centavos(l.custo.text.toString().replace(Regex("[^0-9,.]"), "")) ?: l.item.custoUnitario
+                    Loja.ItemDeCompra(l.item.descricao, q, c, ordenados[pos - 1])
+                }
+                if (escolhidos.isEmpty() || (!somar.isChecked && !salvar.isChecked)) {
+                    responder("Nada foi mudado.")
+                    return@setPositiveButton
+                }
+                comTempoLimite("SALVANDO…") {
+                    val r = try {
+                        ferramentas.loja.aplicarCompra(escolhidos, somar.isChecked, salvar.isChecked)
+                    } catch (e: Exception) {
+                        "Não consegui salvar a compra: ${e.message ?: "erro de conexão"}"
+                    }
+                    val acao: () -> Unit = { responder(r) }
+                    acao
+                }
+            }
+            .setNegativeButton("Cancelar") { _, _ -> responder("Tudo bem, não mudei nada.") }
+            .show()
+    }
+
+    /** Foto recebida pelo "Compartilhar" de outro app. */
+    private fun fotoCompartilhada(uri: Uri) {
+        AlertDialog.Builder(this)
+            .setTitle("O que fazer com a foto?")
+            .setItems(arrayOf("Ler nota de compra (custo e estoque)", "Trocar o fundo", "Cadastrar produto com esta foto")) { _, qual ->
+                when (qual) {
+                    0 -> lerNota(uri)
+                    else -> Thread {
+                        val bytes = FotoProvider.prepararParaEnviar(this, uri, if (qual == 1) 1600 else 1200)
+                        runOnUiThread {
+                            when {
+                                bytes == null -> responder("Não consegui abrir essa foto.")
+                                qual == 1 -> editarFundo(bytes)
+                                else -> abrirCadastro(emptyMap(), bytes)
+                            }
+                        }
+                    }.start()
+                }
+            }
+            .setNegativeButton("Cancelar", null)
+            .show()
     }
 
     // ----------------------------------------------------------- atualização automática

@@ -391,6 +391,100 @@ class Gemini(
             return null
         }
 
+        /** Uma chamada avulsa ao Gemini (sem histórico), tentando o modelo escolhido e duas reservas. */
+        private fun chamarAvulso(chave: String, modelos: List<String>, corpo: ByteArray, tempo: Int = 60_000): JSONObject? {
+            for (m in modelos.map { it.trim().removePrefix("models/") }.filter { it.isNotBlank() }.distinct()) {
+                var conexao: HttpURLConnection? = null
+                try {
+                    conexao = URL("https://generativelanguage.googleapis.com/v1beta/models/$m:generateContent").openConnection() as HttpURLConnection
+                    conexao.requestMethod = "POST"
+                    conexao.connectTimeout = 10_000
+                    conexao.readTimeout = tempo
+                    conexao.doOutput = true
+                    conexao.setRequestProperty("Content-Type", "application/json; charset=utf-8")
+                    conexao.setRequestProperty("Connection", "close")
+                    conexao.setRequestProperty("x-goog-api-key", chave)
+                    conexao.outputStream.use { it.write(corpo) }
+                    if (conexao.responseCode !in 200..299) continue
+                    return JSONObject(conexao.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() })
+                } catch (e: Exception) {
+                    continue
+                } finally {
+                    conexao?.disconnect()
+                }
+            }
+            return null
+        }
+
+        private fun imagem(foto: ByteArray, tipo: String = "image/jpeg") = JSONObject().put(
+            "inline_data", JSONObject().put("mime_type", tipo).put("data", android.util.Base64.encodeToString(foto, android.util.Base64.NO_WRAP))
+        )
+
+        /**
+         * Lê a foto de uma nota fiscal, pedido de fornecedor ou print de compra.
+         * Devolve (descrição, quantidade, custo unitário em centavos) de cada item; null se não conseguir ler.
+         */
+        fun lerNotaDeCompra(chave: String, modelo: String, foto: ByteArray): List<Triple<String, Int, Int>>? {
+            if (chave.isBlank()) return null
+            val pedido = "Esta imagem é uma nota fiscal, cupom, pedido de fornecedor ou print de uma compra de produtos para revenda. " +
+                "Liste cada produto comprado. Responda só com JSON no formato " +
+                "{\"itens\":[{\"descricao\":\"texto como está na nota\",\"quantidade\":5,\"valor_total\":13.00,\"valor_unitario\":2.60}]}. " +
+                "Valores em reais com ponto decimal. Se só houver o total da linha, calcule o unitário dividindo pela quantidade. " +
+                "Não inclua frete, impostos separados, descontos gerais nem a linha de total."
+            val corpo = JSONObject()
+                .put("contents", JSONArray().put(JSONObject().put("role", "user").put("parts", JSONArray().put(imagem(foto)).put(JSONObject().put("text", pedido)))))
+                .put("generationConfig", JSONObject().put("temperature", 0.1).put("responseMimeType", "application/json"))
+                .toString().toByteArray()
+            val json = chamarAvulso(chave, listOf(modelo, "gemini-2.5-flash", "gemini-flash-lite-latest"), corpo) ?: return null
+            val texto = json.optJSONArray("candidates")?.optJSONObject(0)?.optJSONObject("content")?.optJSONArray("parts")
+                ?.let { partes -> (0 until partes.length()).joinToString("") { partes.optJSONObject(it)?.optString("text").orEmpty() } } ?: return null
+            return lerItensDaNota(texto)
+        }
+
+        /** Interpreta o JSON da nota (separado para poder ser testado). */
+        fun lerItensDaNota(texto: String): List<Triple<String, Int, Int>>? {
+            val limpo = texto.substringAfter("{", "").let { if (it.isBlank()) return null else "{$it" }.substringBeforeLast("}") + "}"
+            val itens = try {
+                JSONObject(limpo).optJSONArray("itens")
+            } catch (e: Exception) {
+                null
+            } ?: return null
+            val saida = mutableListOf<Triple<String, Int, Int>>()
+            for (i in 0 until itens.length()) {
+                val o = itens.optJSONObject(i) ?: continue
+                val desc = o.optString("descricao").trim()
+                val qtd = o.optDouble("quantidade", 1.0).let { if (it.isNaN() || it < 1) 1 else it.toInt() }
+                var unit = o.optDouble("valor_unitario", Double.NaN)
+                val total = o.optDouble("valor_total", Double.NaN)
+                if (unit.isNaN() || unit <= 0) unit = if (!total.isNaN() && total > 0) total / qtd else Double.NaN
+                if (desc.isBlank() || unit.isNaN() || unit <= 0) continue
+                saida += Triple(desc, qtd, Math.round(unit * 100).toInt())
+            }
+            return saida.ifEmpty { null }
+        }
+
+        /**
+         * Troca o fundo da foto pelo que foi pedido, com o modelo de imagens do Gemini.
+         * Pode recusar fotos de produtos íntimos (regra do Google): aí devolve null.
+         */
+        fun trocarFundoComIA(chave: String, foto: ByteArray, pedido: String): ByteArray? {
+            if (chave.isBlank()) return null
+            val instrucao = "Edite esta foto de produto para uma loja online: mantenha o produto exatamente igual (forma, cor, rótulo, tamanho e posição) " +
+                "e troque apenas o fundo por: $pedido. Iluminação de estúdio, foto realista, sem texto, sem pessoas."
+            val corpo = JSONObject()
+                .put("contents", JSONArray().put(JSONObject().put("role", "user").put("parts", JSONArray().put(imagem(foto)).put(JSONObject().put("text", instrucao)))))
+                .put("generationConfig", JSONObject().put("responseModalities", JSONArray().put("TEXT").put("IMAGE")))
+                .toString().toByteArray()
+            val json = chamarAvulso(chave, listOf("gemini-2.5-flash-image", "gemini-2.5-flash-image-preview"), corpo, tempo = 90_000) ?: return null
+            val partes = json.optJSONArray("candidates")?.optJSONObject(0)?.optJSONObject("content")?.optJSONArray("parts") ?: return null
+            for (i in 0 until partes.length()) {
+                val p = partes.optJSONObject(i) ?: continue
+                val dados = (p.optJSONObject("inlineData") ?: p.optJSONObject("inline_data"))?.optString("data").orEmpty()
+                if (dados.isNotBlank()) return android.util.Base64.decode(dados, android.util.Base64.DEFAULT)
+            }
+            return null
+        }
+
         /** Junta os textos da primeira resposta do Gemini e limpa sobras de formatação. */
         fun textoDaResposta(json: JSONObject): String? {
             val partes = json.optJSONArray("candidates")?.optJSONObject(0)?.optJSONObject("content")?.optJSONArray("parts") ?: return null
