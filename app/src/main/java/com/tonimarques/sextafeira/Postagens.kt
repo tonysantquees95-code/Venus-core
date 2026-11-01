@@ -153,7 +153,10 @@ object Postagens {
     internal fun disparou(ctx: Context, id: Int) {
         val p = achar(ctx, id) ?: return
         if (p.publicado) return
-        if (!podePublicarSozinho(ctx)) return avisar(ctx, p)
+        if (!podePublicarSozinho(ctx)) {
+            anotar(ctx, p, false, if (!Instagram.conectado(ctx)) "o Instagram não está conectado" else "a loja não está conectada nos ajustes (a foto sobe pelo site)")
+            return avisar(ctx, p)
+        }
         val info = android.app.job.JobInfo.Builder(JOB_BASE + id, android.content.ComponentName(ctx, PublicadorDePosts::class.java))
             .setRequiredNetworkType(android.app.job.JobInfo.NETWORK_TYPE_ANY)
             .setOverrideDeadline(60_000)
@@ -164,7 +167,10 @@ object Postagens {
         } catch (e: Exception) {
             false
         }
-        if (!ok) avisar(ctx, p, erro = "Não consegui começar a publicação.")
+        if (!ok) {
+            anotar(ctx, p, false, "o Android não deixou começar a publicação")
+            avisar(ctx, p, erro = "Não consegui começar a publicação.")
+        }
     }
 
     private const val JOB_BASE = 72_000
@@ -176,14 +182,46 @@ object Postagens {
         Thread {
             try {
                 val link = publicarPelaApi(ctx, p)
+                anotar(ctx, p, true, link)
                 avisarPublicado(ctx, p, link)
             } catch (e: Exception) {
                 Registro.anotar(ctx, "erro", "post automático → ${e.message}")
+                anotar(ctx, p, false, e.message ?: e.javaClass.simpleName)
                 avisar(ctx, p, erro = e.message)
             } finally {
                 terminou()
             }
         }.start()
+    }
+
+    // ------------------------------------------------------------- o que aconteceu com cada post (aparece no chat)
+    private fun anotar(ctx: Context, p: Post, ok: Boolean, detalhe: String) {
+        val prefs = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val lista = try {
+            JSONArray(prefs.getString("resultados", "[]"))
+        } catch (e: Exception) {
+            JSONArray()
+        }
+        lista.put(JSONObject().put("quando", p.quando).put("tipo", p.tipo).put("ok", ok).put("detalhe", detalhe.take(300)))
+        while (lista.length() > 10) lista.remove(0)
+        prefs.edit().putString("resultados", lista.toString()).apply()
+    }
+
+    /** Resultados ainda não mostrados, em frases ("Story das 18:50: publicado."). Marca como vistos. */
+    fun novidades(ctx: Context): List<String> {
+        val prefs = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val lista = try {
+            JSONArray(prefs.getString("resultados", "[]"))
+        } catch (e: Exception) {
+            JSONArray()
+        }
+        if (lista.length() == 0) return emptyList()
+        prefs.edit().putString("resultados", "[]").apply()
+        return (0 until lista.length()).mapNotNull { lista.optJSONObject(it) }.map {
+            val oque = (if (it.optString("tipo") == "story") "Story" else "Post") + " " + Lembretes.quandoFalado(it.optLong("quando"))
+            if (it.optBoolean("ok")) "$oque: publicado no Instagram ✓"
+            else "$oque: não publiquei, porque ${it.optString("detalhe")}. Ele continua na fila: diga posta agora para tentar de novo."
+        }
     }
 
     fun podePublicarSozinho(ctx: Context) = Instagram.conectado(ctx) && Loja(ctx).conectada

@@ -141,6 +141,15 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         }
         iniciarEscutaDeFundoSePreciso()
         atualizarConhecimentoSePreciso()
+        // o que aconteceu com os posts programados enquanto o app estava fechado
+        Postagens.novidades(this).forEach { adicionarMensagem(it, false) }
+        Postagens.pendentes(this).filter { it.quando < System.currentTimeMillis() - 5 * 60_000L && it.id !in atrasosAvisados }.forEach { p ->
+            atrasosAvisados += p.id
+            adicionarMensagem(
+                "O ${if (p.ehStory) "story" else "post"} programado para ${Lembretes.quandoFalado(p.quando)} ainda não saiu. " +
+                    "Diga posta agora para publicar.", false
+            )
+        }
         orbe.invalidate()
         if (vigiliaLigada()) {
             if (temMicrofone()) {
@@ -3096,6 +3105,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
     }
 
     // ----------------------------------------------------------- post em foco (o último programado)
+    private val atrasosAvisados = mutableSetOf<Int>()
     private var postFocado: Int? = null
     private var postFocadoEm = 0L
 
