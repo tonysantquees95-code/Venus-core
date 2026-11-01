@@ -23,3 +23,10 @@ Código pronto aqui; o cérebro passou em 45 testes (teste/t.ts, `node --experim
   DECIDIDO pelo Toni: deixar bem parecido com o LOGO — letra de neon vazada, traço bem mais grosso (-webkit-text-stroke ~2-3px),
   rosa neon vivo (igual ao do logo, magenta forte), e bem iluminado (várias camadas de text-shadow/drop-shadow rosa: 0 0 4px, 0 0 10px, 0 0 22px, 0 0 40px).
   Talvez preencher levemente o miolo com rosa translúcido. Conferir no computador e no celular; mostrar no preview antes de publicar.
+
+## Pedido do Toni (31/10, 22h34): preço de custo e margem de lucro
+- Site: coluna products.cost_cents (int, nulo) — SÓ no painel (admin products GET + product_save + formulário "Preço de custo"),
+  NUNCA no catálogo público. Opcional: order_items.unit_cost_cents guardando o custo na hora da venda (lucro histórico certo).
+- App Vênus (Kotlin) e Vênus da Loja (web): "o custo do gel é 15 reais" (com confirmação), "qual a margem do gel",
+  "margem média dos produtos", "lucro deste mês / da semana", "produtos com menor margem"; campo custo no cadastro por voz.
+- Mostrar margem (lucro ÷ preço) e markup (lucro ÷ custo); considerar desconto Pix de 5% e, se o Toni quiser, taxa do Mercado Pago.
