@@ -34,3 +34,9 @@ Código pronto aqui; o cérebro passou em 45 testes (teste/t.ts, `node --experim
   Pix não tem taxa no Mercado Pago (só o desconto de 5% ao cliente, que já vem no total do pedido). Taxa do cartão: também é repassada ao comprador → NÃO descontar do lucro (sem ajuste de taxa).
 - Próximos (app): ler nota/print de compra com Gemini → custo unitário + somar ao estoque (com confirmação);
   trocar fundo da foto do produto (recorte no aparelho + fundos da loja; fundo livre via IA de imagem, pode recusar).
+
+## Instagram (quando o Toni criar a página do Facebook com o chip da loja)
+- App já tem a fila de posts (aviso na hora + abre o Instagram). Fase 2: publicação automática pela API da Meta
+  (IG profissional + página do Facebook; app Meta for Developers em modo desenvolvimento; token longo; foto pública via /_api/admin/upload).
+  Criar /{ig-user-id}/media (image_url, caption | media_type=STORIES) → /media_publish na hora marcada (JobScheduler no celular).
+- Status do WhatsApp: só lembrete com tudo pronto (sem API oficial).
