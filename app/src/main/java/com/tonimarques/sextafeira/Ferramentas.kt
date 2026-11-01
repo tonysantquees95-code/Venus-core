@@ -398,7 +398,7 @@ class Ferramentas(private val activity: Activity, private val memoria: Memoria? 
             else {
                 val uri = Uri.parse(Gestao.linkWhatsapp(c))
                 activity.runOnUiThread {
-                    if (WHATSAPPS.none { iniciar(Intent(Intent.ACTION_VIEW, uri).setPackage(it)) }) iniciar(Intent(Intent.ACTION_VIEW, uri))
+                    if (WHATSAPPS_LOJA.none { iniciar(Intent(Intent.ACTION_VIEW, uri).setPackage(it)) }) iniciar(Intent(Intent.ACTION_VIEW, uri))
                 }
                 "Abri o WhatsApp de ${c.nome.split(" ").first()} com a mensagem pronta. Confira e toque em Enviar."
             }
@@ -488,7 +488,7 @@ class Ferramentas(private val activity: Activity, private val memoria: Memoria? 
                 if (aviso != null) {
                     val uri = Uri.parse(aviso)
                     activity.runOnUiThread {
-                        if (WHATSAPPS.none { iniciar(Intent(Intent.ACTION_VIEW, uri).setPackage(it)) }) iniciar(Intent(Intent.ACTION_VIEW, uri))
+                        if (WHATSAPPS_LOJA.none { iniciar(Intent(Intent.ACTION_VIEW, uri).setPackage(it)) }) iniciar(Intent(Intent.ACTION_VIEW, uri))
                     }
                     "$feito Abri o WhatsApp da cliente com o aviso pronto, é só tocar em Enviar."
                 } else feito
@@ -788,7 +788,7 @@ class Ferramentas(private val activity: Activity, private val memoria: Memoria? 
         val link = Loja.linkAgendar(p) ?: return "O pedido $id não tem telefone do cliente cadastrado."
         val uri = Uri.parse(link)
         activity.runOnUiThread {
-            if (WHATSAPPS.none { iniciar(Intent(Intent.ACTION_VIEW, uri).setPackage(it)) }) iniciar(Intent(Intent.ACTION_VIEW, uri))
+            if (WHATSAPPS_LOJA.none { iniciar(Intent(Intent.ACTION_VIEW, uri).setPackage(it)) }) iniciar(Intent(Intent.ACTION_VIEW, uri))
         }
         val nome = p.cliente.trim().split(" ").firstOrNull().orEmpty()
         val aviso = if (p.status == "awaiting_payment") " Atenção: esse pedido ainda está aguardando pagamento." else ""
@@ -1248,6 +1248,8 @@ class Ferramentas(private val activity: Activity, private val memoria: Memoria? 
         private const val YOUTUBE_MUSIC = "com.google.android.apps.youtube.music"
         private const val DEEZER = "deezer.android.app"
         private val WHATSAPPS = listOf("com.whatsapp", "com.whatsapp.w4b")
+        /** Mensagens da loja para clientes saem pelo WhatsApp Business (número da loja); sem ele, pelo comum. */
+        private val WHATSAPPS_LOJA = listOf("com.whatsapp.w4b", "com.whatsapp")
         private val NOMES_MIDIA = mapOf(
             "tocar_pausar" to "Pronto.", "tocar" to "Tocando.", "pausar" to "Pausado.",
             "proxima" to "Próxima música.", "anterior" to "Música anterior.",
