@@ -763,6 +763,8 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
                 decisao.nome == "abrir_arquivo" -> escolherArquivo()
                 decisao.nome == "programar_post" -> programarPost(decisao.args)
                 decisao.nome == "listar_posts" -> listarPosts()
+                decisao.nome == "instagram_conectar" -> conectarInstagram()
+                decisao.nome == "instagram_comentarios" -> comentariosInstagram()
                 decisao.nome == "responder_cliente" -> responderCliente(null)
                 decisao.nome == "caixa_grafico" -> mostrarGrafico()
                 decisao.nome == "enviar_relatorio_erros" -> {
@@ -932,8 +934,10 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
             val mostrar = try {
                 trabalho()
             } catch (e: Exception) {
-                if (e !is java.io.IOException) Registro.anotar(this, "erro", "$estado → " + Registro.resumoDoErro(e).replace("\n", " | "))
-                val aviso: () -> Unit = { responder("Não consegui buscar isso agora. Confira sua internet e tente de novo.") }
+                if (e !is java.io.IOException && e !is Instagram.ErroDoInstagram) Registro.anotar(this, "erro", "$estado → " + Registro.resumoDoErro(e).replace("\n", " | "))
+                val aviso: () -> Unit = {
+                    responder(if (e is Instagram.ErroDoInstagram) e.message.orEmpty() else "Não consegui buscar isso agora. Confira sua internet e tente de novo.")
+                }
                 aviso
             }
             runOnUiThread {
@@ -1847,6 +1851,11 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
                         VigiaDaLoja.definirResumo(this, !VigiaDaLoja.resumoLigado(this))
                         ajustes?.atualizar()
                     },
+                    TelaDeAjustes.Ajuste("Instagram da loja", {
+                        Instagram.usuario(this)?.let {
+                            "Conectado como @$it. Os posts programados saem sozinhos na hora marcada. Pergunte: como está o Instagram, comentários do Instagram."
+                        } ?: "Conecte com o token da Meta para a $n publicar os posts programados sozinha, mostrar seguidores e responder comentários."
+                    }) { conectarInstagram() },
                 )
             ),
             TelaDeAjustes.Secao(
@@ -3021,9 +3030,34 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
             .show()
     }
 
-    /** Copia a legenda e abre o Instagram com a foto (feed ou story, você escolhe lá). */
+    /** Publica já: pela API, se o Instagram estiver conectado; senão abre o Instagram com a foto e a legenda copiada. */
     private fun postarAgora(id: Int) {
         val p = Postagens.achar(this, id) ?: return responder("Esse post não existe mais.")
+        if (!java.io.File(p.foto).exists()) return responder("A foto desse post sumiu. Programe de novo.")
+        if (p.publicado) return responder("Esse post já foi publicado.")
+        if (!Postagens.podePublicarSozinho(this)) return postarPeloApp(p)
+        mudarEstado(Orbe.Estado.PENSANDO, "PUBLICANDO…")
+        Thread {
+            val resultado = try {
+                Result.success(Postagens.publicarPelaApi(this, p))
+            } catch (e: Exception) {
+                Result.failure(e)
+            }
+            runOnUiThread {
+                resultado.onSuccess { link ->
+                    responder(if (p.ehStory) "Story publicado no Instagram." else "Post publicado no Instagram.")
+                    if (link.isNotBlank()) mostrarFontes(listOf(Web.Fonte("Ver o post no Instagram", link)))
+                }.onFailure { e ->
+                    responder("Não consegui publicar sozinha: ${e.message} Vou abrir o Instagram para você postar.")
+                    principal.postDelayed({ postarPeloApp(p) }, 2500)
+                }
+            }
+        }.start()
+    }
+
+    /** Copia a legenda e abre o Instagram com a foto (feed ou story, você escolhe lá). */
+    private fun postarPeloApp(p: Postagens.Post) {
+        val id = p.id
         val arquivo = java.io.File(p.foto)
         if (!arquivo.exists()) return responder("A foto desse post sumiu. Programe de novo.")
         if (p.legenda.isNotBlank()) {
@@ -3042,6 +3076,143 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
             responder(if (p.legenda.isNotBlank()) "Abri o Instagram com a foto. A legenda já está copiada: é só colar e publicar." else "Abri o Instagram com a foto.")
         } catch (e: Exception) {
             responder("Não consegui abrir o Instagram.")
+        }
+    }
+
+    // ----------------------------------------------------------- Instagram da loja (API da Meta)
+    /** Cola o token gerado no painel da Meta; mostra o passo a passo e permite desconectar. */
+    private fun conectarInstagram() {
+        val usuario = Instagram.usuario(this)
+        val campo = EditText(this).apply {
+            hint = "Cole aqui o token (começa com IG…)"
+            minLines = 2
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS or InputType.TYPE_TEXT_FLAG_MULTI_LINE
+            setPadding(dp(24), dp(16), dp(24), dp(16))
+        }
+        val passos = "1. No celular, abra developers.facebook.com/apps e entre com o Facebook.\n" +
+            "2. Abra o app da loja (ou crie um: tipo Empresa, caso de uso Instagram).\n" +
+            "3. Em Instagram → Configuração da API com login do Instagram, toque em Adicionar conta e entre com @desejodeintimidade.\n" +
+            "4. Toque em Gerar token, aceite as permissões, copie e cole aqui."
+        val d = AlertDialog.Builder(this)
+            .setTitle(if (usuario != null) "Instagram: @$usuario" else "Conectar o Instagram")
+            .setMessage((if (usuario != null) "Conectado. Para trocar, cole um token novo.\n\n" else "") + passos)
+            .setView(campo)
+            .setPositiveButton("Conectar", null)
+            .setNeutralButton("Abrir a Meta") { _, _ ->
+                try {
+                    startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(Instagram.COMO_CONECTAR)))
+                } catch (e: Exception) {
+                    responder("Não consegui abrir o navegador.")
+                }
+            }
+            .setNegativeButton(if (usuario != null) "Desconectar" else "Cancelar") { _, _ ->
+                if (usuario != null) {
+                    Instagram.desconectar(this)
+                    ajustes?.atualizar()
+                    responder("Desconectei o Instagram. Os posts programados voltam a chegar como aviso para você postar.")
+                }
+            }
+            .create()
+        d.setOnShowListener {
+            d.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+                val token = campo.text.toString()
+                if (token.isBlank()) {
+                    Toast.makeText(this, "Cole o token primeiro.", Toast.LENGTH_SHORT).show()
+                    return@setOnClickListener
+                }
+                d.getButton(AlertDialog.BUTTON_POSITIVE).isEnabled = false
+                Thread {
+                    val r = try {
+                        Result.success(Instagram.conectar(this, token))
+                    } catch (e: Exception) {
+                        Result.failure(e)
+                    }
+                    runOnUiThread {
+                        d.getButton(AlertDialog.BUTTON_POSITIVE).isEnabled = true
+                        r.onSuccess { conta ->
+                            d.dismiss()
+                            ajustes?.atualizar()
+                            val loja = if (ferramentas.loja.conectada) "" else " Para os posts saírem sozinhos, conecte também a loja nos ajustes (a foto sobe pelo site)."
+                            responder("Instagram conectado: @${conta.usuario}. Agora os posts programados saem sozinhos na hora marcada.$loja Pergunte: como está o Instagram.")
+                        }.onFailure { e -> Toast.makeText(this, e.message ?: "Não deu certo.", Toast.LENGTH_LONG).show() }
+                    }
+                }.start()
+            }
+        }
+        d.show()
+    }
+
+    /** Comentários sem resposta: escolhe um, a IA sugere a resposta, você ajusta e envia. */
+    private fun comentariosInstagram() {
+        if (!Instagram.conectado(this)) return responder(Instagram.SEM_CONTA)
+        comTempoLimite("LENDO COMENTÁRIOS…") {
+            val lista = Instagram.comentariosSemResposta(this)
+            val acao: () -> Unit = {
+                if (lista.isEmpty()) responder("Nenhum comentário esperando resposta nos últimos posts.")
+                else {
+                    responder(if (lista.size == 1) "Tem 1 comentário sem resposta." else "Tem ${lista.size} comentários sem resposta. Escolha um para eu sugerir a resposta.")
+                    escolherComentario(lista)
+                }
+            }
+            acao
+        }
+    }
+
+    private fun escolherComentario(lista: List<Instagram.Comentario>) {
+        val itens = lista.map { c -> "@${c.usuario}: ${c.texto.take(120)}\n· ${Instagram.resumirLegenda(c.legendaDoPost)}" }
+        AlertDialog.Builder(this)
+            .setTitle("Comentários sem resposta")
+            .setItems(itens.toTypedArray()) { _, i -> sugerirRespostaComentario(lista, i) }
+            .setNegativeButton("Fechar", null)
+            .show()
+    }
+
+    private fun sugerirRespostaComentario(lista: List<Instagram.Comentario>, i: Int) {
+        val c = lista[i]
+        val k = chave()
+        val m = modelo()
+        val usarIA = k.isNotBlank() && !modoIndependente()
+        comTempoLimite(if (usarIA) "ESCREVENDO…" else "ABRINDO…") {
+            val sugestao = if (usarIA) {
+                val catalogo = try {
+                    if (ferramentas.loja.conectada) Loja.catalogoParaIA(ferramentas.loja.produtos()) else ""
+                } catch (e: Exception) {
+                    ""
+                }
+                Gemini.respostaComentario(k, m, c.texto, c.usuario, c.legendaDoPost, catalogo)
+            } else null
+            val acao: () -> Unit = {
+                val campo = EditText(this).apply {
+                    setText(sugestao ?: "@${c.usuario} ")
+                    setSelection(text.length)
+                    minLines = 3
+                    inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE or InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
+                    setPadding(dp(24), dp(16), dp(24), dp(16))
+                }
+                responder(if (sugestao != null) "Sugeri uma resposta para @${c.usuario}. Confira e toque em Responder." else "Escreva a resposta para @${c.usuario}.")
+                AlertDialog.Builder(this)
+                    .setTitle("Responder @${c.usuario}")
+                    .setMessage("“${c.texto.take(300)}”")
+                    .setView(campo)
+                    .setPositiveButton("Responder") { _, _ -> enviarRespostaComentario(lista, i, campo.text.toString()) }
+                    .setNegativeButton("Voltar") { _, _ -> escolherComentario(lista) }
+                    .show()
+            }
+            acao
+        }
+    }
+
+    private fun enviarRespostaComentario(lista: List<Instagram.Comentario>, i: Int, texto: String) {
+        if (texto.isBlank()) return
+        val c = lista[i]
+        comTempoLimite("RESPONDENDO…") {
+            Instagram.responderComentario(this, c.id, texto.trim())
+            val resto = lista.filterIndexed { j, _ -> j != i }
+            val acao: () -> Unit = {
+                responder("Respondi @${c.usuario}." + if (resto.isNotEmpty()) " Faltam ${resto.size}." else " Não tem mais comentário esperando.")
+                if (resto.isNotEmpty()) escolherComentario(resto)
+            }
+            acao
         }
     }
 

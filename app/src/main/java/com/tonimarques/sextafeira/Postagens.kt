@@ -14,9 +14,10 @@ import org.json.JSONObject
 import java.io.File
 
 /**
- * Fila de posts do Instagram: foto, legenda e horário. Na hora marcada chega uma notificação;
- * tocando nela a Vênus copia a legenda e abre o Instagram com a foto pronta.
- * (Quando a conta estiver ligada à API da Meta, a publicação passa a ser automática.)
+ * Fila de posts do Instagram: foto, legenda e horário.
+ * Com o Instagram conectado (token da Meta) e a loja conectada, na hora marcada a Vênus publica sozinha:
+ * a foto sobe para o site da loja (o Instagram busca a imagem por um endereço público) e vai para o feed ou story.
+ * Sem conexão, ou se der erro, chega uma notificação; tocando nela a Vênus copia a legenda e abre o Instagram.
  */
 object Postagens {
 
@@ -119,11 +120,9 @@ object Postagens {
         }
     }
 
-    fun avisar(ctx: Context, p: Post, atrasado: Boolean = false) {
+    fun avisar(ctx: Context, p: Post, atrasado: Boolean = false, erro: String? = null) {
         val gerente = ctx.getSystemService(NotificationManager::class.java)
-        gerente.createNotificationChannel(
-            NotificationChannel(CANAL, "Posts do Instagram", NotificationManager.IMPORTANCE_HIGH).apply { description = "Hora de publicar os posts programados" }
-        )
+        criarCanal(gerente)
         val abrir = PendingIntent.getActivity(
             ctx, 8000 + p.id,
             Intent(ctx, MainActivity::class.java).setAction(ACAO_POSTAR).putExtra("id", p.id).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP),
@@ -134,11 +133,12 @@ object Postagens {
         } catch (e: Exception) {
             null
         }
-        val titulo = (if (atrasado) "Post atrasado" else "Hora de postar") + if (p.ehStory) " (story)" else " no Instagram"
+        val titulo = (if (erro != null) "Não consegui postar sozinha" else if (atrasado) "Post atrasado" else "Hora de postar") +
+            if (p.ehStory) " (story)" else " no Instagram"
         val b = Notification.Builder(ctx, CANAL)
             .setSmallIcon(R.drawable.ic_venus_simbolo)
             .setContentTitle(titulo)
-            .setContentText("Toque para abrir o Instagram com a foto. " + p.legenda.take(80))
+            .setContentText((if (erro != null) "$erro Toque para postar pelo app. " else "Toque para abrir o Instagram com a foto. ") + p.legenda.take(80))
             .setContentIntent(abrir)
             .setAutoCancel(true)
             .setCategory(Notification.CATEGORY_REMINDER)
@@ -149,9 +149,91 @@ object Postagens {
         }
     }
 
-    internal fun disparou(ctx: Context, id: Int) {
-        val p = achar(ctx, id) ?: return
-        if (!p.publicado) avisar(ctx, p)
+    internal fun disparou(ctx: Context, id: Int, terminou: () -> Unit = {}) {
+        val p = achar(ctx, id)
+        if (p == null || p.publicado) return terminou()
+        if (!podePublicarSozinho(ctx)) {
+            avisar(ctx, p)
+            return terminou()
+        }
+        Thread {
+            try {
+                val link = publicarPelaApi(ctx, p)
+                avisarPublicado(ctx, p, link)
+            } catch (e: Exception) {
+                Registro.anotar(ctx, "erro", "post automático → ${e.message}")
+                avisar(ctx, p, erro = e.message)
+            } finally {
+                terminou()
+            }
+        }.start()
+    }
+
+    fun podePublicarSozinho(ctx: Context) = Instagram.conectado(ctx) && Loja(ctx).conectada
+
+    /** Sobe a foto para o site e publica pela API. Devolve o link do post ("" em story). */
+    fun publicarPelaApi(ctx: Context, p: Post): String {
+        val original = File(p.foto)
+        if (!original.exists()) throw Instagram.ErroDoInstagram("A foto desse post sumiu.")
+        val bytes = if (p.ehStory) original.readBytes() else ajustarParaFeed(original.readBytes())
+        val url = Loja(ctx).enviarFoto(bytes)
+        val link = Instagram.publicar(ctx, url, p.legenda, p.ehStory)
+        marcarPublicado(ctx, p.id)
+        return link
+    }
+
+    /** O feed só aceita proporção entre 4:5 (vertical) e 1,91:1 (deitada): corta o excesso pelo centro. */
+    fun ajustarParaFeed(jpeg: ByteArray): ByteArray {
+        val b = android.graphics.BitmapFactory.decodeByteArray(jpeg, 0, jpeg.size) ?: return jpeg
+        val (x, y, w, h) = corteParaFeed(b.width, b.height) ?: return jpeg
+        val cortado = android.graphics.Bitmap.createBitmap(b, x, y, w, h)
+        val saida = java.io.ByteArrayOutputStream()
+        cortado.compress(android.graphics.Bitmap.CompressFormat.JPEG, 90, saida)
+        return saida.toByteArray()
+    }
+
+    /** Retângulo (x, y, largura, altura) a manter, ou null se a foto já serve. */
+    fun corteParaFeed(largura: Int, altura: Int): List<Int>? {
+        if (largura <= 0 || altura <= 0) return null
+        val r = largura.toDouble() / altura
+        return when {
+            r < 0.8 -> {
+                val h = Math.round(largura / 0.8).toInt()
+                listOf(0, (altura - h) / 2, largura, h)
+            }
+            r > 1.91 -> {
+                val w = Math.round(altura * 1.91).toInt()
+                listOf((largura - w) / 2, 0, w, altura)
+            }
+            else -> null
+        }
+    }
+
+    private fun avisarPublicado(ctx: Context, p: Post, link: String) {
+        val gerente = ctx.getSystemService(NotificationManager::class.java)
+        criarCanal(gerente)
+        val abrir = PendingIntent.getActivity(
+            ctx, 9000 + p.id,
+            if (link.isNotBlank()) Intent(Intent.ACTION_VIEW, android.net.Uri.parse(link)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            else (ctx.packageManager.getLaunchIntentForPackage("com.instagram.android") ?: Intent(ctx, MainActivity::class.java)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+        val b = Notification.Builder(ctx, CANAL)
+            .setSmallIcon(R.drawable.ic_venus_simbolo)
+            .setContentTitle(if (p.ehStory) "Story publicado ✓" else "Post publicado no Instagram ✓")
+            .setContentText(p.legenda.take(90).ifBlank { "Toque para ver." })
+            .setContentIntent(abrir)
+            .setAutoCancel(true)
+        try {
+            gerente.notify(8000 + p.id, b.build())
+        } catch (e: SecurityException) {
+        }
+    }
+
+    private fun criarCanal(gerente: NotificationManager) {
+        gerente.createNotificationChannel(
+            NotificationChannel(CANAL, "Posts do Instagram", NotificationManager.IMPORTANCE_HIGH).apply { description = "Hora de publicar os posts programados" }
+        )
     }
 }
 
@@ -160,7 +242,11 @@ class AvisoDePost : BroadcastReceiver() {
     override fun onReceive(ctx: Context, intent: Intent) {
         when (intent.action) {
             Intent.ACTION_BOOT_COMPLETED, Intent.ACTION_MY_PACKAGE_REPLACED -> Postagens.reagendarTodos(ctx)
-            else -> Postagens.disparou(ctx, intent.getIntExtra("id", 0))
+            else -> {
+                // publicar pela internet leva alguns segundos: segura o aviso aberto até terminar
+                val pendente = goAsync()
+                Postagens.disparou(ctx, intent.getIntExtra("id", 0)) { pendente.finish() }
+            }
         }
     }
 }

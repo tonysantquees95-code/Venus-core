@@ -557,6 +557,25 @@ class Gemini(
         }
 
 
+        /** Resposta pública a um comentário no Instagram da loja (curta, discreta, chama para o direct ou o WhatsApp). */
+        fun respostaComentario(chave: String, modelo: String, comentario: String, usuario: String, legendaDoPost: String, catalogo: String): String? {
+            if (chave.isBlank()) return null
+            val pedido = "Você responde comentários no Instagram da Desejo de Intimidade, loja de moda íntima e sex shop com entrega discreta " +
+                "em todo o Brasil (site desejo-de-intimidade.floot.app). A resposta é PÚBLICA: seja simpática, curta (1 ou 2 frases), elegante, " +
+                "sem palavras explícitas, no máximo 1 emoji, começando com @$usuario. Se perguntarem preço ou detalhes, responda se estiver no catálogo " +
+                "e convide para chamar no direct ou no WhatsApp para atendimento discreto. Elogio: agradeça com carinho. Reclamação: peça desculpas e " +
+                "chame para o direct. Não invente prazos nem produtos.\n" +
+                "Post comentado: ${legendaDoPost.take(300).ifBlank { "(sem legenda)" }}\n" +
+                (if (catalogo.isNotBlank()) "Catálogo (nome | preço | preço no Pix | estoque | link):\n${catalogo.take(3000)}\n" else "") +
+                "Comentário de @$usuario: $comentario\nResponda só com o texto da resposta."
+            val corpo = JSONObject()
+                .put("contents", JSONArray().put(JSONObject().put("role", "user").put("parts", JSONArray().put(JSONObject().put("text", pedido)))))
+                .put("generationConfig", JSONObject().put("temperature", 0.6))
+                .toString().toByteArray()
+            val json = chamarAvulso(chave, listOf(modelo, "gemini-2.5-flash", "gemini-flash-lite-latest"), corpo) ?: return null
+            return textoBruto(json)?.replace(Regex("[*`#]"), "")?.trim()?.trim('"', '“', '”')?.take(1000)
+        }
+
         private fun partesDoDocumento(doc: Arquivos.Documento, texto: String): JSONArray {
             val partes = JSONArray()
             if (doc.bytes != null) partes.put(imagem(doc.bytes, doc.mime))

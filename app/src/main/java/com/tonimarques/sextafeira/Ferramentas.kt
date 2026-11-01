@@ -57,6 +57,13 @@ class Ferramentas(private val activity: Activity, private val memoria: Memoria? 
     fun declaracoes(): JSONArray = JSONArray()
         .put(
             funcao(
+                "instagram_resumo",
+                "Seguidores e desempenho dos últimos posts do Instagram da loja (curtidas, comentários, post que mais engajou).",
+                emptyList(),
+            )
+        )
+        .put(
+            funcao(
                 "abrir_app", "Abre um aplicativo instalado no celular.", listOf("nome"),
                 "nome" to texto("Nome do app, por exemplo WhatsApp, Instagram, Câmera, Spotify.")
             )
@@ -307,6 +314,8 @@ class Ferramentas(private val activity: Activity, private val memoria: Memoria? 
 
     private fun executarSeguro(nome: String, argumentos: JSONObject): String = try {
         executarAqui(nome, argumentos)
+    } catch (e: Instagram.ErroDoInstagram) {
+        e.message.orEmpty()
     } catch (e: ActivityNotFoundException) {
         "Não encontrei nenhum app no celular capaz de fazer isso."
     } catch (e: SecurityException) {
@@ -380,6 +389,7 @@ class Ferramentas(private val activity: Activity, private val memoria: Memoria? 
         "loja_comparar" -> daLoja { it.comparar() }
         "loja_parados" -> daLoja { it.parados() }
         "pesquisar_preco" -> pesquisarPreco(a.optString("produto"))
+        "instagram_resumo" -> Instagram.resumo(activity)
         "loja_curva_abc" -> daLoja { Gestao.textoABC(Gestao.curvaABC(it.pedidos(), Calendar.getInstance())) }
         "loja_compras" -> daLoja { l ->
             val prazo = if (a.has("prazo")) a.optInt("prazo") else prazoDoFornecedor()
@@ -1242,6 +1252,7 @@ class Ferramentas(private val activity: Activity, private val memoria: Memoria? 
             "loja_retiradas", "loja_estoque_geral", "loja_alterar", "loja_status", "loja_reposicao", "loja_mais_vendidos", "loja_comparar", "loja_parados", "loja_margem", "loja_margens", "loja_lucro", "loja_previsao", "loja_produto", "loja_entregue", "loja_confirmar", "loja_agendar",
             "caixa_resultado", "caixa_equilibrio", "caixa_previsao",
             "pesquisar_preco", "loja_curva_abc", "loja_compras", "loja_recompra", "loja_chamar_cliente", "loja_promo_parados",
+            "instagram_resumo",
         )
 
         private const val SPOTIFY = "com.spotify.music"
