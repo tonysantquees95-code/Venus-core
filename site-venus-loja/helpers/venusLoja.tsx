@@ -185,7 +185,7 @@ const R = {
   parados:
     /\b(?:produtos? parados?|produtos? encalhados?|produtos? sem venda|produtos? que nao (?:vendem|vende|saem|sai)|o que (?:nao )?(?:esta|ta|estao|tao) (?:parado|encalhado|sem vender)|o que nao (?:vende|vendeu|esta vendendo|ta vendendo|sai)|(?:quais|que) produtos? (?:nao )?(?:estao|tao|esta|ta) (?:parados?|encalhados?|sem vender))\b/,
   reposicao:
-    /\b(?:lista de reposicao|reposicao|o que (?:eu |nos )?(?:preciso|precisamos|tenho que|temos que|devo) repor|o que repor|(?:itens|produtos|o que) (?:que )?(?:eu |nos )?(?:foi |foram |ja foi |ja foram )?vendidos?|o que (?:eu |nos |a gente )?vend(?:i|emos|eu)|lista (?:de|dos|das) (?:vendidos|itens vendidos|produtos vendidos|vendas))\b/,
+    /\b(?:lista de reposicao|reposicao|repor|reponho|reabastecer|reabastecimento|o que repor|(?:itens|produtos|o que) (?:que )?(?:eu |nos )?(?:foi |foram |ja foi |ja foram )?vendidos?|o que (?:eu |nos |a gente )?vend(?:i|emos|eu)|lista (?:de|dos|das) (?:vendidos|itens vendidos|produtos vendidos|vendas))\b/,
   somar: new RegExp(
     `^(?:coloca|coloque|bota|bote|poe|adiciona|adicione|acrescenta|acrescente|soma|some|entrou|entraram|chegou|chegaram|` +
       `repoe|reponha|repor|aumenta|aumente|inclui|inclua)(?: mais)? ${QTD}(?: a mais)?(?: (?:no|ao|em) estoque)? ${DE} (.+?)(?: (?:no|ao|em) estoque)?$`,
