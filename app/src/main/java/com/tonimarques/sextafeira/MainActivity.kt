@@ -95,6 +95,10 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         ferramentas = Ferramentas(this, memoria)
         // A busca no Google roda numa thread de fundo, chamada pela ferramenta buscar_na_internet.
         ferramentas.buscador = { pergunta -> gemini?.buscarNaInternet(pergunta) }
+        ferramentas.pesquisadorDePrecos = { produto ->
+            val k = chave()
+            if (k.isBlank() || modoIndependente()) null else Gemini.pesquisarPrecos(k, modelo(), produto)
+        }
         cerebro.apelido = memoria.valor("apelido") ?: "chefe"
         VigiaDaLoja.garantir(this)
         cerebro.carregarAprendidas(memoria.aprendidas())
@@ -398,6 +402,48 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         }
     }
 
+    /**
+     * Executa várias etapas em ordem: as que só consultam ou anotam rodam juntas e a resposta sai numa fala só;
+     * a última (que pode precisar de tela ou de confirmação) vai pelo caminho normal.
+     */
+    private fun executarPlano(partes: List<String>) {
+        val decisoes = partes.map { cerebro.responder(it) }
+        val ultima = decisoes.last()
+        val antes = decisoes.dropLast(1).filterIsInstance<Cerebro.Decisao.Executar>()
+        val final = ultima as? Cerebro.Decisao.Executar
+        val juntaNoFim = final != null && final.nome !in Raciocinio.SO_NO_FIM
+        comTempoLimite("FAZENDO ${decisoes.size} COISAS…") {
+            ferramentas.ultimasFontes = emptyList()
+            val textos = antes.map { d ->
+                Contexto.registrar(d.nome, d.args)
+                ferramentas.executar(d.nome, d.args)
+            }.toMutableList()
+            if (juntaNoFim) {
+                Contexto.registrar(final!!.nome, final.args)
+                textos += ferramentas.executar(final.nome, final.args)
+            }
+            val fontes = ferramentas.ultimasFontes
+            val pendente = ferramentas.pendenteQualquer
+            val acao: () -> Unit = {
+                if (textos.isNotEmpty()) {
+                    adicionarMensagem(textos.joinToString("\n\n"), false)
+                    mostrarFontes(fontes)
+                }
+                if (!juntaNoFim) {
+                    // a última etapa segue o caminho normal (tela, confirmação, IA…); as anteriores ficam escritas acima
+                    mostrarDecisao(ultima, partes.last())
+                } else {
+                    if (pendente != null) {
+                        forcarEscuta = true
+                        mostrarConfirmacaoLoja(textos.last())
+                    }
+                    falar(textos.joinToString(". "))
+                }
+            }
+            acao
+        }
+    }
+
     /** Começa uma conversa nova: tela em branco, a anterior fica arquivada no histórico. */
     private fun comecarConversaNova() {
         memoria.novaConversa()
@@ -608,6 +654,13 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         Contexto.comProduto(pedido)?.let { trocado ->
             val r = ComandosLocais.interpretar(trocado)
             if (r is ComandosLocais.Resultado.Acao && (r.nome.startsWith("loja_") || r.nome == "programar_post")) pedido = trocado
+        }
+        // Vários pedidos numa frase só ("quanto vendi hoje e o que está acabando"): faz um de cada vez
+        Raciocinio.dividir(pedido)?.let { etapas ->
+            topicoAtual = Topicos.classificar(pedido, etapas.first().second)
+            adicionarMensagem(original, true)
+            executarPlano(etapas.map { it.first })
+            return
         }
         val decisao = cerebro.responder(pedido)
         topicoAtual = when (decisao) {
@@ -951,6 +1004,8 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         val assistente = obterGemini()
         when {
             assistente == null -> pesquisarSozinha(pedido, amplo = true, depoisIA = false, motivo = null)
+            // pergunta de raciocínio vai direto para quem pensa (não para a busca rápida)
+            Raciocinio.precisaPensar(pedido) -> consultarIA(pedido)
             Pesquisa.ehPesquisavel(pedido) -> pesquisarSozinha(pedido, amplo = false, depoisIA = true, motivo = null)
             else -> consultarIA(pedido)
         }
@@ -1065,7 +1120,9 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
             ?: return pesquisarSozinha(pedido, amplo = true, depoisIA = false, motivo = null)
         ocupado = true
         val id = ++pedidoAtual
-        mudarEstado(Orbe.Estado.PENSANDO, "PENSANDO…")
+        // Pergunta que pede raciocínio: ela pensa com mais calma (e pode responder mais completo)
+        val pensarMais = Raciocinio.precisaPensar(pedido)
+        mudarEstado(Orbe.Estado.PENSANDO, if (pensarMais) "PENSANDO COM CALMA…" else "PENSANDO…")
         ferramentas.ultimasFontes = emptyList()
 
         principal.postDelayed({
@@ -1075,11 +1132,11 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
                 respostaAtrasada = id
                 responder("A resposta está demorando mais que o normal. Se ela chegar, eu mostro aqui.")
             }
-        }, LIMITE_IA_MS)
+        }, if (pensarMais) LIMITE_IA_PROFUNDO_MS else LIMITE_IA_MS)
 
         Thread {
             val resposta = try {
-                assistente.enviar(pedido)
+                assistente.enviar(pedido, pensarMais)
             } catch (e: Exception) {
                 Gemini.RespostaIA(false, "Algo deu errado: ${e.message}")
             }
@@ -3447,6 +3504,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         private const val PEDIDO_ARQUIVO = 42
         private const val PREF_AVISO_ARQUIVOS = "aviso_arquivos"
         private const val LIMITE_IA_MS = 35_000L
+        private const val LIMITE_IA_PROFUNDO_MS = 90_000L
         private const val ID_AMOSTRA = "amostra"
         private const val MODELO_PADRAO = "gemini-flash-latest"
         private const val STATUS_PADRAO = "TOQUE NO ORBE PARA FALAR"

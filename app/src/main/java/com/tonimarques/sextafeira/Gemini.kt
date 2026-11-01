@@ -33,7 +33,12 @@ class Gemini(
         val tipo: String, val resumo: String, val vencimento: String?, val valorCentavos: Int?, val linhaDigitavel: String?,
     )
 
-    fun enviar(pedido: String): RespostaIA {
+    /** true enquanto responde uma pergunta difícil: pensa mais (orçamento de raciocínio maior) e pode responder mais longo. */
+    @Volatile
+    private var profundo = false
+
+    fun enviar(pedido: String, pensarMais: Boolean = false): RespostaIA {
+        profundo = pensarMais
         val inicio = historico.length()
         val usadas = mutableListOf<Pair<String, JSONObject>>()
         historico.put(
@@ -115,10 +120,11 @@ class Gemini(
 
     private fun instrucoes(): String {
         val agora = SimpleDateFormat("EEEE, dd/MM/yyyy, HH:mm", Locale("pt", "BR")).format(Date())
+        val formato = if (profundo) Raciocinio.INSTRUCOES_PROFUNDAS else
+            "Responda sempre em português do Brasil, de forma curta (até 3 frases) e sem markdown,\nporque a resposta pode ser falada em voz alta."
         return """
             ${Marca.personalidade}
-            Responda sempre em português do Brasil, de forma curta (até 3 frases) e sem markdown,
-            porque a resposta pode ser falada em voz alta.
+            $formato
             Para informações atuais (clima, notícias, avaliações de lojas, preços, horários, resultados),
             use previsao_do_tempo ou buscar_na_internet e responda com o que encontrou, em vez de abrir o navegador.
             Para "o que é" e "quem foi", pode usar resumo_wikipedia.
@@ -227,6 +233,8 @@ class Gemini(
                 "tools",
                 JSONArray().put(JSONObject().put("functionDeclarations", ferramentas.declaracoes()))
             )
+        // Pergunta difícil: mais "tempo de pensar" antes de responder (o modelo raciocina por dentro e confere)
+        if (profundo) corpo.put("generationConfig", JSONObject().put("thinkingConfig", JSONObject().put("thinkingBudget", Raciocinio.ORCAMENTO)))
 
         val bytes = corpo.toString().toByteArray(Charsets.UTF_8)
         var ultimaResposta: Pair<Int, JSONObject>? = null
@@ -249,7 +257,14 @@ class Gemini(
         }
 
         // 1) Modelo em uso, com uma nova tentativa se a rede oscilar ou o servidor estiver ocupado.
-        tentar(modeloAtivo, 1)?.let { return it }
+        tentar(modeloAtivo, 1)?.let { r ->
+            // modelo que não aceita o ajuste de raciocínio: tenta de novo do jeito normal
+            if (profundo && r.first == 400) {
+                profundo = false
+                return chamarApi()
+            }
+            return r
+        }
 
         // 2) Modelo sobrecarregado ou sem cota: passa para outro modelo Flash disponível na chave.
         for (reserva in reservas().take(3)) {
@@ -272,7 +287,7 @@ class Gemini(
         try {
             conexao.requestMethod = "POST"
             conexao.connectTimeout = 8_000
-            conexao.readTimeout = 25_000
+            conexao.readTimeout = if (profundo) 75_000 else 25_000
             conexao.doOutput = true
             conexao.useCaches = false
             conexao.setFixedLengthStreamingMode(bytes.size)
@@ -616,6 +631,38 @@ class Gemini(
             return juntas.map { (eu, t) ->
                 JSONObject().put("role", if (eu) "user" else "model").put("parts", JSONArray().put(JSONObject().put("text", t.take(4000))))
             }
+        }
+
+        /**
+         * Pesquisa no Google (pela busca do Gemini) os preços atuais de um produto em lojas do Brasil.
+         * Devolve o texto com uma oferta por linha ("Loja — R$ 00,00 — observação") e as fontes; null se a busca não estiver liberada.
+         */
+        fun pesquisarPrecos(chave: String, modelo: String, produto: String): Web.Resposta? {
+            if (chave.isBlank()) return null
+            val pedido = "Pesquise na internet os preços atuais, no Brasil, de: $produto. " +
+                "Procure em lojas diferentes (Mercado Livre, Amazon, Shopee, Magazine Luiza, Americanas, Casas Bahia e lojas especializadas). " +
+                "Responda só com até 6 linhas, uma por oferta, exatamente no formato: Loja — R$ 00,00 — observação curta (ex.: frete grátis, kit com 2, tamanho). " +
+                "Use somente preços que aparecem nos resultados da busca; não invente nem estime. Sem markdown e sem outras frases."
+            val corpo = JSONObject()
+                .put("contents", JSONArray().put(JSONObject().put("role", "user").put("parts", JSONArray().put(JSONObject().put("text", pedido)))))
+                .put("tools", JSONArray().put(JSONObject().put("google_search", JSONObject())))
+                .put("generationConfig", JSONObject().put("temperature", 0.1))
+                .toString().toByteArray()
+            val json = chamarAvulso(chave, listOf(modelo, "gemini-2.5-flash", "gemini-flash-latest"), corpo, tempo = 45_000) ?: return null
+            val candidato = json.optJSONArray("candidates")?.optJSONObject(0) ?: return null
+            val partes = candidato.optJSONObject("content")?.optJSONArray("parts") ?: return null
+            val texto = (0 until partes.length()).mapNotNull { partes.optJSONObject(it) }
+                .filter { !it.optBoolean("thought", false) }.joinToString("") { it.optString("text") }.replace(Regex("[*#]"), "").trim()
+            if (texto.isBlank()) return null
+            val fontes = mutableListOf<Web.Fonte>()
+            candidato.optJSONObject("groundingMetadata")?.optJSONArray("groundingChunks")?.let { pedacos ->
+                for (i in 0 until pedacos.length()) {
+                    val web = pedacos.optJSONObject(i)?.optJSONObject("web") ?: continue
+                    val url = web.optString("uri")
+                    if (url.isNotBlank() && fontes.none { it.url == url }) fontes += Web.Fonte(web.optString("title", "loja"), url)
+                }
+            }
+            return Web.Resposta(texto, fontes.take(6))
         }
 
         /** Título curto e resumo de uma conversa encerrada (para achar depois). */

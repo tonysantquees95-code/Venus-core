@@ -13,6 +13,7 @@ object Topicos {
         "abrir_app", "abrir_camera", "abrir_configuracao", "lanterna", "nivel_bateria" -> "Celular"
         "salvar_memoria" -> "Sobre mim"
         "buscar_conversa" -> "Conversa"
+        "pesquisar_preco" -> "Compras"
         "loja_resumo", "loja_pedidos", "loja_acabando", "loja_estoque", "loja_retiradas", "loja_estoque_geral", "loja_alterar", "loja_status", "loja_reposicao", "loja_mais_vendidos", "loja_comparar", "loja_parados", "loja_margem", "loja_margens", "loja_lucro", "loja_previsao", "loja_produto",
         "loja_entregue", "loja_confirmar", "loja_agendar", "loja_curva_abc", "loja_compras", "gestao_prazo", "loja_recompra",
         "loja_chamar_cliente", "loja_datas", "loja_promo_parados" -> "Loja"
