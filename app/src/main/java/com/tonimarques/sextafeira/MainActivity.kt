@@ -3089,10 +3089,11 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
             inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS or InputType.TYPE_TEXT_FLAG_MULTI_LINE
             setPadding(dp(24), dp(16), dp(24), dp(16))
         }
-        val passos = "1. No celular, abra developers.facebook.com/apps e entre com o Facebook.\n" +
-            "2. Abra o app da loja (ou crie um: tipo Empresa, caso de uso Instagram).\n" +
-            "3. Em Instagram → Configuração da API com login do Instagram, toque em Adicionar conta e entre com @desejodeintimidade.\n" +
-            "4. Toque em Gerar token, aceite as permissões, copie e cole aqui."
+        val passos = "1. Toque em Abrir a Meta e entre com o seu Facebook.\n" +
+            "2. Criar app → caso de uso Outro → tipo Empresa → nome Vênus da Loja e seu e-mail.\n" +
+            "3. No produto Instagram, toque em Configurar.\n" +
+            "4. Em Gerar tokens de acesso, toque em Adicionar conta e entre com o Instagram da loja (a conta precisa ser profissional e pública).\n" +
+            "5. Toque em Gerar token, aceite, copie o token e cole aqui."
         val d = AlertDialog.Builder(this)
             .setTitle(if (usuario != null) "Instagram: @$usuario" else "Conectar o Instagram")
             .setMessage((if (usuario != null) "Conectado. Para trocar, cole um token novo.\n\n" else "") + passos)
