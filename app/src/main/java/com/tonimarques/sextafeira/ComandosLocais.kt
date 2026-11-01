@@ -41,6 +41,8 @@ object ComandosLocais {
         // Mudanças na loja ("muda o preço do gel para 29,90") antes das contas, para o número não virar cálculo.
         if (!ehRecado) lojaAlteracao(c)?.let { return it }
         LOJA_CADASTRAR.matchEntire(c)?.let { m -> return cadastro(f.trecho(m.groups[1] ?: m.groups[2]).orEmpty()) }
+        if (EDITAR_FUNDO.containsMatchIn(c)) return Resultado.Acao("editar_fundo", emptyMap())
+        if (LER_NOTA.containsMatchIn(c)) return Resultado.Acao("ler_nota", emptyMap())
         if (!ehRecado) Calculadora.responder(c)?.let { return Resultado.Resposta(it) }
         // Conhecimentos gerais que ela sabe de cor (português, ciências, geografia, matemática)
         if (!ehRecado) Saber.responder(c)?.let { return Resultado.Resposta(it) }
@@ -333,6 +335,15 @@ object ComandosLocais {
             Regex("\\b(mes|mensal|30 dias|trinta dias)\\b").containsMatchIn(c) -> "mes"
             else -> padrao
         }
+        if (LOJA_MARGENS.containsMatchIn(c)) return Resultado.Acao("loja_margens", emptyMap())
+        LOJA_MARGEM.firstNotNullOfOrNull { it.matchEntire(c) }?.let { m ->
+            val prod = f.trecho(m.groups[1]).orEmpty().trim()
+            val chaveProd = normalizar(prod)
+            if (!Regex("^(?:(?:de |d[oa] |n[oa] |deste |desta |neste |nesta )?(?:hoje|ontem|semana|mes|mes passado|esta semana|este mes|essa semana|esse mes))$").matches(chaveProd) && prod.length >= 3) {
+                return Resultado.Acao("loja_margem", mapOf("produto" to prod))
+            }
+        }
+        if (LOJA_LUCRO.containsMatchIn(c)) return Resultado.Acao("loja_lucro", mapOf("periodo" to periodo("mes")))
         if (LOJA_MAIS_VENDIDOS.containsMatchIn(c)) return Resultado.Acao("loja_mais_vendidos", mapOf("periodo" to periodo("mes")))
         if (LOJA_COMPARAR.containsMatchIn(c)) return Resultado.Acao("loja_comparar", emptyMap())
         if (LOJA_PARADOS.containsMatchIn(c)) return Resultado.Acao("loja_parados", emptyMap())
@@ -420,6 +431,13 @@ object ComandosLocais {
         LOJA_VENDI.matchEntire(c)?.let { m -> return acao("estoque_tirar", m.groupValues[2], m.groupValues[1].toInt()) }
         LOJA_DEFINIR_A.matchEntire(c)?.let { m -> return acao("estoque_definir", m.groupValues[1], m.groupValues[2].toInt()) }
         LOJA_DEFINIR_B.matchEntire(c)?.let { m -> return acao("estoque_definir", m.groupValues[2], m.groupValues[1].toInt()) }
+        for ((ordem, regra) in LOJA_CUSTO) {
+            val m = regra.matchEntire(c) ?: continue
+            val (prod, valor, extra) = if (ordem == 0) Triple(m.groupValues[1], m.groupValues[2], m.groupValues[3])
+            else Triple(m.groupValues[3], m.groupValues[1], m.groupValues[2])
+            val v = centavos(valor, extra) ?: continue
+            return acao("custo", prod.replace(Regex("\\s+(?:cada|a unidade|por unidade)$"), ""), v)
+        }
         LOJA_FIM_PROMO.matchEntire(c)?.let { m -> return acao("fim_promocao", m.groupValues[1].ifBlank { m.groupValues[2] }) }
         LOJA_PROMO_PCT.matchEntire(c)?.let { m -> return acao("promocao_pct", m.groupValues[2], m.groupValues[1].toInt()) }
         for (regra in LOJA_PROMO) {
@@ -835,7 +853,15 @@ object ComandosLocais {
         "^(?:responde|responda|responder|responde ai|responda ai) (?:pra|para|pro|a|ao|o|a) (?:o |a )?(.+?),? (?:que|dizendo que|falando que|dizendo|falando|:) (.+)$"
     )
     private val RESPONDER = Regex("^(?:responde|responda|responder|responde ai|responda ai)(?: que| dizendo que| falando que|:|,)? (.+)$")
-    private val LOJA_CADASTRAR = Regex(
+    private val EDITAR_FUNDO = Regex(
+        "\\b(?:(?:troca|troque|trocar|muda|mude|mudar|tira|tire|tirar|remove|remova|remover|apaga|apague|edita|edite|editar|coloca|coloque|poe) (?:o |um )?fundo|" +
+            "fundo (?:da|de uma|dessa|desta) foto|edita(?:r)? (?:a |uma )?foto(?: do produto)?|editor de fotos?)\\b"
+    )
+    private val LER_NOTA = Regex(
+        "\\b(?:(?:le|leia|ler|lanca|lance|lancar|registra|registre|registrar|cadastra|cadastre|cadastrar|importa|importe|importar|processa|processe) (?:a |uma |essa |esta )?(?:nota|notinha|nota fiscal|compra|cupom)|" +
+            "nota (?:de compra|fiscal da compra|do fornecedor)|(?:entrou|chegou) (?:a )?mercadoria|compra do fornecedor)\\b"
+    )
+        private val LOJA_CADASTRAR = Regex(
         "^(?:cadastra|cadastre|cadastrar|adiciona|adicione|cria|crie|inclui|inclua|registra|registre)(?: um| o| uma)? (?:novo )?produto(?: novo)?" +
             "(?:(?: chamado| com o nome| de nome|:|,)? (.+))?$|^(?:novo produto|cadastro de produto|cadastrar produto)(?:[:,]? (.+))?$"
     )
@@ -862,6 +888,28 @@ object ComandosLocais {
     )
     private val CANCELAR_LEMBRETE = Regex(
         "^(?:cancela|cancele|apaga|apague|remove|remova|tira|tire|exclui|exclua|esquece|esqueca)(?: o| os| todos os)? lembretes?(?: (?:de|do|da|sobre|para|pra) (.+))?$"
+    )
+    /** 0: produto antes do valor; 1: valor antes do produto. */
+    private val LOJA_CUSTO = listOf(
+        0 to Regex("^(?:o )?(?:custo|preco de custo|valor de custo|custo unitario) (?:de|do|da|dos|das) (.+?) (?:e|eh|foi|fica|ficou|sai|saiu|passa a ser) (?:de )?$VALOR$"),
+        0 to Regex(
+            "^(?:muda|mude|altera|altere|atualiza|atualize|coloca|coloque|define|defina|corrige|corrija|poe|bota|cadastra|cadastre|registra|registre|anota|anote) " +
+                "o (?:custo|preco de custo|valor de custo) (?:de|do|da|dos|das) (.+?) (?:para|pra|em|como|de|por) $VALOR$"
+        ),
+        0 to Regex("^(?:o |a |os |as )?(.+?) (?:me )?custou $VALOR(?: cada| a unidade| por unidade)?$"),
+        1 to Regex("^(?:eu )?paguei $VALOR (?:no|na|nos|nas|em|pelo|pela|pelos|pelas|por|cada) (.+?)$"),
+    )
+    private val LOJA_MARGENS = Regex(
+        "\\b(?:margem media|margem de lucro media|margem (?:de lucro )?(?:media )?(?:dos|das|de todos os) produtos|media de margem|margem geral|" +
+            "(?:quais|que) produtos? (?:me )?(?:da|dao|tem|deixam?) (?:menos|menor|pouco) (?:lucro|margem)|menores margens|menor margem|produtos sem custo)\\b"
+    )
+    private val LOJA_MARGEM = listOf(
+        Regex("^(?:qual (?:e |eh )?(?:a |o )?)?(?:margem de lucro|margem|lucro) (?:de|do|da|dos|das|no|na|nos|nas|neste|nesta|nesse|nessa|deste|desta|desse|dessa|em cima do|em cima da|sobre o|sobre a) (.+?)(?: que (?:eu )?(?:vendi|vendo))?$"),
+        Regex("^quanto (?:eu )?(?:lucro|ganho|ganhei|lucrei) (?:no|na|com o|com a|com|em cima do|em cima da|por|em cada|em) (.+?)(?: vendido| que (?:eu )?(?:vendo|vendi))?$"),
+    )
+    private val LOJA_LUCRO = Regex(
+        "\\b(?:(?:qual|quanto) (?:foi |e |eh |esta |ta )?(?:o )?(?:meu |nosso )?lucro|quanto (?:eu |nos |a gente )?(?:lucrei|lucramos|lucrou|ganhei|ganhamos)|" +
+            "lucro (?:de |d[oa] |n[oa] |desta |deste |dessa |desse )?(?:hoje|ontem|semana|mes)|meu lucro|nosso lucro)\\b"
     )
     private val LOJA_MAIS_VENDIDOS = Regex(
         "\\b(?:mais vendidos?|que mais (?:vende|vendeu|vendem|venderam|sai|saiu|saem|sairam)|campeoes de venda|top \\d* ?(?:produtos|vendas)|ranking (?:de|das|dos) (?:vendas|produtos))\\b"
