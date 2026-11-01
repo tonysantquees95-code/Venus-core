@@ -345,6 +345,60 @@ class Gemini(
             }
         }
 
+        /**
+         * Escreve a descrição de um produto da loja a partir da foto (e do nome), em tom discreto.
+         * Chamada avulsa, sem histórico. Devolve null se não der (sem chave, sem internet ou bloqueio do Google).
+         */
+        fun descreverProduto(chave: String, modelo: String, foto: ByteArray?, nome: String, categoria: String): String? {
+            if (chave.isBlank()) return null
+            val pedido = "Você escreve descrições de produtos para a loja online Desejo de Intimidade (moda íntima e sex shop). " +
+                "Tom elegante, acolhedor e discreto, sem palavras vulgares nem explícitas. " +
+                "Escreva em português do Brasil a descrição do produto \"$nome\" (categoria: $categoria), com no máximo 280 caracteres: " +
+                "o que é, para que serve e o principal diferencial. Sem emojis, sem preço, sem markdown, sem aspas. " +
+                (if (foto != null) "Use a foto para descrever cor, formato e acabamento." else "")
+            val partes = JSONArray()
+            if (foto != null) {
+                partes.put(JSONObject().put("inline_data", JSONObject().put("mime_type", "image/jpeg")
+                    .put("data", android.util.Base64.encodeToString(foto, android.util.Base64.NO_WRAP))))
+            }
+            partes.put(JSONObject().put("text", pedido))
+            val corpo = JSONObject()
+                .put("contents", JSONArray().put(JSONObject().put("role", "user").put("parts", partes)))
+                .put("generationConfig", JSONObject().put("maxOutputTokens", 400).put("temperature", 0.6))
+                .toString().toByteArray()
+            for (m in listOf(modelo.trim().removePrefix("models/"), "gemini-2.5-flash", "gemini-flash-lite-latest").distinct()) {
+                var conexao: HttpURLConnection? = null
+                try {
+                    conexao = URL("https://generativelanguage.googleapis.com/v1beta/models/$m:generateContent").openConnection() as HttpURLConnection
+                    conexao.requestMethod = "POST"
+                    conexao.connectTimeout = 10_000
+                    conexao.readTimeout = 40_000
+                    conexao.doOutput = true
+                    conexao.setRequestProperty("Content-Type", "application/json; charset=utf-8")
+                    conexao.setRequestProperty("Connection", "close")
+                    conexao.setRequestProperty("x-goog-api-key", chave)
+                    conexao.outputStream.use { it.write(corpo) }
+                    if (conexao.responseCode !in 200..299) continue
+                    val json = JSONObject(conexao.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() })
+                    val texto = textoDaResposta(json) ?: continue
+                    return texto.take(300)
+                } catch (e: Exception) {
+                    continue
+                } finally {
+                    conexao?.disconnect()
+                }
+            }
+            return null
+        }
+
+        /** Junta os textos da primeira resposta do Gemini e limpa sobras de formatação. */
+        fun textoDaResposta(json: JSONObject): String? {
+            val partes = json.optJSONArray("candidates")?.optJSONObject(0)?.optJSONObject("content")?.optJSONArray("parts") ?: return null
+            val texto = (0 until partes.length()).mapNotNull { partes.optJSONObject(it)?.optString("text") }.joinToString(" ")
+                .replace(Regex("[*_#`\"“”]"), "").replace(Regex("\\s+"), " ").trim()
+            return texto.ifBlank { null }
+        }
+
         private fun versao(nome: String): Double =
             Regex("gemini-(\\d+(?:\\.\\d+)?)").find(nome)?.groupValues?.get(1)?.toDoubleOrNull() ?: 0.0
     }

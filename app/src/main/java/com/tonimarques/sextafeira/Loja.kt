@@ -184,6 +184,40 @@ class Loja(private val contexto: Context) {
 
     fun prepararStatus(id: Int, status: String, rastreio: String?): Preparo = montarStatus(pedidos(), id, status, rastreio)
 
+    /** Envia a foto do produto para o site e devolve o endereço dela. */
+    fun enviarFoto(jpeg: ByteArray): String {
+        val r = enviar("/_api/admin/upload", JSONObject().put("contentType", "image/jpeg").put("sizeBytes", jpeg.size))
+        val destino = r.optString("presignedUrl").ifBlank { throw ErroDaLoja("O site não aceitou a foto.") }
+        val url = r.optString("url").ifBlank { throw ErroDaLoja("O site não devolveu o endereço da foto.") }
+        val c = URL(destino).openConnection() as HttpURLConnection
+        try {
+            c.requestMethod = "PUT"
+            c.connectTimeout = 15_000
+            c.readTimeout = 60_000
+            c.doOutput = true
+            c.setFixedLengthStreamingMode(jpeg.size)
+            val cabecalhos = r.optJSONObject("headers")
+            var temTipo = false
+            cabecalhos?.keys()?.forEach { k ->
+                c.setRequestProperty(k, cabecalhos.optString(k))
+                if (k.equals("Content-Type", true)) temTipo = true
+            }
+            if (!temTipo) c.setRequestProperty("Content-Type", "image/jpeg")
+            c.outputStream.use { it.write(jpeg) }
+            if (c.responseCode !in 200..299) throw ErroDaLoja("A foto não subiu (erro ${c.responseCode}).")
+        } finally {
+            c.disconnect()
+        }
+        return url
+    }
+
+    /** Cria um produto novo no site. */
+    fun cadastrar(p: NovoProduto): String {
+        enviar("/_api/admin/product_save", corpoDoNovo(p))
+        val onde = if (p.ativo) "já aparece no site" else "ficou escondido do site até você mostrar (diga: mostra o ${p.nome} no site)"
+        return "Pronto: ${p.nome} cadastrado" + (p.precoCentavos?.let { " por ${dinheiro(it)}" } ?: "") + " e $onde."
+    }
+
     /** Aplica uma alteração já confirmada. */
     fun aplicar(a: Alteracao): String {
         when (a.tipo) {
@@ -262,6 +296,12 @@ class Loja(private val contexto: Context) {
     data class Produto(
         val id: Int, val nome: String, val ativo: Boolean, val estoque: Int?, val precoCentavos: Int?,
         val precoAntigo: Int? = null, val bruto: JSONObject? = null,
+    )
+
+    /** Produto novo para cadastrar (o que veio da fala e do formulário). */
+    data class NovoProduto(
+        val nome: String, val categoria: String, val descricao: String?, val precoCentavos: Int?,
+        val estoque: Int?, val imagemUrl: String?, val ativo: Boolean,
     )
 
     /** Uma mudança esperando o "sim". [valor]: quantidade final do estoque ou preço em centavos. */
@@ -479,6 +519,48 @@ class Loja(private val contexto: Context) {
         }
 
         private const val CONFIRMA = " Diga sim para confirmar ou não para cancelar."
+
+        /** As categorias do site (id, nome). */
+        val CATEGORIAS = listOf(
+            "geis_lubrificantes" to "Géis e lubrificantes",
+            "excitantes_retardantes" to "Excitantes e retardantes",
+            "vibradores" to "Vibradores",
+            "masturbadores" to "Masturbadores",
+            "fantasias_lingerie" to "Fantasias e lingerie",
+            "acessorios_bdsm" to "Acessórios BDSM",
+            "kits_casais" to "Kits para casais",
+        )
+
+        /** Adivinha a categoria pelo nome do produto (o formulário deixa trocar). */
+        fun categoriaProvavel(nome: String): String {
+            val n = ComandosLocais.normalizar(nome)
+            return when {
+                Regex("\\b(gel|geis|lubrificante|oleo|massagem|hidratante)").containsMatchIn(n) -> "geis_lubrificantes"
+                Regex("\\b(excitante|retardante|afrodisiaco|spray|esquenta|esfria|vibrante)").containsMatchIn(n) -> "excitantes_retardantes"
+                Regex("\\b(vibrador|bullet|protese|estimulador|sugador|varinha|ovo)").containsMatchIn(n) -> "vibradores"
+                Regex("\\b(masturbador|anel|egg|lanterna)").containsMatchIn(n) -> "masturbadores"
+                Regex("\\b(lingerie|calcinha|sutia|body|camisola|fantasia|conjunto|cinta|meia|baby ?doll|corset|espartilho)").containsMatchIn(n) -> "fantasias_lingerie"
+                Regex("\\b(algema|chicote|venda|mordaca|coleira|plug|bdsm|corda|palmatoria)").containsMatchIn(n) -> "acessorios_bdsm"
+                Regex("\\b(kit|casal|casais|presente|jogo|dado|baralho)").containsMatchIn(n) -> "kits_casais"
+                else -> "geis_lubrificantes"
+            }
+        }
+
+        /** Corpo do product_save para um produto novo (sem id). */
+        fun corpoDoNovo(p: NovoProduto): JSONObject = JSONObject()
+            .put("category", p.categoria)
+            .put("name", p.nome.trim().take(120))
+            .put("description", p.descricao?.trim()?.take(300)?.ifBlank { null } ?: JSONObject.NULL)
+            .put("priceCents", p.precoCentavos ?: JSONObject.NULL)
+            .put("compareAtCents", JSONObject.NULL)
+            .put("specifications", JSONObject.NULL)
+            .put("stockQuantity", p.estoque?.coerceAtLeast(0) ?: JSONObject.NULL)
+            .put("weightGrams", JSONObject.NULL)
+            .put("widthCm", JSONObject.NULL)
+            .put("heightCm", JSONObject.NULL)
+            .put("lengthCm", JSONObject.NULL)
+            .put("imageUrl", p.imagemUrl ?: JSONObject.NULL)
+            .put("active", p.ativo)
 
         /** Campos que o painel exige para salvar um produto (o site troca o produto inteiro). */
         private val CAMPOS_PRODUTO = listOf(

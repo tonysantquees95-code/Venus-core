@@ -40,6 +40,7 @@ object ComandosLocais {
         // Contas, conversões, datas, tradução, CEP...: antes do clima ("30 graus em fahrenheit" é conversão).
         // Mudanças na loja ("muda o preço do gel para 29,90") antes das contas, para o número não virar cálculo.
         if (!ehRecado) lojaAlteracao(c)?.let { return it }
+        LOJA_CADASTRAR.matchEntire(c)?.let { m -> return cadastro(f.trecho(m.groups[1] ?: m.groups[2]).orEmpty()) }
         if (!ehRecado) Calculadora.responder(c)?.let { return Resultado.Resposta(it) }
         // Conhecimentos gerais que ela sabe de cor (português, ciências, geografia, matemática)
         if (!ehRecado) Saber.responder(c)?.let { return Resultado.Resposta(it) }
@@ -827,6 +828,28 @@ object ComandosLocais {
         "^(?:responde|responda|responder|responde ai|responda ai) (?:pra|para|pro|a|ao|o|a) (?:o |a )?(.+?),? (?:que|dizendo que|falando que|dizendo|falando|:) (.+)$"
     )
     private val RESPONDER = Regex("^(?:responde|responda|responder|responde ai|responda ai)(?: que| dizendo que| falando que|:|,)? (.+)$")
+    private val LOJA_CADASTRAR = Regex(
+        "^(?:cadastra|cadastre|cadastrar|adiciona|adicione|cria|crie|inclui|inclua|registra|registre)(?: um| o| uma)? (?:novo )?produto(?: novo)?" +
+            "(?:(?: chamado| com o nome| de nome|:|,)? (.+))?$|^(?:novo produto|cadastro de produto|cadastrar produto)(?:[:,]? (.+))?$"
+    )
+
+    /** "cadastra o produto Gel de Morango 60ml por 29,90 com 10 unidades" → nome, preço e estoque para o formulário. */
+    fun cadastro(resto: String): Resultado {
+        var r = resto.trim()
+        val args = mutableMapOf<String, Any>()
+        Regex("(?:,? (?:com|e) )?(\\d{1,4}) (?:unidades?|pecas?|no estoque|em estoque)").find(normalizar(r))?.let { m ->
+            args["estoque"] = m.groupValues[1].toInt()
+            r = (r.substring(0, m.range.first) + r.substring(m.range.last + 1)).trim()
+        }
+        Regex("(?:,? (?:por|a|custando|preco de|valor de) )$VALOR").find(normalizar(r))?.let { m ->
+            centavos(m.groupValues[1], m.groupValues[2])?.let { args["preco"] = it }
+            r = (r.substring(0, m.range.first) + r.substring(m.range.last + 1)).trim()
+        }
+        val nome = r.trim(',', ' ', '.').replace(Regex("^(?i)(?:chamado|com o nome|de nome)\\s+"), "")
+        if (nome.isNotBlank()) args["nome"] = nome.replaceFirstChar { it.uppercase() }
+        return Resultado.Acao("loja_cadastrar", args)
+    }
+
     private val LISTAR_LEMBRETES = Regex(
         "\\b(?:quais (?:sao )?(?:os )?(?:meus )?lembretes|(?:os )?meus lembretes|tenho (?:algum )?lembrete|lista (?:de |dos )?lembretes|lembretes de hoje|que lembretes)\\b"
     )

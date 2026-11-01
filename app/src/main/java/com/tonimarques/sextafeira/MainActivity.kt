@@ -496,6 +496,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
             is Cerebro.Decisao.Executar -> when {
                 decisao.nome == "pesquisar_na_web" ->
                     buscaInteligente(decisao.args["termo"]?.toString().orEmpty().ifBlank { pedido })
+                decisao.nome == "loja_cadastrar" -> abrirCadastro(decisao.args)
                 decisao.nome in Ferramentas.USAM_REDE -> executarNaRede(decisao.nome, decisao.args)
                 decisao.nome == "controlar_midia" || decisao.nome == "tocar_musica" -> {
                     // A música estava pausada só para ouvir você: devolve o som e só então aperta o botão.
@@ -1391,6 +1392,13 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
     @Deprecated("API clássica, suficiente para este app")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == PEDIDO_FOTO_CAMERA || requestCode == PEDIDO_FOTO_GALERIA) {
+            if (resultCode == RESULT_OK) {
+                val uri = if (requestCode == PEDIDO_FOTO_GALERIA) data?.data else fotoDaCamera
+                if (uri != null) cadastroFoto?.invoke(uri)
+            }
+            return
+        }
         if (requestCode != PEDIDO_VOZ) return
         val texto = data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)?.firstOrNull()
         if (resultCode == RESULT_OK && !texto.isNullOrBlank()) {
@@ -1916,6 +1924,194 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         ajustes?.atualizar()
     }
 
+    // ----------------------------------------------------------- cadastro de produto
+    private var fotoDaCamera: Uri? = null
+    private var cadastroFoto: ((Uri) -> Unit)? = null
+
+    /** Formulário de produto novo, já preenchido com o que foi falado. Foto pela câmera ou galeria e descrição pela IA. */
+    private fun abrirCadastro(args: Map<String, Any>) {
+        val loja = ferramentas.loja
+        if (!loja.conectada) {
+            responder("A loja ainda não está conectada. Abra os ajustes e toque em Conectar à loja.")
+            return
+        }
+        val nomeFalado = args["nome"]?.toString().orEmpty()
+        responder(if (nomeFalado.isBlank()) "Vamos cadastrar. Preencha o produto na tela." else "Vamos cadastrar $nomeFalado. Confira os dados na tela e adicione a foto.")
+        var foto: ByteArray? = null
+
+        val caixa = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(20), dp(8), dp(20), 0)
+        }
+        fun rotulo(t: String) = TextView(this).apply {
+            text = t
+            textSize = 13f
+            setPadding(0, dp(10), 0, dp(2))
+        }
+        fun campo(valor: String, dica: String, tipo: Int) = EditText(this).apply {
+            setText(valor)
+            hint = dica
+            inputType = tipo
+        }
+        val nome = campo(nomeFalado, "Ex.: Gel de massagem morango 60ml", InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_SENTENCES)
+        val categorias = Loja.CATEGORIAS
+        val categoria = android.widget.Spinner(this).apply {
+            adapter = android.widget.ArrayAdapter(this@MainActivity, android.R.layout.simple_spinner_dropdown_item, categorias.map { it.second })
+            setSelection(categorias.indexOfFirst { it.first == Loja.categoriaProvavel(nomeFalado) }.coerceAtLeast(0))
+        }
+        val preco = campo((args["preco"] as? Int)?.let { "%d,%02d".format(it / 100, it % 100) }.orEmpty(), "Ex.: 29,90",
+            InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_FLAG_DECIMAL)
+        val estoque = campo((args["estoque"] as? Int)?.toString().orEmpty(), "Quantas unidades (deixe vazio se não controla)", InputType.TYPE_CLASS_NUMBER)
+        val descricao = campo("", "Descrição curta (até 300 letras)", InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE or InputType.TYPE_TEXT_FLAG_CAP_SENTENCES).apply {
+            minLines = 2
+            maxLines = 5
+            filters = arrayOf(android.text.InputFilter.LengthFilter(300))
+        }
+        val previa = android.widget.ImageView(this).apply {
+            adjustViewBounds = true
+            maxHeight = dp(180)
+            visibility = View.GONE
+        }
+        val avisoFoto = TextView(this).apply { textSize = 12f }
+        val botoesFoto = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        val tirar = android.widget.Button(this).apply { text = "Tirar foto" }
+        val galeria = android.widget.Button(this).apply { text = "Da galeria" }
+        botoesFoto.addView(tirar, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+        botoesFoto.addView(galeria, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+        val ia = android.widget.Button(this).apply { text = "Escrever a descrição com IA" }
+        val mostrar = android.widget.Switch(this).apply {
+            text = "Já mostrar no site"
+            isChecked = false
+            setPadding(0, dp(10), 0, dp(6))
+        }
+
+        caixa.addView(rotulo("Nome"))
+        caixa.addView(nome)
+        caixa.addView(rotulo("Categoria"))
+        caixa.addView(categoria)
+        caixa.addView(rotulo("Preço (R$)"))
+        caixa.addView(preco)
+        caixa.addView(rotulo("Estoque"))
+        caixa.addView(estoque)
+        caixa.addView(rotulo("Foto"))
+        caixa.addView(botoesFoto)
+        caixa.addView(previa)
+        caixa.addView(avisoFoto)
+        caixa.addView(rotulo("Descrição"))
+        caixa.addView(descricao)
+        if (chave().isNotBlank()) caixa.addView(ia)
+        caixa.addView(mostrar)
+
+        cadastroFoto = { uri ->
+            avisoFoto.text = "Preparando a foto…"
+            Thread {
+                val bytes = FotoProvider.prepararParaEnviar(this, uri)
+                runOnUiThread {
+                    if (bytes == null) {
+                        avisoFoto.text = "Não consegui ler essa foto. Tente outra."
+                    } else {
+                        foto = bytes
+                        previa.setImageBitmap(android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size))
+                        previa.visibility = View.VISIBLE
+                        avisoFoto.text = "Foto pronta (${bytes.size / 1024} KB)."
+                    }
+                }
+            }.start()
+        }
+        tirar.setOnClickListener {
+            val (_, uri) = FotoProvider.novaFoto(this)
+            fotoDaCamera = uri
+            val i = Intent(android.provider.MediaStore.ACTION_IMAGE_CAPTURE).putExtra(android.provider.MediaStore.EXTRA_OUTPUT, uri)
+                .addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION or Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            i.clipData = android.content.ClipData.newRawUri("foto", uri)
+            try {
+                startActivityForResult(i, PEDIDO_FOTO_CAMERA)
+            } catch (e: Exception) {
+                Toast.makeText(this, "Não achei o app da câmera.", Toast.LENGTH_LONG).show()
+            }
+        }
+        galeria.setOnClickListener {
+            try {
+                startActivityForResult(Intent(Intent.ACTION_GET_CONTENT).setType("image/*").addCategory(Intent.CATEGORY_OPENABLE), PEDIDO_FOTO_GALERIA)
+            } catch (e: Exception) {
+                Toast.makeText(this, "Não achei a galeria.", Toast.LENGTH_LONG).show()
+            }
+        }
+        ia.setOnClickListener {
+            val n = nome.text.toString().trim()
+            if (n.isBlank()) {
+                Toast.makeText(this, "Escreva o nome antes.", Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
+            ia.isEnabled = false
+            ia.text = "Escrevendo…"
+            val cat = categorias[categoria.selectedItemPosition].second
+            val k = chave()
+            val m = modelo()
+            val f = foto
+            Thread {
+                val t = Gemini.descreverProduto(k, m, f, n, cat)
+                runOnUiThread {
+                    ia.isEnabled = true
+                    ia.text = "Escrever a descrição com IA"
+                    if (t != null) descricao.setText(t)
+                    else Toast.makeText(this, "A IA não conseguiu escrever agora. Escreva você mesmo ou tente de novo.", Toast.LENGTH_LONG).show()
+                }
+            }.start()
+        }
+
+        val dialogo = AlertDialog.Builder(this)
+            .setTitle("Novo produto")
+            .setView(ScrollView(this).apply { addView(caixa) })
+            .setPositiveButton("Cadastrar", null)
+            .setNegativeButton("Cancelar", null)
+            .create()
+        dialogo.setOnDismissListener { cadastroFoto = null }
+        dialogo.setOnShowListener {
+            dialogo.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+                val n = nome.text.toString().trim()
+                if (n.isBlank()) {
+                    Toast.makeText(this, "Informe o nome do produto.", Toast.LENGTH_SHORT).show()
+                    return@setOnClickListener
+                }
+                val textoPreco = preco.text.toString().trim()
+                val centavos = if (textoPreco.isBlank()) null else ComandosLocais.centavos(textoPreco.replace(Regex("[^0-9,.]"), ""))
+                if (textoPreco.isNotBlank() && (centavos == null || centavos <= 0)) {
+                    Toast.makeText(this, "Confira o preço (ex.: 29,90).", Toast.LENGTH_SHORT).show()
+                    return@setOnClickListener
+                }
+                if (mostrar.isChecked && centavos == null) {
+                    Toast.makeText(this, "Para mostrar no site, informe o preço.", Toast.LENGTH_LONG).show()
+                    return@setOnClickListener
+                }
+                val novo = Loja.NovoProduto(
+                    nome = n,
+                    categoria = categorias[categoria.selectedItemPosition].first,
+                    descricao = descricao.text.toString().trim().ifBlank { null },
+                    precoCentavos = centavos,
+                    estoque = estoque.text.toString().trim().toIntOrNull(),
+                    imagemUrl = null,
+                    ativo = mostrar.isChecked,
+                )
+                val fotoFinal = foto
+                dialogo.dismiss()
+                comTempoLimite("CADASTRANDO…") {
+                    val r = try {
+                        val url = fotoFinal?.let { loja.enviarFoto(it) }
+                        loja.cadastrar(novo.copy(imagemUrl = url))
+                    } catch (e: Loja.ErroDaLoja) {
+                        "Não consegui cadastrar: ${e.message}"
+                    } catch (e: Exception) {
+                        "Não consegui falar com a loja agora. Confira a internet e tente de novo."
+                    }
+                    val acao: () -> Unit = { responder(r) }
+                    acao
+                }
+            }
+        }
+        dialogo.show()
+    }
+
     // ----------------------------------------------------------- atualização automática
     private val atualizador by lazy { Atualizador(this) }
 
@@ -2139,6 +2335,8 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         private const val PEDIDO_VOZ = 10
         private const val PEDIDO_MICROFONE = 11
         private const val PEDIDO_NOTIFICACOES = 12
+        private const val PEDIDO_FOTO_CAMERA = 40
+        private const val PEDIDO_FOTO_GALERIA = 41
         private const val LIMITE_IA_MS = 35_000L
         private const val ID_AMOSTRA = "amostra"
         private const val MODELO_PADRAO = "gemini-flash-latest"
