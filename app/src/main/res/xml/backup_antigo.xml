@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Backup automático do Google (Android 11 ou anterior): só a memória e os ajustes da Vênus. -->
+<full-backup-content>
+    <include domain="database" path="sexta.db" />
+    <include domain="sharedpref" path="config.xml" />
+</full-backup-content>

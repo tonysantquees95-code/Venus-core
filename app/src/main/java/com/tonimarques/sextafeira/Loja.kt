@@ -167,6 +167,8 @@ class Loja(private val contexto: Context) {
 
     fun maisVendidos(periodo: String): String = montarMaisVendidos(pedidos(), periodo, Calendar.getInstance())
 
+    fun resumoDaManha(): String = montarResumoDaManha(pedidos(), produtos(), Calendar.getInstance())
+
     fun comparar(): String = montarComparacao(pedidos(), Calendar.getInstance())
 
     fun parados(): String = montarParados(pedidos(), produtos(), Calendar.getInstance())
@@ -778,6 +780,25 @@ class Loja(private val contexto: Context) {
             val mais = if (lista.size > 8) "\nE mais ${lista.size - 8}." else ""
             return "${plural(parados.size, "produto sem venda", "produtos sem venda")} nos últimos $dias dias:\n$linhas$mais\n" +
                 "Dá para colocar em promoção, por exemplo: dá 10% de desconto no, e o nome do produto."
+        }
+
+        /** Para o "bom dia": o que entrou desde ontem à noite e o que tem para fazer hoje. */
+        fun montarResumoDaManha(pedidos: List<Pedido>, produtos: List<Produto>, agora: Calendar): String {
+            val desde = (agora.clone() as Calendar).apply {
+                add(Calendar.DAY_OF_YEAR, -1); set(Calendar.HOUR_OF_DAY, 20); set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0)
+            }.timeInMillis
+            val novos = vendidosNoIntervalo(pedidos, desde, Long.MAX_VALUE)
+            var texto = if (novos.isEmpty()) "Na loja, nenhuma venda nova desde ontem à noite."
+            else "Na loja, desde ontem à noite: ${plural(novos.size, "venda", "vendas")}, ${dinheiro(novos.sumOf { it.totalCentavos })}."
+            val separar = pedidos.count { it.status == "paid" || it.status == "preparing" }
+            val retirar = pedidos.count { it.entrega == "pickup" && it.status in setOf("paid", "preparing", "shipped") }
+            val acabando = produtos.count { it.ativo && it.estoque != null && it.estoque <= ESTOQUE_BAIXO }
+            val tarefas = mutableListOf<String>()
+            if (separar > 0) tarefas += plural(separar, "pedido para separar", "pedidos para separar")
+            if (retirar > 0) tarefas += plural(retirar, "retirada para agendar", "retiradas para agendar")
+            if (acabando > 0) tarefas += plural(acabando, "produto acabando ou esgotado", "produtos acabando ou esgotados")
+            if (tarefas.isNotEmpty()) texto += " Para hoje: ${tarefas.joinToString(", ")}."
+            return texto
         }
 
         /** Resumo da noite: como foi o dia e o que fica para amanhã. */

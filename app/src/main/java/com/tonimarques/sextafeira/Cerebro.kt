@@ -83,6 +83,13 @@ class Cerebro(
         }
         palpite = null
 
+        // Lembrete com horário ("me lembra amanhã às 10 de...") vem antes da memória ("lembra que eu gosto de...")
+        Lembretes.interpretar(frase.original)?.let {
+            return Decisao.Executar("criar_lembrete", mapOf("quando" to it.quando, "texto" to it.texto))
+        }
+        // "Bom dia": a rotina da manhã (clima, lembretes do dia e a loja)
+        if (BOM_DIA.matches(bruto)) return Decisao.Executar("rotina_bom_dia", emptyMap())
+
         // Memória: "lembra que...", "meu nome é...", "o que você sabe sobre mim"...
         ComandosMemoria.interpretar(entrada)?.let { return Decisao.Memoria(it) }
 
@@ -288,6 +295,8 @@ class Cerebro(
     }
 
     companion object {
+        private val BOM_DIA = Regex("^(?:(?:ola|oi|ei) )?bom dia(?: (?:venus|sexta feira|sexta|chefe|meu amor|querida))?$")
+
         const val CONFIANTE = 0.8
         const val PROVAVEL = 0.55
 
