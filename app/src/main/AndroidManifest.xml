@@ -78,6 +78,13 @@
             </intent-filter>
         </activity>
 
+        <!-- Onde a câmera salva a foto do produto novo -->
+        <provider
+            android:name=".FotoProvider"
+            android:authorities="com.tonimarques.sextafeira.fotos"
+            android:exported="false"
+            android:grantUriPermissions="true" />
+
         <!-- Lê as mensagens do WhatsApp nas notificações, quando o usuário pede -->
         <service
             android:name=".LeitorDeMensagens"
