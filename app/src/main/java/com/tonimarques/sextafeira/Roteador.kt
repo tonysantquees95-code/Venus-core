@@ -59,6 +59,7 @@ object Roteador {
         Triple("caixa_previsao", "previsão de faturamento e despesas do próximo mês", ""),
         Triple("caixa_grafico", "gráfico de vendas e despesas", ""),
         Triple("caixa_relatorio", "relatório financeiro em PDF", "periodo: mes|mes_passado|semana"),
+        Triple("pesquisar_preco", "pesquisar o preço de um produto em outras lojas e sites (Mercado Livre, Amazon, Shopee…)", "produto: nome do produto"),
         Triple("buscar_conversa", "voltar a uma conversa antiga sobre um assunto (lembra do que falamos sobre…)", "assunto: só o tema, em poucas palavras"),
         Triple("loja_curva_abc", "curva ABC: quais produtos sustentam o faturamento", ""),
         Triple("loja_compras", "o que comprar do fornecedor agora (ponto de pedido)", "prazo: dias que o fornecedor leva para entregar, se dito"),
@@ -198,7 +199,7 @@ object Roteador {
             "loja_estoque" to listOf("produto"), "loja_produto" to listOf("produto"), "loja_margem" to listOf("produto"),
             "loja_agendar" to listOf("pedido"), "loja_entregue" to listOf("pedido"), "loja_status" to listOf("pedido", "status"),
             "loja_alterar" to listOf("tipo", "produto"), "caixa_lancar" to listOf("tipo", "valor"),
-            "caixa_fixa" to listOf("descricao", "valor"), "gestao_prazo" to listOf("dias"), "buscar_conversa" to listOf("assunto"), "loja_chamar_cliente" to listOf("nome"), "caixa_remover_fixa" to listOf("trecho"), "financeiro_calculo" to listOf("tipo", "a"),
+            "caixa_fixa" to listOf("descricao", "valor"), "gestao_prazo" to listOf("dias"), "buscar_conversa" to listOf("assunto"), "pesquisar_preco" to listOf("produto"), "loja_chamar_cliente" to listOf("nome"), "caixa_remover_fixa" to listOf("trecho"), "financeiro_calculo" to listOf("tipo", "a"),
         )
         for (k in listOf("a", "b", "c")) {
             val v = args[k]

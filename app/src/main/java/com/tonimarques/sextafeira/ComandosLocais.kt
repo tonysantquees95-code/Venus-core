@@ -40,6 +40,7 @@ object ComandosLocais {
         // Contas, conversões, datas, tradução, CEP...: antes do clima ("30 graus em fahrenheit" é conversão).
         // Mudanças na loja ("muda o preço do gel para 29,90") antes das contas, para o número não virar cálculo.
         conversaAntiga(f)?.let { return it }
+        precoNaInternet(f)?.let { return it }
         if (!ehRecado) gestao(f)?.let { return it }
         if (!ehRecado) lojaAlteracao(c)?.let { return it }
         LOJA_CADASTRAR.matchEntire(c)?.let { m -> return cadastro(f.trecho(m.groups[1] ?: m.groups[2]).orEmpty()) }
@@ -959,6 +960,28 @@ object ComandosLocais {
         }
         return null
     }
+
+    /** "Quanto custa o gel KY no Mercado Livre", "pesquisa o preço do vibrador bullet": preços em outras lojas. */
+    fun precoNaInternet(f: Frase): Resultado? {
+        val c = f.chave.trimEnd('.', '!', '?')
+        for (r in PRECO_INTERNET) {
+            val m = r.matchEntire(c) ?: continue
+            val g = m.groups.drop(1).firstOrNull { it != null && it.value.isNotBlank() } ?: continue
+            val produto = f.trecho(g).orEmpty().trim().replace(Regex("^(?:o|a|os|as|um|uma)\\s+", RegexOption.IGNORE_CASE), "")
+            if (produto.length < 3) continue
+            return Resultado.Acao("pesquisar_preco", mapOf("produto" to produto))
+        }
+        return null
+    }
+
+    private const val ONDE = "(?:no mercado livre|na amazon|na shopee|na magalu|no magazine luiza|na americanas|na internet|nas lojas|nas outras lojas|em outras lojas|online|nos concorrentes|na concorrencia|nos sites|no google|nos marketplaces|no mercado)"
+    private val PRECO_INTERNET = listOf(
+        Regex("^(?:quanto|qual (?:e )?(?:o )?(?:preco|valor)(?: de| do| da)?) ?(?:custa|custam|esta|estao|ta|sai|saem|cobram|e|eh|de|do|da)? (?:o |a |os |as |um |uma )?(.+?) $ONDE$"),
+        Regex("^(?:pesquisa|pesquise|pesquisar|busca|busque|buscar|procura|procure|ve|veja|ver|compara|compare|comparar|cota|cote|levanta|levante)(?: (?:o|os|pra mim o|pra mim os|para mim o|para mim os))? (?:preco|precos|valor|valores|preco de mercado) (?:d[oae]s?|para|de um|de uma) (.+?)(?: $ONDE)?$"),
+        Regex("^(?:qual|quais) (?:e )?(?:o |os )?(?:menor preco|menores precos|preco mais barato|melhor preco) (?:d[oae]s?|para|de um|de uma) (.+?)(?: $ONDE)?$"),
+        Regex("^onde (?:eu )?(?:compro|encontro|acho|tem) (?:o |a |os |as |um |uma )?(.+?) mais barat[oa]s?(?: $ONDE)?$"),
+        Regex("^(?:quanto|por quanto) (?:os concorrentes|a concorrencia|as outras lojas|outras lojas) (?:cobram|vendem|estao cobrando|estao vendendo|cobra|vende) (?:pelo|pela|pelos|pelas|o|a|os|as) (.+)$"),
+    )
 
     private val CONVERSA_ANTIGA = listOf(
         Regex("^(?:(?:voce|vc|tu) )?(?:se )?(?:lembra|lembras|recorda|lembrou)(?: (?:d[oa]|de|da gente))?(?: (?:aquilo|aquela conversa|aquele assunto))?(?: o)? (?:que|q) (?:a gente |nos |eu e voce |tu e eu |voce e eu )?(?:falamos|conversamos|combinamos|comentamos|vimos|discutimos|planejamos|pesquisamos|falei|conversei|te falei|te contei|te perguntei|perguntei|conversou|falou|comentou|combinou)(?: (?:sobre|de|do|da|dos|das|a respeito de|em relacao a))? (.+)$"),

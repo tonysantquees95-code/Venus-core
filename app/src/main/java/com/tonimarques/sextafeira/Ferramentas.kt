@@ -378,6 +378,7 @@ class Ferramentas(private val activity: Activity, private val memoria: Memoria? 
         "loja_mais_vendidos" -> daLoja { it.maisVendidos(a.optString("periodo", "mes")) }
         "loja_comparar" -> daLoja { it.comparar() }
         "loja_parados" -> daLoja { it.parados() }
+        "pesquisar_preco" -> pesquisarPreco(a.optString("produto"))
         "loja_curva_abc" -> daLoja { Gestao.textoABC(Gestao.curvaABC(it.pedidos(), Calendar.getInstance())) }
         "loja_compras" -> daLoja { l ->
             val prazo = if (a.has("prazo")) a.optInt("prazo") else prazoDoFornecedor()
@@ -616,6 +617,36 @@ class Ferramentas(private val activity: Activity, private val memoria: Memoria? 
     val loja by lazy { Loja(activity) }
 
     /** Consulta a loja. Os dados ficam no celular (estas ferramentas não são oferecidas ao Gemini). */
+    /** Pesquisa de preços na internet (definida pela tela, que tem a chave do Gemini). Roda fora da thread principal. */
+    var pesquisadorDePrecos: ((String) -> Web.Resposta?)? = null
+
+    private fun pesquisarPreco(produto: String): String {
+        if (produto.isBlank()) return "De qual produto você quer saber o preço?"
+        val link = Precos.linkShopping(produto)
+        val r = try {
+            pesquisadorDePrecos?.invoke(produto)
+        } catch (e: Exception) {
+            null
+        }
+        val ofertas = r?.let { Precos.lerOfertas(it.texto) }.orEmpty()
+        if (ofertas.isEmpty()) {
+            ultimasFontes = listOf(Web.Fonte("Comparar preços de $produto no Google Shopping", link))
+            return if (pesquisadorDePrecos == null) "Para eu pesquisar os preços sozinha, configure a chave do Gemini. Deixei o link do Google Shopping para $produto aqui embaixo."
+            else "Não consegui ler preços confiáveis de $produto agora. Deixei o link do Google Shopping aqui embaixo para você comparar."
+        }
+        ultimasFontes = r!!.fontes + Web.Fonte("Mais preços no Google Shopping", link)
+        var t = Precos.textoOfertas(produto, ofertas)
+        if (loja.conectada) {
+            try {
+                val p = Loja.acharProdutos(loja.produtos(), produto).firstOrNull()
+                val preco = p?.precoCentavos
+                if (p != null && preco != null) Precos.comparar(p.nome, preco, p.custoCentavos, ofertas)?.let { t += " $it" }
+            } catch (e: Exception) {
+            }
+        }
+        return t
+    }
+
     private fun prazoDoFornecedor() = activity.getSharedPreferences("gestao", 0).getInt("prazo_fornecedor", 7)
 
     /** Pedidos e produtos da loja para as contas do caixa (vazios se a loja não estiver conectada). Roda fora da thread principal. */
@@ -1209,7 +1240,7 @@ class Ferramentas(private val activity: Activity, private val memoria: Memoria? 
             "rotina_bom_dia", "responder_mensagem", "confirmar_resposta",
             "loja_retiradas", "loja_estoque_geral", "loja_alterar", "loja_status", "loja_reposicao", "loja_mais_vendidos", "loja_comparar", "loja_parados", "loja_margem", "loja_margens", "loja_lucro", "loja_previsao", "loja_produto", "loja_entregue", "loja_confirmar", "loja_agendar",
             "caixa_resultado", "caixa_equilibrio", "caixa_previsao",
-            "loja_curva_abc", "loja_compras", "loja_recompra", "loja_chamar_cliente", "loja_promo_parados",
+            "pesquisar_preco", "loja_curva_abc", "loja_compras", "loja_recompra", "loja_chamar_cliente", "loja_promo_parados",
         )
 
         private const val SPOTIFY = "com.spotify.music"
