@@ -1186,7 +1186,14 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
 
         Thread {
             val resposta = try {
-                assistente.enviar(pedido, pensarMais)
+                // decisão de negócio: vai junto o retrato da loja em números (sem dados de clientes)
+                val comDados = if (pensarMais && Panorama.sobreNegocio(pedido) && ferramentas.loja.conectada) try {
+                    val (pedidos, produtos) = ferramentas.dadosDoCaixa()
+                    Panorama.anexar(pedido, Panorama.montar(pedidos, produtos, Financas.lancamentos(this), Financas.fixas(this), java.util.Calendar.getInstance()))
+                } catch (e: Exception) {
+                    pedido
+                } else pedido
+                assistente.enviar(comDados, pensarMais)
             } catch (e: Exception) {
                 Gemini.RespostaIA(false, "Algo deu errado: ${e.message}")
             }
