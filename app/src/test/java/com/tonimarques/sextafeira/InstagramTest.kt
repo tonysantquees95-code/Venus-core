@@ -31,6 +31,21 @@ class InstagramTest {
         assertNotEquals("instagram_conectar", acao("abre o Instagram"))
     }
 
+    @Test fun seguimentoDoPost() {
+        assertEquals("postar_agora", acao("Pode postar como está"))
+        assertEquals("postar_agora", acao("posta agora"))
+        assertEquals("postar_agora", acao("pode publicar"))
+        assertEquals("postar_agora", acao("publica já"))
+        assertNotEquals("postar_agora", acao("posta um story do gel"))
+        val m = ComandosLocais.REPROGRAMAR_POST.matchEntire("mudar para hoje as 19h")!!
+        assertEquals("hoje as 19h", m.groupValues[1])
+        assertEquals("amanha as 10h", ComandosLocais.REPROGRAMAR_POST.matchEntire("muda o post para amanha as 10h")!!.groupValues[1])
+        assertEquals("feed", ComandosLocais.TIPO_POST.find("poste no feed se nao consegue no story")!!.groupValues[1])
+        assertEquals("story", ComandosLocais.TIPO_POST.find("troca para story")!!.groupValues[1])
+        assertEquals("https://desejo-de-intimidade.floot.app/_cdn/x.jpg", Loja.enderecoCompleto("/_cdn/x.jpg"))
+        assertEquals("https://a.com/x.jpg", Loja.enderecoCompleto("https://a.com/x.jpg"))
+    }
+
     @Test fun tipoDeToken() {
         assertTrue(Instagram.ehFacebook(Instagram.limparToken(" EAAGm0PX4ZCpsBAxyz ")))
         assertTrue(!Instagram.ehFacebook("IGAAabc123"))

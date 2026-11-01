@@ -56,7 +56,7 @@ object Raciocinio {
     /** Ações que pedem tela ou confirmação: só podem ser a última etapa de um plano. */
     val SO_NO_FIM = setOf(
         "loja_alterar", "loja_entregue", "loja_status", "loja_promo_parados", "loja_cadastrar", "editar_fundo", "ler_nota",
-        "abrir_arquivo", "programar_post", "listar_posts", "instagram_conectar", "instagram_comentarios", "responder_cliente", "caixa_grafico", "caixa_relatorio",
+        "abrir_arquivo", "programar_post", "listar_posts", "instagram_conectar", "instagram_comentarios", "postar_agora", "responder_cliente", "caixa_grafico", "caixa_relatorio",
         "buscar_conversa", "pesquisar_na_web", "tocar_musica", "controlar_midia", "loja_chamar_cliente", "abrir_app",
         "abrir_site", "abrir_mapa", "fazer_ligacao", "enviar_whatsapp", "enviar_sms",
     )

@@ -254,7 +254,7 @@ class Loja(private val contexto: Context) {
         } finally {
             c.disconnect()
         }
-        return url
+        return enderecoCompleto(url)
     }
 
     /** Cria um produto novo no site. */
@@ -382,6 +382,8 @@ class Loja(private val contexto: Context) {
     data class Preparo(val texto: String, val alteracao: Alteracao?)
 
     companion object {
+        /** "/_cdn/…" → "https://desejo-de-intimidade.floot.app/_cdn/…" (o Instagram precisa do endereço completo). */
+        fun enderecoCompleto(url: String): String = if (url.startsWith("/")) SITE + url else url
         const val SITE = "https://desejo-de-intimidade.floot.app"
         private const val COOKIE = "floot_built_app_session"
         private const val ALIAS = "venus_loja"

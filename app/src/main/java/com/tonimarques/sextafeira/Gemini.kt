@@ -128,6 +128,9 @@ class Gemini(
             Para informações atuais (clima, notícias, avaliações de lojas, preços, horários, resultados),
             use previsao_do_tempo ou buscar_na_internet e responda com o que encontrou, em vez de abrir o navegador.
             Para "o que é" e "quem foi", pode usar resumo_wikipedia.
+            Você publica no Instagram da loja sozinha (feed e story) quando o Instagram está conectado nos ajustes:
+            os posts programados saem na hora marcada. Nunca diga que não consegue publicar; se o usuário pedir para
+            postar agora, diga para ele falar "posta agora".
             Quando o usuário contar algo duradouro sobre ele (gostos, rotina, pessoas, planos), use salvar_memoria.
             Use o que você sabe sobre ele para personalizar as respostas, sem repetir isso à toa.
             Se a busca na internet não estiver disponível e a pergunta for sobre algo atual (lançamentos,

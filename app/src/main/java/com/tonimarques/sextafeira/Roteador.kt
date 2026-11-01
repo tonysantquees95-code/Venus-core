@@ -44,6 +44,7 @@ object Roteador {
         Triple("loja_cadastrar", "cadastrar produto novo", "nome; preco: centavos; estoque: unidades (opcionais)"),
         Triple("programar_post", "programar post ou story no Instagram", "tipo: feed|story; produto: nome (opcional)"),
         Triple("listar_posts", "ver os posts programados", ""),
+        Triple("postar_agora", "publicar agora no Instagram o post programado", ""),
         Triple("instagram_conectar", "conectar ou trocar o token do Instagram da loja", ""),
         Triple("instagram_resumo", "seguidores e desempenho do Instagram da loja", ""),
         Triple("instagram_comentarios", "ver e responder comentários do Instagram", ""),
