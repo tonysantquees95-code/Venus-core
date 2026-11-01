@@ -49,11 +49,14 @@ async function carregarLoja(): Promise<Dados> {
     createdAt: data(x.createdAt) ?? new Date(0),
     paidAt: data(x.paidAt),
     trackingCode: x.trackingCode ? String(x.trackingCode) : null,
+    discountCents: Number(x.discountCents ?? 0),
+    shippingCents: Number(x.shippingCents ?? 0),
     items: Array.isArray(x.items)
       ? (x.items as Record<string, unknown>[]).map((i) => ({
           name: String(i.name ?? ""),
           quantity: Number(i.quantity ?? 1),
           unitPriceCents: Number(i.unitPriceCents ?? 0),
+          productId: i.productId === null || i.productId === undefined ? null : Number(i.productId),
         }))
       : [],
   }));
@@ -78,11 +81,12 @@ async function aplicar(a: VLAlteracao): Promise<void> {
     case "ativar":
     case "desativar":
     case "promocao":
-    case "fim_promocao": {
+    case "fim_promocao":
+    case "custo": {
       // relê o produto na hora, para não desfazer outra mudança feita pelo painel
       const atual = (await carregarLoja()).produtos.find((p) => p.id === a.produto.id);
       if (!atual) throw new Error(`Não achei mais ${a.produto.name} na loja.`);
-      const corpo = venusLoja.corpoDoProduto(atual.bruto, a.tipo, a.tipo === "preco" || a.tipo === "promocao" ? a.valor : undefined);
+      const corpo = venusLoja.corpoDoProduto(atual.bruto, a.tipo, a.tipo === "preco" || a.tipo === "promocao" || a.tipo === "custo" ? a.valor : undefined);
       if (!corpo) throw new Error(`Não consegui ler todos os dados de ${a.produto.name}. Faça pelo painel.`);
       await pedirAoPainel("/_api/admin/product_save", corpo);
       return;

@@ -6,7 +6,7 @@
  */
 
 // ------------------------------------------------------------------ tipos
-export type VLItem = { name: string; quantity: number; unitPriceCents: number };
+export type VLItem = { name: string; quantity: number; unitPriceCents: number; productId?: number | null };
 export type VLPedido = {
   id: number;
   status: string;
@@ -18,6 +18,8 @@ export type VLPedido = {
   paidAt: Date | null;
   trackingCode: string | null;
   items: VLItem[];
+  discountCents?: number;
+  shippingCents?: number;
 };
 export type VLProduto = {
   id: number;
@@ -46,13 +48,16 @@ export type VLIntencao =
   | { tipo: "mais_vendidos"; periodo: VLPeriodo }
   | { tipo: "comparar" }
   | { tipo: "parados" }
+  | { tipo: "margem"; produto: string }
+  | { tipo: "margens" }
+  | { tipo: "lucro"; periodo: VLPeriodo }
   | { tipo: "novidades" }
   | { tipo: "ajuda" }
   | { tipo: "saudacao" }
   | { tipo: "obrigado" };
 
 export type VLMudanca =
-  | "estoque_somar" | "estoque_tirar" | "estoque_definir" | "preco" | "ativar" | "desativar" | "promocao" | "promocao_pct" | "fim_promocao";
+  | "estoque_somar" | "estoque_tirar" | "estoque_definir" | "preco" | "ativar" | "desativar" | "promocao" | "promocao_pct" | "fim_promocao" | "custo";
 export type VLPeriodo = "hoje" | "ontem" | "semana" | "mes";
 
 /** Uma mudança esperando o "sim". valor: quantidade final do estoque ou preço em centavos. */
@@ -62,6 +67,7 @@ export type VLAlteracao =
   | { tipo: "ativar" | "desativar"; produto: VLProduto }
   | { tipo: "promocao"; produto: VLProduto; valor: number }
   | { tipo: "fim_promocao"; produto: VLProduto }
+  | { tipo: "custo"; produto: VLProduto; valor: number }
   | { tipo: "entregue"; pedido: VLPedido }
   | { tipo: "status"; pedido: VLPedido; status: "paid" | "preparing" | "shipped"; rastreio: string | null };
 
@@ -153,7 +159,27 @@ const RASTREIO =
   "(?:,? (?:com )?(?:o )?(?:codigo de rastreio|codigo de rastreamento|codigo do rastreio|rastreio|rastreamento|codigo)(?: e)?:? ?([a-z0-9 ]{8,40}))?";
 const PRECO_DE = "(?: de (?:r\\$ ?)?\\d{1,6}(?:[.,]\\d{1,2})?(?: ?reais)?)?";
 
+/** Nome do campo de custo no site (só no painel). */
+export const CAMPO_CUSTO = "costCents";
+const SEM_CAMPO_CUSTO = "O site ainda não tem o campo de preço de custo. Assim que ele for criado no painel, eu passo a guardar e calcular a margem.";
+const custoDe = (p: VLProduto): number | null => (typeof p.bruto?.[CAMPO_CUSTO] === "number" ? (p.bruto[CAMPO_CUSTO] as number) : null);
+const temCampoCusto = (ps: VLProduto[]) => ps.some((p) => p.bruto && CAMPO_CUSTO in p.bruto);
+
 const R = {
+  custo: [
+    [0, new RegExp(`^(?:o )?(?:custo|preco de custo|valor de custo|custo unitario) (?:de|do|da|dos|das) (.+?) (?:e|eh|foi|fica|ficou|sai|saiu|passa a ser) (?:de )?${VALOR}$`)],
+    [0, new RegExp(`^(?:muda|mude|altera|altere|atualiza|atualize|coloca|coloque|define|defina|corrige|corrija|poe|bota|cadastra|cadastre|registra|registre|anota|anote) o (?:custo|preco de custo|valor de custo) (?:de|do|da|dos|das) (.+?) (?:para|pra|em|como|de|por) ${VALOR}$`)],
+    [0, new RegExp(`^(?:o |a |os |as )?(.+?) (?:me )?custou ${VALOR}(?: cada| a unidade| por unidade)?$`)],
+    [1, new RegExp(`^(?:eu )?paguei ${VALOR} (?:no|na|nos|nas|em|pelo|pela|pelos|pelas|por|cada) (.+?)$`)],
+  ] as [number, RegExp][],
+  margens:
+    /\b(?:margem media|margem de lucro media|margem (?:de lucro )?(?:media )?(?:dos|das|de todos os) produtos|media de margem|margem geral|(?:quais|que) produtos? (?:me )?(?:da|dao|tem|deixam?) (?:menos|menor|pouco) (?:lucro|margem)|menores margens|menor margem|produtos sem custo)\b/,
+  margem: [
+    /^(?:qual (?:e |eh )?(?:a |o )?)?(?:margem de lucro|margem|lucro) (?:de|do|da|dos|das|no|na|nos|nas|neste|nesta|nesse|nessa|deste|desta|desse|dessa|em cima do|em cima da|sobre o|sobre a) (.+?)(?: que (?:eu )?(?:vendi|vendo))?$/,
+    /^quanto (?:eu )?(?:lucro|ganho|ganhei|lucrei) (?:no|na|com o|com a|com|em cima do|em cima da|por|em cada|em) (.+?)(?: vendido| que (?:eu )?(?:vendo|vendi))?$/,
+  ],
+  lucro:
+    /\b(?:(?:qual|quanto) (?:foi |e |eh |esta |ta )?(?:o )?(?:meu |nosso )?lucro|quanto (?:eu |nos |a gente )?(?:lucrei|lucramos|lucrou|ganhei|ganhamos)|lucro (?:de |d[oa] |n[oa] |desta |deste |dessa |desse )?(?:hoje|ontem|semana|mes)|meu lucro|nosso lucro)\b/,
   status: [
     ["shipped", [
       new RegExp(`^${MARCAR}${PEDIDO_N},? (?:como |para |pra )?(?:ja )?(?:foi |esta |ta )?(?:enviado|despachado|postado|mandado)${RASTREIO}$`),
@@ -296,6 +322,13 @@ function alteracaoEm(c: string): VLIntencao | null {
   if (m) return alterar("estoque_definir", m[1], parseInt(m[2], 10));
   m = c.match(R.definirB);
   if (m) return alterar("estoque_definir", m[2], parseInt(m[1], 10));
+  for (const [ordem, r] of R.custo) {
+    const m = c.match(r);
+    if (!m) continue;
+    const [prod, valor, extra] = ordem === 0 ? [m[1], m[2], m[3]] : [m[3], m[1], m[2]];
+    const v = centavos(valor, extra ?? "");
+    if (v !== null) return alterar("custo", prod.replace(/\s+(?:cada|a unidade|por unidade)$/, ""), v);
+  }
   const fim = c.match(R.fimPromo);
   if (fim) return alterar("fim_promocao", fim[1] || fim[2]);
   const pct = c.match(R.promoPct);
@@ -333,6 +366,15 @@ function consultaEm(c: string): VLIntencao | null {
   }
   const periodo = (padrao: VLPeriodo): VLPeriodo =>
     /\bhoje\b/.test(c) ? "hoje" : /\bontem\b/.test(c) ? "ontem" : /\b(?:semana|7 dias|sete dias)\b/.test(c) ? "semana" : /\b(?:mes|mensal|30 dias|trinta dias)\b/.test(c) ? "mes" : padrao;
+  if (R.margens.test(c)) return { tipo: "margens" };
+  for (const r of R.margem) {
+    const m = c.match(r);
+    if (!m) continue;
+    const prod = m[1].trim();
+    if (!/^(?:(?:de |d[oa] |n[oa] |deste |desta |neste |nesta )?(?:hoje|ontem|semana|mes|mes passado|esta semana|este mes|essa semana|esse mes))$/.test(prod) && prod.length >= 3)
+      return { tipo: "margem", produto: prod };
+  }
+  if (R.lucro.test(c)) return { tipo: "lucro", periodo: periodo("mes") };
   if (R.maisVendidos.test(c)) return { tipo: "mais_vendidos", periodo: periodo("mes") };
   if (R.comparar.test(c)) return { tipo: "comparar" };
   if (R.parados.test(c)) return { tipo: "parados" };
@@ -633,12 +675,13 @@ const CAMPOS_PRODUTO = [
  */
 function corpoDoProduto(
   bruto: Record<string, unknown>,
-  mudanca: "preco" | "ativar" | "desativar" | "promocao" | "fim_promocao",
+  mudanca: "preco" | "ativar" | "desativar" | "promocao" | "fim_promocao" | "custo",
   valor?: number,
 ): Record<string, unknown> | null {
   if (!bruto || CAMPOS_PRODUTO.some((k) => !(k in bruto))) return null;
   const corpo: Record<string, unknown> = {};
   for (const k of CAMPOS_PRODUTO) corpo[k] = bruto[k] === undefined ? null : bruto[k];
+  if (CAMPO_CUSTO in bruto) corpo[CAMPO_CUSTO] = bruto[CAMPO_CUSTO] ?? null; // não apaga o custo ao mudar outra coisa
   const preco = typeof bruto.priceCents === "number" ? bruto.priceCents : null;
   const antigo = typeof bruto.compareAtCents === "number" ? bruto.compareAtCents : null;
   switch (mudanca) {
@@ -655,6 +698,10 @@ function corpoDoProduto(
       corpo.compareAtCents = cheio;
       break;
     }
+    case "custo":
+      if (!(CAMPO_CUSTO in bruto) || valor === undefined) return null;
+      corpo[CAMPO_CUSTO] = valor;
+      break;
     case "fim_promocao":
       if (preco === null || antigo === null || antigo <= preco) return null;
       corpo.priceCents = antigo;
@@ -728,6 +775,18 @@ function prepararAlteracao(produtos: VLProduto[], mudanca: VLMudanca, falado: st
       texto += " No site aparece o preço antigo riscado. Produto em promoção não tem o desconto extra do Pix.";
       if (off >= 50) texto += " É um desconto grande, confira.";
       return { texto: texto + CONFIRMA, alteracao: { tipo: "promocao", produto: p, valor: novo } };
+    }
+    case "custo": {
+      if (valor === null || valor <= 0) return { texto: "O custo precisa ser maior que zero." };
+      if (!(CAMPO_CUSTO in (p.bruto ?? {}))) return { texto: SEM_CAMPO_CUSTO };
+      const antes = custoDe(p);
+      let texto = antes === null ? `Cadastrar o custo de ${p.name} em ${dinheiro(valor)}?` : `Mudar o custo de ${p.name} de ${dinheiro(antes)} para ${dinheiro(valor)}?`;
+      if (p.priceCents !== null)
+        texto +=
+          valor < p.priceCents
+            ? ` Com o preço de ${dinheiro(p.priceCents)}, o lucro fica ${dinheiro(p.priceCents - valor)} por unidade (${Math.trunc(((p.priceCents - valor) * 100) / p.priceCents)}% do preço).`
+            : ` Atenção: o custo fica igual ou acima do preço de venda (${dinheiro(p.priceCents)}).`;
+      return { texto: texto + CONFIRMA, alteracao: { tipo: "custo", produto: p, valor } };
     }
     case "fim_promocao": {
       const preco = p.priceCents;
@@ -883,6 +942,76 @@ function parados(pedidos: VLPedido[], produtos: VLProduto[], agora = new Date(),
   return `${plural(lista.length, "produto sem venda", "produtos sem venda")} nos últimos ${dias} dias:\n${linhas}${mais}\nDá para colocar em promoção, por exemplo: dá 10% de desconto no, e o nome do produto.`;
 }
 
+const pct = (parte: number, todo: number) => (todo === 0 ? 0 : Math.round((parte * 100) / todo));
+
+function margem(produtos: VLProduto[], falado: string): string {
+  const achados = acharProdutos(produtos, falado);
+  if (achados.length === 0) return `Não achei nenhum produto com "${falado}" na loja.`;
+  if (achados.length > 1) return `Achei ${achados.length} produtos parecidos: ${achados.slice(0, 4).map((p) => p.name).join(", ")}. Diga o nome mais completo.`;
+  const p = achados[0];
+  if (!temCampoCusto(produtos)) return SEM_CAMPO_CUSTO;
+  const custo = custoDe(p);
+  if (custo === null) return `${p.name} ainda não tem custo cadastrado. Diga, por exemplo: o custo do ${p.name} é 15 reais.`;
+  if (p.priceCents === null) return `${p.name} está sem preço de venda.`;
+  const lucro = p.priceCents - custo;
+  let texto = `${p.name}: vende por ${dinheiro(p.priceCents)}, custou ${dinheiro(custo)}. Lucro de ${dinheiro(lucro)} por unidade, ${pct(lucro, p.priceCents)}% do preço (markup de ${pct(lucro, custo)}% sobre o custo).`;
+  if (p.compareAtCents === null || p.compareAtCents <= p.priceCents) {
+    const pix = p.priceCents - Math.round((p.priceCents * 5) / 100);
+    texto += ` No Pix, com 5% de desconto, o lucro fica ${dinheiro(pix - custo)}.`;
+  }
+  return texto;
+}
+
+function margens(produtos: VLProduto[]): string {
+  if (!temCampoCusto(produtos)) return SEM_CAMPO_CUSTO;
+  const ativos = produtos.filter((p) => p.active && p.priceCents !== null && p.priceCents > 0);
+  const comCusto = ativos.filter((p) => custoDe(p) !== null);
+  if (comCusto.length === 0) return "Nenhum produto tem custo cadastrado ainda. Diga, por exemplo: o custo do gel é 15 reais.";
+  const lista = comCusto.map((p) => ({ p, m: pct((p.priceCents as number) - (custoDe(p) as number), p.priceCents as number) }));
+  const media = Math.trunc(lista.reduce((s, x) => s + x.m, 0) / lista.length);
+  const piores = [...lista].sort((a, b) => a.m - b.m).slice(0, 3);
+  let texto = `Margem média de ${media}% do preço, em ${plural(comCusto.length, "produto", "produtos")} com custo cadastrado. Menor margem: ${piores.map((x) => `${x.p.name} (${x.m}%)`).join(", ")}.`;
+  const sem = ativos.filter((p) => custoDe(p) === null);
+  if (sem.length) texto += ` Faltam ${plural(sem.length, "produto", "produtos")} sem custo: ${sem.slice(0, 4).map((p) => p.name).join(", ")}${sem.length > 4 ? ` e mais ${sem.length - 4}` : ""}.`;
+  return texto;
+}
+
+function lucro(pedidos: VLPedido[], produtos: VLProduto[], periodo: VLPeriodo, agora = new Date()): string {
+  if (!temCampoCusto(produtos)) return SEM_CAMPO_CUSTO;
+  const [ini, fim] = intervalo(periodo, agora);
+  const pagos = vendidosEntre(pedidos, ini, fim);
+  const quando = NOME_PERIODO[periodo];
+  if (pagos.length === 0) return `Ainda não teve venda paga ${quando}.`;
+  const porId = new Map(produtos.map((p) => [p.id, p]));
+  const porNome = new Map(produtos.map((p) => [normalizar(p.name.trim()), p]));
+  let vendido = 0;
+  let custo = 0;
+  let semCusto = 0;
+  const faltando = new Set<string>();
+  for (const o of pagos) {
+    const bruto = o.items.reduce((s, i) => s + i.unitPriceCents * i.quantity, 0);
+    for (const i of o.items) {
+      const linha = i.unitPriceCents * i.quantity;
+      const desconto = bruto > 0 ? Math.trunc(((o.discountCents ?? 0) * linha) / bruto) : 0;
+      const p = (i.productId != null ? porId.get(i.productId) : undefined) ?? porNome.get(normalizar(i.name.trim()));
+      const c = p ? custoDe(p) : null;
+      if (c === null) {
+        semCusto += i.quantity;
+        faltando.add(i.name);
+        continue;
+      }
+      vendido += linha - desconto;
+      custo += c * i.quantity;
+    }
+  }
+  const frete = pagos.reduce((s, o) => s + (o.shippingCents ?? 0), 0);
+  if (vendido === 0) return `As vendas ${quando} são de produtos sem custo cadastrado (${[...faltando].slice(0, 4).join(", ")}). Cadastre o custo para eu calcular o lucro.`;
+  let texto = `Lucro ${quando}: ${dinheiro(vendido - custo)} em ${plural(pagos.length, "pedido", "pedidos")} (vendido ${dinheiro(vendido)}, custo ${dinheiro(custo)}, margem de ${pct(vendido - custo, vendido)}%).`;
+  if (frete > 0) texto += ` Frete cobrado dos clientes: ${dinheiro(frete)}, repassado ao envio.`;
+  if (semCusto > 0) texto += ` Ficaram de fora ${plural(semCusto, "unidade", "unidades")} sem custo cadastrado: ${[...faltando].slice(0, 4).join(", ")}.`;
+  return texto;
+}
+
 function prepararEntregue(pedidos: VLPedido[], id: number): VLResposta {
   const p = pedidos.find((x) => x.id === id);
   if (!p) return { texto: `Não achei o pedido ${id}.` };
@@ -952,6 +1081,12 @@ function responder(i: VLIntencao, pedidos: VLPedido[], produtos: VLProduto[], ag
       return { texto: comparar(pedidos, agora) };
     case "parados":
       return { texto: parados(pedidos, produtos, agora) };
+    case "margem":
+      return { texto: margem(produtos, i.produto) };
+    case "margens":
+      return { texto: margens(produtos) };
+    case "lucro":
+      return { texto: lucro(pedidos, produtos, i.periodo, agora) };
     case "novidades":
       return novidades(pedidos, produtos, agora);
     case "ajuda":
@@ -980,6 +1115,8 @@ function confirmado(a: VLAlteracao): string {
       return `Pronto: o pedido ${a.pedido.id} está ${NOME_STATUS[a.status]}${a.rastreio ? `, com o rastreio ${a.rastreio}` : ""}.`;
     case "promocao":
       return `Pronto: ${a.produto.name} está em promoção por ${dinheiro(a.valor)}, com o preço antigo riscado no site.`;
+    case "custo":
+      return `Pronto: custo de ${a.produto.name} cadastrado em ${dinheiro(a.valor)}.`;
     case "fim_promocao":
       return `Pronto: ${a.produto.name} saiu da promoção e voltou a custar ${dinheiro(a.produto.compareAtCents ?? 0)}.`;
   }
