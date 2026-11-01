@@ -58,6 +58,15 @@ class VigiaDaLoja : JobService() {
         private const val P_BAIXOS = "baixos"
         private const val P_INICIADO = "iniciado"
         const val PREF_RESUMO = "resumo_noite"
+        const val PREF_SEMANAL = "relatorio_semanal"
+        private const val P_SEMANAL_DIA = "semanal_dia"
+        private const val P_ESQUECIDAS = "retiradas_avisadas"
+
+        fun semanalLigado(c: Context) = c.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getBoolean(PREF_SEMANAL, true)
+
+        fun definirSemanal(c: Context, ligar: Boolean) {
+            c.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putBoolean(PREF_SEMANAL, ligar).apply()
+        }
         private const val P_RESUMO_DIA = "resumo_dia"
 
         fun resumoLigado(c: Context) = c.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getBoolean(PREF_RESUMO, true)
@@ -123,9 +132,30 @@ class VigiaDaLoja : JobService() {
                 prefs.edit().putString(P_RESUMO_DIA, hoje).apply()
                 avisar(c, 901, "Resumo da loja de hoje", Loja.montarResumoDoDia(pedidos, produtos, agora))
             }
+            // relatório semanal: segunda-feira, a partir das 9h
+            if (prefs.getBoolean(PREF_SEMANAL, true) && agora.get(java.util.Calendar.DAY_OF_WEEK) == java.util.Calendar.MONDAY &&
+                agora.get(java.util.Calendar.HOUR_OF_DAY) >= 9 && prefs.getString(P_SEMANAL_DIA, "") != hoje
+            ) {
+                prefs.edit().putString(P_SEMANAL_DIA, hoje).apply()
+                avisar(c, 902, "Relatório da semana", Loja.montarRelatorioSemanal(pedidos, produtos, agora))
+            }
+            // retirada paga há mais de 2 dias e ainda não entregue: lembra de agendar (uma vez por pedido)
+            val jaAvisadas = ler(prefs.getString(P_ESQUECIDAS, ""))
+            val esquecidas = Loja.retiradasEsquecidas(pedidos, agora.timeInMillis).filter { it.id !in jaAvisadas }
+            if (esquecidas.isNotEmpty() && !primeira) {
+                avisar(
+                    c, 903, "Retirada sem agendar",
+                    esquecidas.take(4).joinToString("; ") { "Pedido #${it.id} de ${it.cliente.trim().split(" ").firstOrNull().orEmpty()}" } +
+                        ". Pagos há mais de 2 dias. Diga: agendar retirada do pedido, e o número.",
+                )
+            }
+            if (esquecidas.isNotEmpty() || primeira) {
+                val ids = (jaAvisadas + Loja.retiradasEsquecidas(pedidos, agora.timeInMillis).map { it.id }).filter { id -> pedidos.any { it.id == id } }
+                prefs.edit().putString(P_ESQUECIDAS, ids.joinToString(",")).apply()
+            }
             if (primeira) return
             for (p in n.pedidosPagos.take(5)) avisar(c, 1000 + p.id, "Pedido #${p.id} pago", textoDoPedido(p))
-            if (n.acabando.isNotEmpty()) avisar(c, 900, "Estoque acabando", textoDoEstoque(n.acabando))
+            if (n.acabando.isNotEmpty()) avisar(c, 900, "Estoque acabando", textoDoEstoqueComPrevisao(pedidos, produtos, n.acabando))
         }
 
         private fun ler(s: String?): Set<Int> = s.orEmpty().split(",").mapNotNull { it.trim().toIntOrNull() }.toSet()
@@ -153,6 +183,15 @@ class VigiaDaLoja : JobService() {
             val entrega = if (p.entrega == "pickup") "retirada (agendar pelo WhatsApp)" else "envio pelos Correios"
             val nome = p.cliente.trim().split(" ").firstOrNull().orEmpty()
             return "${Loja.dinheiro(p.totalCentavos)}${if (nome.isNotBlank()) " · $nome" else ""} · $entrega. $itens"
+        }
+
+        fun textoDoEstoqueComPrevisao(pedidos: List<Loja.Pedido>, produtos: List<Loja.Produto>, acabando: List<Loja.Produto>): String {
+            val ritmo = Loja.ritmoDeVendas(pedidos, produtos, java.util.Calendar.getInstance())
+            return acabando.take(6).joinToString("; ") { p ->
+                val r = ritmo[p.id] ?: 0.0
+                val base = if ((p.estoque ?: 0) <= 0) "${p.nome}: esgotado" else "${p.nome}: ${p.estoque} un."
+                if (r > 0 && (p.estoque ?: 0) > 0) "$base (acaba em ~${maxOf(1, ((p.estoque ?: 0) / r).toInt())} dias)" else base
+            } + if (acabando.size > 6) " e mais ${acabando.size - 6}." else "."
         }
 
         fun textoDoEstoque(produtos: List<Loja.Produto>): String =

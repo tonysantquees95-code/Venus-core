@@ -490,6 +490,25 @@ class Gemini(
             return null
         }
 
+        /** Rascunho de resposta a uma cliente, usando só o catálogo e as regras da loja. */
+        fun respostaCliente(chave: String, modelo: String, mensagem: String, catalogo: String): String? {
+            if (chave.isBlank()) return null
+            val pedido = "Você atende clientes da Desejo de Intimidade (moda íntima e sex shop, Porto Alegre, site desejo-de-intimidade.floot.app) pelo WhatsApp. " +
+                "Regras da loja: entrega discreta para todo o Brasil pelos Correios (SEDEX ou PAC), frete calculado pelo CEP no site; " +
+                "pagamento por Pix com 5% de desconto (exceto produtos em promoção) ou cartão em até 3x; retirada grátis em ponto de retirada em Porto Alegre, " +
+                "com dia e horário combinados pelo WhatsApp depois da compra; embalagem neutra e sem identificação; venda só para maiores de 18 anos. " +
+                "Catálogo atual (nome | preço | preço no Pix | estoque | link):\n$catalogo\n\n" +
+                "Escreva a resposta para a mensagem abaixo, como a loja, em português do Brasil: simpática, curta (até 5 frases), discreta, sem palavras vulgares, " +
+                "no máximo 2 emojis. Use só as informações acima; cite preço e link quando falar de produto; se algo não estiver aqui, diga que vai verificar. " +
+                "Não invente prazos nem produtos. Responda só com o texto da mensagem.\n\nMensagem da cliente: $mensagem"
+            val corpo = JSONObject()
+                .put("contents", JSONArray().put(JSONObject().put("role", "user").put("parts", JSONArray().put(JSONObject().put("text", pedido)))))
+                .put("generationConfig", JSONObject().put("temperature", 0.5))
+                .toString().toByteArray()
+            val json = chamarAvulso(chave, listOf(modelo, "gemini-2.5-flash", "gemini-flash-lite-latest"), corpo) ?: return null
+            return textoBruto(json)?.replace(Regex("[*`#]"), "")?.trim()?.trim('"', '“', '”')
+        }
+
         /** Legenda para Instagram (feed ou story) a partir da foto e do que se sabe do produto. */
         fun legendaInstagram(chave: String, modelo: String, foto: ByteArray?, contexto: String, story: Boolean): String? {
             if (chave.isBlank()) return null
