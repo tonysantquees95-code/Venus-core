@@ -30,3 +30,7 @@ Código pronto aqui; o cérebro passou em 45 testes (teste/t.ts, `node --experim
 - App Vênus (Kotlin) e Vênus da Loja (web): "o custo do gel é 15 reais" (com confirmação), "qual a margem do gel",
   "margem média dos produtos", "lucro deste mês / da semana", "produtos com menor margem"; campo custo no cadastro por voz.
 - Mostrar margem (lucro ÷ preço) e markup (lucro ÷ custo); considerar desconto Pix de 5% e, se o Toni quiser, taxa do Mercado Pago.
+- Decidido pelo Toni (22h45): frete é repassado ao cliente → NÃO entra como custo; mostrar só como informação ("frete cobrado: R$ X").
+  Pix não tem taxa no Mercado Pago (só o desconto de 5% ao cliente, que já vem no total do pedido). Taxa do cartão: ajuste opcional em % no app (ele vai informar).
+- Próximos (app): ler nota/print de compra com Gemini → custo unitário + somar ao estoque (com confirmação);
+  trocar fundo da foto do produto (recorte no aparelho + fundos da loja; fundo livre via IA de imagem, pode recusar).
