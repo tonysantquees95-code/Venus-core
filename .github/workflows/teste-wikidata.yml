@@ -46,7 +46,7 @@ jobs:
               for m in re.finditer(r"_api/admin/upload|uploadUrl|publicUrl|presign|signedUrl|putUrl|product_save", tudo):
                   f.write("=== " + m.group(0) + "\n" + tudo[max(0, m.start() - 600): m.end() + 2500] + "\n\n")
           PY
-          cat out/qtd.txt out/endpoints.txt
+          ls -la out
       - name: Guardar resultado num ramo separado
         run: |
           cd out
