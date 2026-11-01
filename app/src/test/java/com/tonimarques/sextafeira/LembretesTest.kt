@@ -54,6 +54,8 @@ class LembretesTest {
         val a = agora()
         assertEquals("amanhã às 10:00", Lembretes.quandoFalado(em(1, Calendar.NOVEMBER, 10), a))
         assertEquals("daqui a 20 minutos (às 21:50)", Lembretes.quandoFalado(a.timeInMillis + 20 * 60_000L, a))
+        // dito alguns segundos depois de marcar continua "2 minutos"
+        assertEquals("daqui a 2 minutos (às 21:31)", Lembretes.quandoFalado(a.timeInMillis + 2 * 60_000L - 3_000, a))
         assertEquals("segunda, 2/11, às 9:00", Lembretes.quandoFalado(em(2, Calendar.NOVEMBER, 9), a))
     }
 
