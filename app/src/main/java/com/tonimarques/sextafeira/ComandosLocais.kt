@@ -49,6 +49,8 @@ object ComandosLocais {
         acompanhar(f)?.let { return it }
         noticias(f)?.let { return it }
         loja(f)?.let { return it }
+        if (LISTAR_LEMBRETES.containsMatchIn(c)) return Resultado.Acao("listar_lembretes", emptyMap())
+        CANCELAR_LEMBRETE.matchEntire(c)?.let { m -> return Resultado.Acao("cancelar_lembrete", mapOf("trecho" to (f.trecho(m.groups[1]) ?: ""))) }
         perto(f)?.let { return it }
         retomar(c)?.let { return it }
         // "como chego no shopping" é rota, não pergunta aberta
@@ -794,6 +796,12 @@ object ComandosLocais {
             Regex("^$MARCAR$PEDIDO_N (?:como |para |pra )?(?:ja )?(?:foi )?pago$"),
             Regex("^(?:o |a )?(?:cliente|compradora?) do pedido (?:numero |n )?(\\d{1,6}) (?:ja )?pagou$"),
         ),
+    )
+    private val LISTAR_LEMBRETES = Regex(
+        "\\b(?:quais (?:sao )?(?:os )?(?:meus )?lembretes|(?:os )?meus lembretes|tenho (?:algum )?lembrete|lista (?:de |dos )?lembretes|lembretes de hoje|que lembretes)\\b"
+    )
+    private val CANCELAR_LEMBRETE = Regex(
+        "^(?:cancela|cancele|apaga|apague|remove|remova|tira|tire|exclui|exclua|esquece|esqueca)(?: o| os| todos os)? lembretes?(?: (?:de|do|da|sobre|para|pra) (.+))?$"
     )
     private val LOJA_MAIS_VENDIDOS = Regex(
         "\\b(?:mais vendidos?|que mais (?:vende|vendeu|vendem|venderam|sai|saiu|saem|sairam)|campeoes de venda|top \\d* ?(?:produtos|vendas)|ranking (?:de|das|dos) (?:vendas|produtos))\\b"

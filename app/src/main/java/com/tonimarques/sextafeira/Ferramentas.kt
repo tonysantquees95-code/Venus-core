@@ -326,6 +326,27 @@ class Ferramentas(private val activity: Activity, private val memoria: Memoria? 
         "lanterna" -> lanterna(a.optBoolean("ligar", true))
         "criar_alarme" -> alarme(a.optInt("hora"), a.optInt("minuto"), a.optString("descricao"))
         "criar_timer" -> timer(a.optInt("segundos"), a.optString("descricao"))
+        "criar_lembrete" -> {
+            val l = Lembretes.criar(activity, Lembretes.Pedido(a.optLong("quando"), a.optString("texto")))
+            if (android.os.Build.VERSION.SDK_INT >= 33 &&
+                activity.checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED
+            ) activity.requestPermissions(arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), 31)
+            "Combinado: ${Lembretes.quandoFalado(l.quando)} eu te lembro: ${l.texto.replaceFirstChar { it.lowercase() }}."
+        }
+        "listar_lembretes" -> {
+            val lista = Lembretes.futuros(activity)
+            if (lista.isEmpty()) "Você não tem nenhum lembrete marcado."
+            else "Seus lembretes: " + lista.take(8).joinToString("; ") { "${Lembretes.quandoFalado(it.quando)}, ${it.texto.replaceFirstChar { c -> c.lowercase() }}" } + "."
+        }
+        "cancelar_lembrete" -> {
+            val n = Lembretes.cancelar(activity, a.optString("trecho"))
+            when {
+                n == 0 -> "Não achei nenhum lembrete assim."
+                n == 1 -> "Pronto, cancelei o lembrete."
+                else -> "Pronto, cancelei $n lembretes."
+            }
+        }
+        "rotina_bom_dia" -> rotinaBomDia()
         "abrir_site" -> abrirSite(a.optString("endereco"))
         "pesquisar_na_web" -> pesquisar(a.optString("termo"))
         "abrir_mapa" -> mapa(
@@ -515,6 +536,30 @@ class Ferramentas(private val activity: Activity, private val memoria: Memoria? 
         } catch (e: Exception) {
             "Não consegui falar com a loja agora. Confira a internet."
         }
+    }
+
+    /** "Bom dia": cumprimento, clima de hoje, lembretes do dia e como está a loja. Roda fora da thread principal. */
+    private fun rotinaBomDia(): String {
+        val apelido = memoria?.valor("apelido")
+        val partes = mutableListOf("Bom dia${if (!apelido.isNullOrBlank()) ", $apelido" else ""}!")
+        if (!memoria?.valor("cidade").isNullOrBlank()) {
+            try {
+                partes += clima("", "hoje")
+            } catch (e: Exception) {
+            }
+        }
+        val hoje = Lembretes.deHoje(activity)
+        if (hoje.isNotEmpty()) {
+            partes += "Lembretes de hoje: " + hoje.take(5).joinToString("; ") { "${Lembretes.quandoFalado(it.quando)}, ${it.texto.replaceFirstChar { c -> c.lowercase() }}" } + "."
+        }
+        if (loja.conectada) {
+            try {
+                partes += loja.resumoDaManha()
+            } catch (e: Exception) {
+            }
+        }
+        if (partes.size == 1) partes += "Que seu dia seja ótimo. Em que posso ajudar?"
+        return partes.joinToString(" ")
     }
 
     /** Mudança na loja esperando o "sim" do usuário (preparada por loja_alterar ou loja_entregue). */
@@ -972,6 +1017,7 @@ class Ferramentas(private val activity: Activity, private val memoria: Memoria? 
             "acompanhar_tema", "atualizar_noticias", "traduzir", "consultar_cep", "consultar_cnpj", "consultar_ddd", "feriados",
             "buscar_cep", "dicionario", "ortografia", "distancia",
             "loja_resumo", "loja_pedidos", "loja_acabando", "loja_estoque",
+            "rotina_bom_dia",
             "loja_retiradas", "loja_estoque_geral", "loja_alterar", "loja_status", "loja_reposicao", "loja_mais_vendidos", "loja_comparar", "loja_parados", "loja_entregue", "loja_confirmar", "loja_agendar",
         )
 

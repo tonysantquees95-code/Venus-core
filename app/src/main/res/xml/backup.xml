@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Backup automático do Google (Android 12+): só a memória e os ajustes da Vênus.
+     Fica de fora o que é grande (modelo de voz) ou que não funciona em outro celular (senhas criptografadas). -->
+<data-extraction-rules>
+    <cloud-backup>
+        <include domain="database" path="sexta.db" />
+        <include domain="sharedpref" path="config.xml" />
+    </cloud-backup>
+    <device-transfer>
+        <include domain="database" path="sexta.db" />
+        <include domain="sharedpref" path="config.xml" />
+    </device-transfer>
+</data-extraction-rules>

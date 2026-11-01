@@ -6,7 +6,7 @@ object Topicos {
     fun deFerramenta(nome: String?): String? = when (nome) {
         "tocar_musica", "controlar_midia" -> "Música"
         "enviar_whatsapp", "enviar_sms", "fazer_ligacao" -> "Mensagens e ligações"
-        "criar_alarme", "criar_timer" -> "Alarmes e timers"
+        "criar_alarme", "criar_timer", "criar_lembrete", "listar_lembretes", "cancelar_lembrete", "rotina_bom_dia" -> "Alarmes e timers"
         "previsao_do_tempo" -> "Clima"
         "abrir_mapa" -> "Lugares e rotas"
         "pesquisar_na_web", "buscar_na_internet", "abrir_site", "resumo_wikipedia" -> "Pesquisas"
