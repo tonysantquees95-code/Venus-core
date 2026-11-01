@@ -347,6 +347,9 @@ class Ferramentas(private val activity: Activity, private val memoria: Memoria? 
             }
         }
         "rotina_bom_dia" -> rotinaBomDia()
+        "ler_mensagens" -> lerMensagens(a.optString("de"))
+        "responder_mensagem" -> prepararResposta(a.optString("para"), a.optString("texto"))
+        "confirmar_resposta" -> confirmarResposta()
         "abrir_site" -> abrirSite(a.optString("endereco"))
         "pesquisar_na_web" -> pesquisar(a.optString("termo"))
         "abrir_mapa" -> mapa(
@@ -565,6 +568,64 @@ class Ferramentas(private val activity: Activity, private val memoria: Memoria? 
     /** Mudança na loja esperando o "sim" do usuário (preparada por loja_alterar ou loja_entregue). */
     @Volatile
     var lojaPendente: Loja.Alteracao? = null
+
+    /** Resposta de WhatsApp esperando o "sim". */
+    data class RespostaPendente(val nome: String, val texto: String)
+
+    @Volatile
+    var respostaPendente: RespostaPendente? = null
+
+    val temPendente get() = lojaPendente != null || respostaPendente != null
+    val pendenteQualquer: Any? get() = lojaPendente ?: respostaPendente
+
+    fun esquecerPendentes() {
+        lojaPendente = null
+        respostaPendente = null
+    }
+
+    /** Última conversa lida, para "responde que..." sem dizer o nome. */
+    @Volatile
+    private var ultimaConversa: String? = null
+
+    private fun lerMensagens(de: String): String {
+        if (!LeitorDeMensagens.liberado(activity)) {
+            return "Para eu ler suas mensagens, libere o acesso às notificações: nos ajustes da ${Marca.nome}, toque em Ler mensagens do WhatsApp."
+        }
+        val conversas = LeitorDeMensagens.conversas()
+            ?: return "O acesso está liberado, mas o leitor de mensagens ainda está iniciando. Tente de novo em alguns segundos."
+        ultimaConversa = (if (de.isNotBlank()) LeitorDeMensagens.achar(conversas, de) else conversas.firstOrNull())?.nome ?: ultimaConversa
+        return LeitorDeMensagens.montarLeitura(conversas, de)
+    }
+
+    private fun prepararResposta(para: String, texto: String): String {
+        respostaPendente = null
+        if (texto.isBlank()) return "O que eu respondo?"
+        if (!LeitorDeMensagens.liberado(activity)) return lerMensagens("")
+        val conversas = LeitorDeMensagens.conversas().orEmpty()
+        val nome = if (para.isBlank()) ultimaConversa ?: conversas.firstOrNull()?.nome else LeitorDeMensagens.achar(conversas, para)?.nome
+        if (nome == null) {
+            return if (para.isBlank()) "Não tem mensagem nova para responder."
+            else "Não achei mensagem nova de $para. Para mandar uma mensagem nova, diga: manda mensagem para $para que, e a mensagem."
+        }
+        respostaPendente = RespostaPendente(nome, texto.replaceFirstChar { it.uppercase() })
+        return "Responder para $nome: ${respostaPendente!!.texto}? Diga sim para confirmar ou não para cancelar."
+    }
+
+    private fun confirmarResposta(): String {
+        val r = respostaPendente ?: return "Não tinha nenhuma resposta esperando confirmação."
+        respostaPendente = null
+        ultimaConversa = r.nome
+        if (LeitorDeMensagens.responder(activity, r.nome, r.texto)) return "Respondido para ${r.nome}."
+        // a conversa saiu das notificações (foi aberta no celular): abre o WhatsApp com o texto pronto
+        val r2 = CountDownLatch(1)
+        var resultado = ""
+        principal.post {
+            resultado = enviarWhatsapp(r.nome, r.texto)
+            r2.countDown()
+        }
+        r2.await(10, TimeUnit.SECONDS)
+        return resultado.ifBlank { "Não consegui responder agora." }
+    }
 
     /** Abre o WhatsApp do cliente com a mensagem de agendamento da retirada já escrita. */
     private fun agendarRetirada(loja: Loja, id: Int): String {
@@ -1017,7 +1078,7 @@ class Ferramentas(private val activity: Activity, private val memoria: Memoria? 
             "acompanhar_tema", "atualizar_noticias", "traduzir", "consultar_cep", "consultar_cnpj", "consultar_ddd", "feriados",
             "buscar_cep", "dicionario", "ortografia", "distancia",
             "loja_resumo", "loja_pedidos", "loja_acabando", "loja_estoque",
-            "rotina_bom_dia",
+            "rotina_bom_dia", "responder_mensagem", "confirmar_resposta",
             "loja_retiradas", "loja_estoque_geral", "loja_alterar", "loja_status", "loja_reposicao", "loja_mais_vendidos", "loja_comparar", "loja_parados", "loja_entregue", "loja_confirmar", "loja_agendar",
         )
 

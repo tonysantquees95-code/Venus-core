@@ -464,16 +464,16 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
             }
         }
         // Resposta a "Mudar o preço de X para Y? Diga sim ou não."
-        if (ferramentas.lojaPendente != null) {
+        if (ferramentas.temPendente) {
             val resposta = Loja.simOuNao(pedido)
             if (resposta != null) {
-                topicoAtual = "Loja"
+                topicoAtual = if (ferramentas.lojaPendente != null) "Loja" else "Mensagens e ligações"
                 adicionarMensagem(original, true)
                 responderConfirmacaoLoja(resposta)
                 return
             }
-            // falou outra coisa: a alteração é deixada de lado
-            ferramentas.lojaPendente = null
+            // falou outra coisa: a alteração (ou a resposta) é deixada de lado
+            ferramentas.esquecerPendentes()
             fecharConfirmacaoLoja()
         }
         val decisao = cerebro.responder(pedido)
@@ -670,7 +670,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
             ferramentas.ultimasFontes = emptyList()
             val resultado = ferramentas.executar(nome, args)
             val fontes = ferramentas.ultimasFontes
-            val pendente = if (nome == "loja_alterar" || nome == "loja_entregue" || nome == "loja_status") ferramentas.lojaPendente else null
+            val pendente = if (nome in setOf("loja_alterar", "loja_entregue", "loja_status", "responder_mensagem")) ferramentas.pendenteQualquer else null
             val acao: () -> Unit = {
                 if (pendente != null) forcarEscuta = true
                 responder(resultado)
@@ -688,18 +688,18 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
     private fun mostrarConfirmacaoLoja(pergunta: String) {
         fecharConfirmacaoLoja()
         dialogoLoja = AlertDialog.Builder(this)
-            .setTitle("Confirmar mudança na loja")
+            .setTitle(if (ferramentas.lojaPendente != null) "Confirmar mudança na loja" else "Confirmar resposta")
             .setMessage(pergunta.replace(" Diga sim para confirmar ou não para cancelar.", ""))
             .setPositiveButton("Confirmar") { _, _ ->
                 dialogoLoja = null
-                if (ferramentas.lojaPendente != null && !ocupado) {
+                if (ferramentas.temPendente && !ocupado) {
                     adicionarMensagem("Sim, confirmar", true)
                     responderConfirmacaoLoja(true)
                 }
             }
             .setNegativeButton("Cancelar") { _, _ ->
                 dialogoLoja = null
-                if (ferramentas.lojaPendente != null) {
+                if (ferramentas.temPendente) {
                     adicionarMensagem("Cancelar", true)
                     responderConfirmacaoLoja(false)
                 }
@@ -715,11 +715,12 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
 
     private fun responderConfirmacaoLoja(sim: Boolean) {
         fecharConfirmacaoLoja()
+        val eraMensagem = ferramentas.lojaPendente == null && ferramentas.respostaPendente != null
         if (sim) {
-            executarNaRede("loja_confirmar", emptyMap())
+            executarNaRede(if (eraMensagem) "confirmar_resposta" else "loja_confirmar", emptyMap())
         } else {
-            ferramentas.lojaPendente = null
-            responder("Tudo bem, não mudei nada.")
+            ferramentas.esquecerPendentes()
+            responder(if (eraMensagem) "Tudo bem, não respondi." else "Tudo bem, não mudei nada.")
         }
     }
 
@@ -1499,6 +1500,13 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
             ),
             TelaDeAjustes.Secao(
                 "Sistema", listOf(
+                    TelaDeAjustes.Ajuste("Ler mensagens do WhatsApp", {
+                        "Pergunte \"tem mensagem nova?\" e ela lê; diga \"responde para a Natália que chego às 8\" e ela responde, sempre confirmando antes. " +
+                            "Precisa liberar o acesso às notificações (ela só olha as do WhatsApp e não guarda nada)."
+                    }, { LeitorDeMensagens.liberado(this) }) {
+                        LeitorDeMensagens.abrirPermissao(this)
+                        Toast.makeText(this, "Ative a ${Marca.nome} na lista e volte.", Toast.LENGTH_LONG).show()
+                    },
                     TelaDeAjustes.Ajuste("Atualizações", {
                         "Versão ${versaoDoApp()} instalada. A ${Marca.nome} avisa sozinha quando sai uma nova; toque para procurar agora."
                     }) { procurarAtualizacao(manual = true) },

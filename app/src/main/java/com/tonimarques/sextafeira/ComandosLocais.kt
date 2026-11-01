@@ -50,6 +50,7 @@ object ComandosLocais {
         noticias(f)?.let { return it }
         loja(f)?.let { return it }
         if (LISTAR_LEMBRETES.containsMatchIn(c)) return Resultado.Acao("listar_lembretes", emptyMap())
+        mensagens(f)?.let { return it }
         CANCELAR_LEMBRETE.matchEntire(c)?.let { m -> return Resultado.Acao("cancelar_lembrete", mapOf("trecho" to (f.trecho(m.groups[1]) ?: ""))) }
         perto(f)?.let { return it }
         retomar(c)?.let { return it }
@@ -797,6 +798,35 @@ object ComandosLocais {
             Regex("^(?:o |a )?(?:cliente|compradora?) do pedido (?:numero |n )?(\\d{1,6}) (?:ja )?pagou$"),
         ),
     )
+    /** "Tem mensagem nova?", "o que a Natália mandou?", "responde para a Natália que chego às 8". */
+    private fun mensagens(f: Frase): Resultado? {
+        val c = f.chave
+        if (RECADO.containsMatchIn(c)) return null // "manda mensagem para..." é outra coisa
+        RESPONDER_PARA.matchEntire(c)?.let { m ->
+            return Resultado.Acao("responder_mensagem", mapOf("para" to f.trecho(m.groups[1]).orEmpty(), "texto" to f.trecho(m.groups[2]).orEmpty()))
+        }
+        RESPONDER.matchEntire(c)?.let { m ->
+            return Resultado.Acao("responder_mensagem", mapOf("para" to "", "texto" to f.trecho(m.groups[1]).orEmpty()))
+        }
+        DE_QUEM.matchEntire(c)?.let { m ->
+            if (m.groupValues[1] !in setOf("voce", "vc", "ele", "ela", "eu", "isso", "aquilo")) {
+                return Resultado.Acao("ler_mensagens", mapOf("de" to f.trecho(m.groups[1]).orEmpty()))
+            }
+        }
+        if (LER_MENSAGENS.containsMatchIn(c)) return Resultado.Acao("ler_mensagens", mapOf("de" to ""))
+        return null
+    }
+
+    private val LER_MENSAGENS = Regex(
+        "\\b(?:tem (?:alguma |nova )?mensage(?:m|ns)(?: nova| novas)?|chegou (?:alguma )?mensagem|mensagens? novas?|" +
+            "(?:le|leia|ler|me le|le pra mim|leia pra mim|quais sao|quais|mostra|mostre) (?:as |minhas |as minhas |a )?(?:mensagens|mensagem)|" +
+            "o que (?:me )?mandaram|(?:quem|alguem) (?:me )?mandou mensagem|(?:mensagens|mensagem) do (?:whatsapp|zap))\\b"
+    )
+    private val DE_QUEM = Regex("^(?:o que|que|qual a mensagem que) (?:o |a )?(.+?) (?:me )?(?:mandou|disse|falou|escreveu)(?: no whatsapp| no zap)?$")
+    private val RESPONDER_PARA = Regex(
+        "^(?:responde|responda|responder|responde ai|responda ai) (?:pra|para|pro|a|ao|o|a) (?:o |a )?(.+?),? (?:que|dizendo que|falando que|dizendo|falando|:) (.+)$"
+    )
+    private val RESPONDER = Regex("^(?:responde|responda|responder|responde ai|responda ai)(?: que| dizendo que| falando que|:|,)? (.+)$")
     private val LISTAR_LEMBRETES = Regex(
         "\\b(?:quais (?:sao )?(?:os )?(?:meus )?lembretes|(?:os )?meus lembretes|tenho (?:algum )?lembrete|lista (?:de |dos )?lembretes|lembretes de hoje|que lembretes)\\b"
     )

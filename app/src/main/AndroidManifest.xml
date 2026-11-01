@@ -78,6 +78,17 @@
             </intent-filter>
         </activity>
 
+        <!-- Lê as mensagens do WhatsApp nas notificações, quando o usuário pede -->
+        <service
+            android:name=".LeitorDeMensagens"
+            android:exported="true"
+            android:label="Vênus: ler mensagens do WhatsApp"
+            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
+            <intent-filter>
+                <action android:name="android.service.notification.NotificationListenerService" />
+            </intent-filter>
+        </service>
+
         <!-- Lembretes: dispara na hora marcada e reagenda depois de reiniciar o celular ou atualizar o app -->
         <receiver
             android:name=".AvisoDeLembrete"

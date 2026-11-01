@@ -63,7 +63,8 @@ class CerebroTest {
     @Test fun conversa() {
         val c = novo()
         assertTrue(responde(c, "oi sexta-feira").isNotBlank())
-        assertTrue(responde(c, "bom dia").startsWith("Bom dia"))
+        executa(c, "bom dia", "rotina_bom_dia")
+        assertTrue(responde(c, "boa tarde").startsWith("Boa tarde"))
         assertTrue(responde(c, "tudo bem?").isNotBlank())
         assertTrue(responde(c, "quem te criou").isNotBlank())
         assertTrue(responde(c, "conta uma piada").contains("?"))
