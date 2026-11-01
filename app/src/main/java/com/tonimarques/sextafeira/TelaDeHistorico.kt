@@ -26,13 +26,15 @@ import java.util.Date
 import java.util.Locale
 
 /**
- * Histórico das conversas, com a identidade da Vênus: tópicos em cartões de vidro,
- * busca em todas as conversas e cada conversa mostrada em balões, como no chat.
+ * Histórico com a identidade da Vênus: cada conversa num cartão de vidro (título, resumo e assunto),
+ * busca por assunto em todas as conversas e cada conversa mostrada em balões, com o botão para continuar nela.
  */
 class TelaDeHistorico(
     private val activity: Activity,
     private val memoria: Memoria,
     private var cor: Int,
+    /** Tocar em "Continuar esta conversa": volta para o chat dentro dela. */
+    private val aoContinuar: (Long) -> Unit = {},
 ) : Dialog(activity, R.style.Tema) {
 
     private val br = Locale("pt", "BR")
@@ -42,19 +44,20 @@ class TelaDeHistorico(
     private lateinit var rolagem: ScrollView
     private lateinit var busca: EditText
     private lateinit var botaoApagar: ImageButton
-    private var topicoAberto: String? = null
+    private lateinit var botaoContinuar: TextView
+    private var conversaAberta: Long? = null
 
     init {
         setContentView(montar())
         window?.setWindowAnimations(android.R.style.Animation_Activity)
         window?.setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
-        mostrarTopicos()
+        mostrarConversas()
     }
 
     override fun onBackPressed() {
-        if (topicoAberto != null || busca.text.isNotBlank()) {
+        if (conversaAberta != null || busca.text.isNotBlank()) {
             busca.setText("")
-            mostrarTopicos()
+            mostrarConversas()
         } else {
             super.onBackPressed()
         }
@@ -120,7 +123,7 @@ class TelaDeHistorico(
         raiz.addView(topo)
 
         busca = EditText(context).apply {
-            hint = "Buscar nas conversas…"
+            hint = "Buscar por assunto…"
             setHintTextColor(COR_APAGADA)
             setTextColor(Color.WHITE)
             textSize = 14.5f
@@ -133,7 +136,7 @@ class TelaDeHistorico(
                 override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
                 override fun afterTextChanged(s: Editable?) {
                     val termo = s?.toString().orEmpty().trim()
-                    if (termo.length >= 2) mostrarBusca(termo) else if (topicoAberto == null) mostrarTopicos()
+                    if (termo.length >= 2) mostrarBusca(termo) else if (conversaAberta == null) mostrarConversas()
                 }
             })
         }
@@ -153,44 +156,75 @@ class TelaDeHistorico(
         }
         rolagem.addView(lista)
         raiz.addView(rolagem, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
+        botaoContinuar = TextView(context).apply {
+            text = "CONTINUAR ESTA CONVERSA"
+            textSize = 13f
+            letterSpacing = 0.18f
+            gravity = Gravity.CENTER
+            setTextColor(Color.WHITE)
+            typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
+            background = vidro(comAlfa(cor, 70), comAlfa(cor, 170), 24)
+            setPadding(dp(16), dp(14), dp(16), dp(14))
+            visibility = View.GONE
+            setOnClickListener {
+                val id = conversaAberta ?: return@setOnClickListener
+                dismiss()
+                aoContinuar(id)
+            }
+        }
+        raiz.addView(botaoContinuar, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+            setMargins(dp(6), dp(6), dp(6), dp(14))
+        })
         return raiz
     }
 
-    // ------------------------------------------------------------- tópicos
-    private fun mostrarTopicos() {
-        topicoAberto = null
+    // ------------------------------------------------------------- lista de conversas
+    private fun mostrarConversas() {
+        conversaAberta = null
+        botaoContinuar.visibility = View.GONE
         busca.visibility = View.VISIBLE
         lista.removeAllViews()
-        val topicos = try {
-            memoria.resumoTopicos()
+        val conversas = try {
+            memoria.conversas()
         } catch (e: Exception) {
             emptyList()
         }
         titulo.text = "HISTÓRICO"
-        val total = topicos.sumOf { it.quantidade }
-        subtitulo.text = if (topicos.isEmpty()) "NENHUMA CONVERSA AINDA" else "$total MENSAGENS · ${topicos.size} ASSUNTOS"
-        botaoApagar.visibility = if (topicos.isEmpty()) View.GONE else View.VISIBLE
-        if (topicos.isEmpty()) {
-            lista.addView(aviso("As conversas com a ${Marca.nome} aparecem aqui, separadas por assunto."))
+        subtitulo.text = if (conversas.isEmpty()) "NENHUMA CONVERSA AINDA" else "${conversas.size} CONVERSAS"
+        botaoApagar.visibility = if (conversas.isEmpty()) View.GONE else View.VISIBLE
+        if (conversas.isEmpty()) {
+            lista.addView(aviso("Cada conversa com a ${Marca.nome} fica guardada aqui, separada. Para voltar a um assunto, diga: lembra do que falamos sobre, e o assunto."))
             return
         }
-        for (t in topicos) lista.addView(cartaoTopico(t))
+        val atual = memoria.conversaRecente()
+        var diaAnterior = ""
+        for (c in conversas) {
+            val d = dia(c.ultimo)
+            if (d != diaAnterior) {
+                lista.addView(separador(d))
+                diaAnterior = d
+            }
+            lista.addView(cartaoConversa(c, c.id == atual))
+        }
         rolagem.post { rolagem.scrollTo(0, 0) }
     }
 
-    private fun cartaoTopico(t: Memoria.ResumoTopico): View {
+    private fun cartaoConversa(c: Memoria.Conversa, emAndamento: Boolean): View {
         val cartao = LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            background = vidro(Color.argb(16, 255, 255, 255), Color.argb(30, 255, 255, 255), 20)
+            background = vidro(
+                if (emAndamento) comAlfa(cor, 26) else Color.argb(16, 255, 255, 255),
+                if (emAndamento) comAlfa(cor, 120) else Color.argb(30, 255, 255, 255), 20,
+            )
             setPadding(dp(16), dp(14), dp(12), dp(14))
             foreground = toque()
             isClickable = true
-            setOnClickListener { abrirTopico(t.topico) }
+            setOnClickListener { abrirConversa(c) }
         }
         // bolinha com a inicial do assunto
         cartao.addView(TextView(context).apply {
-            text = t.topico.take(1).uppercase(br)
+            text = c.topico.take(1).uppercase(br)
             textSize = 15f
             gravity = Gravity.CENTER
             setTextColor(cor)
@@ -204,24 +238,27 @@ class TelaDeHistorico(
 
         val textos = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL }
         textos.addView(TextView(context).apply {
-            text = t.topico
+            text = c.titulo.ifBlank { c.previa.ifBlank { "Conversa" } }
             textSize = 15.5f
+            maxLines = 2
+            ellipsize = android.text.TextUtils.TruncateAt.END
             setTextColor(Color.WHITE)
         })
-        if (t.previa.isNotBlank()) {
+        val linha2 = c.trecho ?: c.resumo.ifBlank { c.previa.takeIf { it != c.titulo }.orEmpty() }
+        if (linha2.isNotBlank()) {
             textos.addView(TextView(context).apply {
-                text = "“${t.previa}”"
+                text = if (c.trecho != null) "“${c.trecho}”" else linha2
                 textSize = 12.5f
-                maxLines = 2
+                maxLines = 3
                 ellipsize = android.text.TextUtils.TruncateAt.END
                 setTextColor(Color.argb(200, 200, 206, 230))
                 setPadding(0, dp(2), 0, 0)
             })
         }
         textos.addView(TextView(context).apply {
-            text = "${t.quantidade} mensagens · ${quando(t.ultimo)}"
+            text = (if (emAndamento) "em andamento · " else "") + "${c.topico} · ${c.quantidade} mensagens · ${quando(c.ultimo)}"
             textSize = 11f
-            setTextColor(COR_APAGADA)
+            setTextColor(if (emAndamento) cor else COR_APAGADA)
             setPadding(0, dp(4), 0, 0)
         })
         cartao.addView(textos, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
@@ -237,18 +274,27 @@ class TelaDeHistorico(
     }
 
     // ------------------------------------------------------------- uma conversa
-    private fun abrirTopico(topico: String) {
-        topicoAberto = topico
+    private fun abrirConversa(c: Memoria.Conversa) {
+        conversaAberta = c.id
         busca.visibility = View.GONE
         lista.removeAllViews()
         val mensagens = try {
-            memoria.mensagens(topico, 300)
+            memoria.mensagensDaConversa(c.id, 400)
         } catch (e: Exception) {
             emptyList()
         }
-        titulo.text = topico.uppercase(br)
-        subtitulo.text = "${mensagens.size} MENSAGENS"
+        titulo.text = c.titulo.ifBlank { "CONVERSA" }.uppercase(br)
+        subtitulo.text = "${c.topico.uppercase(br)} · ${mensagens.size} MENSAGENS"
         botaoApagar.visibility = View.VISIBLE
+        botaoContinuar.visibility = View.VISIBLE
+        if (c.resumo.isNotBlank()) lista.addView(TextView(context).apply {
+            text = c.resumo
+            textSize = 13f
+            setLineSpacing(0f, 1.15f)
+            setTextColor(Color.argb(210, 200, 206, 230))
+            background = vidro(comAlfa(cor, 18), comAlfa(cor, 70), 16)
+            setPadding(dp(14), dp(10), dp(14), dp(10))
+        })
         var diaAnterior = ""
         for (m in mensagens) {
             val dia = dia(m.quando)
@@ -262,24 +308,22 @@ class TelaDeHistorico(
     }
 
     private fun mostrarBusca(termo: String) {
-        topicoAberto = null
+        conversaAberta = null
+        botaoContinuar.visibility = View.GONE
         lista.removeAllViews()
         val achadas = try {
-            memoria.buscarMensagens(termo)
+            memoria.buscarConversas(termo)
         } catch (e: Exception) {
             emptyList()
         }
         titulo.text = "BUSCA"
-        subtitulo.text = if (achadas.isEmpty()) "NADA ENCONTRADO" else "${achadas.size} RESULTADOS"
+        subtitulo.text = if (achadas.isEmpty()) "NADA ENCONTRADO" else "${achadas.size} CONVERSAS"
         botaoApagar.visibility = View.GONE
         if (achadas.isEmpty()) {
-            lista.addView(aviso("Nenhuma mensagem com “$termo”."))
+            lista.addView(aviso("Nenhuma conversa sobre “$termo”."))
             return
         }
-        for (m in achadas) {
-            lista.addView(separador("${m.topico} · ${dia(m.quando)}"))
-            lista.addView(balao(m))
-        }
+        for (c in achadas) lista.addView(cartaoConversa(c, false))
         rolagem.post { rolagem.scrollTo(0, 0) }
     }
 
@@ -337,16 +381,16 @@ class TelaDeHistorico(
     }
 
     private fun confirmarApagar() {
-        val topico = topicoAberto
+        val conversa = conversaAberta
         AlertDialog.Builder(activity)
-            .setTitle(if (topico != null) "Apagar “$topico”?" else "Apagar todo o histórico?")
+            .setTitle(if (conversa != null) "Apagar esta conversa?" else "Apagar todo o histórico?")
             .setMessage(
-                if (topico != null) "As mensagens deste assunto serão apagadas. As memórias continuam."
+                if (conversa != null) "As mensagens desta conversa serão apagadas. As memórias continuam."
                 else "Todas as conversas salvas serão apagadas. As memórias e o que a ${Marca.nome} aprendeu continuam."
             )
             .setPositiveButton("Apagar") { _, _ ->
-                if (topico != null) memoria.apagarTopico(topico) else memoria.apagarHistorico()
-                mostrarTopicos()
+                if (conversa != null) memoria.apagarConversa(conversa) else memoria.apagarHistorico()
+                mostrarConversas()
             }
             .setNegativeButton("Cancelar", null)
             .show()

@@ -100,6 +100,15 @@ class Gemini(
         return RespostaIA(true, "Fiz várias ações seguidas e parei por segurança. Quer que eu continue?")
     }
 
+    /**
+     * Começa com as mensagens de uma conversa salva (para continuar de onde parou, mesmo depois de fechar o app
+     * ou ao retomar um assunto antigo). [mensagens]: (é do usuário?, texto), da mais antiga para a mais nova.
+     */
+    fun carregarHistorico(mensagens: List<Pair<Boolean, String>>) {
+        desfazer(0)
+        for (c in montarHistorico(mensagens)) historico.put(c)
+    }
+
     private fun desfazer(tamanho: Int) {
         while (historico.length() > tamanho) historico.remove(historico.length() - 1)
     }
@@ -123,6 +132,8 @@ class Gemini(
             Nunca diga que fez algo que a ferramenta não confirmou. Se o resultado pedir para
             o usuário tocar em algo (Enviar, Ligar, Permitir), repita esse aviso.
             Se não houver ferramenta para o pedido, diga com honestidade o que não consegue fazer.
+            Quando o usuário retomar um assunto de uma conversa antiga (o histórico dela já vem carregado),
+            relembre em uma frase o ponto em que vocês pararam e continue dali, sem repetir tudo.
             Agora é $agora.
         """.trimIndent() + contexto().let { if (it.isBlank()) "" else "\n\nSobre o usuário:\n$it" }
     }
@@ -592,6 +603,43 @@ class Gemini(
         }
 
         /** Junta os textos da primeira resposta do Gemini e limpa sobras de formatação. */
+        /** O histórico no formato do Gemini: alterna usuário e Vênus, começa pelo usuário e termina na Vênus. */
+        fun montarHistorico(mensagens: List<Pair<Boolean, String>>, maximo: Int = 40): List<JSONObject> {
+            val limpas = mensagens.filter { it.second.isNotBlank() && !it.second.startsWith("Fontes: ") }.takeLast(maximo)
+            val juntas = mutableListOf<Pair<Boolean, String>>()
+            for ((eu, t) in limpas) {
+                if (juntas.isNotEmpty() && juntas.last().first == eu) juntas[juntas.size - 1] = eu to (juntas.last().second + "\n" + t)
+                else juntas += eu to t
+            }
+            while (juntas.isNotEmpty() && !juntas.first().first) juntas.removeAt(0)
+            while (juntas.isNotEmpty() && juntas.last().first) juntas.removeAt(juntas.size - 1)
+            return juntas.map { (eu, t) ->
+                JSONObject().put("role", if (eu) "user" else "model").put("parts", JSONArray().put(JSONObject().put("text", t.take(4000))))
+            }
+        }
+
+        /** Título curto e resumo de uma conversa encerrada (para achar depois). */
+        fun resumirConversa(chave: String, modelo: String, transcricao: String): Pair<String, String>? {
+            if (chave.isBlank()) return null
+            val pedido = "Esta é uma conversa entre um usuário e a assistente Vênus. Responda só com JSON: " +
+                "{\"titulo\": \"assunto principal em até 6 palavras\", \"resumo\": \"2 ou 3 frases com o que foi falado, decidido ou ficou pendente, " +
+                "incluindo números, nomes e produtos citados\"}.\n\n" + transcricao.takeLast(12000)
+            val corpo = JSONObject()
+                .put("contents", JSONArray().put(JSONObject().put("role", "user").put("parts", JSONArray().put(JSONObject().put("text", pedido)))))
+                .put("generationConfig", JSONObject().put("temperature", 0.2).put("responseMimeType", "application/json"))
+                .toString().toByteArray()
+            val json = chamarAvulso(chave, listOf("gemini-flash-lite-latest", modelo, "gemini-2.5-flash"), corpo, tempo = 30_000) ?: return null
+            val bruto = textoBruto(json) ?: return null
+            return try {
+                val o = JSONObject(bruto.substring(bruto.indexOf('{'), bruto.lastIndexOf('}') + 1))
+                val titulo = o.optString("titulo").trim().trimEnd('.')
+                val resumo = o.optString("resumo").trim()
+                if (titulo.isBlank() || resumo.isBlank()) null else titulo.take(60) to resumo.take(600)
+            } catch (e: Exception) {
+                null
+            }
+        }
+
         fun textoDaResposta(json: JSONObject): String? {
             val partes = json.optJSONArray("candidates")?.optJSONObject(0)?.optJSONObject("content")?.optJSONArray("parts") ?: return null
             val texto = (0 until partes.length()).mapNotNull { partes.optJSONObject(it)?.optString("text") }.joinToString(" ")
