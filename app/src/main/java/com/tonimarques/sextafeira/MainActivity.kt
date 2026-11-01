@@ -83,6 +83,11 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
     private val prefs by lazy { getSharedPreferences("config", Context.MODE_PRIVATE) }
     private val tarefaVigilia = Runnable { iniciarVigilia() }
     private var despertador: Despertador? = null
+    /** Ouve "Vênus", "chega", "espera"... enquanto ela fala, para dar para interromper. */
+    private var interruptor: Interruptor? = null
+    /** Até quando continuar tentando ouvir depois que ela fala (o reconhecedor desiste rápido no silêncio). */
+    private var escutaAte = 0L
+    private val apagarTela = Runnable { window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) }
 
     // ------------------------------------------------------------ ciclo de vida
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -138,6 +143,10 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
 
     override fun onPause() {
         naTela = false
+        interruptor?.parar()
+        escutaAte = 0L
+        principal.removeCallbacks(apagarTela)
+        window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         VigiliaService.aoGestoNaTela = null
         liberarFoco()
         VigiliaService.pausarPorTela(false)
@@ -153,6 +162,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
     override fun onDestroy() {
         principal.removeCallbacksAndMessages(null)
         despertador?.parar()
+        interruptor?.parar()
         tts?.shutdown()
         reconhecedor?.destroy()
         super.onDestroy()
@@ -426,6 +436,10 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
     private fun mudarEstado(estado: Orbe.Estado, texto: String) {
         orbe.estado = estado
         status.text = texto
+        // A tela não apaga enquanto ela ouve, pensa ou fala (e por mais 1 minuto depois)
+        principal.removeCallbacks(apagarTela)
+        if (estado != Orbe.Estado.OCIOSO) window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        else principal.postDelayed(apagarTela, 60_000)
     }
 
     private fun mudarEstadoOcioso() {
@@ -749,7 +763,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
             ferramentas.ultimasFontes = emptyList()
             val resultado = ferramentas.executar(nome, args)
             val fontes = ferramentas.ultimasFontes
-            val pendente = if (nome in setOf("loja_alterar", "loja_entregue", "loja_status", "responder_mensagem")) ferramentas.pendenteQualquer else null
+            val pendente = if (nome in setOf("loja_alterar", "loja_entregue", "loja_status", "responder_mensagem", "loja_promo_parados")) ferramentas.pendenteQualquer else null
             val acao: () -> Unit = {
                 if (pendente != null) forcarEscuta = true
                 responder(resultado)
@@ -1085,15 +1099,38 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         falando = true
         val limpo = texto.replace(Regex("[*#_`>]"), "")
         tts?.speak(limpo, TextToSpeech.QUEUE_FLUSH, null, "resposta")
+        if (naTela && prefs.getBoolean(PREF_INTERROMPER, true) && temMicrofone()) {
+            val i = interruptor ?: Interruptor(this) { interromperFala() }.also { interruptor = it }
+            i.iniciar(limpo)
+        }
+    }
+
+    /** Você falou "Vênus", "chega", "espera"... durante a fala: ela se cala e passa a ouvir. */
+    private fun interromperFala() {
+        if (!falando) return
+        tts?.stop()
+        falando = false
+        ultimaFoiVoz = true
+        escutaAte = android.os.SystemClock.elapsedRealtime() + 12_000
+        mudarEstado(Orbe.Estado.OUVINDO, "PODE FALAR…")
+        // espera o microfone do interruptor ser solto
+        principal.postDelayed({ if (!ocupado && escuta == Escuta.NADA && !falando) ouvirComando() }, 300)
     }
 
     /** Depois de responder: volta a ouvir (conversa) ou volta a esperar "Sexta-feira, ativar". */
     private fun aposFala() {
         falando = false
+        val estavaOuvindo = interruptor?.ativo == true
+        interruptor?.parar()
         mudarEstadoOcioso()
         val continuar = ultimaFoiVoz && naTela && !ocupado &&
             (forcarEscuta || cerebro.aguardandoResposta || prefs.getBoolean(PREF_CONTINUA, true))
-        if (continuar) ouvirComando() else ficarOcioso()
+        if (continuar) {
+            // Fica uns 12 segundos esperando você responder (tentando de novo se o reconhecedor desistir antes)
+            escutaAte = android.os.SystemClock.elapsedRealtime() + if (forcarEscuta || cerebro.aguardandoResposta) 15_000 else 12_000
+            // um respiro para não ouvir o finzinho da própria voz (e para o microfone do interruptor ser solto)
+            principal.postDelayed({ if (!falando && !ocupado && escuta == Escuta.NADA) ouvirComando() }, if (estavaOuvindo) 300 else 150)
+        } else ficarOcioso()
     }
 
     private fun vozesEmPortugues(): List<Voice> {
@@ -1256,6 +1293,9 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         .putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
         .putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
         .putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE, packageName)
+        // dá tempo para pensar no meio da frase sem ela cortar
+        .putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 1500L)
+        .putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, 1200L)
 
     private fun agendarVigilia(atraso: Long) {
         principal.removeCallbacks(tarefaVigilia)
@@ -1313,9 +1353,13 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
 
     protected fun alternarEscuta() {
         when (escuta) {
-            Escuta.COMANDO -> reconhecedor?.stopListening()
+            Escuta.COMANDO -> {
+                escutaAte = 0L
+                reconhecedor?.stopListening()
+            }
             else -> {
                 ultimaFoiVoz = true
+                escutaAte = android.os.SystemClock.elapsedRealtime() + 8_000
                 ouvirComando()
             }
         }
@@ -1324,6 +1368,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
     private fun ouvirComando() {
         if (ocupado || escuta == Escuta.COMANDO) return
         pararVigilia()
+        interruptor?.parar()
         tts?.stop()
         falando = false
         forcarEscuta = false
@@ -1442,8 +1487,16 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
                     agendarVigilia(if (errosSeguidos > 8) 6000L else atraso)
                 }
                 Escuta.COMANDO -> {
-                    ultimaFoiVoz = false
                     mostrarParcial("")
+                    // Ainda dentro da janela de conversa: o reconhecedor desistiu cedo, então tenta de novo
+                    val semFala = error == SpeechRecognizer.ERROR_NO_MATCH || error == SpeechRecognizer.ERROR_SPEECH_TIMEOUT
+                    if (semFala && naTela && !ocupado && android.os.SystemClock.elapsedRealtime() < escutaAte) {
+                        mudarEstado(Orbe.Estado.OUVINDO, "OUVINDO…")
+                        principal.postDelayed({ if (escuta == Escuta.NADA && !ocupado && !falando) ouvirComando() }, 120)
+                        return
+                    }
+                    escutaAte = 0L
+                    ultimaFoiVoz = false
                     val texto = when (error) {
                         SpeechRecognizer.ERROR_NO_MATCH, SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> "NÃO OUVI NADA · TOQUE PARA FALAR"
                         SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> "PERMITA O USO DO MICROFONE"
@@ -1557,6 +1610,10 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
                     },
                     item("Conversa contínua", { "Depois de responder, ela volta a ouvir sem você precisar tocar no orbe." },
                         MENU_CONTINUA) { prefs.getBoolean(PREF_CONTINUA, true) },
+                    item("Interromper enquanto ela fala", {
+                        if (ModeloDeVoz.pronto(this)) "Diga \"$n\", \"chega\", \"espera\" ou \"silêncio\" durante a fala e ela se cala e passa a ouvir. Tocar no orbe também interrompe."
+                        else "Precisa da voz offline (ajuste acima). Enquanto isso, toque no orbe para interromper."
+                    }, MENU_INTERROMPER) { prefs.getBoolean(PREF_INTERROMPER, true) },
                 )
             ),
             TelaDeAjustes.Secao(
@@ -1738,6 +1795,11 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
             MENU_CONTINUA -> {
                 val ligado = !prefs.getBoolean(PREF_CONTINUA, true)
                 prefs.edit().putBoolean(PREF_CONTINUA, ligado).apply()
+            }
+            MENU_INTERROMPER -> {
+                val ligado = !prefs.getBoolean(PREF_INTERROMPER, true)
+                prefs.edit().putBoolean(PREF_INTERROMPER, ligado).apply()
+                if (!ligado) interruptor?.parar()
             }
             MENU_NOVA -> {
                 ajustes?.dismiss()
@@ -3304,6 +3366,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         private const val PREF_MODELO = "modelo"
         private const val PREF_FALAR = "falar"
         private const val PREF_CONTINUA = "continua"
+        private const val PREF_INTERROMPER = "interromper"
         private const val PREF_VIGILIA = "vigilia"
         private const val PREF_PEDIU_MIC = "pediu_mic"
         private const val PREF_VOZ = "voz"
@@ -3314,6 +3377,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         private const val MENU_MODELO = 2
         private const val MENU_FALAR = 3
         private const val MENU_CONTINUA = 4
+        private const val MENU_INTERROMPER = 40
         private const val MENU_NOVA = 5
         private const val MENU_DIAGNOSTICO = 6
         private const val MENU_VIGILIA = 7

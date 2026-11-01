@@ -59,6 +59,13 @@ object Roteador {
         Triple("caixa_previsao", "previsão de faturamento e despesas do próximo mês", ""),
         Triple("caixa_grafico", "gráfico de vendas e despesas", ""),
         Triple("caixa_relatorio", "relatório financeiro em PDF", "periodo: mes|mes_passado|semana"),
+        Triple("loja_curva_abc", "curva ABC: quais produtos sustentam o faturamento", ""),
+        Triple("loja_compras", "o que comprar do fornecedor agora (ponto de pedido)", "prazo: dias que o fornecedor leva para entregar, se dito"),
+        Triple("gestao_prazo", "anotar quantos dias o fornecedor leva para entregar", "dias"),
+        Triple("loja_recompra", "clientes que sumiram e podem ser chamados de volta", ""),
+        Triple("loja_chamar_cliente", "abrir o WhatsApp de uma cliente com mensagem de recompra", "nome"),
+        Triple("loja_datas", "próximas datas comerciais (Black Friday, Dia dos Namorados, Natal…)", "dias: quantos dias para frente"),
+        Triple("loja_promo_parados", "colocar em promoção todos os produtos parados", "pct: desconto em %; dias: sem venda há quantos dias"),
         Triple("caixa_apagar", "apagar o último lançamento do caixa", ""),
         Triple("caixa_fixa", "cadastrar despesa fixa mensal (aluguel, internet, sistema)", "descricao; valor: centavos; dia: dia do vencimento 1-28"),
         Triple("caixa_remover_fixa", "tirar uma despesa fixa", "trecho: nome da despesa"),
@@ -162,6 +169,11 @@ object Roteador {
             }
         }
         // números que vieram como texto ("15", "29,90")
+        for (k in listOf("pct", "dias", "prazo")) {
+            val v = args[k]
+            if (v is String) v.filter { it.isDigit() }.toIntOrNull()?.let { args[k] = it } ?: args.remove(k)
+            if (v is Double) args[k] = v.toInt()
+        }
         for (k in listOf("pedido", "valor", "preco", "estoque")) {
             val v = args[k]
             if (v is String) {
@@ -185,7 +197,7 @@ object Roteador {
             "loja_estoque" to listOf("produto"), "loja_produto" to listOf("produto"), "loja_margem" to listOf("produto"),
             "loja_agendar" to listOf("pedido"), "loja_entregue" to listOf("pedido"), "loja_status" to listOf("pedido", "status"),
             "loja_alterar" to listOf("tipo", "produto"), "caixa_lancar" to listOf("tipo", "valor"),
-            "caixa_fixa" to listOf("descricao", "valor"), "caixa_remover_fixa" to listOf("trecho"), "financeiro_calculo" to listOf("tipo", "a"),
+            "caixa_fixa" to listOf("descricao", "valor"), "gestao_prazo" to listOf("dias"), "loja_chamar_cliente" to listOf("nome"), "caixa_remover_fixa" to listOf("trecho"), "financeiro_calculo" to listOf("tipo", "a"),
         )
         for (k in listOf("a", "b", "c")) {
             val v = args[k]

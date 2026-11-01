@@ -130,7 +130,7 @@ class VigiaDaLoja : JobService() {
             val hoje = "%04d-%02d-%02d".format(agora.get(java.util.Calendar.YEAR), agora.get(java.util.Calendar.MONTH) + 1, agora.get(java.util.Calendar.DAY_OF_MONTH))
             if (prefs.getBoolean(PREF_RESUMO, true) && agora.get(java.util.Calendar.HOUR_OF_DAY) >= 21 && prefs.getString(P_RESUMO_DIA, "") != hoje) {
                 prefs.edit().putString(P_RESUMO_DIA, hoje).apply()
-                avisar(c, 901, "Resumo da loja de hoje", Loja.montarResumoDoDia(pedidos, produtos, agora))
+                avisar(c, 901, "Resumo da loja de hoje", Loja.montarResumoDoDia(pedidos, produtos, agora) + (Gestao.avisoDeData(agora)?.let { " $it" } ?: ""))
             }
             // relatório semanal: segunda-feira, a partir das 9h
             if (prefs.getBoolean(PREF_SEMANAL, true) && agora.get(java.util.Calendar.DAY_OF_WEEK) == java.util.Calendar.MONDAY &&

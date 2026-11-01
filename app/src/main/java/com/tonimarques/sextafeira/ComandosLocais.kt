@@ -39,6 +39,7 @@ object ComandosLocais {
         val ehRecado = RECADO.containsMatchIn(c)
         // Contas, conversões, datas, tradução, CEP...: antes do clima ("30 graus em fahrenheit" é conversão).
         // Mudanças na loja ("muda o preço do gel para 29,90") antes das contas, para o número não virar cálculo.
+        if (!ehRecado) gestao(f)?.let { return it }
         if (!ehRecado) lojaAlteracao(c)?.let { return it }
         LOJA_CADASTRAR.matchEntire(c)?.let { m -> return cadastro(f.trecho(m.groups[1] ?: m.groups[2]).orEmpty()) }
         if (EDITAR_FUNDO.containsMatchIn(c)) return Resultado.Acao("editar_fundo", emptyMap())
@@ -940,6 +941,52 @@ object ComandosLocais {
         0 to Regex("^(?:o |a |os |as )?(.+?) (?:me )?custou $VALOR(?: cada| a unidade| por unidade)?$"),
         1 to Regex("^(?:eu )?paguei $VALOR (?:no|na|nos|nas|em|pelo|pela|pelos|pelas|por|cada) (.+?)$"),
     )
+    /** Gestão da loja: curva ABC, o que comprar, prazo do fornecedor, recompra, datas comerciais e promoção em lote. */
+    fun gestao(f: Frase): Resultado? {
+        val c = f.chave.trimEnd('.', '!', '?')
+        if (GESTAO_PROMO_PARADOS.containsMatchIn(c)) {
+            val pct = Regex("(\\d{1,2}) ?(?:%|por cento)").find(c)?.groupValues?.get(1)?.toInt() ?: 15
+            val dias = Regex("(\\d{1,3}) dias").find(c)?.groupValues?.get(1)?.toInt() ?: 30
+            return Resultado.Acao("loja_promo_parados", mapOf("pct" to pct, "dias" to dias))
+        }
+        if (GESTAO_ABC.containsMatchIn(c)) return Resultado.Acao("loja_curva_abc", emptyMap())
+        GESTAO_PRAZO.matchEntire(c)?.let { m -> return Resultado.Acao("gestao_prazo", mapOf("dias" to m.groupValues[1].toInt())) }
+        if (GESTAO_COMPRAS.containsMatchIn(c)) return Resultado.Acao("loja_compras", emptyMap())
+        GESTAO_CHAMAR.firstNotNullOfOrNull { it.matchEntire(c) }?.let { m ->
+            val nome = f.trecho(m.groups[1]).orEmpty().trim()
+            if (nome.isNotBlank()) return Resultado.Acao("loja_chamar_cliente", mapOf("nome" to nome))
+        }
+        if (GESTAO_RECOMPRA.containsMatchIn(c)) return Resultado.Acao("loja_recompra", emptyMap())
+        if (GESTAO_DATAS.containsMatchIn(c)) {
+            val dias = if (Regex("\\b(?:black friday|natal|namorados|dia do sexo|dia da mulher|carnaval|reveillon|orgasmo|solteiro)\\b").containsMatchIn(c)) 365 else 60
+            return Resultado.Acao("loja_datas", mapOf("dias" to dias))
+        }
+        return null
+    }
+
+    private val GESTAO_PROMO_PARADOS = Regex(
+        "\\b(?:promocao|desconto|liquidacao|queima)\\b.*\\b(?:produtos? parados?|parados|sem venda|que nao (?:vendem|venderam|saem|sairam))\\b" +
+            "|\\b(?:produtos? parados?|parados|sem venda)\\b.*\\b(?:em promocao|na promocao|com desconto|em liquidacao)\\b"
+    )
+    private val GESTAO_ABC = Regex(
+        "\\bcurva (?:abc|a b c)\\b|\\b(?:quais|que) produtos (?:mais )?(?:sustentam|seguram|trazem mais dinheiro|dao mais dinheiro|mais faturam|faturam mais)\\b|\\bprodutos mais importantes da loja\\b"
+    )
+    private val GESTAO_PRAZO = Regex("^(?:o |meu |a )?(?:fornecedor|distribuidor|fornecedora)(?: \\w+)? (?:entrega|demora|leva|manda|envia)(?: a mercadoria| os produtos)?(?: em)? (\\d{1,3}) dias?(?: (?:para|pra) (?:entregar|chegar))?$")
+    private val GESTAO_COMPRAS = Regex(
+        "\\b(?:sugestao de compras?|sugestoes de compras?|ponto de pedido|lista de compras? da loja|o que (?:eu )?(?:preciso|devo|tenho que) (?:comprar|encomendar|pedir) (?:pra|para|na|da) (?:a )?loja|o que (?:eu )?(?:preciso|devo|tenho que) (?:encomendar|pedir) (?:do|ao|pro) fornecedor|o que (?:eu )?(?:preciso|devo|tenho que) comprar do fornecedor|hora de comprar|quando (?:eu )?(?:devo|preciso) comprar mais)\\b"
+    )
+    private val GESTAO_CHAMAR = listOf(
+        Regex("^(?:chama|chame|chamar|traz|traga|trazer) de volta (?:a |o |a cliente |o cliente )?(.+)$"),
+        Regex("^(?:chama|chame|traz|traga) (?:a |o |a cliente |o cliente )?(.+?) de volta$"),
+        Regex("^(?:manda|mande|envia|envie) (?:a |uma )?mensagem de recompra (?:para|pra|pro) (?:a |o )?(.+)$"),
+    )
+    private val GESTAO_RECOMPRA = Regex(
+        "\\b(?:recompra|clientes? (?:sumid[oa]s?|inativ[oa]s?|que (?:nao voltaram|sumiram|nao compram mais|nao compraram mais))|quais clientes (?:eu )?(?:posso|devo|da pra|consigo) (?:chamar|trazer)(?: de volta)?|chamar clientes de volta|trazer clientes de volta)\\b"
+    )
+    private val GESTAO_DATAS = Regex(
+        "\\b(?:datas? comercia(?:l|is)|datas? (?:que vendem|importantes para a loja|de venda)|calendario (?:comercial|de vendas|da loja)|proximas datas|quando (?:e|eh|vai ser|cai) (?:a |o )?(?:black friday|dia dos namorados|dia do sexo|dia do orgasmo|dia do solteiro|carnaval)|quanto(?:s dias)? falta(?:m)? (?:para|pra) (?:a |o )?(?:black friday|dia dos namorados|dia do sexo|dia do orgasmo|dia do solteiro|dia da mulher))\\b"
+    )
+
     /** Caixa da loja: despesas, entradas por fora, fixas, resultado, gráficos e contas financeiras. */
     fun financas(f: Frase): Resultado? {
         val c = f.chave

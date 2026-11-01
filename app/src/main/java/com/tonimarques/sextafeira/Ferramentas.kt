@@ -378,6 +378,35 @@ class Ferramentas(private val activity: Activity, private val memoria: Memoria? 
         "loja_mais_vendidos" -> daLoja { it.maisVendidos(a.optString("periodo", "mes")) }
         "loja_comparar" -> daLoja { it.comparar() }
         "loja_parados" -> daLoja { it.parados() }
+        "loja_curva_abc" -> daLoja { Gestao.textoABC(Gestao.curvaABC(it.pedidos(), Calendar.getInstance())) }
+        "loja_compras" -> daLoja { l ->
+            val prazo = if (a.has("prazo")) a.optInt("prazo") else prazoDoFornecedor()
+            Gestao.textoCompra(Gestao.sugestaoDeCompra(l.pedidos(), l.produtos(), Calendar.getInstance(), prazo), prazo)
+        }
+        "gestao_prazo" -> {
+            val dias = a.optInt("dias").coerceIn(1, 120)
+            activity.getSharedPreferences("gestao", 0).edit().putInt("prazo_fornecedor", dias).apply()
+            "Anotado: o fornecedor entrega em ${if (dias == 1) "1 dia" else "$dias dias"}. Vou usar isso para avisar a hora de comprar."
+        }
+        "loja_recompra" -> daLoja { l -> Gestao.textoRecompra(Gestao.clientesParaRecompra(l.pedidos(), System.currentTimeMillis()), System.currentTimeMillis()) }
+        "loja_chamar_cliente" -> daLoja { l ->
+            val lista = Gestao.clientesParaRecompra(l.pedidos(), System.currentTimeMillis(), minDias = 0, maxDias = 3650)
+            val c = Gestao.acharCliente(lista, a.optString("nome"))
+            if (c == null) "Não achei nenhuma cliente com esse nome nos pedidos."
+            else {
+                val uri = Uri.parse(Gestao.linkWhatsapp(c))
+                activity.runOnUiThread {
+                    if (WHATSAPPS.none { iniciar(Intent(Intent.ACTION_VIEW, uri).setPackage(it)) }) iniciar(Intent(Intent.ACTION_VIEW, uri))
+                }
+                "Abri o WhatsApp de ${c.nome.split(" ").first()} com a mensagem pronta. Confira e toque em Enviar."
+            }
+        }
+        "loja_datas" -> Gestao.textoDatas(Gestao.proximasDatas(Calendar.getInstance(), a.optInt("dias", 60).coerceIn(7, 365)), a.optInt("dias", 60).coerceIn(7, 365))
+        "loja_promo_parados" -> daLoja { l ->
+            val preparo = Gestao.promocaoNosParados(l.pedidos(), l.produtos(), Calendar.getInstance(), a.optInt("dias", 30), a.optInt("pct", 15))
+            lojaPendente = preparo.alteracao
+            preparo.texto
+        }
         "loja_margem" -> daLoja { it.margem(a.optString("produto")) }
         "loja_margens" -> daLoja { it.margens() }
         "loja_lucro" -> daLoja { it.lucro(a.optString("periodo", "mes")) }
@@ -587,6 +616,8 @@ class Ferramentas(private val activity: Activity, private val memoria: Memoria? 
     val loja by lazy { Loja(activity) }
 
     /** Consulta a loja. Os dados ficam no celular (estas ferramentas não são oferecidas ao Gemini). */
+    private fun prazoDoFornecedor() = activity.getSharedPreferences("gestao", 0).getInt("prazo_fornecedor", 7)
+
     /** Pedidos e produtos da loja para as contas do caixa (vazios se a loja não estiver conectada). Roda fora da thread principal. */
     fun dadosDoCaixa(): Pair<List<Loja.Pedido>, List<Loja.Produto>> {
         if (!loja.conectada) return emptyList<Loja.Pedido>() to emptyList()
@@ -646,6 +677,7 @@ class Ferramentas(private val activity: Activity, private val memoria: Memoria? 
                 partes += loja.resumoDaManha()
             } catch (e: Exception) {
             }
+            Gestao.avisoDeData(Calendar.getInstance())?.let { partes += it }
         }
         if (partes.size == 1) partes += "Que seu dia seja ótimo. Em que posso ajudar?"
         return partes.joinToString(" ")
@@ -1177,6 +1209,7 @@ class Ferramentas(private val activity: Activity, private val memoria: Memoria? 
             "rotina_bom_dia", "responder_mensagem", "confirmar_resposta",
             "loja_retiradas", "loja_estoque_geral", "loja_alterar", "loja_status", "loja_reposicao", "loja_mais_vendidos", "loja_comparar", "loja_parados", "loja_margem", "loja_margens", "loja_lucro", "loja_previsao", "loja_produto", "loja_entregue", "loja_confirmar", "loja_agendar",
             "caixa_resultado", "caixa_equilibrio", "caixa_previsao",
+            "loja_curva_abc", "loja_compras", "loja_recompra", "loja_chamar_cliente", "loja_promo_parados",
         )
 
         private const val SPOTIFY = "com.spotify.music"
