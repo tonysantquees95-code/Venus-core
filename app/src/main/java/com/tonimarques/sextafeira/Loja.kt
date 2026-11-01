@@ -267,6 +267,20 @@ class Loja(private val contexto: Context) {
     /** Aplica uma alteração já confirmada. */
     fun aplicar(a: Alteracao): String {
         when (a.tipo) {
+            "lote" -> {
+                var ok = 0
+                val falhas = mutableListOf<String>()
+                for (x in a.lote) {
+                    try {
+                        aplicar(x)
+                        ok++
+                    } catch (e: Exception) {
+                        falhas += x.produto?.nome ?: x.pedido?.id?.toString() ?: "?"
+                    }
+                }
+                return "Pronto: ${plural(ok, "produto alterado", "produtos alterados")} no site." +
+                    if (falhas.isNotEmpty()) " Não consegui mudar: ${falhas.joinToString(", ")}." else ""
+            }
             "estoque_somar", "estoque_tirar", "estoque_definir" -> {
                 val p = a.produto!!
                 enviar("/_api/admin/stock_update", JSONObject().put("productId", p.id).put("quantity", a.valor!!).put("mode", "set"))
@@ -361,7 +375,7 @@ class Loja(private val contexto: Context) {
     /** Uma mudança esperando o "sim". [valor]: quantidade final do estoque ou preço em centavos. */
     data class Alteracao(
         val tipo: String, val produto: Produto? = null, val pedido: Pedido? = null, val valor: Int? = null,
-        val status: String? = null, val rastreio: String? = null,
+        val status: String? = null, val rastreio: String? = null, val lote: List<Alteracao> = emptyList(),
     )
 
     /** O que falar e, se der para seguir, a alteração que aguarda confirmação. */
