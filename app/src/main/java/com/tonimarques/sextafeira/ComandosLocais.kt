@@ -44,6 +44,7 @@ object ComandosLocais {
         if (EDITAR_FUNDO.containsMatchIn(c)) return Resultado.Acao("editar_fundo", emptyMap())
         if (LER_NOTA.containsMatchIn(c)) return Resultado.Acao("ler_nota", emptyMap())
         if (ABRIR_ARQUIVO.containsMatchIn(c)) return Resultado.Acao("abrir_arquivo", emptyMap())
+        lojaPrevisao(f)?.let { return it }
         if (LISTAR_POSTS.containsMatchIn(c)) return Resultado.Acao("listar_posts", emptyMap())
         if (RESPONDER_CLIENTE.containsMatchIn(c)) return Resultado.Acao("responder_cliente", emptyMap())
         PROGRAMAR_POST.matchEntire(c)?.let { m -> return programarPost(m.groupValues[1], f.trecho(m.groups[2]).orEmpty()) }
@@ -339,10 +340,7 @@ object ComandosLocais {
             Regex("\\b(mes|mensal|30 dias|trinta dias)\\b").containsMatchIn(c) -> "mes"
             else -> padrao
         }
-        LOJA_PREVISAO.firstNotNullOfOrNull { it.matchEntire(c) }?.let { m ->
-            return Resultado.Acao("loja_previsao", mapOf("produto" to f.trecho(m.groups[1]).orEmpty().replace(Regex("^(?i)(?:o|a|os|as)\\s+"), "")))
-        }
-        if (LOJA_PREVISAO_GERAL.containsMatchIn(c)) return Resultado.Acao("loja_previsao", mapOf("produto" to ""))
+        lojaPrevisao(f)?.let { return it }
         if (LOJA_MARGENS.containsMatchIn(c)) return Resultado.Acao("loja_margens", emptyMap())
         LOJA_MARGEM.firstNotNullOfOrNull { it.matchEntire(c) }?.let { m ->
             val prod = f.trecho(m.groups[1]).orEmpty().trim()
@@ -936,6 +934,16 @@ object ComandosLocais {
         0 to Regex("^(?:o |a |os |as )?(.+?) (?:me )?custou $VALOR(?: cada| a unidade| por unidade)?$"),
         1 to Regex("^(?:eu )?paguei $VALOR (?:no|na|nos|nas|em|pelo|pela|pelos|pelas|por|cada) (.+?)$"),
     )
+    /** "Quando o gel vai acabar", "previsão de estoque" (antes do clima, que também entende "previsão"). */
+    private fun lojaPrevisao(f: Frase): Resultado? {
+        val c = f.chave
+        LOJA_PREVISAO.firstNotNullOfOrNull { it.matchEntire(c) }?.let { m ->
+            return Resultado.Acao("loja_previsao", mapOf("produto" to f.trecho(m.groups[1]).orEmpty().replace(Regex("^(?i)(?:o|a|os|as)\\s+"), "")))
+        }
+        if (LOJA_PREVISAO_GERAL.containsMatchIn(c)) return Resultado.Acao("loja_previsao", mapOf("produto" to ""))
+        return null
+    }
+
     private val LOJA_PREVISAO = listOf(
         Regex("^(?:quando|em quantos dias|em quanto tempo) (?:o |a |os |as )?(.+?) (?:vai |vao )?(?:acaba|acabar|acabam|esgota|esgotar|esgotam)$"),
         Regex("^(?:quando|em quantos dias|em quanto tempo) (?:vai |vao )?(?:acaba|acabar|acabam|esgota|esgotar|esgotam) (?:o |a |os |as )?(?:estoque (?:d[oae]s? )?)?(.+)$"),
