@@ -17,3 +17,7 @@ Código pronto aqui; o cérebro passou em 45 testes (teste/t.ts, `node --experim
 - Voz: SpeechRecognition do Safari (pt-BR) + speechSynthesis. Se o microfone não aparecer, o ditado do teclado do iPhone funciona.
 - Na tela inicial do iPhone: Safari → Compartilhar → Adicionar à Tela de Início, abrindo em /admin/venus.
 - Avisos push no iPhone: verificar o que a Floot permite (sem service worker próprio).
+
+## Pedido extra do Toni (31/10)
+- Nome da loja no topo do site (SiteHeader): hoje em fonte pontilhada, rosa escuro, pouco contraste → deixar maior e mais legível,
+  com o rosa neon vivo e brilho (text-shadow). Mostrar 2–3 opções no preview antes de publicar. Conferir no celular também.
