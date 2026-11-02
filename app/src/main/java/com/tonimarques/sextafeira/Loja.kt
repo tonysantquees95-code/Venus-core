@@ -370,6 +370,8 @@ class Loja(private val contexto: Context) {
     data class NovoProduto(
         val nome: String, val categoria: String, val descricao: String?, val precoCentavos: Int?,
         val estoque: Int?, val imagemUrl: String?, val ativo: Boolean,
+        /** Preço de custo (só o painel vê); null se não informado. */
+        val custoCentavos: Int? = null,
     )
 
     /** Uma mudança esperando o "sim". [valor]: quantidade final do estoque ou preço em centavos. */
@@ -761,6 +763,7 @@ class Loja(private val contexto: Context) {
             .put("lengthCm", JSONObject.NULL)
             .put("imageUrl", p.imagemUrl ?: JSONObject.NULL)
             .put("active", p.ativo)
+            .apply { if (p.custoCentavos != null) put(CAMPO_CUSTO, p.custoCentavos) }
 
         /** Campos que o painel exige para salvar um produto (o site troca o produto inteiro). */
         private val CAMPOS_PRODUTO = listOf(

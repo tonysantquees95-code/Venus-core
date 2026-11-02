@@ -131,7 +131,10 @@ class GestaoTest {
 
     @Test fun interromper() {
         val validas = Interruptor.PALAVRAS.toSet()
-        assertEquals("chega", Interruptor.acharPalavra("chega", validas))
+        assertNull(Interruptor.acharPalavra("chega", validas))
+        assertEquals("venus", Interruptor.acharPalavra("a vênus", validas))
+        assertEquals(0.93, Interruptor.confianca("{\"result\":[{\"word\":\"vênus\",\"conf\":0.93}],\"text\":\"vênus\"}", "vênus"), 0.001)
+        assertEquals(0.0, Interruptor.confianca("{\"text\":\"\"}", "vênus"), 0.001)
         assertEquals("venus", Interruptor.acharPalavra("[unk] vênus", validas))
         assertNull(Interruptor.acharPalavra("[unk] [unk]", validas))
         assertNull(Interruptor.acharPalavra("", validas))

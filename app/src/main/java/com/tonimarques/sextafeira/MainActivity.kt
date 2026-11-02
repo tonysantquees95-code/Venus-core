@@ -2347,172 +2347,167 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         val nomeFalado = args["nome"]?.toString().orEmpty()
         responder(if (nomeFalado.isBlank()) "Vamos cadastrar. Preencha o produto na tela." else "Vamos cadastrar $nomeFalado. Confira os dados na tela e adicione a foto.")
         var foto: ByteArray? = fotoInicial
-
-        val caixa = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(dp(20), dp(8), dp(20), 0)
-        }
-        fun rotulo(t: String) = TextView(this).apply {
-            text = t
-            textSize = 13f
-            setPadding(0, dp(10), 0, dp(2))
-        }
-        fun campo(valor: String, dica: String, tipo: Int) = EditText(this).apply {
-            setText(valor)
-            hint = dica
-            inputType = tipo
-        }
-        val nome = campo(nomeFalado, "Ex.: Gel de massagem morango 60ml", InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_SENTENCES)
+        val f = Formulario(this, "Novo produto", "Preencha, confira e cadastre na loja")
         val categorias = Loja.CATEGORIAS
-        val categoria = android.widget.Spinner(this).apply {
-            adapter = android.widget.ArrayAdapter(this@MainActivity, android.R.layout.simple_spinner_dropdown_item, categorias.map { it.second })
-            setSelection(categorias.indexOfFirst { it.first == Loja.categoriaProvavel(nomeFalado) }.coerceAtLeast(0))
-        }
-        val preco = campo((args["preco"] as? Int)?.let { "%d,%02d".format(it / 100, it % 100) }.orEmpty(), "Ex.: 29,90",
-            InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_FLAG_DECIMAL)
-        val estoque = campo((args["estoque"] as? Int)?.toString().orEmpty(), "Quantas unidades (deixe vazio se não controla)", InputType.TYPE_CLASS_NUMBER)
-        val descricao = campo("", "Descrição curta (até 300 letras)", InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE or InputType.TYPE_TEXT_FLAG_CAP_SENTENCES).apply {
-            minLines = 2
-            maxLines = 5
-            filters = arrayOf(android.text.InputFilter.LengthFilter(300))
-        }
-        val previa = android.widget.ImageView(this).apply {
-            adjustViewBounds = true
-            maxHeight = dp(180)
-            visibility = View.GONE
-        }
-        val avisoFoto = TextView(this).apply { textSize = 12f }
-        val botoesFoto = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        val tirar = android.widget.Button(this).apply { text = "Tirar foto" }
-        val galeria = android.widget.Button(this).apply { text = "Da galeria" }
-        botoesFoto.addView(tirar, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
-        botoesFoto.addView(galeria, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
-        val ia = android.widget.Button(this).apply { text = "Escrever a descrição com IA" }
-        val mostrar = android.widget.Switch(this).apply {
-            text = "Já mostrar no site"
-            isChecked = false
-            setPadding(0, dp(10), 0, dp(6))
-        }
 
-        caixa.addView(rotulo("Nome"))
-        caixa.addView(nome)
-        caixa.addView(rotulo("Categoria"))
-        caixa.addView(categoria)
-        caixa.addView(rotulo("Preço (R$)"))
-        caixa.addView(preco)
-        caixa.addView(rotulo("Estoque"))
-        caixa.addView(estoque)
-        caixa.addView(rotulo("Foto"))
-        caixa.addView(botoesFoto)
-        caixa.addView(previa)
-        caixa.addView(avisoFoto)
-        val trocarFundo = android.widget.Button(this).apply { text = "Trocar o fundo da foto" }
-        caixa.addView(trocarFundo)
+        // --- produto
+        f.cartao("Produto")
+        val (blocoNome, nome) = f.campo("Nome", nomeFalado, "Ex.: Gel de massagem morango 60ml")
+        f.adicionar(blocoNome, 2)
+        f.adicionar(f.rotulo("Categoria"), 12)
+        val categoria = f.seletor(categorias.map { it.second }, categorias.indexOfFirst { it.first == Loja.categoriaProvavel(nomeFalado) }.coerceAtLeast(0))
+        f.adicionar(categoria, 5)
+
+        // --- preço, custo e estoque
+        f.cartao("Preço e estoque")
+        val numero = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_FLAG_DECIMAL
+        val (blocoPreco, preco) = f.campo("Preço de venda (R$)", (args["preco"] as? Int)?.let { "%d,%02d".format(it / 100, it % 100) }.orEmpty(), "29,90", numero)
+        val (blocoCusto, custo) = f.campo("Preço de custo (R$)", (args["custo"] as? Int)?.let { "%d,%02d".format(it / 100, it % 100) }.orEmpty(), "15,00", numero)
+        f.lado(blocoPreco, blocoCusto)
+        val margem = f.aviso("O custo só você vê. Com ele, a Vênus calcula o lucro de cada venda.")
+        f.adicionar(margem, 6)
+        fun centavosDe(e: EditText): Int? = e.text.toString().trim().takeIf { it.isNotBlank() }
+            ?.let { ComandosLocais.centavos(it.replace(Regex("[^0-9,.]"), "")) }
+        val atualizarMargem = {
+            val v = centavosDe(preco)
+            val c = centavosDe(custo)
+            margem.text = when {
+                v != null && c != null && v > 0 -> {
+                    val lucro = v - c
+                    val pct = lucro * 100.0 / v
+                    if (lucro <= 0) "Atenção: o preço está abaixo do custo (prejuízo de ${Loja.dinheiro(-lucro)} por unidade)."
+                    else "Lucro de ${Loja.dinheiro(lucro)} por unidade · margem de ${pct.toInt()}%"
+                }
+                else -> "O custo só você vê. Com ele, a Vênus calcula o lucro de cada venda."
+            }
+            margem.setTextColor(if (v != null && c != null && v <= c) Color.parseColor("#FF8A80") else Formulario.COR_APAGADA)
+        }
+        val observador = object : android.text.TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
+            override fun onTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
+            override fun afterTextChanged(e: android.text.Editable?) = atualizarMargem()
+        }
+        preco.addTextChangedListener(observador)
+        custo.addTextChangedListener(observador)
+        atualizarMargem()
+        val (blocoEstoque, estoque) = f.campo("Estoque (unidades)", (args["estoque"] as? Int)?.toString().orEmpty(), "Vazio se não controla", InputType.TYPE_CLASS_NUMBER)
+        f.adicionar(blocoEstoque, 12)
+
+        // --- foto
+        f.cartao("Foto")
+        val previa = f.previa()
+        f.adicionar(previa, 2)
+        val avisoFoto = f.aviso("Uma foto boa vende mais: fundo limpo e boa luz.")
+        f.adicionar(avisoFoto, 6)
+        val tirar = f.botao("Câmera") { pedirFotoCamera() }
+        val galeria = f.botao("Galeria") { pedirFotoGaleria() }
+        f.lado(tirar, galeria)
         fun mostrarFoto(bytes: ByteArray) {
             foto = bytes
             previa.setImageBitmap(android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size))
             previa.visibility = View.VISIBLE
             avisoFoto.text = "Foto pronta (${bytes.size / 1024} KB)."
         }
-        fotoInicial?.let { mostrarFoto(it) }
-        trocarFundo.setOnClickListener {
+        val trocarFundo = f.botao("Trocar o fundo da foto") {
             val atual = foto
             if (atual == null) Toast.makeText(this, "Escolha a foto primeiro.", Toast.LENGTH_SHORT).show()
             else editarFundo(atual) { nova -> mostrarFoto(nova) }
         }
-        caixa.addView(rotulo("Descrição"))
-        caixa.addView(descricao)
-        if (chave().isNotBlank()) caixa.addView(ia)
-        caixa.addView(mostrar)
+        f.adicionar(trocarFundo, 10)
+        fotoInicial?.let { mostrarFoto(it) }
 
-        cadastroFoto = { uri ->
-            avisoFoto.text = "Preparando a foto…"
-            Thread {
-                val bytes = FotoProvider.prepararParaEnviar(this, uri)
-                runOnUiThread {
-                    if (bytes == null) {
-                        avisoFoto.text = "Não consegui ler essa foto. Tente outra."
-                    } else {
-                        mostrarFoto(bytes)
-                    }
-                }
-            }.start()
-        }
-        tirar.setOnClickListener { pedirFotoCamera() }
-        galeria.setOnClickListener { pedirFotoGaleria() }
-        ia.setOnClickListener {
+        // --- descrição e vitrine
+        f.cartao("Descrição")
+        val (blocoDescricao, descricao) = f.campo("Texto que aparece no site", "", "Descrição curta (até 300 letras)",
+            InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE or InputType.TYPE_TEXT_FLAG_CAP_SENTENCES, linhas = 3)
+        descricao.maxLines = 6
+        descricao.filters = arrayOf(android.text.InputFilter.LengthFilter(300))
+        f.adicionar(blocoDescricao, 2)
+        lateinit var ia: TextView
+        ia = f.botao("✦  Escrever a descrição com IA") {
             val n = nome.text.toString().trim()
             if (n.isBlank()) {
                 Toast.makeText(this, "Escreva o nome antes.", Toast.LENGTH_SHORT).show()
-                return@setOnClickListener
+                return@botao
             }
             ia.isEnabled = false
             ia.text = "Escrevendo…"
             val cat = categorias[categoria.selectedItemPosition].second
             val k = chave()
             val m = modelo()
-            val f = foto
+            val fotoAtual = foto
             Thread {
-                val t = Gemini.descreverProduto(k, m, f, n, cat)
+                val t = Gemini.descreverProduto(k, m, fotoAtual, n, cat)
                 runOnUiThread {
                     ia.isEnabled = true
-                    ia.text = "Escrever a descrição com IA"
+                    ia.text = "✦  Escrever a descrição com IA"
                     if (t != null) descricao.setText(t)
                     else Toast.makeText(this, "A IA não conseguiu escrever agora. Escreva você mesmo ou tente de novo.", Toast.LENGTH_LONG).show()
                 }
             }.start()
         }
+        if (chave().isNotBlank()) f.adicionar(ia, 10)
+        val mostrar = f.interruptor("Já mostrar no site", false)
+        f.adicionar(mostrar, 12)
 
-        val dialogo = AlertDialog.Builder(this)
-            .setTitle("Novo produto")
-            .setView(ScrollView(this).apply { addView(caixa) })
-            .setPositiveButton("Cadastrar", null)
-            .setNegativeButton("Cancelar", null)
-            .create()
-        dialogo.setOnDismissListener { cadastroFoto = null }
-        dialogo.setOnShowListener {
-            dialogo.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
-                val n = nome.text.toString().trim()
-                if (n.isBlank()) {
-                    Toast.makeText(this, "Informe o nome do produto.", Toast.LENGTH_SHORT).show()
-                    return@setOnClickListener
+        cadastroFoto = { uri ->
+            avisoFoto.text = "Preparando a foto…"
+            Thread {
+                val bytes = FotoProvider.prepararParaEnviar(this, uri)
+                runOnUiThread {
+                    if (bytes == null) avisoFoto.text = "Não consegui ler essa foto. Tente outra." else mostrarFoto(bytes)
                 }
-                val textoPreco = preco.text.toString().trim()
-                val centavos = if (textoPreco.isBlank()) null else ComandosLocais.centavos(textoPreco.replace(Regex("[^0-9,.]"), ""))
-                if (textoPreco.isNotBlank() && (centavos == null || centavos <= 0)) {
-                    Toast.makeText(this, "Confira o preço (ex.: 29,90).", Toast.LENGTH_SHORT).show()
-                    return@setOnClickListener
+            }.start()
+        }
+        f.aoFechar { cadastroFoto = null }
+
+        val cadastrar = f.botao("Cadastrar produto", primario = true) {
+            val n = nome.text.toString().trim()
+            if (n.isBlank()) {
+                Toast.makeText(this, "Informe o nome do produto.", Toast.LENGTH_SHORT).show()
+                return@botao
+            }
+            val centavos = centavosDe(preco)
+            if (preco.text.isNotBlank() && (centavos == null || centavos <= 0)) {
+                Toast.makeText(this, "Confira o preço (ex.: 29,90).", Toast.LENGTH_SHORT).show()
+                return@botao
+            }
+            val custoCentavos = centavosDe(custo)
+            if (custo.text.isNotBlank() && (custoCentavos == null || custoCentavos < 0)) {
+                Toast.makeText(this, "Confira o preço de custo (ex.: 15,00).", Toast.LENGTH_SHORT).show()
+                return@botao
+            }
+            if (mostrar.isChecked && centavos == null) {
+                Toast.makeText(this, "Para mostrar no site, informe o preço.", Toast.LENGTH_LONG).show()
+                return@botao
+            }
+            val novo = Loja.NovoProduto(
+                nome = n,
+                categoria = categorias[categoria.selectedItemPosition].first,
+                descricao = descricao.text.toString().trim().ifBlank { null },
+                precoCentavos = centavos,
+                estoque = estoque.text.toString().trim().toIntOrNull(),
+                imagemUrl = null,
+                ativo = mostrar.isChecked,
+                custoCentavos = custoCentavos,
+            )
+            val fotoFinal = foto
+            f.fechar()
+            comTempoLimite("CADASTRANDO…") {
+                val r = try {
+                    val url = fotoFinal?.let { loja.enviarFoto(it) }
+                    loja.cadastrar(novo.copy(imagemUrl = url))
+                } catch (e: Loja.ErroDaLoja) {
+                    "Não consegui cadastrar: ${e.message}"
+                } catch (e: Exception) {
+                    "Não consegui falar com a loja agora. Confira a internet e tente de novo."
                 }
-                if (mostrar.isChecked && centavos == null) {
-                    Toast.makeText(this, "Para mostrar no site, informe o preço.", Toast.LENGTH_LONG).show()
-                    return@setOnClickListener
-                }
-                val novo = Loja.NovoProduto(
-                    nome = n,
-                    categoria = categorias[categoria.selectedItemPosition].first,
-                    descricao = descricao.text.toString().trim().ifBlank { null },
-                    precoCentavos = centavos,
-                    estoque = estoque.text.toString().trim().toIntOrNull(),
-                    imagemUrl = null,
-                    ativo = mostrar.isChecked,
-                )
-                val fotoFinal = foto
-                dialogo.dismiss()
-                comTempoLimite("CADASTRANDO…") {
-                    val r = try {
-                        val url = fotoFinal?.let { loja.enviarFoto(it) }
-                        loja.cadastrar(novo.copy(imagemUrl = url))
-                    } catch (e: Loja.ErroDaLoja) {
-                        "Não consegui cadastrar: ${e.message}"
-                    } catch (e: Exception) {
-                        "Não consegui falar com a loja agora. Confira a internet e tente de novo."
-                    }
-                    val acao: () -> Unit = { responder(r) }
-                    acao
-                }
+                val acao: () -> Unit = { responder(r) }
+                acao
             }
         }
-        dialogo.show()
+        f.acoes(cadastrar, f.botao("Cancelar") { f.fechar() })
+        f.mostrar()
     }
 
     // ----------------------------------------------------------- trocar o fundo da foto
@@ -2867,71 +2862,46 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         val produtoFalado = args["produto"]?.toString().orEmpty()
         var contexto = produtoFalado
         var linkDoProduto = ""
-        val caixa = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(dp(20), dp(8), dp(20), 0)
-        }
-        val previa = android.widget.ImageView(this).apply {
-            adjustViewBounds = true
-            maxHeight = dp(220)
-            visibility = View.GONE
-        }
-        val aviso = TextView(this).apply { textSize = 12f }
-        val linhaFoto = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        val tirar = android.widget.Button(this).apply { text = "Tirar foto" }
-        val galeria = android.widget.Button(this).apply { text = "Da galeria" }
-        linhaFoto.addView(tirar, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
-        linhaFoto.addView(galeria, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
-        val fundo = android.widget.Button(this).apply { text = "Trocar o fundo" }
-        val tipos = android.widget.RadioGroup(this).apply { orientation = LinearLayout.HORIZONTAL }
-        val feed = android.widget.RadioButton(this).apply { text = "Post no feed"; id = View.generateViewId() }
-        val story = android.widget.RadioButton(this).apply { text = "Story"; id = View.generateViewId() }
-        tipos.addView(feed)
-        tipos.addView(story)
-        tipos.check(if (args["tipo"] == "story") story.id else feed.id)
-        val horario = android.widget.Button(this)
-        fun mostrarHorario() {
-            horario.text = "Quando: " + Lembretes.quandoFalado(quando)
-        }
-        mostrarHorario()
-        val legenda = EditText(this).apply {
-            hint = "Legenda"
-            minLines = 3
-            maxLines = 8
-            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE or InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
-        }
-        val ia = android.widget.Button(this).apply { text = "Escrever a legenda com IA" }
-        caixa.addView(linhaFoto)
-        caixa.addView(previa)
-        caixa.addView(aviso)
-        caixa.addView(fundo)
-        caixa.addView(tipos)
-        caixa.addView(horario)
-        caixa.addView(legenda)
-        if (chave().isNotBlank()) caixa.addView(ia)
+        val sozinha = Postagens.podePublicarSozinho(this)
+        val f = Formulario(this, "Post no Instagram", if (sozinha) "Na hora marcada eu publico sozinha" else "Na hora marcada eu te aviso com tudo pronto")
 
+        // --- formato
+        f.cartao("Formato")
+        lateinit var legenda: EditText
+        val (escolhaTipo, tipoMarcado) = f.escolha(listOf("Post no feed", "Story"), if (args["tipo"] == "story") 1 else 0) { i ->
+            legenda.hint = if (i == 1) "Texto que vai escrito no story (curto)" else "Legenda do post, com hashtags"
+        }
+        f.adicionar(escolhaTipo, 2)
+        val dicaTipo = f.aviso("No story, a Vênus monta a arte em tela cheia com a foto inteira, o texto e o endereço do produto.")
+        f.adicionar(dicaTipo, 8)
+
+        // --- foto
+        f.cartao("Foto")
+        val previa = f.previa()
+        f.adicionar(previa, 2)
+        val aviso = f.aviso("Escolha a foto do post.")
+        f.adicionar(aviso, 6)
         fun mostrarFoto(b: ByteArray) {
             foto = b
             previa.setImageBitmap(android.graphics.BitmapFactory.decodeByteArray(b, 0, b.size))
             previa.visibility = View.VISIBLE
             aviso.text = ""
+            aviso.visibility = View.GONE
         }
-        val anterior = cadastroFoto
-        cadastroFoto = { uri ->
-            aviso.text = "Preparando a foto…"
-            Thread {
-                val b = FotoProvider.prepararParaEnviar(this, uri, 1440)
-                runOnUiThread { if (b == null) aviso.text = "Não consegui ler essa foto." else mostrarFoto(b) }
-            }.start()
+        f.lado(f.botao("Câmera") { pedirFotoCamera() }, f.botao("Galeria") { pedirFotoGaleria() })
+        f.adicionar(f.botao("Trocar o fundo") {
+            val atual = foto
+            if (atual == null) Toast.makeText(this, "Escolha a foto primeiro.", Toast.LENGTH_SHORT).show()
+            else editarFundo(atual) { nova -> mostrarFoto(nova) }
+        }, 10)
+
+        // --- quando
+        f.cartao("Quando")
+        lateinit var horario: TextView
+        fun mostrarHorario() {
+            horario.text = "🗓  " + Lembretes.quandoFalado(quando).replaceFirstChar { it.uppercase() }
         }
-        tirar.setOnClickListener { pedirFotoCamera() }
-        galeria.setOnClickListener { pedirFotoGaleria() }
-        fundo.setOnClickListener {
-            val f = foto
-            if (f == null) Toast.makeText(this, "Escolha a foto primeiro.", Toast.LENGTH_SHORT).show()
-            else editarFundo(f) { nova -> mostrarFoto(nova) }
-        }
-        horario.setOnClickListener {
+        horario = f.botao("") {
             val c = java.util.Calendar.getInstance().apply { timeInMillis = quando }
             android.app.DatePickerDialog(this, { _, a, m, d ->
                 android.app.TimePickerDialog(this, { _, h, min ->
@@ -2940,23 +2910,49 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
                 }, c.get(java.util.Calendar.HOUR_OF_DAY), c.get(java.util.Calendar.MINUTE), true).show()
             }, c.get(java.util.Calendar.YEAR), c.get(java.util.Calendar.MONTH), c.get(java.util.Calendar.DAY_OF_MONTH)).show()
         }
-        ia.setOnClickListener {
-            ia.isEnabled = false
-            ia.text = "Escrevendo…"
-            val k = chave()
-            val m = modelo()
-            val f = foto
-            val ehStory = tipos.checkedRadioButtonId == story.id
-            val ctx = contexto
+        mostrarHorario()
+        f.adicionar(horario, 2)
+        f.adicionar(f.aviso("Toque para escolher o dia e a hora. Boa hora para a loja: entre 19h e 21h."), 6)
+
+        // --- texto
+        f.cartao("Texto")
+        val (blocoLegenda, campoLegenda) = f.campo("Legenda", "", if (tipoMarcado() == 1) "Texto que vai escrito no story (curto)" else "Legenda do post, com hashtags",
+            InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE or InputType.TYPE_TEXT_FLAG_CAP_SENTENCES, linhas = 4)
+        legenda = campoLegenda
+        legenda.maxLines = 10
+        f.adicionar(blocoLegenda, 2)
+        if (chave().isNotBlank()) {
+            lateinit var ia: TextView
+            ia = f.botao("✦  Escrever com IA") {
+                ia.isEnabled = false
+                ia.text = "Escrevendo…"
+                val k = chave()
+                val m = modelo()
+                val fotoAtual = foto
+                val ehStory = tipoMarcado() == 1
+                val ctx = contexto
+                Thread {
+                    val t = Gemini.legendaInstagram(k, m, fotoAtual, ctx, ehStory)
+                    runOnUiThread {
+                        ia.isEnabled = true
+                        ia.text = "✦  Escrever com IA"
+                        if (t != null) legenda.setText(t) else Toast.makeText(this, "A IA não conseguiu agora. Tente de novo.", Toast.LENGTH_LONG).show()
+                    }
+                }.start()
+            }
+            f.adicionar(ia, 10)
+        }
+
+        val anterior = cadastroFoto
+        cadastroFoto = { uri ->
+            aviso.visibility = View.VISIBLE
+            aviso.text = "Preparando a foto…"
             Thread {
-                val t = Gemini.legendaInstagram(k, m, f, ctx, ehStory)
-                runOnUiThread {
-                    ia.isEnabled = true
-                    ia.text = "Escrever a legenda com IA"
-                    if (t != null) legenda.setText(t) else Toast.makeText(this, "A IA não conseguiu agora. Tente de novo.", Toast.LENGTH_LONG).show()
-                }
+                val b = FotoProvider.prepararParaEnviar(this, uri, 1440)
+                runOnUiThread { if (b == null) aviso.text = "Não consegui ler essa foto." else mostrarFoto(b) }
             }.start()
         }
+        f.aoFechar { cadastroFoto = anterior }
 
         // "post do gel": usa a foto e os dados do produto da loja
         if (produtoFalado.isNotBlank() && ferramentas.loja.conectada) {
@@ -2980,23 +2976,15 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
                         linkDoProduto = "${Loja.SITE}/produto/${achado.id}"
                         contexto = "produto ${achado.nome}" + (achado.precoCentavos?.let { ", por ${Loja.dinheiro(it)}" } ?: "") +
                             (achado.bruto?.optString("description")?.takeIf { it.isNotBlank() && it != "null" }?.let { ". $it" } ?: "")
-                        aviso.text = if (bytes != null) "Foto do produto da loja. Pode trocar o fundo ou escolher outra." else "Achei ${achado.nome}, mas sem foto. Escolha uma."
-                        if (bytes != null) mostrarFoto(bytes)
+                        if (bytes != null) mostrarFoto(bytes) else aviso.text = "Achei ${achado.nome}, mas sem foto. Escolha uma."
+                        dicaTipo.text = "Produto: ${achado.nome}. No story vai o endereço da página dele no site."
                     } else aviso.text = "Não achei $produtoFalado na loja. Escolha a foto."
                 }
             }.start()
         }
 
-        val dialogo = AlertDialog.Builder(this)
-            .setTitle("Programar post")
-            .setView(ScrollView(this).apply { addView(caixa) })
-            .setPositiveButton("Programar", null)
-            .setNeutralButton("Programar e fazer outro", null)
-            .setNegativeButton("Cancelar", null)
-            .create()
-        dialogo.setOnDismissListener { cadastroFoto = anterior }
         fun salvar(): Boolean {
-            val f = foto ?: run {
+            val fotoFinal = foto ?: run {
                 Toast.makeText(this, "Escolha a foto.", Toast.LENGTH_SHORT).show()
                 return false
             }
@@ -3004,28 +2992,29 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
                 Toast.makeText(this, "Escolha um horário no futuro.", Toast.LENGTH_SHORT).show()
                 return false
             }
-            val p = Postagens.criar(this, quando, if (tipos.checkedRadioButtonId == story.id) "story" else "feed", legenda.text.toString(), f, linkDoProduto)
+            val p = Postagens.criar(this, quando, if (tipoMarcado() == 1) "story" else "feed", legenda.text.toString(), fotoFinal, linkDoProduto)
             focarPost(p.id)
             if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
                 requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), PEDIDO_NOTIFICACOES)
             }
             responder(
                 "Programado: ${if (p.ehStory) "story" else "post"} ${Lembretes.quandoFalado(p.quando)}. " +
-                    if (Postagens.podePublicarSozinho(this)) "Na hora eu publico sozinha. Para mudar, diga: muda para hoje às 20h, no feed, ou posta agora."
+                    if (sozinha) "Na hora eu publico sozinha. Para mudar, diga: muda para hoje às 20h, no feed, ou posta agora."
                     else "Na hora eu te aviso com tudo pronto."
             )
             return true
         }
-        dialogo.setOnShowListener {
-            dialogo.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener { if (salvar()) dialogo.dismiss() }
-            dialogo.getButton(AlertDialog.BUTTON_NEUTRAL).setOnClickListener {
+        f.acoes(
+            f.botao("Programar", primario = true) { if (salvar()) f.fechar() },
+            f.botao("+ Outro") {
                 if (salvar()) {
-                    dialogo.dismiss()
-                    programarPost(mapOf("tipo" to if (tipos.checkedRadioButtonId == story.id) "story" else "feed"))
+                    val tipo = if (tipoMarcado() == 1) "story" else "feed"
+                    f.fechar()
+                    programarPost(mapOf("tipo" to tipo))
                 }
-            }
-        }
-        dialogo.show()
+            },
+        )
+        f.mostrar()
     }
 
     private fun listarPosts() {
