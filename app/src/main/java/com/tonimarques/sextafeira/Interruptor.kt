@@ -15,9 +15,10 @@ import org.json.JSONObject
 import kotlin.math.max
 
 /**
- * Deixa interromper a Vênus enquanto ela fala: dizendo "Vênus", "para", "chega", "espera" ou "silêncio",
- * ela se cala na hora e passa a ouvir. Usa o ouvido offline (sem internet, sem bipe) e ignora as palavras
- * que ela mesma está falando, para não se interromper com a própria voz.
+ * Deixa interromper a Vênus enquanto ela fala, só dizendo "Vênus": ela se cala na hora e passa a ouvir.
+ * Usa o ouvido offline (sem internet, sem bipe). Para barulho e conversa não virarem "Vênus", o ouvido conhece
+ * também palavras comuns (que "absorvem" o resto) e só aceita a palavra com confiança alta, depois que a fala termina.
+ * Ignora quando ela mesma está falando "Vênus", para não se interromper com a própria voz.
  */
 class Interruptor(private val contexto: Context, private val aoInterromper: () -> Unit) {
     private val principal = Handler(Looper.getMainLooper())
@@ -59,6 +60,7 @@ class Interruptor(private val contexto: Context, private val aoInterromper: () -
             if (minha != geracao) return
             val gramatica = (GRAMATICA + "[unk]").joinToString(",", "[", "]") { "\"$it\"" }
             reconhecedor = org.vosk.Recognizer(modelo, TAXA.toFloat(), gramatica)
+            reconhecedor.setWords(true)
             val minimo = AudioRecord.getMinBufferSize(TAXA, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT)
             gravador = AudioRecord(
                 MediaRecorder.AudioSource.VOICE_RECOGNITION, TAXA,
@@ -86,14 +88,16 @@ class Interruptor(private val contexto: Context, private val aoInterromper: () -
                     if (terminou) reconhecedor.reset()
                     continue
                 }
-                val texto = campo(if (terminou) reconhecedor.result else reconhecedor.partialResult, if (terminou) "text" else "partial")
-                val achada = acharPalavra(texto, validas)
+                // só a frase terminada (com a confiança de cada palavra) decide
+                if (!terminou) continue
+                val resultado = reconhecedor.result
+                val achada = acharPalavra(campo(resultado, "text"), validas)?.takeIf { confianca(resultado, "vênus") >= CONFIANCA_MINIMA }
                 if (achada != null) {
                     if (achada == candidato) repeticoes++ else {
                         candidato = achada
                         repeticoes = 1
                     }
-                    if (terminou || repeticoes >= 2) {
+                    if (repeticoes >= 1) {
                         if (minha == geracao) principal.post {
                             if (minha == geracao && ativo) {
                                 ativo = false
@@ -129,9 +133,36 @@ class Interruptor(private val contexto: Context, private val aoInterromper: () -
     companion object {
         private const val TAXA = 16000
 
-        /** O que interrompe (sem acento, como o reconhecedor devolve depois de normalizado). */
-        val PALAVRAS = listOf("venus", "venus para", "chega", "espera", "silencio", "pare", "para venus", "cala a boca")
-        private val GRAMATICA = listOf("vênus", "vênus para", "chega", "espera", "silêncio", "pare", "para vênus", "cala a boca")
+        /** O que interrompe (sem acento, como o reconhecedor devolve depois de normalizado): só chamar "Vênus". */
+        val PALAVRAS = listOf("venus", "ei venus", "oi venus", "venus para")
+
+        /** Confiança mínima (0 a 1) para aceitar que foi "Vênus" mesmo. */
+        const val CONFIANCA_MINIMA = 0.85
+
+        /**
+         * A palavra que vale, mais palavras comuns que "absorvem" barulho e conversa (sem elas, o ouvido
+         * encaixaria qualquer som na única palavra que conhece).
+         */
+        private val GRAMATICA = listOf("vênus", "ei vênus", "oi vênus", "vênus para") + listOf(
+            "a", "o", "e", "é", "de", "da", "do", "que", "não", "sim", "eu", "você", "ela", "ele", "isso", "então", "bom",
+            "mas", "tá", "aí", "né", "uhum", "hum", "ah", "oi", "olá", "obrigado", "certo", "nossa", "meu", "minha",
+            "vamos", "agora", "aqui", "lá", "muito", "mais", "menos", "tudo", "nada", "quando", "onde", "como", "por",
+            "para", "com", "sem", "um", "uma", "dois", "três", "casa", "loja", "venda", "pedido", "música", "nunca", "vem",
+            "verde", "véu", "nove", "menos", "bônus", "ônibus", "vênia",
+        )
+
+        /** Confiança da palavra [palavra] no resultado do ouvido offline (0 se não aparece). */
+        fun confianca(json: String?, palavra: String): Double = try {
+            val lista = JSONObject(json ?: "{}").optJSONArray("result")
+            var melhor = 0.0
+            if (lista != null) for (i in 0 until lista.length()) {
+                val w = lista.optJSONObject(i) ?: continue
+                if (ComandosLocais.normalizar(w.optString("word")) == ComandosLocais.normalizar(palavra)) melhor = maxOf(melhor, w.optDouble("conf", 0.0))
+            }
+            melhor
+        } catch (e: Exception) {
+            0.0
+        }
 
         fun palavrasDa(frase: String): Set<String> =
             ComandosLocais.normalizar(frase).split(Regex("[^a-z0-9]+")).filter { it.isNotBlank() }.toSet()

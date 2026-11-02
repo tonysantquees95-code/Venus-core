@@ -22,6 +22,10 @@ class Gemini(
 ) {
     private val modelo = modelo.trim().removePrefix("models/")
     private var modeloAtivo = this.modelo
+    /** O modelo recusou o modo rápido (sem raciocínio interno)? */
+    @Volatile
+    private var semModoRapido = false
+
     /** Quando passou para um modelo reserva (volta ao principal depois de 10 minutos). */
     private var reservaDesde = 0L
     private var modelosReserva: List<String>? = null
@@ -240,6 +244,8 @@ class Gemini(
             )
         // Pergunta difícil: mais "tempo de pensar" antes de responder (o modelo raciocina por dentro e confere)
         if (profundo) corpo.put("generationConfig", JSONObject().put("thinkingConfig", JSONObject().put("thinkingBudget", Raciocinio.ORCAMENTO)))
+        // Pergunta comum: sem "pensar por dentro" (é o que mais atrasa a resposta dos modelos Flash novos)
+        else if (!semModoRapido) corpo.put("generationConfig", JSONObject().put("thinkingConfig", JSONObject().put("thinkingBudget", 0)))
 
         val bytes = corpo.toString().toByteArray(Charsets.UTF_8)
         var ultimaResposta: Pair<Int, JSONObject>? = null
@@ -267,6 +273,11 @@ class Gemini(
             // modelo que não aceita o ajuste de raciocínio: tenta de novo do jeito normal
             if (profundo && r.first == 400) {
                 profundo = false
+                return chamarApi()
+            }
+            // modelo que não aceita desligar o raciocínio: volta ao normal e não tenta mais
+            if (!profundo && !semModoRapido && r.first == 400 && r.second.optJSONObject("error")?.optString("message").orEmpty().contains("thinking", true)) {
+                semModoRapido = true
                 return chamarApi()
             }
             return r
