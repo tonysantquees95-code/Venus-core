@@ -22,6 +22,8 @@ class Gemini(
 ) {
     private val modelo = modelo.trim().removePrefix("models/")
     private var modeloAtivo = this.modelo
+    /** Quando passou para um modelo reserva (volta ao principal depois de 10 minutos). */
+    private var reservaDesde = 0L
     private var modelosReserva: List<String>? = null
     private val historico = JSONArray()
 
@@ -243,13 +245,14 @@ class Gemini(
         var ultimaResposta: Pair<Int, JSONObject>? = null
         var ultimoErro: IOException? = null
 
-        fun ocupado(codigo: Int) = codigo >= 500 || codigo == 429
+        // Passou para a reserva há mais de 10 minutos: tenta de novo o modelo principal.
+        if (modeloAtivo != modelo && System.currentTimeMillis() - reservaDesde > 10 * 60_000L) modeloAtivo = modelo
 
         fun tentar(modeloUsado: String, vezes: Int): Pair<Int, JSONObject>? {
             for (tentativa in 1..vezes) {
                 try {
                     val resposta = enviarRequisicao(modeloUsado, bytes)
-                    if (!ocupado(resposta.first)) return resposta
+                    if (!sobrecarregado(resposta.first, resposta.second)) return resposta
                     ultimaResposta = resposta
                 } catch (e: IOException) {
                     ultimoErro = e
@@ -269,12 +272,14 @@ class Gemini(
             return r
         }
 
-        // 2) Modelo sobrecarregado ou sem cota: passa para outro modelo Flash disponível na chave.
-        for (reserva in reservas().take(3)) {
+        // 2) Modelo sobrecarregado (503, "overloaded") ou sem cota (429): passa para um modelo Flash, primeiro os mais leves.
+        val ordem = (listOf("gemini-2.5-flash", "gemini-flash-lite-latest") + reservas().take(3)).distinct()
+        for (reserva in ordem) {
             if (reserva == modeloAtivo) continue
             val resposta = tentar(reserva, 1) ?: continue
             if (resposta.first in 200..299) {
                 modeloAtivo = reserva // segue a conversa com o modelo que respondeu
+                reservaDesde = System.currentTimeMillis()
                 return resposta
             }
         }
@@ -338,6 +343,18 @@ class Gemini(
 
         private const val MAX_RODADAS = 8
         private const val MAX_RESERVAS = 4
+
+        /**
+         * O modelo está indisponível ou sobrecarregado? 429 (cota), 500/502/503/504, ou mensagem do Google
+         * com "overloaded", "UNAVAILABLE", "RESOURCE_EXHAUSTED" ou "503". Aí a Vênus troca para um modelo Flash.
+         */
+        fun sobrecarregado(codigo: Int, resposta: JSONObject?): Boolean {
+            if (codigo == 429 || codigo == 500 || codigo == 502 || codigo == 503 || codigo == 504) return true
+            if (codigo in 200..299) return false
+            val erro = resposta?.optJSONObject("error")
+            val texto = (erro?.optString("message").orEmpty() + " " + erro?.optString("status").orEmpty())
+            return Regex("overloaded|unavailable|resource_exhausted|\\b503\\b|try again later", RegexOption.IGNORE_CASE).containsMatchIn(texto)
+        }
         private val RESERVA_FIXA = listOf("gemini-flash-lite-latest", "gemini-2.5-flash")
         private val IGNORAR = listOf("image", "tts", "live", "audio", "embed", "exp", "computer", "robotic", "native")
 
