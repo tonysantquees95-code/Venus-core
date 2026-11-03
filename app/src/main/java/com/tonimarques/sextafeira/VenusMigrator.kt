@@ -3,14 +3,16 @@ package com.tonimarques.sextafeira
 import android.content.Context
 import android.database.sqlite.SQLiteDatabase
 import android.content.ContentValues
+import com.google.generativeai.GoogleGenAI
+import com.google.generativeai.type.content
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 class VenusMigrator(context: Context, apiKey: String) {
 
+    private val ai = GoogleGenAI(apiKey = apiKey)
+    private val embeddingModel = ai.embeddingModel("models/text-embedding-004")
     private val dbHelper = Memoria(context)
-    // Puxa a inteligência do arquivo Gemini que já funciona no seu aplicativo
-    private val geminiApp = Gemini(context) 
 
     suspend fun migrarBancoAntigo() = withContext(Dispatchers.IO) {
         val db = dbHelper.writableDatabase
@@ -31,16 +33,17 @@ class VenusMigrator(context: Context, apiKey: String) {
 
                 if (!jaMigrado) {
                     try {
-                        // Utiliza a própria lógica interna do seu app para buscar a resposta ou vetor
-                        // Isso evita erros de compilação com bibliotecas externas de fora do projeto
+                        val resposta = embeddingModel.embedContent(textoOriginal)
+                        val vetorEmTexto = resposta.embedding.values.joinToString(",")
+
                         val valores = ContentValues().apply {
                             put("chave", chave)
                             put("texto", textoOriginal)
-                            put("vetor", "") // O seu banco semântico local preencherá na execução
+                            put("vetor", vetorEmTexto)
                         }
                         db.insertWithOnConflict("memoria_venus", null, valores, SQLiteDatabase.CONFLICT_REPLACE)
                         
-                        kotlinx.coroutines.delay(100)
+                        kotlinx.coroutines.delay(150)
                     } catch (e: Exception) {
                         e.printStackTrace()
                     }
