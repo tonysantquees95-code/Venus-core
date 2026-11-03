@@ -33,7 +33,7 @@ class VenusMigrator(context: Context, apiKey: String) {
 
                 if (!jaMigrado) {
                     try {
-                        val resposta = embeddingModel.embedContent(content { text(textoOriginal) })
+                        val resposta = embeddingModel.embedContent(textoOriginal)
                         val vetorEmTexto = resposta.embedding.values.joinToString(",")
 
                         val valores = ContentValues().apply {
