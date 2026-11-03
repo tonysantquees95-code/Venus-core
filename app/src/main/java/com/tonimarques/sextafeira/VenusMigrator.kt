@@ -1,5 +1,7 @@
 package com.tonimarques.sextafeira // Pacote correto
 
+package com.tonimarques.sextafeira
+
 import android.content.Context
 import android.database.sqlite.SQLiteDatabase
 import android.content.ContentValues
