@@ -122,6 +122,8 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         if (javaClass == MainActivity::class.java) principal.postDelayed({ procurarAtualizacao(manual = false) }, 4000)
         if (javaClass == MainActivity::class.java) principal.postDelayed({ resumirConversasAntigas() }, 8000)
         if (javaClass == MainActivity::class.java) principal.postDelayed({ enviarRelatorioDeErros(manual = false) }, 12_000)
+                // Liga o cérebro semântico da Vênus nativamente
+        try { com.tonimarques.sextafeira.VenusMemoryManager(this@MainActivity, getString(resources.getIdentifier("chave_do_gemini", "string", packageName))) } catch (e: Exception) { e.printStackTrace() }
     }
 
     override fun onNewIntent(intent: Intent) {
