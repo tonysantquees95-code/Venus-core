@@ -122,31 +122,6 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         if (javaClass == MainActivity::class.java) principal.postDelayed({ procurarAtualizacao(manual = false) }, 4000)
         if (javaClass == MainActivity::class.java) principal.postDelayed({ resumirConversasAntigas() }, 8000)
         if (javaClass == MainActivity::class.java) principal.postDelayed({ enviarRelatorioDeErros(manual = false) }, 12_000)
-                                // Dispara a migração semântica automática de forma totalmente isolada
-        try {
-            val classeMemoria = Memoria(this@MainActivity)
-            val db = classeMemoria.readableDatabase
-            val cursorCheck = db.rawQuery("SELECT name FROM sqlite_master WHERE type='table' AND name='aprendidas'", null)
-            val tabelaExiste = cursorCheck.count > 0
-            cursorCheck.close()
-
-            if (tabelaExiste) {
-                kotlinx.coroutines.GlobalScope.launch(kotlinx.coroutines.Dispatchers.IO) {
-                    try {
-                        // Buscando o identificador correto que você localizou
-                        val idChave = resources.getIdentifier("chave_do_gemini", "string", packageName)
-                        val chaveValida = if (idChave != 0) getString(idChave) else ""
-                        
-                        if (chaveValida.isNotEmpty()) {
-                            VenusMigrator(this@MainActivity, chaveValida).migrarBancoAntigo()
-                        }
-                    } catch (e: Exception) {
-                        e.printStackTrace()
-                    }
-                }
-            }
-        } catch (e: Exception) {
-            e.printStackTrace()
         }
     }
 
