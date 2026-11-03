@@ -123,7 +123,8 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         if (javaClass == MainActivity::class.java) principal.postDelayed({ resumirConversasAntigas() }, 8000)
         if (javaClass == MainActivity::class.java) principal.postDelayed({ enviarRelatorioDeErros(manual = false) }, 12_000)
                 // Liga o cérebro semântico da Vênus nativamente
-        try { com.tonimarques.sextafeira.VenusMemoryManager(this@MainActivity, getString(resources.getIdentifier("chave_do_gemini", "string", packageName))) } catch (e: Exception) { e.printStackTrace() }
+                // Inicializa o ecossistema semântico integrado
+        try { inicializarBancoSemantico() } catch (e: Exception) { e.printStackTrace() }
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -3842,4 +3843,105 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
 
         private val COR_TEXTO_APAGADO = Color.parseColor("#6B769A")
     }
-}
+        // =========================================================================
+    // CÉREBRO SEMÂNTICO EMBUTIDO DA VÊNUS (BUSCA POR SINÔNIMOS INTEGRADA)
+    // =========================================================================
+    
+    private var dbHelperVenusLocal: android.database.sqlite.SQLiteOpenHelper? = null
+
+    private fun inicializarBancoSemantico() {
+        if (dbHelperVenusLocal == null) {
+            dbHelperVenusLocal = object : android.database.sqlite.SQLiteOpenHelper(this@MainActivity, "VenusData.db", null, 1) {
+                override fun onCreate(db: android.database.sqlite.SQLiteDatabase) {
+                    db.execSQL("CREATE TABLE IF NOT EXISTS memoria_venus (chave TEXT PRIMARY KEY, texto TEXT, vetor TEXT)")
+                }
+                override fun onUpgrade(db: android.database.sqlite.SQLiteDatabase, oldVersion: Int, newVersion: Int) {
+                    db.execSQL("DROP TABLE IF EXISTS memoria_venus")
+                    onCreate(db)
+                }
+            }
+        }
+    }
+
+    fun venusAprender(chave: String, texto: String) {
+        inicializarBancoSemantico()
+        kotlinx.coroutines.GlobalScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            try {
+                val idChave = resources.getIdentifier("chave_do_gemini", "string", packageName)
+                val apiKey = if (idChave != 0) getString(idChave) else ""
+                if (apiKey.isNotEmpty()) {
+                    val ai = com.google.generativeai.GoogleGenAI(apiKey = apiKey)
+                    val embeddingModel = ai.embeddingModel("models/text-embedding-004")
+                    val resposta = embeddingModel.embedContent(texto)
+                    val vetorEmTexto = resposta.embedding.values.joinToString(",")
+
+                    val db = dbHelperVenusLocal?.writableDatabase
+                    val valores = android.content.ContentValues().apply {
+                        put("chave", chave)
+                        put("texto", texto)
+                        put("vetor", vetorEmTexto)
+                    }
+                    db?.insertWithOnConflict("memoria_venus", null, valores, android.database.sqlite.SQLiteDatabase.CONFLICT_REPLACE)
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+    }
+
+    fun venusBuscarSinonimo(pergunta: String, callback: (String?) -> Unit) {
+        inicializarBancoSemantico()
+        kotlinx.coroutines.GlobalScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            try {
+                val idChave = resources.getIdentifier("chave_do_gemini", "string", packageName)
+                val apiKey = if (idChave != 0) getString(idChave) else ""
+                if (apiKey.isNotEmpty()) {
+                    val ai = com.google.generativeai.GoogleGenAI(apiKey = apiKey)
+                    val embeddingModel = ai.embeddingModel("models/text-embedding-004")
+                    val resposta = embeddingModel.embedContent(pergunta)
+                    val vetorPergunta = resposta.embedding.values
+
+                    val db = dbHelperVenusLocal?.readableDatabase
+                    var melhorTexto: String? = null
+                    var maiorSimilaridade = -1.0f
+                    val limiteCorte = 0.65f
+
+                    val cursor = db?.rawQuery("SELECT texto, vetor FROM memoria_venus", null)
+                    cursor?.let {
+                        while (it.moveToNext()) {
+                            val textoSalvo = it.getString(0)
+                            val vetorSalvoTexto = it.getString(1) ?: continue
+                            if (vetorSalvoTexto.isEmpty()) continue
+                            
+                            val vetorSalvo = vetorSalvoTexto.split(",").map { item -> item.toFloat() }
+                            
+                            // Cálculo nativo de similaridade de cosseno integrado
+                            var dotProduct = 0.0f
+                            var normA = 0.0f
+                            var normB = 0.0f
+                            for (i in vetorPergunta.indices) {
+                                dotProduct += vetorPergunta[i] * vetorSalvo[i]
+                                normA += vetorPergunta[i] * vetorPergunta[i]
+                                normB += vetorSalvo[i] * vetorSalvo[i]
+                            }
+                            val similaridade = if (normA == 0.0f || normB == 0.0f) 0.0f else (dotProduct / (Math.sqrt(normA.toDouble()) * Math.sqrt(normB.toDouble()))).toFloat()
+
+                            if (similaridade > maiorSimilaridade && similaridade >= limiteCorte) {
+                                maiorSimilaridade = similaridade
+                                melhorTexto = textoSalvo
+                            }
+                        }
+                        it.close()
+                    }
+                    withContext(kotlinx.coroutines.Dispatchers.Main) {
+                        callback(melhorTexto)
+                    }
+                } else {
+                    withContext(kotlinx.coroutines.Dispatchers.Main) { callback(null) }
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+                withContext(kotlinx.coroutines.Dispatchers.Main) { callback(null) }
+            }
+        }
+    }
