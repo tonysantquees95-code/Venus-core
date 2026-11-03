@@ -122,6 +122,61 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         if (javaClass == MainActivity::class.java) principal.postDelayed({ procurarAtualizacao(manual = false) }, 4000)
         if (javaClass == MainActivity::class.java) principal.postDelayed({ resumirConversasAntigas() }, 8000)
         if (javaClass == MainActivity::class.java) principal.postDelayed({ enviarRelatorioDeErros(manual = false) }, 12_000)
+            /**
+     * Função para migrar as memórias antigas para o formato semântico
+     */
+    private fun rodarMigracaoSemantica() {
+        try {
+            val dbHelper = Memoria(this@MainActivity)
+            val db = dbHelper.writableDatabase
+            
+            // Verifica se a tabela antiga 'aprendidas' existe
+            val cursorCheck = db.rawQuery("SELECT name FROM sqlite_master WHERE type='table' AND name='aprendidas'", null)
+            val tabelaExiste = cursorCheck.count > 0
+            cursorCheck.close()
+
+            if (tabelaExiste) {
+                // Executa em uma thread separada para não travar a tela do celular
+                kotlinx.coroutines.GlobalScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                    try {
+                        val idChave = resources.getIdentifier("chave_do_gemini", "string", packageName)
+                        val apiKey = if (idChave != 0) getString(idChave) else ""
+                        
+                        if (apiKey.isNotEmpty()) {
+                            val ai = com.google.generativeai.GoogleGenAI(apiKey = apiKey)
+                            val embeddingModel = ai.embeddingModel("models/text-embedding-004")
+
+                            val cursor = db.rawQuery("SELECT trecho, texto FROM aprendidas", null)
+                            while (cursor.moveToNext()) {
+                                val chave = cursor.getString(0) ?: continue
+                                val textoOriginal = cursor.getString(1) ?: continue
+
+                                val checkCursor = db.rawQuery("SELECT 1 FROM memoria_venus WHERE chave = ?", arrayOf(chave))
+                                val jaMigrado = checkCursor.count > 0
+                                checkCursor.close()
+
+                                if (!jaMigrado) {
+                                    val resposta = embeddingModel.embedContent(textoOriginal)
+                                    val vetorEmTexto = resposta.embedding.values.joinToString(",")
+
+                                    val valores = android.content.ContentValues().apply {
+                                        put("chave", chave)
+                                        put("texto", textoOriginal)
+                                        put("vetor", vetorEmTexto)
+                                    }
+                                    db.insertWithOnConflict("memoria_venus", null, valores, SQLiteDatabase.CONFLICT_REPLACE)
+                                    kotlinx.coroutines.delay(150)
+                                }
+                            }
+                            cursor.close()
+                        }
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
         }
     }
 
