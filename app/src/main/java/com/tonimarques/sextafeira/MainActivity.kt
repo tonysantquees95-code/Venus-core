@@ -122,7 +122,11 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         if (javaClass == MainActivity::class.java) principal.postDelayed({ procurarAtualizacao(manual = false) }, 4000)
         if (javaClass == MainActivity::class.java) principal.postDelayed({ resumirConversasAntigas() }, 8000)
         if (javaClass == MainActivity::class.java) principal.postDelayed({ enviarRelatorioDeErros(manual = false) }, 12_000)
-        forcarMigracaoSql()
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        tratarIntent(intent)
     }
 
     override fun onResume() {
@@ -3835,14 +3839,5 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         const val EXTRA_PEDIDO = "pedido"
 
         private val COR_TEXTO_APAGADO = Color.parseColor("#6B769A")
-        // Executa a migração interna das memórias de texto de forma 100% nativa
-    private fun forcarMigracaoSql() {
-        try {
-            val dbHelper = Memoria(this@MainActivity)
-            val db = dbHelper.writableDatabase
-            db.execSQL("CREATE TABLE IF NOT EXISTS memoria_venus (chave TEXT PRIMARY KEY, texto TEXT, vetor TEXT)")
-            db.execSQL("INSERT OR IGNORE INTO memoria_venus (chave, texto, vetor) SELECT trecho, texto, '' FROM aprendidas")
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
     }
+}
