@@ -122,6 +122,16 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         if (javaClass == MainActivity::class.java) principal.postDelayed({ procurarAtualizacao(manual = false) }, 4000)
         if (javaClass == MainActivity::class.java) principal.postDelayed({ resumirConversasAntigas() }, 8000)
         if (javaClass == MainActivity::class.java) principal.postDelayed({ enviarRelatorioDeErros(manual = false) }, 12_000)
+                // Dispara a migração semântica automática ao abrir o app
+        lifecycleScope.launch {
+            try {
+                val apiKey = getString(R.string.gemini_api_key) 
+                VenusMigrator(this@MainActivity, apiKey).migrarBancoAntigo()
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+
     }
 
     override fun onNewIntent(intent: Intent) {
