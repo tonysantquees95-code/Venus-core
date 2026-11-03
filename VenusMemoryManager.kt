@@ -16,7 +16,7 @@ import kotlin.math.sqrt
 class VenusMemoryManager(context: Context, apiKey: String) {
 
     private val ai = GoogleGenAI(apiKey = apiKey)
-    private val embeddingModel = ai.embeddingModel("text-embedding-004") // Modelo ultra-barato do plano pago
+    private val embeddingModel = ai.embeddingModel("models/text-embedding-004") // Modelo ultra-barato do plano pago
     private val dbHelper = VenusDbHelper(context)
 
     /**
