@@ -18,7 +18,7 @@ object EmbeddingsGemini {
      */
     const val MODELO = "gemini-embedding-2"
 
-    private const val ENDERECO = "https://googleapis.com"
+    private const val ENDERECO = "https://generativelanguage.googleapis.com/v1beta/models/"
     private const val MAXIMO_DE_LETRAS = 2000
 
     /** O vetor da frase (já com comprimento 1), ou null se faltar chave/internet ou o Gemini recusar. */
