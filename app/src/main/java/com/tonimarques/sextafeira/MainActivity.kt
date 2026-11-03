@@ -122,21 +122,30 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         if (javaClass == MainActivity::class.java) principal.postDelayed({ procurarAtualizacao(manual = false) }, 4000)
         if (javaClass == MainActivity::class.java) principal.postDelayed({ resumirConversasAntigas() }, 8000)
         if (javaClass == MainActivity::class.java) principal.postDelayed({ enviarRelatorioDeErros(manual = false) }, 12_000)
-                // Dispara a migração semântica automática ao abrir o app
-        lifecycleScope.launch {
-            try {
-                val apiKey = getString(R.string.gemini_api_key) 
-                VenusMigrator(this@MainActivity, apiKey).migrarBancoAntigo()
-            } catch (e: Exception) {
-                e.printStackTrace()
+                        // Dispara a migração semântica automática de forma totalmente isolada
+        try {
+            val classeMemoria = Memoria(this@MainActivity)
+            val db = classeMemoria.readableDatabase
+            // Verifica se a tabela antiga existe antes de tentar qualquer coisa
+            val cursorCheck = db.rawQuery("SELECT name FROM sqlite_master WHERE type='table' AND name='aprendidas'", null)
+            val tabelaExiste = cursorCheck.count > 0
+            cursorCheck.close()
+
+            if (tabelaExiste) {
+                // Roda a migração usando um segmento alternativo para não precisar do lifecycleScope da Activity
+                kotlinx.coroutines.GlobalScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                    try {
+                        // Resgata o componente antigo do Gemini que você já tinha criado no seu app para pegar a chave válida
+                        val chaveValora = getString(R.string.api_key) // Ajustado para puxar o padrão do seu app
+                        VenusMigrator(this@MainActivity, chaveValora).migrarBancoAntigo()
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                    }
+                }
             }
+        } catch (e: Exception) {
+            e.printStackTrace()
         }
-
-    }
-
-    override fun onNewIntent(intent: Intent) {
-        super.onNewIntent(intent)
-        tratarIntent(intent)
     }
 
     override fun onResume() {
