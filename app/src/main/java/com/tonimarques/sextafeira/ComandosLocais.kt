@@ -939,9 +939,25 @@ object ComandosLocais {
         "\\b(?:o que (?:voce )?(?:estudou|aprendeu|treinou)(?: hoje| sozinha)?|como (?:esta|ta|foi) (?:o |seu |teu )?(?:estudo|treino|aprendizado)|memoria vetorial|quanto (?:voce )?(?:ja )?aprendeu)\\b"
     )
 
+    private const val STORY_AUTO = "(?:os |o )?(?:stories|storys|story) (?:automaticos?|do dia|diarios?|de dicas?|das dicas)"
+    private val STORY_AUTO_LIGA = Regex("^(?:liga|ligue|ligar|ativa|ative|ativar|volta|voltar)(?: com)? $STORY_AUTO$")
+    private val STORY_AUTO_DESLIGA = Regex("^(?:desliga|desligue|desligar|desativa|desative|desativar|para|pare|parar)(?: com)? $STORY_AUTO$")
+    private val STORY_AUTO_VER = Regex(
+        "^(?:me )?(?:mostra|mostre|mostrar|ver|quero ver|como fica|como vai ficar)(?: o| a)?(?: proximo| proxima)? (?:story (?:de hoje|do dia|automatico|da dica)|dica do dia|previa do story)$"
+    )
+    private val STORY_AUTO_AGORA = Regex(
+        "^(?:posta|poste|postar|publica|publique|publicar)(?: a| o| uma| um)? (?:dica|curiosidade|story do dia|story da dica|story de dica|story de curiosidade)(?: do dia)?(?: agora| ja)?$"
+    )
+    private val STORY_AUTO_RESUMO = Regex("\\b(?:stories automaticos|story automatico|stories do dia|stories diarios)\\b")
+
     /** "conecta o Instagram", "como está o Instagram?", "comentários do Instagram". */
     fun instagram(c: String): Resultado? {
         val t = c.trimEnd('.', '!', '?')
+        if (STORY_AUTO_LIGA.matches(t)) return Resultado.Acao("story_auto", mapOf("ligado" to true))
+        if (STORY_AUTO_DESLIGA.matches(t)) return Resultado.Acao("story_auto", mapOf("ligado" to false))
+        if (STORY_AUTO_VER.matches(t)) return Resultado.Acao("story_auto_ver", emptyMap())
+        if (STORY_AUTO_AGORA.matches(t)) return Resultado.Acao("story_auto_agora", emptyMap())
+        if (STORY_AUTO_RESUMO.containsMatchIn(t)) return Resultado.Acao("story_auto", emptyMap())
         if (POSTAR_AGORA.matches(t)) return Resultado.Acao("postar_agora", emptyMap())
         if (ESTUDO_AGORA.matches(t)) return Resultado.Acao("estudo_agora", emptyMap())
         if (IDEIAS_POST.containsMatchIn(t)) return Resultado.Acao("estudo_ideias", emptyMap())

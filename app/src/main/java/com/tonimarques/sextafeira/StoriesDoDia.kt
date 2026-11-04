@@ -1,0 +1,521 @@
+package com.tonimarques.sextafeira
+
+import android.app.AlarmManager
+import android.app.Notification
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.PendingIntent
+import android.app.job.JobInfo
+import android.app.job.JobParameters
+import android.app.job.JobScheduler
+import android.app.job.JobService
+import android.content.BroadcastReceiver
+import android.content.ComponentName
+import android.content.Context
+import android.content.Intent
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.graphics.Canvas
+import android.graphics.Color
+import android.graphics.LinearGradient
+import android.graphics.Paint
+import android.graphics.RadialGradient
+import android.graphics.Rect
+import android.graphics.RectF
+import android.graphics.Shader
+import android.graphics.Typeface
+import android.os.Build
+import android.text.Layout
+import android.text.StaticLayout
+import android.text.TextPaint
+import org.json.JSONArray
+import org.json.JSONObject
+import java.io.ByteArrayOutputStream
+import java.io.File
+import java.net.HttpURLConnection
+import java.net.URL
+import java.text.SimpleDateFormat
+import java.util.Calendar
+import java.util.Date
+import java.util.Locale
+
+/**
+ * Stories do dia: duas vezes por dia (manhã e tarde) a Vênus publica sozinha no Instagram da loja um story de
+ * dica ou curiosidade sobre bem-estar, autoestima e intimidade, com a cara da loja (fundo preto, rosa neon,
+ * logo, foto de um produto da loja ao fundo).
+ *
+ * Os textos vêm do Gemini uma vez por semana (14 de uma vez, gastando só 1 pedido da cota); se o Gemini
+ * não responder, usa uma reserva fixa, então o story nunca falha por falta de texto.
+ * WhatsApp: não existe jeito oficial de publicar status sozinho; depois de cada story chega uma notificação
+ * que abre o WhatsApp Business com a imagem pronta (é só escolher "Meu status" e enviar).
+ */
+object StoriesDoDia {
+
+    data class Tema(val tipo: String, val titulo: String, val texto: String)
+
+    private const val PREFS = "stories_dia"
+    private const val CANAL = "stories_dia"
+    private const val JOB_ID = 74_100
+    const val ACAO = "com.tonimarques.sextafeira.STORY_DO_DIA"
+    const val WHATSAPP_BUSINESS = "com.whatsapp.w4b"
+    private val ROSA = Color.parseColor("#FF2E97")
+    private val LILAS = Color.parseColor("#9B5CF6")
+
+    private fun prefs(ctx: Context) = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+
+    fun ligado(ctx: Context) = prefs(ctx).getBoolean("ligado", true)
+
+    fun definirLigado(ctx: Context, v: Boolean) {
+        prefs(ctx).edit().putBoolean("ligado", v).apply()
+        if (v) agendar(ctx) else cancelar(ctx)
+        Diario.anotar(ctx, "instagram", if (v) "Stories automáticos ligados (manhã e tarde)" else "Stories automáticos desligados", "voz")
+    }
+
+    /** Horários em minutos do dia: manhã 9h30 e tarde 15h30, se não mudar. */
+    fun horario(ctx: Context, turno: String): Int = prefs(ctx).getInt("hora_$turno", if (turno == "manha") 9 * 60 + 30 else 15 * 60 + 30)
+
+    fun definirHorario(ctx: Context, turno: String, minutos: Int) {
+        prefs(ctx).edit().putInt("hora_$turno", minutos.coerceIn(0, 24 * 60 - 1)).apply()
+        agendar(ctx)
+    }
+
+    fun horaTexto(minutos: Int) = "%d:%02d".format(minutos / 60, minutos % 60)
+
+    fun descricao(ctx: Context): String {
+        val base = "Todo dia às ${horaTexto(horario(ctx, "manha"))} e às ${horaTexto(horario(ctx, "tarde"))}: um story de dica ou curiosidade " +
+            "sobre bem-estar e autoestima, com a cara da loja. Depois chega um aviso para pôr no status do WhatsApp."
+        val ultimo = prefs(ctx).getString("ultimo", null)?.let { " Último: $it" }.orEmpty()
+        val falta = when {
+            !Instagram.conectado(ctx) -> " Falta conectar o Instagram da loja."
+            !Loja(ctx).conectada -> " Falta conectar a loja (a imagem sobe pelo site)."
+            else -> ""
+        }
+        return base + ultimo + falta
+    }
+
+    // ------------------------------------------------------------------ agenda
+    private fun proximo(ctx: Context, agora: Calendar = Calendar.getInstance()): Pair<String, Long> {
+        val opcoes = mutableListOf<Pair<String, Long>>()
+        for (dias in 0..1) for (turno in listOf("manha", "tarde")) {
+            val m = horario(ctx, turno)
+            val c = (agora.clone() as Calendar).apply {
+                add(Calendar.DAY_OF_YEAR, dias)
+                set(Calendar.HOUR_OF_DAY, m / 60)
+                set(Calendar.MINUTE, m % 60)
+                set(Calendar.SECOND, 0)
+                set(Calendar.MILLISECOND, 0)
+            }
+            if (c.timeInMillis > agora.timeInMillis + 30_000) opcoes += turno to c.timeInMillis
+        }
+        return opcoes.minByOrNull { it.second }!!
+    }
+
+    private fun alarme(ctx: Context) = PendingIntent.getBroadcast(
+        ctx, 74_000, Intent(ctx, AlarmeDoStory::class.java).setAction(ACAO), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+    )
+
+    /** Marca o próximo story (manhã ou tarde). Chamado ao abrir o app, ao ligar o celular e depois de cada story. */
+    fun agendar(ctx: Context) {
+        if (!ligado(ctx)) return
+        val (turno, quando) = proximo(ctx)
+        prefs(ctx).edit().putString("proximo_turno", turno).apply()
+        val am = ctx.getSystemService(AlarmManager::class.java)
+        try {
+            if (Build.VERSION.SDK_INT < 31 || am.canScheduleExactAlarms()) am.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, quando, alarme(ctx))
+            else am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, quando, alarme(ctx))
+        } catch (e: SecurityException) {
+            am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, quando, alarme(ctx))
+        }
+    }
+
+    fun cancelar(ctx: Context) = ctx.getSystemService(AlarmManager::class.java).cancel(alarme(ctx))
+
+    /** Na hora: um trabalho em segundo plano que espera a internet publica o story. */
+    internal fun disparou(ctx: Context) {
+        val turno = prefs(ctx).getString("proximo_turno", null) ?: turnoDeAgora()
+        agendar(ctx) // já marca o próximo
+        val info = JobInfo.Builder(JOB_ID, ComponentName(ctx, PublicadorDeStory::class.java))
+            .setRequiredNetworkType(JobInfo.NETWORK_TYPE_ANY)
+            .setOverrideDeadline(30 * 60_000L)
+            .setExtras(android.os.PersistableBundle().apply { putString("turno", turno) })
+            .build()
+        try {
+            ctx.getSystemService(JobScheduler::class.java).schedule(info)
+        } catch (e: Exception) {
+        }
+    }
+
+    private fun turnoDeAgora() = if (Calendar.getInstance().get(Calendar.HOUR_OF_DAY) < 12) "manha" else "tarde"
+
+    private fun hoje() = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
+
+    // ------------------------------------------------------------------ publicar
+    /**
+     * Monta e publica o story. [forcar]: publica mesmo que este turno já tenha saído hoje ("posta a dica agora").
+     * Bloqueante: chame fora da thread principal. Devolve o tema publicado.
+     */
+    fun publicar(ctx: Context, turno: String = turnoDeAgora(), forcar: Boolean = false): Tema {
+        val marca = "feito_${hoje()}_$turno"
+        if (!forcar && prefs(ctx).getBoolean(marca, false)) throw IllegalStateException("O story da ${nomeTurno(turno)} de hoje já foi publicado.")
+        if (!Instagram.conectado(ctx)) throw IllegalStateException("O Instagram da loja não está conectado.")
+        val loja = Loja(ctx)
+        if (!loja.conectada) throw IllegalStateException("A loja não está conectada nos ajustes (a imagem sobe pelo site).")
+        val tema = proximoTema(ctx)
+        val jpeg = arte(ctx, tema)
+        val url = loja.enviarFoto(jpeg)
+        Instagram.publicar(ctx, url, "", story = true)
+        usar(ctx, tema)
+        val arquivo = guardarParaWhatsApp(ctx, jpeg)
+        prefs(ctx).edit().putBoolean(marca, true)
+            .putString("ultimo", "${nomeTurno(turno)} de ${SimpleDateFormat("dd/MM", Locale("pt", "BR")).format(Date())}: \"${tema.titulo}\"").apply()
+        Diario.anotar(ctx, "instagram", "Story do dia (${nomeTurno(turno)}) publicado: ${tema.titulo}", "automatico")
+        avisar(ctx, tema, arquivo, null)
+        return tema
+    }
+
+    fun nomeTurno(turno: String) = if (turno == "manha") "manhã" else "tarde"
+
+    /** A imagem do próximo story, sem publicar (para "mostra o story de hoje"). */
+    fun previa(ctx: Context): Pair<Tema, File> {
+        val tema = proximoTema(ctx)
+        val (arquivo, _) = FotoProvider.novoArquivo(ctx, "story_previa_${System.currentTimeMillis()}.jpg")
+        arquivo.writeBytes(arte(ctx, tema))
+        return tema to arquivo
+    }
+
+    private fun guardarParaWhatsApp(ctx: Context, jpeg: ByteArray): File {
+        val (arquivo, _) = FotoProvider.novoArquivo(ctx, "story_${System.currentTimeMillis()}.jpg")
+        arquivo.writeBytes(jpeg)
+        return arquivo
+    }
+
+    /** Abre o WhatsApp Business (ou a escolha de app) com a imagem pronta para o status. */
+    fun intencaoWhatsApp(ctx: Context, arquivo: File): Intent {
+        val uri = android.net.Uri.parse("content://${FotoProvider.AUTORIDADE}/${arquivo.name}")
+        val envio = Intent(Intent.ACTION_SEND).setType("image/jpeg").putExtra(Intent.EXTRA_STREAM, uri)
+            .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
+        val temBusiness = try {
+            ctx.packageManager.getPackageInfo(WHATSAPP_BUSINESS, 0)
+            true
+        } catch (e: Exception) {
+            false
+        }
+        return if (temBusiness) envio.setPackage(WHATSAPP_BUSINESS)
+        else Intent.createChooser(envio, "Pôr no status").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    }
+
+    fun avisar(ctx: Context, tema: Tema?, arquivo: File?, erro: String?) {
+        val gerente = ctx.getSystemService(NotificationManager::class.java)
+        gerente.createNotificationChannel(NotificationChannel(CANAL, "Stories do dia", NotificationManager.IMPORTANCE_DEFAULT))
+        val toque = if (arquivo != null) PendingIntent.getActivity(ctx, 74_200, intencaoWhatsApp(ctx, arquivo), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+        else PendingIntent.getActivity(ctx, 74_201, Intent(ctx, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK), PendingIntent.FLAG_IMMUTABLE)
+        val b = Notification.Builder(ctx, CANAL)
+            .setSmallIcon(R.drawable.ic_venus_simbolo)
+            .setContentTitle(if (erro == null) "Story do dia publicado ✓" else "Não consegui publicar o story do dia")
+            .setContentText(if (erro == null) "\"${tema?.titulo.orEmpty()}\". Toque para pôr no status do WhatsApp." else erro)
+            .setContentIntent(toque)
+            .setAutoCancel(true)
+        if (arquivo != null) BitmapFactory.decodeFile(arquivo.absolutePath, BitmapFactory.Options().apply { inSampleSize = 4 })?.let {
+            b.setLargeIcon(it).setStyle(Notification.BigPictureStyle().bigPicture(it))
+        }
+        try {
+            gerente.notify(74_300, b.build())
+        } catch (e: SecurityException) {
+        }
+    }
+
+    // ------------------------------------------------------------------ temas (textos)
+    private fun fila(ctx: Context): MutableList<Tema> {
+        val a = try {
+            JSONArray(prefs(ctx).getString("fila", "[]"))
+        } catch (e: Exception) {
+            JSONArray()
+        }
+        return (0 until a.length()).mapNotNull { a.optJSONObject(it) }.map { Tema(it.optString("tipo"), it.optString("titulo"), it.optString("texto")) }.toMutableList()
+    }
+
+    private fun salvarFila(ctx: Context, l: List<Tema>) {
+        val a = JSONArray()
+        l.forEach { a.put(JSONObject().put("tipo", it.tipo).put("titulo", it.titulo).put("texto", it.texto)) }
+        prefs(ctx).edit().putString("fila", a.toString()).apply()
+    }
+
+    private fun usados(ctx: Context): List<String> = try {
+        JSONArray(prefs(ctx).getString("usados", "[]")).let { a -> (0 until a.length()).map { a.optString(it) } }
+    } catch (e: Exception) {
+        emptyList()
+    }
+
+    private fun usar(ctx: Context, t: Tema) {
+        salvarFila(ctx, fila(ctx).filter { it.titulo != t.titulo })
+        val u = (usados(ctx) + t.titulo).takeLast(120)
+        prefs(ctx).edit().putString("usados", JSONArray(u).toString()).apply()
+    }
+
+    /** O próximo tema: da fila; se acabando, pede mais 14 ao Gemini; sem Gemini, da reserva. */
+    fun proximoTema(ctx: Context): Tema {
+        var f = fila(ctx)
+        if (f.size < 3) {
+            val novos = try {
+                gerarTemas(ctx)
+            } catch (e: Exception) {
+                emptyList()
+            }
+            if (novos.isNotEmpty()) {
+                f = (f + novos).distinctBy { ComandosLocais.normalizar(it.titulo) }.toMutableList()
+                salvarFila(ctx, f)
+            }
+        }
+        f.firstOrNull()?.let { return it }
+        val ja = usados(ctx).map { ComandosLocais.normalizar(it) }.toSet()
+        return RESERVA.firstOrNull { ComandosLocais.normalizar(it.titulo) !in ja } ?: RESERVA[(System.currentTimeMillis() / 86_400_000L % RESERVA.size).toInt()]
+    }
+
+    private fun gerarTemas(ctx: Context): List<Tema> {
+        val config = ctx.getSharedPreferences("config", Context.MODE_PRIVATE)
+        val chave = config.getString("chave", "").orEmpty()
+        if (chave.isBlank()) return emptyList()
+        val modelo = config.getString("modelo", "").orEmpty().ifBlank { "gemini-flash-latest" }
+        val json = Gemini.gerarJson(chave, modelo, pedidoDeTemas(usados(ctx).takeLast(60)), temperatura = 0.9) ?: return emptyList()
+        return lerTemas(json)
+    }
+
+    fun pedidoDeTemas(jaUsados: List<String>): String =
+        "Você é a social media da Desejo de Intimidade, loja online de moda íntima e bem-estar sexual de Porto Alegre. " +
+            "Crie 14 textos curtos para stories do Instagram, metade \"dica\" e metade \"curiosidade\", sobre: autoestima, amor-próprio, " +
+            "autocuidado, bem-estar íntimo, relacionamento e comunicação a dois, conhecer o próprio corpo, sono, estresse e libido, " +
+            "romance e datas especiais. Tom acolhedor, elegante, inclusivo e sem julgamento, em português do Brasil. " +
+            "Regras: nada explícito nem vulgar (regras do Instagram); sem nomes de produtos nem preços; sem promessas de saúde nem " +
+            "conselho médico; curiosidades só se forem verdadeiras e bem conhecidas (na dúvida, faça uma dica). " +
+            "Título com até 45 caracteres; texto com até 170 caracteres; no máximo 1 emoji por texto. " +
+            (if (jaUsados.isNotEmpty()) "Não repita estes títulos: ${jaUsados.joinToString(" | ")}. " else "") +
+            "Responda só com JSON: {\"temas\":[{\"tipo\":\"dica|curiosidade\",\"titulo\":\"...\",\"texto\":\"...\"}]}"
+
+    fun lerTemas(json: String): List<Tema> {
+        val o = try {
+            val i = json.indexOf('{')
+            val f = json.lastIndexOf('}')
+            if (i < 0 || f < i) return emptyList()
+            JSONObject(json.substring(i, f + 1))
+        } catch (e: Exception) {
+            return emptyList()
+        }
+        val a = o.optJSONArray("temas") ?: return emptyList()
+        return (0 until a.length()).mapNotNull { a.optJSONObject(it) }.mapNotNull {
+            val titulo = it.optString("titulo").trim().take(60)
+            val texto = it.optString("texto").trim().take(220)
+            val tipo = if (it.optString("tipo").contains("curio", true)) "curiosidade" else "dica"
+            if (titulo.length < 4 || texto.length < 20) null else Tema(tipo, titulo, texto)
+        }
+    }
+
+    /** Textos de reserva (sem Gemini). */
+    val RESERVA = listOf(
+        Tema("dica", "Comece pelo espelho", "Antes de sair, diga a si mesma uma qualidade que você admira em você. Autoestima também se treina, um dia de cada vez ✨"),
+        Tema("curiosidade", "O abraço que acalma", "Abraços longos e carinho liberam ocitocina, o hormônio ligado ao vínculo e à sensação de segurança."),
+        Tema("dica", "Converse sem pressa", "Falar sobre desejos e limites fora do quarto, num momento tranquilo, deixa a intimidade mais leve e cheia de confiança."),
+        Tema("dica", "Seu corpo, seu tempo", "Não existe jeito certo de sentir prazer. Conhecer o próprio corpo, sem pressa e sem cobrança, é um ato de amor-próprio 💗"),
+        Tema("curiosidade", "Dormir bem é autocuidado", "Noites mal dormidas mexem com o humor, a energia e até a vontade. Cuidar do sono também é cuidar do bem-estar íntimo."),
+        Tema("dica", "Um ritual só seu", "Banho demorado, uma música que você ama, um creme cheiroso. Separar um momento só para você muda o seu dia."),
+        Tema("curiosidade", "Riso aproxima", "Casais que riem juntos costumam se sentir mais próximos. Bom humor também é parte do romance."),
+        Tema("dica", "Elogie de verdade", "Um elogio sincero e específico vale mais que mil genéricos. Que tal elogiar alguém (ou você mesma) hoje?"),
+        Tema("dica", "Lingerie é para você", "Usar algo bonito por baixo da roupa, só porque você gosta, é um lembrete diário de que você merece se sentir incrível."),
+        Tema("curiosidade", "Estresse e desejo", "O estresse do dia a dia pode diminuir a libido. Respirar fundo, desacelerar e se cuidar ajudam o corpo a relaxar."),
+        Tema("dica", "Surpreenda no simples", "Um bilhete, uma mensagem carinhosa no meio do dia ou um jantar diferente: pequenas surpresas mantêm a chama acesa 🔥"),
+        Tema("dica", "Respeite seus limites", "Dizer não também é amor-próprio. Intimidade boa é aquela em que as duas pessoas se sentem seguras e à vontade."),
+        Tema("curiosidade", "Toque que conecta", "A pele é o maior órgão do corpo e é cheia de terminações nervosas. Carinho sem pressa é uma forma poderosa de conexão."),
+        Tema("dica", "Desconecte para conectar", "Que tal uma noite sem celular? Atenção total ao outro (ou a você mesma) muda tudo."),
+        Tema("dica", "Celebre seu corpo", "Troque a crítica no espelho por gratidão: pelo que seu corpo faz, sente e vive todos os dias."),
+        Tema("curiosidade", "Perfume e memória", "O olfato é muito ligado às emoções e às lembranças. Um perfume especial pode virar a marca de um momento a dois."),
+    )
+
+    // ------------------------------------------------------------------ arte 1080×1920 com a cara da loja
+    fun arte(ctx: Context, tema: Tema): ByteArray {
+        val w = 1080
+        val h = 1920
+        val bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+        val tela = Canvas(bmp)
+        val suave = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
+
+        // fundo: preto, com a foto de um produto da loja bem desfocada e escura (identidade sem "anúncio")
+        tela.drawColor(Color.BLACK)
+        fotoDeFundo(ctx)?.let { foto ->
+            val cobre = maxOf(w.toFloat() / foto.width, h.toFloat() / foto.height)
+            val fw = foto.width * cobre
+            val fh = foto.height * cobre
+            val mini = Bitmap.createBitmap(27, 48, Bitmap.Config.ARGB_8888)
+            Canvas(mini).apply {
+                scale(27f / w, 48f / h)
+                drawBitmap(foto, null, RectF((w - fw) / 2, (h - fh) / 2, (w + fw) / 2, (h + fh) / 2), suave)
+            }
+            suave.alpha = 150
+            tela.drawBitmap(mini, null, Rect(0, 0, w, h), suave)
+            suave.alpha = 255
+            tela.drawColor(Color.argb(170, 0, 0, 0))
+        }
+        // brilho neon rosa em cima e lilás embaixo
+        val brilho = Paint(Paint.ANTI_ALIAS_FLAG)
+        brilho.shader = RadialGradient(w * 0.8f, h * 0.18f, w * 0.8f, Color.argb(110, 255, 46, 151), Color.TRANSPARENT, Shader.TileMode.CLAMP)
+        tela.drawRect(0f, 0f, w.toFloat(), h.toFloat(), brilho)
+        brilho.shader = RadialGradient(w * 0.15f, h * 0.9f, w * 0.9f, Color.argb(90, 155, 92, 246), Color.TRANSPARENT, Shader.TileMode.CLAMP)
+        tela.drawRect(0f, 0f, w.toFloat(), h.toFloat(), brilho)
+
+        // moldura fina em rosa neon, com halo
+        val moldura = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            style = Paint.Style.STROKE
+            strokeWidth = 3f
+            color = Color.argb(200, 255, 46, 151)
+            setShadowLayer(18f, 0f, 0f, ROSA)
+        }
+        tela.drawRoundRect(RectF(48f, 48f, w - 48f, h - 48f), 22f, 22f, moldura)
+
+        // logo da loja (redondo) no topo
+        var y = 190f
+        logo(ctx)?.let { l ->
+            val lado = 190f
+            val r = RectF(w / 2f - lado / 2, y, w / 2f + lado / 2, y + lado)
+            tela.save()
+            tela.clipPath(android.graphics.Path().apply { addOval(r, android.graphics.Path.Direction.CW) })
+            tela.drawBitmap(l, null, r, suave)
+            tela.restore()
+            tela.drawOval(r, Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; strokeWidth = 3f; color = ROSA; setShadowLayer(14f, 0f, 0f, ROSA) })
+            y += lado + 70f
+        } ?: run { y += 60f }
+
+        // rótulo pequeno em caixa alta espaçada
+        val rotulo = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = ROSA
+            textSize = 36f
+            letterSpacing = 0.32f
+            typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
+            setShadowLayer(16f, 0f, 0f, Color.argb(160, 255, 46, 151))
+        }
+        val textoRotulo = if (tema.tipo == "curiosidade") "VOCÊ SABIA?" else "DICA DE BEM-ESTAR"
+        tela.drawText(textoRotulo, (w - rotulo.measureText(textoRotulo)) / 2, y, rotulo)
+        y += 60f
+        val filete = Paint(Paint.ANTI_ALIAS_FLAG).apply { strokeWidth = 3f }
+        filete.shader = LinearGradient(w / 2f - 120, 0f, w / 2f + 120, 0f, intArrayOf(Color.TRANSPARENT, ROSA, Color.TRANSPARENT), null, Shader.TileMode.CLAMP)
+        tela.drawLine(w / 2f - 120, y, w / 2f + 120, y, filete)
+
+        // título (serifa, grande) e texto, centralizados no meio da tela
+        val titulo = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.WHITE
+            textSize = if (tema.titulo.length > 30) 88f else 100f
+            typeface = Typeface.create(Typeface.SERIF, Typeface.BOLD)
+            setShadowLayer(22f, 0f, 0f, Color.argb(120, 255, 46, 151))
+        }
+        val corpo = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.argb(235, 240, 236, 242)
+            textSize = 52f
+            typeface = Typeface.create("sans-serif-light", Typeface.NORMAL)
+        }
+        val largura = w - 220
+        val lTitulo = StaticLayout.Builder.obtain(tema.titulo, 0, tema.titulo.length, titulo, largura)
+            .setAlignment(Layout.Alignment.ALIGN_CENTER).setLineSpacing(0f, 1.05f).build()
+        val lCorpo = StaticLayout.Builder.obtain(tema.texto, 0, tema.texto.length, corpo, largura)
+            .setAlignment(Layout.Alignment.ALIGN_CENTER).setLineSpacing(0f, 1.3f).build()
+        val bloco = lTitulo.height + 70 + lCorpo.height
+        val topo = maxOf(y + 110f, (h - bloco) / 2f + 60f)
+        tela.save()
+        tela.translate(110f, topo)
+        lTitulo.draw(tela)
+        tela.translate(0f, lTitulo.height + 70f)
+        lCorpo.draw(tela)
+        tela.restore()
+
+        // rodapé: @ da loja e site
+        val usuario = Instagram.usuario(ctx)?.takeIf { it.isNotBlank() }?.let { "@$it" } ?: "Desejo de Intimidade"
+        val arroba = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.WHITE
+            textSize = 44f
+            typeface = Typeface.create(Typeface.SERIF, Typeface.BOLD_ITALIC)
+        }
+        tela.drawText(usuario, (w - arroba.measureText(usuario)) / 2, h - 230f, arroba)
+        val site = Loja.SITE.removePrefix("https://")
+        val pequeno = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.argb(200, 255, 46, 151)
+            textSize = 32f
+            letterSpacing = 0.08f
+        }
+        tela.drawText(site, (w - pequeno.measureText(site)) / 2, h - 170f, pequeno)
+
+        val saida = ByteArrayOutputStream()
+        bmp.compress(Bitmap.CompressFormat.JPEG, 90, saida)
+        bmp.recycle()
+        return saida.toByteArray()
+    }
+
+    /** Uma foto de produto da loja (sorteada), para o fundo. Null sem loja/internet. */
+    private fun fotoDeFundo(ctx: Context): Bitmap? = try {
+        val loja = Loja(ctx)
+        val fotos = if (loja.conectada) loja.produtos().filter { it.ativo && !it.imagemUrl.isNullOrBlank() }.mapNotNull { it.imagemUrl } else emptyList()
+        fotos.randomOrNull()?.let { baixarImagem(Loja.enderecoCompleto(it)) }
+    } catch (e: Exception) {
+        null
+    }
+
+    /** O logo do site (baixado uma vez e guardado). */
+    private fun logo(ctx: Context): Bitmap? {
+        val arquivo = File(ctx.filesDir, "logo_loja.png")
+        if (!arquivo.exists() || arquivo.length() == 0L) {
+            try {
+                val c = URL(Loja.enderecoCompleto(LOGO)).openConnection() as HttpURLConnection
+                c.connectTimeout = 10_000
+                c.readTimeout = 20_000
+                if (c.responseCode in 200..299) c.inputStream.use { entrada -> arquivo.outputStream().use { entrada.copyTo(it) } }
+                c.disconnect()
+            } catch (e: Exception) {
+                return null
+            }
+        }
+        return BitmapFactory.decodeFile(arquivo.absolutePath)
+    }
+
+    private const val LOGO = "/_cdn/static/5fca2697-82ee-406c-9472-4a112f72f1b7-C-pia-de-C-pia-de-Logotipo-Boutique_20261026_013613_0000.png"
+
+    private fun baixarImagem(url: String): Bitmap? {
+        val c = URL(url).openConnection() as HttpURLConnection
+        return try {
+            c.connectTimeout = 10_000
+            c.readTimeout = 20_000
+            if (c.responseCode !in 200..299) null
+            else c.inputStream.use { BitmapFactory.decodeStream(it, null, BitmapFactory.Options().apply { inSampleSize = 2 }) }
+        } finally {
+            c.disconnect()
+        }
+    }
+}
+
+/** Alarme do story do dia (e reagenda ao ligar o celular ou atualizar o app). */
+class AlarmeDoStory : BroadcastReceiver() {
+    override fun onReceive(ctx: Context, intent: Intent) {
+        when (intent.action) {
+            Intent.ACTION_BOOT_COMPLETED, Intent.ACTION_MY_PACKAGE_REPLACED -> StoriesDoDia.agendar(ctx)
+            else -> if (StoriesDoDia.ligado(ctx)) StoriesDoDia.disparou(ctx)
+        }
+    }
+}
+
+/** Publica o story do dia em segundo plano, quando tiver internet. */
+class PublicadorDeStory : JobService() {
+    override fun onStartJob(params: JobParameters): Boolean {
+        val turno = params.extras.getString("turno") ?: "manha"
+        Thread {
+            try {
+                StoriesDoDia.publicar(applicationContext, turno)
+            } catch (e: Exception) {
+                val msg = e.message ?: e.javaClass.simpleName
+                if (!msg.contains("já foi publicado")) {
+                    Registro.anotar(applicationContext, "erro", "story do dia → $msg")
+                    Diario.anotar(applicationContext, "instagram", "Story do dia (${StoriesDoDia.nomeTurno(turno)}) não publicado: $msg", "automatico", ok = false)
+                    StoriesDoDia.avisar(applicationContext, null, null, msg)
+                }
+            } finally {
+                jobFinished(params, false)
+            }
+        }.start()
+        return true
+    }
+
+    override fun onStopJob(params: JobParameters): Boolean = true
+}
