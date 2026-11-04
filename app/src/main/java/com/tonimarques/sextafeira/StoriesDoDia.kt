@@ -51,13 +51,17 @@ import java.util.Locale
  */
 object StoriesDoDia {
 
-    data class Tema(val tipo: String, val titulo: String, val texto: String)
+    data class Tema(val tipo: String, val titulo: String, val texto: String, val enquete: String = "") {
+        /** Pergunta de sim/não para o adesivo de enquete do Instagram. */
+        val pergunta get() = enquete.ifBlank { if (tipo == "curiosidade") "Você já sabia disso?" else "Você já faz isso?" }
+    }
 
     private const val PREFS = "stories_dia"
     private const val CANAL = "stories_dia"
     private const val JOB_ID = 74_100
     const val ACAO = "com.tonimarques.sextafeira.STORY_DO_DIA"
     const val WHATSAPP_BUSINESS = "com.whatsapp.w4b"
+    const val ACAO_INTERATIVO = "com.tonimarques.sextafeira.STORY_INTERATIVO"
     private val ROSA = Color.parseColor("#FF2E97")
     private val LILAS = Color.parseColor("#9B5CF6")
 
@@ -79,11 +83,20 @@ object StoriesDoDia {
         agendar(ctx)
     }
 
+    /**
+     * Story da tarde com enquete: a API do Instagram não coloca adesivos, então a Vênus prepara a imagem
+     * (com espaço para a enquete), copia a pergunta e abre o Instagram; você põe o adesivo e publica.
+     */
+    fun tardeInterativa(ctx: Context) = prefs(ctx).getBoolean("tarde_interativa", true)
+
+    fun definirTardeInterativa(ctx: Context, v: Boolean) = prefs(ctx).edit().putBoolean("tarde_interativa", v).apply()
+
     fun horaTexto(minutos: Int) = "%d:%02d".format(minutos / 60, minutos % 60)
 
     fun descricao(ctx: Context): String {
-        val base = "Todo dia às ${horaTexto(horario(ctx, "manha"))} e às ${horaTexto(horario(ctx, "tarde"))}: um story de dica ou curiosidade " +
-            "sobre bem-estar e autoestima, com a cara da loja. Depois chega um aviso para pôr no status do WhatsApp."
+        val base = "Às ${horaTexto(horario(ctx, "manha"))} publica sozinha um story de dica ou curiosidade sobre bem-estar e autoestima, com a cara da loja" +
+            (if (tardeInterativa(ctx)) "; às ${horaTexto(horario(ctx, "tarde"))} prepara o story com enquete (você só põe o adesivo e publica)."
+            else " e às ${horaTexto(horario(ctx, "tarde"))} também.") + " Depois chega um aviso para pôr no status do WhatsApp."
         val ultimo = prefs(ctx).getString("ultimo", null)?.let { " Último: $it" }.orEmpty()
         val falta = when {
             !Instagram.conectado(ctx) -> " Falta conectar o Instagram da loja."
@@ -157,6 +170,7 @@ object StoriesDoDia {
     fun publicar(ctx: Context, turno: String = turnoDeAgora(), forcar: Boolean = false): Tema {
         val marca = "feito_${hoje()}_$turno"
         if (!forcar && prefs(ctx).getBoolean(marca, false)) throw IllegalStateException("O story da ${nomeTurno(turno)} de hoje já foi publicado.")
+        if (!forcar && turno == "tarde" && tardeInterativa(ctx)) return prepararComEnquete(ctx, marca)
         if (!Instagram.conectado(ctx)) throw IllegalStateException("O Instagram da loja não está conectado.")
         val loja = Loja(ctx)
         if (!loja.conectada) throw IllegalStateException("A loja não está conectada nos ajustes (a imagem sobe pelo site).")
@@ -174,6 +188,54 @@ object StoriesDoDia {
     }
 
     fun nomeTurno(turno: String) = if (turno == "manha") "manhã" else "tarde"
+
+    /** Story com enquete: monta a imagem (com espaço para o adesivo) e avisa; quem publica é você. */
+    fun prepararComEnquete(ctx: Context, marca: String = "feito_${hoje()}_tarde"): Tema {
+        val tema = proximoTema(ctx)
+        val jpeg = arte(ctx, tema, espacoEnquete = true)
+        usar(ctx, tema)
+        val arquivo = guardarParaWhatsApp(ctx, jpeg)
+        prefs(ctx).edit().putBoolean(marca, true)
+            .putString("ultimo", "tarde de ${SimpleDateFormat("dd/MM", Locale("pt", "BR")).format(Date())} (com enquete): \"${tema.titulo}\"").apply()
+        Diario.anotar(ctx, "instagram", "Story com enquete preparado: ${tema.titulo} (pergunta: ${tema.pergunta})", "automatico")
+        avisarEnquete(ctx, tema, arquivo)
+        return tema
+    }
+
+    /** Abre o Instagram com a imagem (escolha "Story" na tela de compartilhar). */
+    fun intencaoInstagram(arquivo: File): Intent {
+        val uri = android.net.Uri.parse("content://${FotoProvider.AUTORIDADE}/${arquivo.name}")
+        return Intent(Intent.ACTION_SEND).setType("image/jpeg").putExtra(Intent.EXTRA_STREAM, uri)
+            .setPackage("com.instagram.android")
+            .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
+    }
+
+    private fun avisarEnquete(ctx: Context, tema: Tema, arquivo: File) {
+        val gerente = ctx.getSystemService(NotificationManager::class.java)
+        gerente.createNotificationChannel(NotificationChannel(CANAL, "Stories do dia", NotificationManager.IMPORTANCE_DEFAULT))
+        // o toque passa pela Vênus, que copia a pergunta e abre o Instagram
+        val instagram = PendingIntent.getActivity(
+            ctx, 74_210,
+            Intent(ctx, MainActivity::class.java).setAction(ACAO_INTERATIVO).putExtra("arquivo", arquivo.name).putExtra("pergunta", tema.pergunta)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+        val whatsapp = PendingIntent.getActivity(ctx, 74_211, intencaoWhatsApp(ctx, arquivo), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+        val b = Notification.Builder(ctx, CANAL)
+            .setSmallIcon(R.drawable.ic_venus_simbolo)
+            .setContentTitle("Story da tarde pronto para a enquete")
+            .setContentText("Toque: abre o Instagram com a imagem. Ponha o adesivo Enquete com \"${tema.pergunta}\" (já copiado).")
+            .setStyle(Notification.BigTextStyle().bigText("\"${tema.titulo}\"\nToque para abrir o Instagram com a imagem, escolha Story, " +
+                "toque no adesivo Enquete e cole a pergunta: ${tema.pergunta}"))
+            .setContentIntent(instagram)
+            .addAction(Notification.Action.Builder(null, "Status do WhatsApp", whatsapp).build())
+            .setAutoCancel(true)
+        BitmapFactory.decodeFile(arquivo.absolutePath, BitmapFactory.Options().apply { inSampleSize = 4 })?.let { b.setLargeIcon(it) }
+        try {
+            gerente.notify(74_310, b.build())
+        } catch (e: SecurityException) {
+        }
+    }
 
     /** A imagem do próximo story, sem publicar (para "mostra o story de hoje"). */
     fun previa(ctx: Context): Pair<Tema, File> {
@@ -231,12 +293,12 @@ object StoriesDoDia {
         } catch (e: Exception) {
             JSONArray()
         }
-        return (0 until a.length()).mapNotNull { a.optJSONObject(it) }.map { Tema(it.optString("tipo"), it.optString("titulo"), it.optString("texto")) }.toMutableList()
+        return (0 until a.length()).mapNotNull { a.optJSONObject(it) }.map { Tema(it.optString("tipo"), it.optString("titulo"), it.optString("texto"), it.optString("enquete")) }.toMutableList()
     }
 
     private fun salvarFila(ctx: Context, l: List<Tema>) {
         val a = JSONArray()
-        l.forEach { a.put(JSONObject().put("tipo", it.tipo).put("titulo", it.titulo).put("texto", it.texto)) }
+        l.forEach { a.put(JSONObject().put("tipo", it.tipo).put("titulo", it.titulo).put("texto", it.texto).put("enquete", it.enquete)) }
         prefs(ctx).edit().putString("fila", a.toString()).apply()
     }
 
@@ -288,8 +350,9 @@ object StoriesDoDia {
             "Regras: nada explícito nem vulgar (regras do Instagram); sem nomes de produtos nem preços; sem promessas de saúde nem " +
             "conselho médico; curiosidades só se forem verdadeiras e bem conhecidas (na dúvida, faça uma dica). " +
             "Título com até 45 caracteres; texto com até 170 caracteres; no máximo 1 emoji por texto. " +
+            "Para cada um, uma pergunta de sim ou não para a enquete do story, com até 40 caracteres (ex.: \"Você já sabia disso?\", \"Já fez isso hoje?\"). " +
             (if (jaUsados.isNotEmpty()) "Não repita estes títulos: ${jaUsados.joinToString(" | ")}. " else "") +
-            "Responda só com JSON: {\"temas\":[{\"tipo\":\"dica|curiosidade\",\"titulo\":\"...\",\"texto\":\"...\"}]}"
+            "Responda só com JSON: {\"temas\":[{\"tipo\":\"dica|curiosidade\",\"titulo\":\"...\",\"texto\":\"...\",\"enquete\":\"...\"}]}"
 
     fun lerTemas(json: String): List<Tema> {
         val o = try {
@@ -305,7 +368,8 @@ object StoriesDoDia {
             val titulo = it.optString("titulo").trim().take(60)
             val texto = it.optString("texto").trim().take(220)
             val tipo = if (it.optString("tipo").contains("curio", true)) "curiosidade" else "dica"
-            if (titulo.length < 4 || texto.length < 20) null else Tema(tipo, titulo, texto)
+            val enquete = it.optString("enquete").trim().take(60).let { q -> if (q.isNotBlank() && !q.endsWith("?")) "$q?" else q }
+            if (titulo.length < 4 || texto.length < 20) null else Tema(tipo, titulo, texto, enquete)
         }
     }
 
@@ -330,7 +394,7 @@ object StoriesDoDia {
     )
 
     // ------------------------------------------------------------------ arte 1080×1920 com a cara da loja
-    fun arte(ctx: Context, tema: Tema): ByteArray {
+    fun arte(ctx: Context, tema: Tema, espacoEnquete: Boolean = false): ByteArray {
         val w = 1080
         val h = 1920
         val bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
@@ -415,7 +479,8 @@ object StoriesDoDia {
         val lCorpo = StaticLayout.Builder.obtain(tema.texto, 0, tema.texto.length, corpo, largura)
             .setAlignment(Layout.Alignment.ALIGN_CENTER).setLineSpacing(0f, 1.3f).build()
         val bloco = lTitulo.height + 70 + lCorpo.height
-        val topo = maxOf(y + 110f, (h - bloco) / 2f + 60f)
+        // com enquete, o texto sobe e sobra espaço livre embaixo para o adesivo
+        val topo = if (espacoEnquete) y + 90f else maxOf(y + 110f, (h - bloco) / 2f + 60f)
         tela.save()
         tela.translate(110f, topo)
         lTitulo.draw(tela)

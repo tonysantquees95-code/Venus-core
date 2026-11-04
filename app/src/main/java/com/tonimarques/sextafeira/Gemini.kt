@@ -288,6 +288,8 @@ class Gemini(
                 return resposta
             }
         }
+        // 3) Nenhum Gemini respondeu: a IA reserva (Groq ou Grok), se estiver configurada.
+        SegundaIA.responder(corpo, if (profundo) 60_000 else 30_000)?.let { return 200 to it }
         return ultimaResposta ?: throw (ultimoErro ?: IOException("sem conexão"))
     }
 
@@ -469,7 +471,12 @@ class Gemini(
                     conexao?.disconnect()
                 }
             }
-            return null
+            // nenhum Gemini respondeu: a IA reserva (só texto)
+            return try {
+                SegundaIA.responder(JSONObject(String(corpo, Charsets.UTF_8)), tempo)
+            } catch (e: Exception) {
+                null
+            }
         }
 
         private fun imagem(foto: ByteArray, tipo: String = "image/jpeg") = JSONObject().put(

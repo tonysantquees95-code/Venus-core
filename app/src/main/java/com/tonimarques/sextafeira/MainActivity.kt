@@ -250,6 +250,11 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
             ACAO_ATIVAR -> orbe.post { ativar() }
             Atualizador.ACAO_INSTALAR -> resultadoDaInstalacao(intent)
             Postagens.ACAO_POSTAR -> intent.getIntExtra("id", 0).takeIf { it > 0 }?.let { id -> orbe.post { postarAgora(id) } }
+            StoriesDoDia.ACAO_INTERATIVO -> {
+                val arquivo = intent.getStringExtra("arquivo").orEmpty()
+                val pergunta = intent.getStringExtra("pergunta").orEmpty()
+                if (arquivo.isNotBlank()) orbe.post { abrirStoryComEnquete(arquivo, pergunta) }
+            }
             Intent.ACTION_VIEW -> intent.data?.takeIf { it.scheme == "content" || it.scheme == "file" }?.let { u -> orbe.post { abrirDocumento(u) } }
             Intent.ACTION_SEND -> {
                 @Suppress("DEPRECATION")
@@ -962,6 +967,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
                 decisao.nome == "story_auto" -> storiesAutomaticos(decisao.args["ligado"] as? Boolean)
                 decisao.nome == "story_auto_ver" -> previaDoStory()
                 decisao.nome == "story_auto_agora" -> storyDoDiaAgora()
+                decisao.nome == "story_enquete" -> storyComEnqueteAgora()
                 decisao.nome == "diario_resumo" -> {
                     val semana = decisao.args["periodo"] == "semana"
                     val desde = if (semana) System.currentTimeMillis() - 7 * 86_400_000L else Diario.inicioDoDia()
@@ -2087,6 +2093,13 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
                         StoriesDoDia.definirLigado(this, !StoriesDoDia.ligado(this))
                         ajustes?.atualizar()
                     },
+                    TelaDeAjustes.Ajuste("Story da tarde com enquete", {
+                        "A API do Instagram não põe adesivos. À tarde a $n prepara a imagem, copia a pergunta e abre o Instagram: " +
+                            "você toca em Enquete, cola e publica. Desligado: a tarde também sai sozinha, sem enquete."
+                    }, { StoriesDoDia.tardeInterativa(this) }) {
+                        StoriesDoDia.definirTardeInterativa(this, !StoriesDoDia.tardeInterativa(this))
+                        ajustes?.atualizar()
+                    },
                     TelaDeAjustes.Ajuste("Horários dos stories", {
                         "Manhã às ${StoriesDoDia.horaTexto(StoriesDoDia.horario(this, "manha"))} e tarde às ${StoriesDoDia.horaTexto(StoriesDoDia.horario(this, "tarde"))}. Toque para mudar."
                     }) { escolherHorariosDosStories() },
@@ -2098,6 +2111,10 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
                         "Responde só com os próprios recursos (comandos, pesquisa e notícias), sem usar o Gemini."
                     }, MENU_INDEPENDENTE) { modoIndependente() },
                     item("Chave do Gemini", { if (chave().isBlank()) "Não configurada" else "Configurada" }, MENU_CHAVE),
+                    TelaDeAjustes.Ajuste("IA reserva (quando o Gemini travar)", {
+                        if (!SegundaIA.configurada(this)) "Não configurada. Com uma chave grátis da Groq, a $n continua respondendo quando o Gemini falhar ou ficar sem cota."
+                        else "Usando ${SegundaIA.provedor(this).nome}." + (if (SegundaIA.ultimaVez > 0) " Última vez que ajudou: ${Diario.hora(SegundaIA.ultimaVez)}." else "")
+                    }) { pedirIAReserva() },
                     TelaDeAjustes.Ajuste("Estudo diário (memória vetorial)", {
                         val r = Estudo.ultimo(this)
                         "Todo dia, em segundo plano: ${Estudo.FRASES_POR_DIA} jeitos de pedir, ${Estudo.ENIGMAS_POR_DIA} charadas, " +
@@ -3464,6 +3481,87 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
                 }.onFailure { responder("Não consegui montar o story: ${it.message}") }
             }
         }.start()
+    }
+
+    /** Do aviso do story da tarde: copia a pergunta da enquete e abre o Instagram com a imagem. */
+    private fun abrirStoryComEnquete(arquivo: String, pergunta: String) {
+        val f = java.io.File(FotoProvider.pasta(this), arquivo)
+        if (!f.exists()) return responder("A imagem desse story não está mais aqui (passou mais de um dia). Diga: prepara o story com enquete.")
+        if (pergunta.isNotBlank()) {
+            (getSystemService(CLIPBOARD_SERVICE) as android.content.ClipboardManager).setPrimaryClip(android.content.ClipData.newPlainText("Enquete", pergunta))
+        }
+        try {
+            startActivity(StoriesDoDia.intencaoInstagram(f))
+            Toast.makeText(this, "Escolha Story, toque no adesivo Enquete e cole: $pergunta", Toast.LENGTH_LONG).show()
+        } catch (e: ActivityNotFoundException) {
+            responder("Não achei o Instagram neste celular.")
+        }
+    }
+
+    private fun storyComEnqueteAgora() {
+        responder("Vou preparar o story com enquete; quando estiver pronto, chega o aviso para abrir no Instagram.")
+        Thread {
+            val r = try {
+                Result.success(StoriesDoDia.prepararComEnquete(this))
+            } catch (e: Exception) {
+                Result.failure(e)
+            }
+            runOnUiThread {
+                r.onSuccess { responder("Pronto: \"${it.titulo}\". Toque no aviso para abrir o Instagram; a pergunta da enquete é: ${it.pergunta}") }
+                    .onFailure { responder("Não consegui preparar: ${it.message}") }
+            }
+        }.start()
+    }
+
+    private fun pedirIAReserva() {
+        val opcoes = SegundaIA.PROVEDORES
+        var escolhido = opcoes.indexOfFirst { it.id == SegundaIA.provedor(this).id }.coerceAtLeast(0)
+        val caixa = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(20), dp(8), dp(20), 0)
+        }
+        val grupo = android.widget.RadioGroup(this)
+        opcoes.forEachIndexed { i, p ->
+            grupo.addView(android.widget.RadioButton(this).apply {
+                id = 9100 + i
+                text = p.nome
+                isChecked = i == escolhido
+            })
+        }
+        grupo.setOnCheckedChangeListener { _, id -> escolhido = id - 9100 }
+        caixa.addView(grupo)
+        val entrada = campoDeDialogo(SegundaIA.chave(this), "Cole aqui a chave")
+        caixa.addView(entrada)
+        AlertDialog.Builder(this)
+            .setTitle("IA reserva")
+            .setMessage("Quando o Gemini travar ou ficar sem cota, a $n pergunta para esta IA. A Groq é grátis (cerca de 1.000 pedidos por dia): crie a chave em console.groq.com.")
+            .setView(caixa)
+            .setPositiveButton("Salvar e testar") { _, _ ->
+                SegundaIA.salvar(this, opcoes[escolhido].id, entrada.text.toString())
+                if (entrada.text.isBlank()) return@setPositiveButton responder("IA reserva desligada.")
+                responder("Testando a ${opcoes[escolhido].nome}…")
+                Thread {
+                    val r = try {
+                        Result.success(SegundaIA.testar(this))
+                    } catch (e: Exception) {
+                        Result.failure(e)
+                    }
+                    runOnUiThread {
+                        r.onSuccess { responder("A ${opcoes[escolhido].nome} respondeu: \"${it.take(60)}\". Agora, se o Gemini travar, ela assume.") }
+                            .onFailure { responder(it.message ?: "Não funcionou.") }
+                        ajustes?.atualizar()
+                    }
+                }.start()
+            }
+            .setNeutralButton("Criar chave") { _, _ ->
+                try {
+                    startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(opcoes[escolhido].site)))
+                } catch (e: ActivityNotFoundException) {
+                    Toast.makeText(this, "Nenhum navegador encontrado.", Toast.LENGTH_SHORT).show()
+                }
+            }
+            .setNegativeButton("Cancelar", null)
+            .show()
     }
 
     private fun storyDoDiaAgora() {
