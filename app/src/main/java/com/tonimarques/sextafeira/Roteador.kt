@@ -128,7 +128,7 @@ object Roteador {
             .put("contents", JSONArray().put(JSONObject().put("role", "user").put("parts", JSONArray().put(JSONObject().put("text", montarPedido(frase, contexto))))))
             .put("generationConfig", JSONObject().put("temperature", 0.0).put("responseMimeType", "application/json"))
             .toString().toByteArray()
-        for (m in listOf("gemini-flash-lite-latest", modelo.removePrefix("models/"), "gemini-2.5-flash").filter { it.isNotBlank() }.distinct()) {
+        for (m in listOf("gemini-flash-lite-latest", modelo.removePrefix("models/"), "gemini-3.8-flash").filter { it.isNotBlank() }.distinct()) {
             var c: HttpURLConnection? = null
             try {
                 c = URL("https://generativelanguage.googleapis.com/v1beta/models/$m:generateContent").openConnection() as HttpURLConnection

@@ -22,9 +22,8 @@ class Gemini(
 ) {
     private val modelo = modelo.trim().removePrefix("models/")
     private var modeloAtivo = this.modelo
-    /** O modelo recusou o modo rápido (sem raciocínio interno)? */
-    @Volatile
-    private var semModoRapido = false
+    /** Modelos que recusaram o ajuste de raciocínio (recebem o pedido sem ele). */
+    private val modelosSemAjuste = java.util.Collections.synchronizedSet(mutableSetOf<String>())
 
     /** Quando passou para um modelo reserva (volta ao principal depois de 10 minutos). */
     private var reservaDesde = 0L
@@ -242,12 +241,11 @@ class Gemini(
                 "tools",
                 JSONArray().put(JSONObject().put("functionDeclarations", ferramentas.declaracoes()))
             )
-        // Pergunta difícil: mais "tempo de pensar" antes de responder (o modelo raciocina por dentro e confere)
-        if (profundo) corpo.put("generationConfig", JSONObject().put("thinkingConfig", JSONObject().put("thinkingBudget", Raciocinio.ORCAMENTO)))
-        // Pergunta comum: sem "pensar por dentro" (é o que mais atrasa a resposta dos modelos Flash novos)
-        else if (!semModoRapido) corpo.put("generationConfig", JSONObject().put("thinkingConfig", JSONObject().put("thinkingBudget", 0)))
-
-        val bytes = corpo.toString().toByteArray(Charsets.UTF_8)
+        // O ajuste de raciocínio: pergunta difícil = mais "tempo de pensar"; pergunta comum = sem pensar por dentro
+        // (é o que mais atrasa os modelos Flash novos). Modelo que recusar o ajuste (erro 400) recebe sem ele.
+        val ajuste = JSONObject().put("thinkingConfig", JSONObject().put("thinkingBudget", if (profundo) Raciocinio.ORCAMENTO else 0))
+        val comAjuste = JSONObject(corpo.toString()).put("generationConfig", ajuste).toString().toByteArray(Charsets.UTF_8)
+        val semAjuste = corpo.toString().toByteArray(Charsets.UTF_8)
         var ultimaResposta: Pair<Int, JSONObject>? = null
         var ultimoErro: IOException? = null
 
@@ -257,7 +255,11 @@ class Gemini(
         fun tentar(modeloUsado: String, vezes: Int): Pair<Int, JSONObject>? {
             for (tentativa in 1..vezes) {
                 try {
-                    val resposta = enviarRequisicao(modeloUsado, bytes)
+                    var resposta = enviarRequisicao(modeloUsado, if (modeloUsado in modelosSemAjuste) semAjuste else comAjuste)
+                    if (resposta.first == 400 && modeloUsado !in modelosSemAjuste) {
+                        modelosSemAjuste += modeloUsado
+                        resposta = enviarRequisicao(modeloUsado, semAjuste)
+                    }
                     if (!sobrecarregado(resposta.first, resposta.second)) return resposta
                     ultimaResposta = resposta
                 } catch (e: IOException) {
@@ -268,23 +270,15 @@ class Gemini(
             return null
         }
 
-        // 1) Modelo em uso, com uma nova tentativa se a rede oscilar ou o servidor estiver ocupado.
+        // 1) Modelo em uso.
         tentar(modeloAtivo, 1)?.let { r ->
-            // modelo que não aceita o ajuste de raciocínio: tenta de novo do jeito normal
-            if (profundo && r.first == 400) {
-                profundo = false
-                return chamarApi()
-            }
-            // modelo que não aceita desligar o raciocínio: volta ao normal e não tenta mais
-            if (!profundo && !semModoRapido && r.first == 400 && r.second.optJSONObject("error")?.optString("message").orEmpty().contains("thinking", true)) {
-                semModoRapido = true
-                return chamarApi()
-            }
-            return r
+            if (r.first in 200..299 || r.first == 401 || r.first == 403) return r
+            ultimaResposta = r
         }
 
-        // 2) Modelo sobrecarregado (503, "overloaded") ou sem cota (429): passa para um modelo Flash, primeiro os mais leves.
-        val ordem = (listOf("gemini-2.5-flash", "gemini-flash-lite-latest") + reservas().take(3)).distinct()
+        // 2) Modelo sobrecarregado (503, "overloaded"), sem cota (429) ou fora do ar: passa para outro modelo Flash.
+        // (o gemini-2.5-flash não está mais disponível para chaves novas; o Google indica o gemini-3.8-flash)
+        val ordem = (listOf("gemini-3.8-flash", "gemini-flash-lite-latest") + reservas().take(3)).distinct()
         for (reserva in ordem) {
             if (reserva == modeloAtivo) continue
             val resposta = tentar(reserva, 1) ?: continue
@@ -366,7 +360,7 @@ class Gemini(
             val texto = (erro?.optString("message").orEmpty() + " " + erro?.optString("status").orEmpty())
             return Regex("overloaded|unavailable|resource_exhausted|\\b503\\b|try again later", RegexOption.IGNORE_CASE).containsMatchIn(texto)
         }
-        private val RESERVA_FIXA = listOf("gemini-flash-lite-latest", "gemini-2.5-flash")
+        private val RESERVA_FIXA = listOf("gemini-flash-lite-latest", "gemini-3.8-flash")
         private val IGNORAR = listOf("image", "tts", "live", "audio", "embed", "exp", "computer", "robotic", "native")
 
         /**
@@ -428,7 +422,7 @@ class Gemini(
                 .put("contents", JSONArray().put(JSONObject().put("role", "user").put("parts", partes)))
                 .put("generationConfig", JSONObject().put("maxOutputTokens", 400).put("temperature", 0.6))
                 .toString().toByteArray()
-            for (m in listOf(modelo.trim().removePrefix("models/"), "gemini-2.5-flash", "gemini-flash-lite-latest").distinct()) {
+            for (m in listOf(modelo.trim().removePrefix("models/"), "gemini-3.8-flash", "gemini-flash-lite-latest").distinct()) {
                 var conexao: HttpURLConnection? = null
                 try {
                     conexao = URL("https://generativelanguage.googleapis.com/v1beta/models/$m:generateContent").openConnection() as HttpURLConnection
@@ -497,7 +491,7 @@ class Gemini(
                 .put("contents", JSONArray().put(JSONObject().put("role", "user").put("parts", JSONArray().put(imagem(foto, tipo)).put(JSONObject().put("text", pedido)))))
                 .put("generationConfig", JSONObject().put("temperature", 0.1).put("responseMimeType", "application/json"))
                 .toString().toByteArray()
-            val json = chamarAvulso(chave, listOf(modelo, "gemini-2.5-flash", "gemini-flash-lite-latest"), corpo) ?: return null
+            val json = chamarAvulso(chave, listOf(modelo, "gemini-3.8-flash", "gemini-flash-lite-latest"), corpo) ?: return null
             val texto = json.optJSONArray("candidates")?.optJSONObject(0)?.optJSONObject("content")?.optJSONArray("parts")
                 ?.let { partes -> (0 until partes.length()).joinToString("") { partes.optJSONObject(it)?.optString("text").orEmpty() } } ?: return null
             return lerItensDaNota(texto)
@@ -562,7 +556,7 @@ class Gemini(
                 .put("contents", JSONArray().put(JSONObject().put("role", "user").put("parts", JSONArray().put(JSONObject().put("text", pedido)))))
                 .put("generationConfig", JSONObject().put("temperature", 0.5))
                 .toString().toByteArray()
-            val json = chamarAvulso(chave, listOf(modelo, "gemini-2.5-flash", "gemini-flash-lite-latest"), corpo) ?: return null
+            val json = chamarAvulso(chave, listOf(modelo, "gemini-3.8-flash", "gemini-flash-lite-latest"), corpo) ?: return null
             return textoBruto(json)?.replace(Regex("[*`#]"), "")?.trim()?.trim('"', '“', '”')
         }
 
@@ -583,7 +577,7 @@ class Gemini(
                 .put("contents", JSONArray().put(JSONObject().put("role", "user").put("parts", partes)))
                 .put("generationConfig", JSONObject().put("temperature", 0.8))
                 .toString().toByteArray()
-            val json = chamarAvulso(chave, listOf(modelo, "gemini-2.5-flash", "gemini-flash-lite-latest"), corpo) ?: return null
+            val json = chamarAvulso(chave, listOf(modelo, "gemini-3.8-flash", "gemini-flash-lite-latest"), corpo) ?: return null
             return textoBruto(json)?.replace(Regex("[*`]"), "")?.trim()?.trim('"', '“', '”')?.take(2000)
         }
 
@@ -603,7 +597,7 @@ class Gemini(
                 .put("contents", JSONArray().put(JSONObject().put("role", "user").put("parts", JSONArray().put(JSONObject().put("text", pedido)))))
                 .put("generationConfig", JSONObject().put("temperature", 0.6))
                 .toString().toByteArray()
-            val json = chamarAvulso(chave, listOf(modelo, "gemini-2.5-flash", "gemini-flash-lite-latest"), corpo) ?: return null
+            val json = chamarAvulso(chave, listOf(modelo, "gemini-3.8-flash", "gemini-flash-lite-latest"), corpo) ?: return null
             return textoBruto(json)?.replace(Regex("[*`#]"), "")?.trim()?.trim('"', '“', '”')?.take(1000)
         }
 
@@ -629,7 +623,7 @@ class Gemini(
                 .put("contents", JSONArray().put(JSONObject().put("role", "user").put("parts", partesDoDocumento(doc, pedido))))
                 .put("generationConfig", JSONObject().put("temperature", 0.2).put("responseMimeType", "application/json"))
                 .toString().toByteArray()
-            val json = chamarAvulso(chave, listOf(modelo, "gemini-2.5-flash", "gemini-flash-lite-latest"), corpo, tempo = 120_000) ?: return null
+            val json = chamarAvulso(chave, listOf(modelo, "gemini-3.8-flash", "gemini-flash-lite-latest"), corpo, tempo = 120_000) ?: return null
             return lerAnalise(textoBruto(json) ?: return null)
         }
 
@@ -658,7 +652,7 @@ class Gemini(
                 .put("contents", JSONArray().put(JSONObject().put("role", "user").put("parts", partesDoDocumento(doc, pedido))))
                 .put("generationConfig", JSONObject().put("temperature", 0.3))
                 .toString().toByteArray()
-            val json = chamarAvulso(chave, listOf(modelo, "gemini-2.5-flash", "gemini-flash-lite-latest"), corpo, tempo = 120_000) ?: return null
+            val json = chamarAvulso(chave, listOf(modelo, "gemini-3.8-flash", "gemini-flash-lite-latest"), corpo, tempo = 120_000) ?: return null
             return textoDaResposta(json)
         }
 
@@ -668,13 +662,18 @@ class Gemini(
          */
         fun gerarJson(chave: String, modelo: String, pedido: String, pensar: Int = 0, temperatura: Double = 0.9): String? {
             if (chave.isBlank()) return null
-            val config = JSONObject().put("temperature", temperatura).put("responseMimeType", "application/json")
-            if (pensar > 0) config.put("thinkingConfig", JSONObject().put("thinkingBudget", pensar))
-            val corpo = JSONObject()
-                .put("contents", JSONArray().put(JSONObject().put("role", "user").put("parts", JSONArray().put(JSONObject().put("text", pedido)))))
-                .put("generationConfig", config)
-                .toString().toByteArray()
-            val json = chamarAvulso(chave, listOf(modelo, "gemini-2.5-flash", "gemini-flash-lite-latest"), corpo, tempo = 120_000) ?: return null
+            fun corpo(comPensar: Boolean): ByteArray {
+                val config = JSONObject().put("temperature", temperatura).put("responseMimeType", "application/json")
+                if (comPensar) config.put("thinkingConfig", JSONObject().put("thinkingBudget", pensar))
+                return JSONObject()
+                    .put("contents", JSONArray().put(JSONObject().put("role", "user").put("parts", JSONArray().put(JSONObject().put("text", pedido)))))
+                    .put("generationConfig", config)
+                    .toString().toByteArray()
+            }
+            val modelos = listOf(modelo, "gemini-3.8-flash", "gemini-flash-lite-latest")
+            // com raciocínio primeiro; se nenhum modelo aceitar o ajuste, sem ele
+            val json = (if (pensar > 0) chamarAvulso(chave, modelos, corpo(true), tempo = 120_000) else null)
+                ?: chamarAvulso(chave, modelos, corpo(false), tempo = 120_000) ?: return null
             return textoBruto(json)
         }
 
@@ -714,7 +713,7 @@ class Gemini(
                 .put("tools", JSONArray().put(JSONObject().put("google_search", JSONObject())))
                 .put("generationConfig", JSONObject().put("temperature", 0.1))
                 .toString().toByteArray()
-            val json = chamarAvulso(chave, listOf(modelo, "gemini-2.5-flash", "gemini-flash-latest"), corpo, tempo = 45_000) ?: return null
+            val json = chamarAvulso(chave, listOf(modelo, "gemini-3.8-flash", "gemini-flash-latest"), corpo, tempo = 45_000) ?: return null
             val candidato = json.optJSONArray("candidates")?.optJSONObject(0) ?: return null
             val partes = candidato.optJSONObject("content")?.optJSONArray("parts") ?: return null
             val texto = (0 until partes.length()).mapNotNull { partes.optJSONObject(it) }
@@ -741,7 +740,7 @@ class Gemini(
                 .put("contents", JSONArray().put(JSONObject().put("role", "user").put("parts", JSONArray().put(JSONObject().put("text", pedido)))))
                 .put("generationConfig", JSONObject().put("temperature", 0.2).put("responseMimeType", "application/json"))
                 .toString().toByteArray()
-            val json = chamarAvulso(chave, listOf("gemini-flash-lite-latest", modelo, "gemini-2.5-flash"), corpo, tempo = 30_000) ?: return null
+            val json = chamarAvulso(chave, listOf("gemini-flash-lite-latest", modelo, "gemini-3.8-flash"), corpo, tempo = 30_000) ?: return null
             val bruto = textoBruto(json) ?: return null
             return try {
                 val o = JSONObject(bruto.substring(bruto.indexOf('{'), bruto.lastIndexOf('}') + 1))
