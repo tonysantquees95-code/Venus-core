@@ -63,6 +63,10 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
 
     private var gemini: Gemini? = null
     private var tts: TextToSpeech? = null
+    /** Voz neural (Microsoft): o áudio da resposta toca aqui. */
+    private var tocador: android.media.MediaPlayer? = null
+    /** Muda a cada fala nova ou interrupção: áudio que chega atrasado de uma fala antiga é descartado. */
+    private var numeroDaFala = 0
     private var ttsPronto = false
     private var falando = false
     private var falaPendente: String? = null
@@ -194,6 +198,8 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         despertador?.parar()
         interruptor?.parar()
         tts?.shutdown()
+        tocador?.release()
+        tocador = null
         reconhecedor?.destroy()
         super.onDestroy()
     }
@@ -1544,17 +1550,181 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         }
         falando = true
         val limpo = texto.replace(Regex("[*#_`>]"), "")
-        tts?.speak(limpo, TextToSpeech.QUEUE_FLUSH, null, "resposta")
+        if (VozNeural.ativa(this)) falarComVozNeural(limpo)
+        else tts?.speak(limpo, TextToSpeech.QUEUE_FLUSH, null, "resposta")
         if (naTela && prefs.getBoolean(PREF_INTERROMPER, true) && temMicrofone()) {
             val i = interruptor ?: Interruptor(this) { interromperFala() }.also { interruptor = it }
             i.iniciar(limpo)
         }
     }
 
+    /** Gera a fala na Microsoft (em segundo plano) e toca; se não vier em poucos segundos, fala com a voz do celular. */
+    private fun falarComVozNeural(limpo: String) {
+        val numero = ++numeroDaFala
+        Thread {
+            val arquivo = try {
+                VozNeural.sintetizar(this, limpo)
+            } catch (e: Exception) {
+                null
+            }
+            runOnUiThread {
+                if (numero != numeroDaFala || !falando) return@runOnUiThread // foi interrompida enquanto gerava
+                if (arquivo == null) {
+                    tts?.speak(limpo, TextToSpeech.QUEUE_FLUSH, null, "resposta")
+                    return@runOnUiThread
+                }
+                tocarAudio(arquivo, numero)
+            }
+        }.start()
+    }
+
+    private fun tocarAudio(arquivo: java.io.File, numero: Int, amostra: Boolean = false) {
+        tocador?.release()
+        tocador = try {
+            android.media.MediaPlayer().apply {
+                setAudioAttributes(
+                    android.media.AudioAttributes.Builder()
+                        .setUsage(android.media.AudioAttributes.USAGE_ASSISTANT)
+                        .setContentType(android.media.AudioAttributes.CONTENT_TYPE_SPEECH)
+                        .build()
+                )
+                setDataSource(arquivo.absolutePath)
+                setOnCompletionListener { mp ->
+                    mp.release()
+                    if (tocador === mp) tocador = null
+                    if (!amostra && numero == numeroDaFala) aposFala()
+                }
+                setOnErrorListener { mp, _, _ ->
+                    mp.release()
+                    if (tocador === mp) tocador = null
+                    if (!amostra && numero == numeroDaFala) aposFala()
+                    true
+                }
+                prepare()
+                start()
+            }
+        } catch (e: Exception) {
+            if (!amostra && numero == numeroDaFala) aposFala()
+            null
+        }
+        if (!amostra && tocador != null) mudarEstado(Orbe.Estado.FALANDO, "FALANDO")
+    }
+
+    /** Cala as duas vozes (a do celular e a neural). */
+    private fun pararFala() {
+        numeroDaFala++
+        tts?.stop()
+        tocador?.let {
+            try {
+                it.stop()
+            } catch (e: Exception) {
+            }
+            it.release()
+        }
+        tocador = null
+    }
+
+    /** Ajuste da voz neural: chave, região, voz (com amostra) e jeito de falar. */
+    private fun configurarVozNeural() {
+        var voz = VozNeural.VOZES.indexOf(VozNeural.voz(this)).coerceAtLeast(0)
+        var estilo = VozNeural.ESTILOS.indexOf(VozNeural.estilo(this)).coerceAtLeast(0)
+        val caixa = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(20), dp(8), dp(20), 0)
+        }
+        fun rotulo(t: String) = TextView(this).apply {
+            text = t
+            setPadding(0, dp(10), 0, dp(4))
+            setTextColor(COR_TEXTO_APAGADO)
+        }
+        caixa.addView(rotulo("Voz (toque para ouvir)"))
+        val grupoVoz = android.widget.RadioGroup(this)
+        VozNeural.VOZES.forEachIndexed { i, v ->
+            grupoVoz.addView(android.widget.RadioButton(this).apply {
+                id = 9200 + i
+                text = "${v.nome} — ${v.descricao}"
+                isChecked = i == voz
+            })
+        }
+        caixa.addView(grupoVoz)
+        caixa.addView(rotulo("Jeito de falar"))
+        val grupoEstilo = android.widget.RadioGroup(this)
+        VozNeural.ESTILOS.forEachIndexed { i, e ->
+            grupoEstilo.addView(android.widget.RadioButton(this).apply {
+                id = 9300 + i
+                text = e.nome
+                isChecked = i == estilo
+            })
+        }
+        caixa.addView(grupoEstilo)
+        caixa.addView(rotulo("Chave do Azure Speech"))
+        val chave = campoDeDialogo(VozNeural.chave(this), "Cole aqui a chave (KEY 1)")
+        caixa.addView(chave)
+        caixa.addView(rotulo("Região do recurso"))
+        val regiao = campoDeDialogo(VozNeural.regiao(this), "brazilsouth")
+        caixa.addView(regiao)
+
+        fun ouvir() {
+            if (chave.text.isBlank()) return Toast.makeText(this, "Cole a chave para ouvir as vozes da Microsoft.", Toast.LENGTH_SHORT).show()
+            VozNeural.salvar(this, chave.text.toString(), regiao.text.toString(), VozNeural.VOZES[voz].id, VozNeural.ESTILOS[estilo].id)
+            val opcao = VozNeural.VOZES[voz]
+            val jeito = VozNeural.ESTILOS[estilo]
+            Thread {
+                val f = VozNeural.sintetizar(this, "Olá, Toni. Eu sou a ${Marca.nome}. Sistemas prontos. No que posso ajudar?", opcao, jeito, 10_000)
+                runOnUiThread {
+                    if (f != null) {
+                        pararFala()
+                        tocarAudio(f, numeroDaFala, amostra = true)
+                    } else Toast.makeText(this, "A Microsoft não respondeu. Confira a chave e a região.", Toast.LENGTH_LONG).show()
+                }
+            }.start()
+        }
+        grupoVoz.setOnCheckedChangeListener { _, id ->
+            voz = id - 9200
+            ouvir()
+        }
+        grupoEstilo.setOnCheckedChangeListener { _, id ->
+            estilo = id - 9300
+            ouvir()
+        }
+        AlertDialog.Builder(this)
+            .setTitle("Voz neural (Microsoft)")
+            .setMessage("Bem mais natural que a voz do celular. Grátis até ${"%,d".format(VozNeural.LIMITE_GRATIS).replace(',', '.')} caracteres por mês; perto do limite ela volta sozinha para a voz do celular.")
+            .setView(android.widget.ScrollView(this).apply { addView(caixa) })
+            .setPositiveButton("Salvar e testar") { _, _ ->
+                VozNeural.salvar(this, chave.text.toString(), regiao.text.toString(), VozNeural.VOZES[voz].id, VozNeural.ESTILOS[estilo].id)
+                if (chave.text.isBlank()) return@setPositiveButton responder("Voz neural desligada; continuo com a voz do celular.")
+                Thread {
+                    val r = try {
+                        Result.success(VozNeural.testar(this))
+                    } catch (e: Exception) {
+                        Result.failure(e)
+                    }
+                    runOnUiThread {
+                        r.onSuccess {
+                            adicionarMensagem("Voz neural ligada: ${VozNeural.voz(this).nome}. É assim que eu falo agora.", false)
+                            pararFala()
+                            tocarAudio(it, numeroDaFala, amostra = true)
+                        }.onFailure { responder(it.message ?: "Não funcionou.") }
+                        ajustes?.atualizar()
+                    }
+                }.start()
+            }
+            .setNeutralButton("Criar chave") { _, _ ->
+                try {
+                    startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://portal.azure.com/#create/Microsoft.CognitiveServicesSpeechServices")))
+                } catch (e: ActivityNotFoundException) {
+                    Toast.makeText(this, "Nenhum navegador encontrado.", Toast.LENGTH_SHORT).show()
+                }
+            }
+            .setNegativeButton("Fechar") { _, _ -> pararFala() }
+            .show()
+    }
+
     /** Você falou "Vênus", "chega", "espera"... durante a fala: ela se cala e passa a ouvir. */
     private fun interromperFala() {
         if (!falando) return
-        tts?.stop()
+        pararFala()
         falando = false
         ultimaFoiVoz = true
         escutaAte = android.os.SystemClock.elapsedRealtime() + 12_000
@@ -1815,7 +1985,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         if (ocupado || escuta == Escuta.COMANDO) return
         pararVigilia()
         interruptor?.parar()
-        tts?.stop()
+        pararFala()
         falando = false
         forcarEscuta = false
         if (!temMicrofone()) {
@@ -2049,7 +2219,8 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
             ),
             TelaDeAjustes.Secao(
                 "Voz da $n", listOf(
-                    item("Escolher a voz", { "Vozes em português instaladas no celular." }, MENU_VOZ),
+                    TelaDeAjustes.Ajuste("Voz neural (Microsoft)", { VozNeural.resumo(this) }) { configurarVozNeural() },
+                    item("Escolher a voz", { "Vozes em português instaladas no celular (usadas quando a voz neural está desligada ou sem internet)." }, MENU_VOZ),
                     item("Velocidade e tom", { "Deixe a fala mais rápida, mais lenta, mais grave ou mais aguda." }, MENU_AJUSTE_VOZ),
                     item("Responder em voz alta", { "Além de escrever, ela fala as respostas." }, MENU_FALAR) {
                         prefs.getBoolean(PREF_FALAR, true)
@@ -2277,7 +2448,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
             MENU_FALAR -> {
                 val ligado = !prefs.getBoolean(PREF_FALAR, true)
                 prefs.edit().putBoolean(PREF_FALAR, ligado).apply()
-                if (!ligado) tts?.stop()
+                if (!ligado) pararFala()
             }
             MENU_CONTINUA -> {
                 val ligado = !prefs.getBoolean(PREF_CONTINUA, true)
