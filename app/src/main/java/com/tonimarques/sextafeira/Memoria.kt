@@ -370,6 +370,40 @@ class Memoria(contexto: Context) : SQLiteOpenHelper(contexto, "sexta.db", null, 
             return buffer.array()
         }
 
+        /** Teto da memória vetorial: com o formato compacto, cerca de 50 MB no celular e a busca continua rápida. */
+        const val MAXIMO_ITENS = 60_000
+
+        /** Vetores em blocos de 4.096 dentro do índice (nenhum pedaço grande demais de memória). */
+        private const val BLOCO = 4096
+
+        /** Formato compacto: 'Q' + escala (float) + 1 byte por número. */
+        private const val CABECALHO = 5
+        private const val MARCA: Byte = 'Q'.code.toByte()
+
+        @Volatile
+        private var geracaoGlobal = 0L
+
+        fun ehCompacto(b: ByteArray) = b.size > CABECALHO && b.size % 4 == 1 && b[0] == MARCA
+
+        /** Vetor -> 'Q' + escala + cada número em 1 byte (-127..127): 4 vezes menor, quase a mesma nota. */
+        fun compactar(v: FloatArray): ByteArray {
+            var maior = 0f
+            for (x in v) maior = maxOf(maior, Math.abs(x))
+            val escala = if (maior == 0f) 1f else maior / 127f
+            val saida = ByteArray(CABECALHO + v.size)
+            saida[0] = MARCA
+            ByteBuffer.wrap(saida, 1, 4).order(ByteOrder.LITTLE_ENDIAN).putFloat(escala)
+            for (i in v.indices) saida[CABECALHO + i] = Math.round(v[i] / escala).coerceIn(-127, 127).toByte()
+            return saida
+        }
+
+        /** Volta do formato compacto (ou do antigo) para números. */
+        fun descompactar(b: ByteArray): FloatArray {
+            if (!ehCompacto(b)) return bytesParaVetor(b)
+            val escala = ByteBuffer.wrap(b, 1, 4).order(ByteOrder.LITTLE_ENDIAN).float
+            return FloatArray(b.size - CABECALHO) { b[CABECALHO + it] * escala }
+        }
+
         /** Bytes da coluna BLOB -> vetor. */
         fun bytesParaVetor(bytes: ByteArray): FloatArray {
             val vetor = FloatArray(bytes.size / 4)
@@ -538,8 +572,44 @@ class Memoria(contexto: Context) : SQLiteOpenHelper(contexto, "sexta.db", null, 
 
     data class Achado(val item: Item, val nota: Double)
 
-    /** Vetores em memória (lidos do banco na primeira busca e atualizados a cada gravação). */
-    private class Indice(val modelo: String, val itens: MutableList<Pair<Item, FloatArray>>)
+    /**
+     * Vetores em memória, compactos (1 byte por número + 1 escala por vetor), em blocos de [BLOCO] vetores,
+     * para caberem dezenas de milhares sem pesar. O texto de cada item fica no banco e só é lido para os achados.
+     */
+    private class Indice(val modelo: String, var geracao: Long) {
+        var dim = 0
+        var n = 0
+        var ids = LongArray(1024)
+        var tipos = arrayOfNulls<String>(1024)
+        var escalas = FloatArray(1024)
+        val blocos = ArrayList<ByteArray>()
+
+        fun somar(id: Long, tipo: String, compacto: ByteArray) {
+            val d = compacto.size - CABECALHO
+            if (d <= 0) return
+            if (dim == 0) dim = d
+            if (d != dim) return
+            if (n == ids.size) {
+                ids = ids.copyOf(n * 2)
+                tipos = tipos.copyOf(n * 2)
+                escalas = escalas.copyOf(n * 2)
+            }
+            if (n / BLOCO >= blocos.size) blocos += ByteArray(BLOCO * dim)
+            ids[n] = id
+            tipos[n] = tipo.intern()
+            escalas[n] = ByteBuffer.wrap(compacto, 1, 4).order(ByteOrder.LITTLE_ENDIAN).float
+            System.arraycopy(compacto, CABECALHO, blocos[n / BLOCO], (n % BLOCO) * dim, dim)
+            n++
+        }
+
+        fun nota(i: Int, consulta: FloatArray): Double {
+            val b = blocos[i / BLOCO]
+            val ini = (i % BLOCO) * dim
+            var s = 0f
+            for (j in 0 until dim) s += consulta[j] * b[ini + j]
+            return (s * escalas[i]).toDouble()
+        }
+    }
 
     @Volatile
     private var indice: Indice? = null
@@ -554,6 +624,7 @@ class Memoria(contexto: Context) : SQLiteOpenHelper(contexto, "sexta.db", null, 
     ): Boolean {
         val t = texto.trim().take(1000)
         if (t.isEmpty()) return false
+        val compacto = if (vetor != null && modelo != null) compactar(vetor) else null
         val valores = ContentValues().apply {
             put("tipo", tipo)
             put("texto", t)
@@ -562,8 +633,8 @@ class Memoria(contexto: Context) : SQLiteOpenHelper(contexto, "sexta.db", null, 
             put("args", args)
             put("fonte", fonte)
             put("criado", System.currentTimeMillis())
-            if (vetor != null && modelo != null) {
-                put("vetor", vetorParaBytes(vetor))
+            if (compacto != null) {
+                put("vetor", compacto)
                 put("modelo", modelo)
             }
         }
@@ -572,9 +643,25 @@ class Memoria(contexto: Context) : SQLiteOpenHelper(contexto, "sexta.db", null, 
         if (!novo) {
             valores.remove("criado")
             writableDatabase.update("vetores", valores, "tipo = ? AND texto = ?", arrayOf(tipo, t))
+            mudou(null)
+        } else if (compacto != null) {
+            if (indice?.modelo == modelo) mudou { ind -> ind.somar(id, tipo, compacto) } else mudou(null)
         }
-        indice = null
         return novo
+    }
+
+    /** Avisa as outras instâncias (o estudo roda em outra) e atualiza o índice desta sem reler tudo. */
+    private fun mudou(acrescentar: ((Indice) -> Unit)?) {
+        synchronized(Memoria::class.java) {
+            val atual = indice
+            geracaoGlobal++
+            if (acrescentar != null && atual != null && atual.geracao == geracaoGlobal - 1) {
+                acrescentar(atual)
+                atual.geracao = geracaoGlobal
+            } else {
+                indice = null
+            }
+        }
     }
 
     /**
@@ -582,27 +669,45 @@ class Memoria(contexto: Context) : SQLiteOpenHelper(contexto, "sexta.db", null, 
      * [tipos] vazio = todos. Só compara vetores do mesmo [modelo].
      */
     fun buscarVetores(consulta: FloatArray, modelo: String, tipos: Set<String> = emptySet(), minimo: Double = MINIMO_SENTIDO, quantos: Int = 5): List<Achado> {
-        val ind = indice?.takeIf { it.modelo == modelo } ?: carregarIndice(modelo)
-        val achados = ArrayList<Achado>()
-        for ((item, v) in ind.itens) {
-            if (tipos.isNotEmpty() && item.tipo !in tipos) continue
-            val nota = produtoInterno(consulta, v)
-            if (nota >= minimo) achados += Achado(item, nota)
+        val ind = indice?.takeIf { it.modelo == modelo && it.geracao == geracaoGlobal } ?: carregarIndice(modelo)
+        if (ind.n == 0 || consulta.size != ind.dim) return emptyList()
+        val melhores = ArrayList<Pair<Int, Double>>()
+        for (i in 0 until ind.n) {
+            if (tipos.isNotEmpty() && ind.tipos[i]!! !in tipos) continue
+            val nota = ind.nota(i, consulta)
+            if (nota < minimo) continue
+            melhores += i to nota
+            if (melhores.size > quantos * 8) {
+                melhores.sortByDescending { it.second }
+                while (melhores.size > quantos) melhores.removeAt(melhores.size - 1)
+            }
         }
-        return achados.sortedByDescending { it.nota }.take(quantos)
+        val topo = melhores.sortedByDescending { it.second }.take(quantos)
+        if (topo.isEmpty()) return emptyList()
+        val itens = itensPorId(topo.map { ind.ids[it.first] })
+        return topo.mapNotNull { (i, nota) -> itens[ind.ids[i]]?.let { Achado(it, nota) } }
+    }
+
+    private fun itensPorId(ids: List<Long>): Map<Long, Item> {
+        val mapa = HashMap<Long, Item>()
+        readableDatabase.rawQuery(
+            "SELECT id, tipo, texto, resposta, acao, args, fonte FROM vetores WHERE id IN (${ids.joinToString(",")})", null
+        ).use { c ->
+            while (c.moveToNext()) mapa[c.getLong(0)] = Item(c.getLong(0), c.getString(1), c.getString(2), c.getString(3), c.getString(4), c.getString(5), c.getString(6))
+        }
+        return mapa
     }
 
     private fun carregarIndice(modelo: String): Indice {
-        val lista = mutableListOf<Pair<Item, FloatArray>>()
-        readableDatabase.rawQuery(
-            "SELECT id, tipo, texto, resposta, acao, args, fonte, vetor FROM vetores WHERE vetor IS NOT NULL AND modelo = ?", arrayOf(modelo)
-        ).use { c ->
+        val geracao = synchronized(Memoria::class.java) { geracaoGlobal }
+        val ind = Indice(modelo, geracao)
+        readableDatabase.rawQuery("SELECT id, tipo, vetor FROM vetores WHERE vetor IS NOT NULL AND modelo = ?", arrayOf(modelo)).use { c ->
             while (c.moveToNext()) {
-                lista += Item(c.getLong(0), c.getString(1), c.getString(2), c.getString(3), c.getString(4), c.getString(5), c.getString(6)) to
-                    bytesParaVetor(c.getBlob(7))
+                val b = c.getBlob(2) ?: continue
+                ind.somar(c.getLong(0), c.getString(1), if (ehCompacto(b)) b else compactar(bytesParaVetor(b)))
             }
         }
-        return Indice(modelo, lista).also { indice = it }
+        return ind.also { indice = it }
     }
 
     fun contarUso(id: Long) {
@@ -624,7 +729,7 @@ class Memoria(contexto: Context) : SQLiteOpenHelper(contexto, "sexta.db", null, 
         try {
             for ((id, v) in vetores) {
                 db.update("vetores", ContentValues().apply {
-                    put("vetor", vetorParaBytes(v))
+                    put("vetor", compactar(v))
                     put("modelo", modelo)
                 }, "id = ?", arrayOf(id.toString()))
             }
@@ -632,7 +737,68 @@ class Memoria(contexto: Context) : SQLiteOpenHelper(contexto, "sexta.db", null, 
         } finally {
             db.endTransaction()
         }
-        indice = null
+        mudou(null)
+    }
+
+    // ------------------------------------------------------ manutenção (estudo diário)
+    /** Passa os vetores antigos (4 bytes por número) para o formato compacto. Devolve quantos converteu. */
+    fun compactarAntigos(limite: Int = 5000): Int {
+        val antigos = mutableListOf<Pair<Long, ByteArray>>()
+        readableDatabase.rawQuery("SELECT id, vetor FROM vetores WHERE vetor IS NOT NULL AND length(vetor) % 4 = 0 LIMIT $limite", null).use { c ->
+            while (c.moveToNext()) antigos += c.getLong(0) to c.getBlob(1)
+        }
+        if (antigos.isEmpty()) return 0
+        val db = writableDatabase
+        db.beginTransaction()
+        try {
+            for ((id, b) in antigos) db.update("vetores", ContentValues().apply { put("vetor", compactar(bytesParaVetor(b))) }, "id = ?", arrayOf(id.toString()))
+            db.setTransactionSuccessful()
+        } finally {
+            db.endTransaction()
+        }
+        mudou(null)
+        return antigos.size
+    }
+
+    /**
+     * Tira o que o estudo criou e nunca foi usado depois de [dias] dias (frases de comando e charadas),
+     * as ideias de post velhas, e mantém o total abaixo de [MAXIMO_ITENS] (sai o mais antigo e nunca usado).
+     * O que você ensinou, as respostas para clientes e o que já foi usado ficam. Devolve quantos saíram.
+     */
+    fun limparEstudoVelho(dias: Int = 60, agora: Long = System.currentTimeMillis()): Int {
+        val limite = (agora - dias * 86_400_000L).toString()
+        val db = writableDatabase
+        var removidos = db.delete("vetores", "fonte = 'estudo' AND usos = 0 AND criado < ? AND tipo IN ('comando', 'enigma')", arrayOf(limite))
+        removidos += db.delete("vetores", "tipo = 'ideia_post' AND criado < ?", arrayOf(limite))
+        val total = readableDatabase.rawQuery("SELECT COUNT(*) FROM vetores", null).use { if (it.moveToFirst()) it.getInt(0) else 0 }
+        val excesso = total - MAXIMO_ITENS
+        if (excesso > 0) {
+            removidos += db.delete(
+                "vetores",
+                "id IN (SELECT id FROM vetores WHERE fonte = 'estudo' AND usos = 0 AND tipo IN ('comando', 'enigma', 'objecao') ORDER BY criado LIMIT $excesso)",
+                null,
+            )
+        }
+        if (removidos > 0) mudou(null)
+        return removidos
+    }
+
+    /** As mensagens (suas e dela) desde [desde], na ordem, para a revisão do dia. */
+    fun mensagensDesde(desde: Long, limite: Int = 300): List<Mensagem> {
+        val lista = mutableListOf<Mensagem>()
+        readableDatabase.rawQuery(
+            "SELECT quando, autor, texto, topico FROM mensagens WHERE quando >= ? ORDER BY id DESC LIMIT $limite", arrayOf(desde.toString())
+        ).use { c -> while (c.moveToNext()) lista += Mensagem(c.getLong(0), c.getString(1) == "eu", c.getString(2), c.getString(3)) }
+        return lista.reversed()
+    }
+
+    /** Itens de um tipo, mais novos primeiro (para mostrar as ideias de post, por exemplo). */
+    fun itensDoTipo(tipo: String, quantos: Int): List<Item> {
+        val lista = mutableListOf<Item>()
+        readableDatabase.rawQuery(
+            "SELECT id, tipo, texto, resposta, acao, args, fonte FROM vetores WHERE tipo = ? ORDER BY id DESC LIMIT $quantos", arrayOf(tipo)
+        ).use { c -> while (c.moveToNext()) lista += Item(c.getLong(0), c.getString(1), c.getString(2), c.getString(3), c.getString(4), c.getString(5), c.getString(6)) }
+        return lista
     }
 
     /** Quantos itens de cada tipo (e quantos já têm vetor). */

@@ -44,6 +44,7 @@ object Roteador {
         Triple("loja_cadastrar", "cadastrar produto novo", "nome; preco: centavos; estoque: unidades (opcionais)"),
         Triple("programar_post", "programar post ou story no Instagram", "tipo: feed|story; produto: nome (opcional)"),
         Triple("listar_posts", "ver os posts programados", ""),
+        Triple("estudo_ideias", "ver as ideias de post que a Vênus preparou no estudo", ""),
         Triple("robo_resumo", "como está o robô de WhatsApp e Instagram: atendimentos de hoje e clientes esperando a loja", ""),
         Triple("robo_ligar", "ligar ou desligar o robô de respostas do WhatsApp e Instagram", "ligado: true|false"),
         Triple("postar_agora", "publicar agora no Instagram o post programado", ""),

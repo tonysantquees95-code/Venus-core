@@ -933,6 +933,7 @@ object ComandosLocais {
         "\\b(?:o que (?:voce |a venus )?(?:mudou|fez|alterou|ajustou|mexeu)(?: na loja| no site| no instagram)?(?: hoje| essa semana| nesta semana)?|" +
             "o que (?:foi|ja foi) (?:mudado|alterado|ajustado)(?: hoje| essa semana)?|(?:log|registro|historico|diario) (?:de|dos) ajustes|log da venus)\\b"
     )
+    private val IDEIAS_POST = Regex("\\b(?:ideias? (?:de|pra|para) (?:post|posts|postagem|postagens|story|stories|instagram|insta|reels)|(?:o que|que) (?:eu )?(?:posto|postar|publico|publicar)(?: no (?:insta|instagram))?(?: essa semana| hoje| amanha)?)\\b")
     private val ESTUDO_AGORA = Regex("^(?:vai |pode |quero que (?:voce )?)?(?:estuda|estudar|estude|treina|treinar|treine|aprende|aprender)(?: um pouco| sozinha)? (?:agora|ja|hoje)$")
     private val ESTUDO_RESUMO = Regex(
         "\\b(?:o que (?:voce )?(?:estudou|aprendeu|treinou)(?: hoje| sozinha)?|como (?:esta|ta|foi) (?:o |seu |teu )?(?:estudo|treino|aprendizado)|memoria vetorial|quanto (?:voce )?(?:ja )?aprendeu)\\b"
@@ -943,6 +944,7 @@ object ComandosLocais {
         val t = c.trimEnd('.', '!', '?')
         if (POSTAR_AGORA.matches(t)) return Resultado.Acao("postar_agora", emptyMap())
         if (ESTUDO_AGORA.matches(t)) return Resultado.Acao("estudo_agora", emptyMap())
+        if (IDEIAS_POST.containsMatchIn(t)) return Resultado.Acao("estudo_ideias", emptyMap())
         ROBO_LIGAR.find(t)?.let { m -> return Resultado.Acao("robo_ligar", mapOf("ligado" to !Regex("^(?:des|pausa|para|pare|parar)").containsMatchIn(m.groupValues[1]))) }
         if (ROBO_RESUMO.containsMatchIn(t)) return Resultado.Acao("robo_resumo", emptyMap())
         if (LIMPAR_ERROS.containsMatchIn(t)) return Resultado.Acao("limpar_erros", emptyMap())
