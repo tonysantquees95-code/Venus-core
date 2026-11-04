@@ -70,7 +70,7 @@ class Diario private constructor(contexto: Context) : SQLiteOpenHelper(contexto.
         /** Ações que mudam algo de verdade: entram no diário quando dão certo. */
         val ACOES_QUE_MUDAM = mapOf(
             "loja_confirmar" to "loja", "loja_promo_parados" to "loja", "caixa_lancar" to "caixa", "caixa_fixa" to "caixa",
-            "caixa_remover_fixa" to "caixa", "confirmar_resposta" to "loja",
+            "caixa_remover_fixa" to "caixa", "confirmar_resposta" to "loja", "robo_ligar" to "loja",
         )
 
         /** "o que mudou hoje" em uma frase. */

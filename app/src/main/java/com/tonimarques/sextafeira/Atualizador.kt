@@ -199,9 +199,11 @@ class Atualizador(private val contexto: Context) {
             val tag = json.optString("tag_name")
             val numero = numeroDaVersao(tag) ?: return null
             val assets = json.optJSONArray("assets") ?: return null
-            for (i in 0 until assets.length()) {
-                val a = assets.optJSONObject(i) ?: continue
-                if (!a.optString("name").endsWith(".apk", ignoreCase = true)) continue
+            // a Vênus é o Venus.apk (o Vênus Robô sai em outra publicação, mas nunca pega o arquivo errado)
+            val ordem = (0 until assets.length()).mapNotNull { assets.optJSONObject(it) }
+                .sortedByDescending { it.optString("name").equals("Venus.apk", ignoreCase = true) }
+            for (a in ordem) {
+                if (!a.optString("name").endsWith(".apk", ignoreCase = true) || a.optString("name").contains("robo", ignoreCase = true)) continue
                 return Versao(
                     numero, tag, a.optString("url"), a.optString("browser_download_url"), a.optLong("size"),
                     notas(json.optString("body")),

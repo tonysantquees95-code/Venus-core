@@ -230,6 +230,20 @@ class Loja(private val contexto: Context) {
 
     fun prepararStatus(id: Int, status: String, rastreio: String?): Preparo = montarStatus(pedidos(), id, status, rastreio)
 
+    // ------------------------------------------------------------- Vênus Robô (WhatsApp e Instagram)
+    /** Como está o robô: ligado, atendimentos de hoje e clientes esperando a loja. */
+    fun robo(): String = try {
+        montarRobo(buscar("/_api/admin/robo"))
+    } catch (e: ErroDaLoja) {
+        if (e.message?.contains("404") == true) "O site ainda não tem o painel do robô. Ele entra na próxima atualização do site." else throw e
+    }
+
+    fun ligarRobo(ligado: Boolean): String {
+        enviar("/_api/admin/robo_ligar", JSONObject().put("ligado", ligado))
+        return if (ligado) "Robô ligado: a Vênus volta a responder o WhatsApp e o Instagram da loja."
+        else "Robô desligado: a Vênus parou de responder o WhatsApp e o Instagram até você pedir para ligar."
+    }
+
     /** Envia a foto do produto para o site e devolve o endereço dela. */
     fun enviarFoto(jpeg: ByteArray): String {
         val r = enviar("/_api/admin/upload", JSONObject().put("contentType", "image/jpeg").put("sizeBytes", jpeg.size))
@@ -384,6 +398,36 @@ class Loja(private val contexto: Context) {
     data class Preparo(val texto: String, val alteracao: Alteracao?)
 
     companion object {
+        /**
+         * {ligado, hoje:{atendimentos, clientes, passadas}, esperando:[{canal, ultimaMensagem, quando}]} → frase.
+         * Separado para poder ser testado.
+         */
+        fun montarRobo(o: JSONObject, agora: Long = System.currentTimeMillis()): String {
+            val hoje = o.optJSONObject("hoje") ?: JSONObject()
+            val esperando = o.optJSONArray("esperando") ?: JSONArray()
+            val partes = mutableListOf<String>()
+            partes += if (o.optBoolean("ligado", true)) "O robô está ligado." else "O robô está desligado."
+            val atend = hoje.optInt("atendimentos")
+            partes += if (atend == 0) "Hoje ainda não respondeu ninguém."
+            else "Hoje respondeu $atend ${if (atend == 1) "mensagem" else "mensagens"} de ${hoje.optInt("clientes")} ${if (hoje.optInt("clientes") == 1) "cliente" else "clientes"}" +
+                (if (hoje.optInt("passadas") > 0) " e passou ${hoje.optInt("passadas")} para você" else "") + "."
+            if (esperando.length() == 0) partes += "Nenhuma cliente esperando você."
+            else {
+                val linhas = (0 until minOf(esperando.length(), 5)).mapNotNull { esperando.optJSONObject(it) }.map { e ->
+                    val quando = lerData(e.opt("quando"))
+                    val min = if (quando > 0) ((agora - quando) / 60_000).toInt() else -1
+                    val ha = when {
+                        min < 0 -> ""
+                        min < 60 -> " (há $min min)"
+                        else -> " (há ${min / 60} h)"
+                    }
+                    "${e.optString("canal").replaceFirstChar { it.uppercase() }}$ha: “${e.optString("ultimaMensagem").take(80)}”"
+                }
+                partes += "${esperando.length()} ${if (esperando.length() == 1) "cliente esperando" else "clientes esperando"} você: " + linhas.joinToString("; ") + "."
+            }
+            return partes.joinToString(" ")
+        }
+
         /** "/_cdn/…" → "https://desejo-de-intimidade.floot.app/_cdn/…" (o Instagram precisa do endereço completo). */
         fun enderecoCompleto(url: String): String = if (url.startsWith("/")) SITE + url else url
         const val SITE = "https://desejo-de-intimidade.floot.app"
@@ -414,6 +458,12 @@ class Loja(private val contexto: Context) {
 
         fun dinheiro(centavos: Int): String =
             NumberFormat.getCurrencyInstance(BR).format(centavos / 100.0).replace(' ', ' ')
+
+        private fun lerData(v: Any?): Long = when (v) {
+            is Number -> v.toLong()
+            is String -> data(v) ?: 0L
+            else -> 0L
+        }
 
         private fun data(iso: String?): Long? {
             if (iso.isNullOrBlank() || iso == "null") return null

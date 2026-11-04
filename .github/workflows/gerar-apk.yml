@@ -49,8 +49,10 @@ jobs:
           grep -E "Could not|What went wrong|> |Caused by|Required by|Searched in" build.log | grep -v "^> Task" | head -n 40 |
             while read -r linha; do echo "::error::$linha"; done || true
 
-      - name: Renomear o APK
-        run: cp app/build/outputs/apk/release/app-release.apk Venus.apk
+      - name: Renomear os APKs
+        run: |
+          cp app/build/outputs/apk/release/app-release.apk Venus.apk
+          cp robo/build/outputs/apk/release/robo-release.apk VenusRobo.apk
 
       - name: Notas da versão
         run: |
@@ -64,3 +66,12 @@ jobs:
           body_path: notas.txt
           files: Venus.apk
           make_latest: true
+
+      - name: Publicar o Vênus Robô
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: robo-1.${{ github.run_number }}
+          name: Vênus Robô 1.${{ github.run_number }}
+          body: "App que responde as clientes no WhatsApp Business e no Instagram com a Vênus da loja. Baixe o VenusRobo.apk e toque nele para instalar (é um app separado da Vênus)."
+          files: VenusRobo.apk
+          make_latest: false

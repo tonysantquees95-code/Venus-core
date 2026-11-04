@@ -921,6 +921,12 @@ object ComandosLocais {
     /** "no feed", "poste no feed", "troca para story". */
     val TIPO_POST = Regex("^(?:(?:muda|mudar|mude|troca|trocar|troque|passa|poste|posta|postar|publica|publicar|faz|faca|coloca|bota)(?: (?:ele|ela|isso|o post|a postagem))? )?(?:no|pro|para o|pra|para|pelo|como) (feed|story|stories)\\b")
 
+    private val ROBO = "(?:o |a )?(?:robo|robozinho|venus robo|atendimento automatico|resposta automatica)"
+    private val ROBO_LIGAR = Regex("^(?:pode )?(liga|ligar|ligue|ativa|ativar|ative|volta|voltar|desliga|desligar|desligue|desativa|desativar|desative|pausa|pausar|pause|para|parar|pare)(?: o| a)? $ROBO\\b")
+    private val ROBO_RESUMO = Regex(
+        "\\b(?:como (?:esta|ta|foi|vai) $ROBO|quantos atendimentos|quantas clientes (?:o robo|a venus) (?:atendeu|respondeu)|" +
+            "(?:quem|quais clientes|tem cliente|alguma cliente)(?: (?:esta|ta|estao|tao))? esperando(?: resposta| eu responder| voce)?|clientes esperando|atendimentos do robo)\\b"
+    )
     private val LIMPAR_ERROS = Regex("\\b(?:limpa|limpar|limpe|apaga|apagar|apague|zera|zerar|zere)(?: o| os)? (?:log de erros|registro de erros|relatorio de erros|erros)\\b")
     private val LOG_ERROS = Regex("\\b(?:log de erros|registro de erros|quais (?:os |sao os )?erros|erros em aberto|mostra(?:r)? os erros|que erros (?:voce )?(?:teve|deu))\\b")
     private val DIARIO = Regex(
@@ -937,6 +943,8 @@ object ComandosLocais {
         val t = c.trimEnd('.', '!', '?')
         if (POSTAR_AGORA.matches(t)) return Resultado.Acao("postar_agora", emptyMap())
         if (ESTUDO_AGORA.matches(t)) return Resultado.Acao("estudo_agora", emptyMap())
+        ROBO_LIGAR.find(t)?.let { m -> return Resultado.Acao("robo_ligar", mapOf("ligado" to !Regex("^(?:des|pausa|para|pare|parar)").containsMatchIn(m.groupValues[1]))) }
+        if (ROBO_RESUMO.containsMatchIn(t)) return Resultado.Acao("robo_resumo", emptyMap())
         if (LIMPAR_ERROS.containsMatchIn(t)) return Resultado.Acao("limpar_erros", emptyMap())
         if (LOG_ERROS.containsMatchIn(t)) return Resultado.Acao("log_erros", emptyMap())
         DIARIO.find(t)?.let { m -> return Resultado.Acao("diario_resumo", mapOf("periodo" to if (m.value.contains("semana")) "semana" else "hoje")) }
