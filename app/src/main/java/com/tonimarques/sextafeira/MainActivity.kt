@@ -924,6 +924,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
                     }.start()
                 }
                 decisao.nome == "estudo_agora" -> estudarAgora()
+                decisao.nome == "estudo_ideias" -> mostrarIdeiasDePost()
                 decisao.nome == "diario_resumo" -> {
                     val semana = decisao.args["periodo"] == "semana"
                     val desde = if (semana) System.currentTimeMillis() - 7 * 86_400_000L else Diario.inicioDoDia()
@@ -2055,9 +2056,11 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
                     item("Chave do Gemini", { if (chave().isBlank()) "Não configurada" else "Configurada" }, MENU_CHAVE),
                     TelaDeAjustes.Ajuste("Estudo diário (memória vetorial)", {
                         val r = Estudo.ultimo(this)
-                        "Uma vez por dia, em segundo plano, ela cria e confere ${Estudo.FRASES_POR_DIA} jeitos novos de pedir as coisas e " +
-                            "${Estudo.ENIGMAS_POR_DIA} charadas, e guarda tudo em vetores no celular." +
-                            (r?.let { " Último: ${it.data.split("-").reversed().take(2).joinToString("/")}, +${it.frases} frases, +${it.enigmas} charadas." } ?: "") +
+                        "Todo dia, em segundo plano: ${Estudo.FRASES_POR_DIA} jeitos de pedir, ${Estudo.ENIGMAS_POR_DIA} charadas, " +
+                            "${Estudo.CLIENTES_POR_DIA} respostas para clientes conferidas, até ${Estudo.REVISAO_MAXIMO} correções das suas conversas, " +
+                            "${Estudo.VOZ_POR_DIA} erros de voz e digitação e ${Estudo.OBJECOES_POR_DIA} objeções de venda; " +
+                            "${Estudo.IDEIAS_POR_SEMANA} ideias de post por semana. Descarta o que já sabe e limpa o que nunca usou." +
+                            (r?.let { " Último: ${it.data.split("-").reversed().take(2).joinToString("/")}, +${it.total} itens." } ?: "") +
                             " Pergunte: o que você estudou hoje?"
                     }, { Estudo.ligado(this) }) {
                         Estudo.definirLigado(this, !Estudo.ligado(this))
@@ -3001,7 +3004,22 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
             } catch (e: Exception) {
                 ""
             }
-            val r = Gemini.respostaCliente(k, m, mensagem, catalogo.ifBlank { "(catálogo indisponível agora)" })
+            // o que ela já aprendeu e conferiu no estudo (respostas para clientes e objeções)
+            val conferidas = try {
+                Semantica.vetorDe(mensagem, k)?.let { v ->
+                    memoria.buscarVetores(v, EmbeddingsGemini.MODELO, setOf("cliente", "objecao"), minimo = 0.80, quantos = 3)
+                }.orEmpty()
+            } catch (e: Exception) {
+                emptyList()
+            }
+            val pronta = conferidas.firstOrNull()?.takeIf { it.nota >= 0.94 && !it.item.resposta.isNullOrBlank() }
+            pronta?.let { memoria.contarUso(it.item.id) }
+            val referencias = conferidas.filter { !it.item.resposta.isNullOrBlank() }.joinToString("\n") { "- \"${it.item.texto}\" → ${it.item.resposta}" }
+            val r = pronta?.item?.resposta ?: Gemini.respostaCliente(
+                k, m, mensagem,
+                catalogo.ifBlank { "(catálogo indisponível agora)" } +
+                    (if (referencias.isNotBlank()) "\n\nRespostas já conferidas da loja para perguntas parecidas (use o mesmo tom e as mesmas informações):\n$referencias" else ""),
+            )
             val acao: () -> Unit = {
                 if (r == null) responder("O Gemini não respondeu agora. Tente de novo em instantes.")
                 else {
@@ -3349,9 +3367,9 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
 
     private fun estudarAgora() {
         if (chave().isBlank()) return responder("Para estudar eu uso o Gemini. Configure a chave do Gemini nos ajustes.")
-        if (estudando) return responder("Já estou estudando. Leva uns minutos; eu aviso quando terminar.")
+        if (estudando || Estudo.ocupado()) return responder("Já estou estudando. Leva uns minutos; eu aviso quando terminar.")
         estudando = true
-        responder("Vou estudar agora: ${Estudo.FRASES_POR_DIA} jeitos novos de pedir as coisas e ${Estudo.ENIGMAS_POR_DIA} charadas. Leva alguns minutos e eu aviso aqui.")
+        responder("Vou estudar agora: jeitos de pedir, charadas, respostas para clientes, correções das nossas conversas, erros de voz e objeções de venda. Leva uns 5 minutos e eu aviso aqui.")
         Thread {
             val r = try {
                 Estudo.estudar(this, forcar = true)
@@ -3366,6 +3384,25 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
             runOnUiThread {
                 estudando = false
                 adicionarMensagem(Estudo.descrever(r, contagem), false)
+            }
+        }.start()
+    }
+
+    /** As ideias de post que ela preparou no estudo da semana. */
+    private fun mostrarIdeiasDePost() {
+        Thread {
+            val ideias = try {
+                memoria.itensDoTipo("ideia_post", Estudo.IDEIAS_POR_SEMANA)
+            } catch (e: Exception) {
+                emptyList()
+            }
+            runOnUiThread {
+                if (ideias.isEmpty()) {
+                    responder("Ainda não preparei ideias de post. Elas saem no estudo de uma vez por semana; se quiser já, diga: estuda agora.")
+                } else {
+                    responder("Separei ${ideias.size} ideias de post para as próximas semanas. Estão aqui na conversa.")
+                    adicionarMensagem(ideias.mapIndexed { i, it -> "${i + 1}. ${it.texto}\n${it.resposta.orEmpty()}" }.joinToString("\n\n"), false)
+                }
             }
         }.start()
     }
