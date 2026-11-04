@@ -25,6 +25,8 @@
 
     <!-- Necessário a partir do Android 11 para ver os apps instalados, a voz e a fala -->
     <queries>
+        <!-- para saber se o Vênus Robô está instalado e em qual versão (atualização pela Vênus) -->
+        <package android:name="com.tonimarques.venusrobo" />
         <intent>
             <action android:name="android.intent.action.MAIN" />
             <category android:name="android.intent.category.LAUNCHER" />
