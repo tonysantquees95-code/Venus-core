@@ -74,6 +74,21 @@ class EstudoAmpliadoTest {
         assertTrue(texto, texto.contains("590 itens de até 60.000"))
     }
 
+    @Test fun estudeECadastroDeProduto() {
+        for (f in listOf("Vênus estude", "estude", "estude agora", "estudo agora", "vai estudar")) {
+            assertEquals(f, "estudo_agora", (ComandosLocais.interpretar(f) as? Acao)?.nome)
+        }
+        for (f in listOf("Vênus quero adicionar um produto na loja", "vamos cadastrar um produto", "abrir tela de cadastro de produto", "cadastra um produto")) {
+            assertEquals(f, "loja_cadastrar", (ComandosLocais.interpretar(f) as? Acao)?.nome)
+        }
+    }
+
+    @Test fun recusaNaoViraMemoria() {
+        assertFalse(Semantica.vale("como adiciono um produto", "Eu não consigo cadastrar produtos diretamente na sua loja online ainda."))
+        assertFalse(Semantica.vale("qual a capital da França", "Infelizmente não tenho essa informação agora."))
+        assertTrue(Semantica.vale("qual a capital da França", "A capital da França é Paris."))
+    }
+
     @Test fun pedeIdeiasDePost() {
         assertEquals("estudo_ideias", (ComandosLocais.interpretar("me dá ideias de post") as? Acao)?.nome)
         assertEquals("estudo_ideias", (ComandosLocais.interpretar("o que eu posto no insta essa semana?") as? Acao)?.nome)

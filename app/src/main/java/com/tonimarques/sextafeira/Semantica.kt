@@ -73,7 +73,7 @@ object Semantica {
                 }
             }
             "intencao" -> if (a.nota >= LIMIAR_INTENCAO) Decisao.Frase(i.texto, a.nota, i.id) else null
-            "resposta" -> if (a.nota >= LIMIAR_RESPOSTA && Conhecimento.vale(frase) && !i.resposta.isNullOrBlank()) Decisao.Responder(i.resposta, a.nota, i.id) else null
+            "resposta" -> if (a.nota >= LIMIAR_RESPOSTA && !i.resposta.isNullOrBlank() && vale(frase, i.resposta)) Decisao.Responder(i.resposta, a.nota, i.id) else null
             "enigma" -> if (a.nota >= LIMIAR_ENIGMA && !i.resposta.isNullOrBlank()) Decisao.Responder(i.resposta, a.nota, i.id) else null
             else -> null
         }
@@ -106,8 +106,18 @@ object Semantica {
     fun vale(pergunta: String, resposta: String): Boolean {
         val p = ComandosLocais.normalizar(pergunta)
         return resposta.length in 10..2500 && Conhecimento.vale(pergunta) && !PESSOAL.containsMatchIn(p) &&
-            !resposta.startsWith("Não consegui") && !resposta.startsWith("Algo deu errado")
+            !resposta.startsWith("Não consegui") && !resposta.startsWith("Algo deu errado") &&
+            !RECUSA.containsMatchIn(ComandosLocais.normalizar(resposta))
     }
+
+    /** Respostas de "não sei / não consigo": nunca viram memória (senão ela repete a recusa para sempre). */
+    private val RECUSA = Regex(
+        "\\b(?:(?:ainda )?nao (?:consigo|posso|tenho como|tenho acesso|sei fazer|e possivel|da para)|infelizmente|" +
+            "sou (?:apenas |so )?uma (?:ia|inteligencia artificial|assistente virtual)|nao tenho (?:essa|esta) (?:funcao|capacidade))\\b"
+    )
+
+    /** Tira da memória as respostas guardadas que não valem mais (recusas, assuntos pessoais). */
+    fun limparRespostasRuins(memoria: Memoria): Int = memoria.apagarRespostas { pergunta, resposta -> !vale(pergunta, resposta) }
 
     // ------------------------------------------------------------------ banco antigo → vetores
     /** Uma vez: copia o que ela sabia em texto para a memória vetorial. */

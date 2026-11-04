@@ -792,6 +792,18 @@ class Memoria(contexto: Context) : SQLiteOpenHelper(contexto, "sexta.db", null, 
         return lista.reversed()
     }
 
+    /** Apaga as respostas guardadas (tipo "resposta") que [ruim] reprovar. */
+    fun apagarRespostas(ruim: (String, String) -> Boolean): Int {
+        val apagar = mutableListOf<Long>()
+        readableDatabase.rawQuery("SELECT id, texto, resposta FROM vetores WHERE tipo = 'resposta'", null).use { c ->
+            while (c.moveToNext()) if (ruim(c.getString(1).orEmpty(), c.getString(2).orEmpty())) apagar += c.getLong(0)
+        }
+        if (apagar.isEmpty()) return 0
+        apagar.chunked(500).forEach { writableDatabase.delete("vetores", "id IN (${it.joinToString(",")})", null) }
+        mudou(null)
+        return apagar.size
+    }
+
     /** Itens de um tipo, mais novos primeiro (para mostrar as ideias de post, por exemplo). */
     fun itensDoTipo(tipo: String, quantos: Int): List<Item> {
         val lista = mutableListOf<Item>()
