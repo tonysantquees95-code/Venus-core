@@ -106,7 +106,11 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         VigiaDaLoja.garantir(this)
         cerebro.carregarAprendidas(memoria.aprendidas())
         Lexico.iniciar(this)
-        cerebro.aoAprender = { frase, intencao -> memoria.aprender(frase, intencao) }
+        cerebro.aoAprender = { frase, intencao ->
+            memoria.aprender(frase, intencao)
+            Thread { memoria.guardarVetor("intencao", frase, acao = intencao, fonte = "aprendida") }.start()
+        }
+        EstudoDiario.agendar(this)
         try {
             if (Calculadora.conversaVazia()) for (m in memoria.mensagens(null, 120)) Calculadora.lembrar(m.texto)
         } catch (e: Exception) {
@@ -734,12 +738,13 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
      * (a Vênus executa no celular). Se for conversa ou pergunta geral, segue o caminho de sempre.
      */
     private fun rotearOuPerguntar(pedido: String) {
-        // pergunta de raciocínio não é comando: vai direto para quem pensa (sem a consulta extra ao roteador)
-        if (documentoAtivo() != null || Raciocinio.precisaPensar(pedido)) {
+        if (documentoAtivo() != null) {
             responderPergunta(pedido)
             return
         }
-        Roteador.lembrada(this, pedido)?.let {
+        // pergunta de raciocínio não é comando: só procura charada/resposta já aprendida, depois vai para quem pensa
+        val pensar = Raciocinio.precisaPensar(pedido)
+        if (!pensar) Roteador.lembrada(this, pedido)?.let {
             mostrarDecisao(Cerebro.Decisao.Executar(it.acao, it.args), pedido)
             return
         }
@@ -751,12 +756,34 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         val m = modelo()
         val contexto = Contexto.descrever()
         comTempoLimite("ENTENDENDO…") {
+            // 1) memória vetorial no celular: mesmo sentido do que ela já aprendeu? resolve sem o modelo principal
+            val sentido = try {
+                Semantica.entender(memoria, k, pedido, soRespostas = pensar)
+            } catch (e: Exception) {
+                null
+            }
+            if (sentido != null) {
+                memoria.contarUso(sentido.id)
+                val porSentido: () -> Unit = { aplicarSentido(sentido, pedido) }
+                return@comTempoLimite porSentido
+            }
+            if (pensar) {
+                val pergunta: () -> Unit = { responderPergunta(pedido) }
+                return@comTempoLimite pergunta
+            }
+            // 2) o Gemini só interpreta qual ação é
             val rota = Roteador.rotear(k, m, pedido, contexto)
+            // frases que dependem do assunto anterior ("e o dele?") não viram regra fixa
+            val dependeDoContexto = contexto.isNotBlank() &&
+                Regex("\\b(?:ele|ela|dele|dela|nele|nela|mesmo|esse|essa|este|esta|aquele|aquela|isso)\\b|^e ").containsMatchIn(Roteador.chave(pedido))
+            if (rota != null && !dependeDoContexto) {
+                try {
+                    Semantica.aprenderComando(memoria, pedido, rota.acao, rota.args, "roteador")
+                } catch (e: Exception) {
+                }
+            }
             val acao: () -> Unit = if (rota != null) {
                 {
-                    // frases que dependem do assunto anterior ("e o dele?") não viram regra fixa
-                    val dependeDoContexto = contexto.isNotBlank() &&
-                        Regex("\\b(?:ele|ela|dele|dela|nele|nela|mesmo|esse|essa|este|esta|aquele|aquela|isso)\\b|^e ").containsMatchIn(Roteador.chave(pedido))
                     if (!dependeDoContexto) Roteador.lembrar(this, pedido, rota)
                     topicoAtual = Topicos.classificar(pedido, rota.acao)
                     mostrarDecisao(Cerebro.Decisao.Executar(rota.acao, rota.args), pedido)
@@ -765,6 +792,27 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
                 { responderPergunta(pedido) }
             }
             acao
+        }
+    }
+
+    /** Achou na memória vetorial algo com o mesmo sentido: executa, usa a frase aprendida ou responde. */
+    private fun aplicarSentido(s: Semantica.Decisao, pedido: String) {
+        val parecido = "${(s.nota * 100).toInt()}% parecido"
+        when (s) {
+            is Semantica.Decisao.Executar -> {
+                topicoAtual = Topicos.classificar(pedido, s.acao)
+                mostrarNota("Entendi pelo sentido ($parecido)")
+                mostrarDecisao(Cerebro.Decisao.Executar(s.acao, s.args), pedido)
+            }
+            is Semantica.Decisao.Frase -> {
+                mostrarNota("Entendi como “${s.frase}” ($parecido)")
+                val d = cerebro.responder(s.frase)
+                if (d is Cerebro.Decisao.Incerto) responderPergunta(pedido) else mostrarDecisao(d, pedido)
+            }
+            is Semantica.Decisao.Responder -> {
+                mostrarNota("Da minha memória ($parecido)")
+                responder(s.texto)
+            }
         }
     }
 
@@ -780,6 +828,18 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
                 decisao.nome == "programar_post" -> programarPost(decisao.args)
                 decisao.nome == "listar_posts" -> listarPosts()
                 decisao.nome == "instagram_conectar" -> conectarInstagram()
+                decisao.nome == "estudo_resumo" -> {
+                    val r = Estudo.ultimo(this)
+                    Thread {
+                        val contagem = try {
+                            memoria.contarVetores()
+                        } catch (e: Exception) {
+                            emptyMap()
+                        }
+                        runOnUiThread { responder(Estudo.descrever(r, contagem)) }
+                    }.start()
+                }
+                decisao.nome == "estudo_agora" -> estudarAgora()
                 decisao.nome == "postar_agora" -> {
                     val alvo = postEmFoco() ?: Postagens.pendentes(this).firstOrNull()?.id
                     if (alvo == null) responder("Não tem post na fila. Diga, por exemplo: programa um story do gel.") else postarAgora(alvo)
@@ -1148,8 +1208,16 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
                 val (nome, args) = resposta.chamadas[0]
                 val mapa = args.keys().asSequence().associateWith { args.opt(it) }
                 cerebro.aprenderComIA(pedido, nome, mapa)
+                if (nome in Roteador.NOMES) {
+                    @Suppress("UNCHECKED_CAST")
+                    val limpo = mapa.filterValues { it != null && it != org.json.JSONObject.NULL } as Map<String, Any>
+                    Thread { Semantica.aprenderComando(memoria, pedido, nome, limpo, "ia") }.start()
+                }
             } else if (resposta.chamadas.isEmpty()) {
                 ferramentas.conhecimento?.lembrarResposta(pedido, resposta.texto)
+                // charada ou pergunta atemporal respondida: vira memória vetorial (mesmo dita de outro jeito, ela já sabe)
+                val tipo = if (Regex("\\b(?:o que e o que e|adivinha|charada|enigma)\\b").containsMatchIn(ComandosLocais.normalizar(pedido))) "enigma" else "resposta"
+                Thread { Semantica.aprenderResposta(memoria, pedido, resposta.texto, tipo) }.start()
             }
         } catch (e: Exception) {
         }
@@ -1884,6 +1952,16 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
                         "Responde só com os próprios recursos (comandos, pesquisa e notícias), sem usar o Gemini."
                     }, MENU_INDEPENDENTE) { modoIndependente() },
                     item("Chave do Gemini", { if (chave().isBlank()) "Não configurada" else "Configurada" }, MENU_CHAVE),
+                    TelaDeAjustes.Ajuste("Estudo diário (memória vetorial)", {
+                        val r = Estudo.ultimo(this)
+                        "Uma vez por dia, em segundo plano, ela cria e confere ${Estudo.FRASES_POR_DIA} jeitos novos de pedir as coisas e " +
+                            "${Estudo.ENIGMAS_POR_DIA} charadas, e guarda tudo em vetores no celular." +
+                            (r?.let { " Último: ${it.data.split("-").reversed().take(2).joinToString("/")}, +${it.frases} frases, +${it.enigmas} charadas." } ?: "") +
+                            " Pergunte: o que você estudou hoje?"
+                    }, { Estudo.ligado(this) }) {
+                        Estudo.definirLigado(this, !Estudo.ligado(this))
+                        ajustes?.atualizar()
+                    },
                     item("Modelo do Gemini", { modelo() }, MENU_MODELO),
                 )
             ),
@@ -3093,6 +3171,32 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         } catch (e: Exception) {
             responder("Não consegui abrir o Instagram.")
         }
+    }
+
+    // ----------------------------------------------------------- estudo diário
+    private var estudando = false
+
+    private fun estudarAgora() {
+        if (chave().isBlank()) return responder("Para estudar eu uso o Gemini. Configure a chave do Gemini nos ajustes.")
+        if (estudando) return responder("Já estou estudando. Leva uns minutos; eu aviso quando terminar.")
+        estudando = true
+        responder("Vou estudar agora: ${Estudo.FRASES_POR_DIA} jeitos novos de pedir as coisas e ${Estudo.ENIGMAS_POR_DIA} charadas. Leva alguns minutos e eu aviso aqui.")
+        Thread {
+            val r = try {
+                Estudo.estudar(this, forcar = true)
+            } catch (e: Exception) {
+                null
+            }
+            val contagem = try {
+                memoria.contarVetores()
+            } catch (e: Exception) {
+                emptyMap()
+            }
+            runOnUiThread {
+                estudando = false
+                adicionarMensagem(Estudo.descrever(r, contagem), false)
+            }
+        }.start()
     }
 
     // ----------------------------------------------------------- post em foco (o último programado)

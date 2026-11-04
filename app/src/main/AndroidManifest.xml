@@ -133,6 +133,12 @@
             </intent-filter>
         </receiver>
 
+        <!-- Estudo diário da Vênus (memória vetorial) -->
+        <service
+            android:name=".EstudoDiario"
+            android:exported="false"
+            android:permission="android.permission.BIND_JOB_SERVICE" />
+
         <service
             android:name=".PublicadorDePosts"
             android:exported="false"

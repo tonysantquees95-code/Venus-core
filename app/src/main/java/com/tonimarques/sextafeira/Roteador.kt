@@ -78,7 +78,7 @@ object Roteador {
         Triple("financeiro_calculo", "conta de matemática financeira",
             "tipo: juros_compostos (a=capital em reais, b=taxa % ao mês, c=meses, taxa_anual=true se a taxa for ao ano) | parcela (a=valor em reais, b=taxa % ao mês, c=número de parcelas) | desconto_venda (a=desconto %, b=margem % se dita) | markup (a=margem % desejada, b=custo em reais)"),
     )
-    private val NOMES = ACOES.map { it.first }.toSet()
+    val NOMES = ACOES.map { it.first }.toSet()
 
     // ------------------------------------------------------------------ memória das frases decifradas
     private const val PREFS = "rotas_aprendidas"
@@ -104,6 +104,10 @@ object Roteador {
         if (prefs.all.size >= LIMITE) prefs.all.keys.take(50).forEach { ed.remove(it) }
         ed.putString(chave(frase), JSONObject().put("acao", rota.acao).put("args", JSONObject(rota.args)).toString()).apply()
     }
+
+    /** Todas as frases aprendidas (frase → JSON da rota), para passar à memória vetorial. */
+    fun todas(ctx: Context): Map<String, String> =
+        ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).all.mapNotNull { (k, v) -> (v as? String)?.let { k to it } }.toMap()
 
     fun esquecerTudo(ctx: Context) = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().clear().apply()
 
@@ -160,7 +164,7 @@ object Roteador {
         return lerRota(json)
     }
 
-    private fun lerRota(json: JSONObject): Rota? {
+    fun lerRota(json: JSONObject): Rota? {
         val acao = json.optString("acao").trim()
         if (acao !in NOMES) return null
         val a = json.optJSONObject("args") ?: JSONObject()
