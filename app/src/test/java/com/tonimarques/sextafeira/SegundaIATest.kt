@@ -62,3 +62,13 @@ class SegundaIATest {
         assertEquals("Oi, Toni!", SegundaIA.textoDe(texto))
     }
 }
+
+class PesquisaReservaTest {
+    @Test fun limpaCitacoesEAchaFontes() {
+        assertEquals("O Grêmio venceu por 2 a 1.", SegundaIA.limparPesquisa("O **Grêmio** venceu por 2 a 1【3†L4-L9】."))
+        val f = SegundaIA.fontesDe(
+            org.json.JSONArray("""[{"type":"browser_search","output":"{\"results\":[{\"title\":\"GZH\",\"url\":\"https://gauchazh.com/x\"}]}","search_results":{"results":[{"title":"Globo","url":"https://ge.globo.com/y"}]}}]""")
+        )
+        assertEquals(listOf("https://ge.globo.com/y", "https://gauchazh.com/x").sorted(), f.map { it.url }.sorted())
+    }
+}

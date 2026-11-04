@@ -99,6 +99,87 @@ object SegundaIA {
         return paraGemini(r.json)
     }
 
+    /**
+     * Pesquisa na internet pela Groq (busca no navegador do próprio modelo gpt-oss), para quando a busca do Google
+     * pelo Gemini não está disponível (cota esgotada ou plano grátis). Null sem chave ou se não der.
+     */
+    fun pesquisar(pergunta: String): Web.Resposta? {
+        val chave = chave()
+        if (chave.isBlank() || provedor().id != "groq") return null
+        val agora = java.text.SimpleDateFormat("dd/MM/yyyy", java.util.Locale("pt", "BR")).format(java.util.Date())
+        for (modelo in listOf("openai/gpt-oss-120b", "openai/gpt-oss-20b")) {
+            val corpo = JSONObject()
+                .put("model", modelo)
+                .put("messages", JSONArray()
+                    .put(JSONObject().put("role", "system").put("content",
+                        "Pesquise na internet e responda em português do Brasil, em até 4 frases, direto ao ponto, sem markdown e sem tabelas. " +
+                            "Se for sobre uma loja ou produto, resuma a reputação e as reclamações mais comuns. Hoje é $agora."))
+                    .put(JSONObject().put("role", "user").put("content", pergunta)))
+                .put("tools", JSONArray().put(JSONObject().put("type", "browser_search")))
+                .put("tool_choice", "required")
+                .put("reasoning_effort", "low")
+            var c: HttpURLConnection? = null
+            try {
+                c = (URL("https://api.groq.com/openai/v1/chat/completions").openConnection() as HttpURLConnection).apply {
+                    requestMethod = "POST"
+                    connectTimeout = 8_000
+                    readTimeout = 45_000
+                    doOutput = true
+                    setRequestProperty("Content-Type", "application/json; charset=utf-8")
+                    setRequestProperty("Authorization", "Bearer $chave")
+                }
+                c.outputStream.use { it.write(corpo.toString().toByteArray(Charsets.UTF_8)) }
+                val codigo = c.responseCode
+                val texto = (if (codigo in 200..299) c.inputStream else c.errorStream)?.bufferedReader()?.use { it.readText() }.orEmpty()
+                if (codigo !in 200..299) {
+                    ctx?.let { Registro.anotar(it, "erro", "pesquisa pela Groq → $codigo ${texto.take(200)}") }
+                    continue
+                }
+                val msg = JSONObject(texto).optJSONArray("choices")?.optJSONObject(0)?.optJSONObject("message") ?: continue
+                val resposta = limparPesquisa(msg.optString("content"))
+                if (resposta.isBlank()) continue
+                ultimaVez = System.currentTimeMillis()
+                return Web.Resposta(resposta, fontesDe(msg.opt("executed_tools")).take(6))
+            } catch (e: Exception) {
+                continue
+            } finally {
+                c?.disconnect()
+            }
+        }
+        return null
+    }
+
+    /** Tira as marcas de citação (【2†L6-L10】) e a formatação. */
+    fun limparPesquisa(t: String): String = t
+        .replace(Regex("【[^】]*】"), "")
+        .replace(Regex("\\[\\d+(?:[,†][^\\]]*)?]"), "")
+        .replace(Regex("[*#`]"), "")
+        .replace(Regex("[ \\t]+"), " ")
+        .replace(Regex("\\s+([.,;:!?])"), "$1")
+        .trim()
+        .take(1200)
+
+    /** Procura {title, url} em qualquer lugar do que a ferramenta de busca devolveu. */
+    fun fontesDe(v: Any?): List<Web.Fonte> {
+        val saida = mutableListOf<Web.Fonte>()
+        fun andar(x: Any?) {
+            when (x) {
+                is JSONObject -> {
+                    val url = x.optString("url")
+                    if (url.startsWith("http") && saida.none { it.url == url }) saida += Web.Fonte(x.optString("title").ifBlank { "fonte" }, url)
+                    x.keys().forEach { andar(x.opt(it)) }
+                }
+                is JSONArray -> for (i in 0 until x.length()) andar(x.opt(i))
+                is String -> if (x.trimStart().startsWith("{") || x.trimStart().startsWith("[")) try {
+                    andar(if (x.trimStart().startsWith("{")) JSONObject(x) else JSONArray(x))
+                } catch (e: Exception) {
+                }
+            }
+        }
+        andar(v)
+        return saida
+    }
+
     /** Teste rápido da chave (para o botão "Salvar e testar"). Devolve a resposta ou lança erro com a explicação. */
     fun testar(c: Context): String {
         iniciar(c)
