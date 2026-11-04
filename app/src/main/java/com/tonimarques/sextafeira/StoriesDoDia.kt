@@ -448,7 +448,9 @@ object StoriesDoDia {
     /** Uma foto de produto da loja (sorteada), para o fundo. Null sem loja/internet. */
     private fun fotoDeFundo(ctx: Context): Bitmap? = try {
         val loja = Loja(ctx)
-        val fotos = if (loja.conectada) loja.produtos().filter { it.ativo && !it.imagemUrl.isNullOrBlank() }.mapNotNull { it.imagemUrl } else emptyList()
+        val fotos: List<String> = if (loja.conectada) {
+            loja.produtos().filter { it.ativo }.mapNotNull { p -> p.bruto?.optString("imageUrl")?.takeIf { it.isNotBlank() && it != "null" } }
+        } else emptyList()
         fotos.randomOrNull()?.let { baixarImagem(Loja.enderecoCompleto(it)) }
     } catch (e: Exception) {
         null
