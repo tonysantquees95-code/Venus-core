@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Ícone do Vênus Robô: balão de conversa (rosa → lilás) com carinha de robô; diferente do orbe da Vênus -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- antena -->
+    <path android:pathData="M54,27v6" android:strokeWidth="3" android:strokeLineCap="round" android:strokeColor="#FFE9B8F5" />
+    <path android:pathData="M54,25.5m-3,0a3,3 0,1 1,6 0a3,3 0,1 1,-6 0" android:fillColor="#FFFFC857" />
+    <!-- balão -->
+    <path android:pathData="M36,33h36a10,10 0,0 1,10 10v20a10,10 0,0 1,-10 10h-18l-12,10v-10h-6a10,10 0,0 1,-10 -10v-20a10,10 0,0 1,10 -10z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:startX="26"
+                android:startY="33"
+                android:endX="82"
+                android:endY="83"
+                android:type="linear">
+                <item android:color="#FFE36BD0" android:offset="0" />
+                <item android:color="#FF9B5CF6" android:offset="1" />
+            </gradient>
+        </aapt:attr>
+    </path>
+    <!-- rosto -->
+    <path android:pathData="M37,44h34a5,5 0,0 1,5 5v8a5,5 0,0 1,-5 5h-34a5,5 0,0 1,-5 -5v-8a5,5 0,0 1,5 -5z" android:fillColor="#FF140B2B" />
+    <path android:pathData="M45,53m-3.6,0a3.6,3.6 0,1 1,7.2 0a3.6,3.6 0,1 1,-7.2 0" android:fillColor="#FF7CF0E0" />
+    <path android:pathData="M63,53m-3.6,0a3.6,3.6 0,1 1,7.2 0a3.6,3.6 0,1 1,-7.2 0" android:fillColor="#FF7CF0E0" />
+    <path android:pathData="M48,66.5q6,3.5 12,0" android:strokeWidth="2.6" android:strokeLineCap="round" android:strokeColor="#FFFFFFFF" />
+</vector>
