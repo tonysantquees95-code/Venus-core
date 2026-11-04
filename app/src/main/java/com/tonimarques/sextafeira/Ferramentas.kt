@@ -396,6 +396,8 @@ class Ferramentas(private val activity: Activity, private val memoria: Memoria? 
         "loja_parados" -> daLoja { it.parados() }
         "pesquisar_preco" -> pesquisarPreco(a.optString("produto"))
         "instagram_resumo" -> Instagram.resumo(activity)
+        "robo_resumo" -> daLoja { it.robo() }
+        "robo_ligar" -> daLoja { it.ligarRobo(a.optBoolean("ligado", true)) }
         "loja_curva_abc" -> daLoja { Gestao.textoABC(Gestao.curvaABC(it.pedidos(), Calendar.getInstance())) }
         "loja_compras" -> daLoja { l ->
             val prazo = if (a.has("prazo")) a.optInt("prazo") else prazoDoFornecedor()
@@ -1258,7 +1260,7 @@ class Ferramentas(private val activity: Activity, private val memoria: Memoria? 
             "loja_retiradas", "loja_estoque_geral", "loja_alterar", "loja_status", "loja_reposicao", "loja_mais_vendidos", "loja_comparar", "loja_parados", "loja_margem", "loja_margens", "loja_lucro", "loja_previsao", "loja_produto", "loja_entregue", "loja_confirmar", "loja_agendar",
             "caixa_resultado", "caixa_equilibrio", "caixa_previsao",
             "pesquisar_preco", "loja_curva_abc", "loja_compras", "loja_recompra", "loja_chamar_cliente", "loja_promo_parados",
-            "instagram_resumo",
+            "instagram_resumo", "robo_resumo", "robo_ligar",
         )
 
         private const val SPOTIFY = "com.spotify.music"

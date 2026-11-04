@@ -16,3 +16,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "SextaFeira"
 include(":app")
+include(":robo")
