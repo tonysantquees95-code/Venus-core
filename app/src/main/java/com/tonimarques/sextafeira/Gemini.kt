@@ -156,7 +156,9 @@ class Gemini(
      * Pesquisa no Google pelo Gemini ("grounding") e devolve o resumo com as fontes.
      * Null se não der (por exemplo: a chave está no plano gratuito, que não inclui a busca).
      */
-    fun buscarNaInternet(pergunta: String): Web.Resposta? {
+    fun buscarNaInternet(pergunta: String): Web.Resposta? = buscarNoGoogle(pergunta) ?: SegundaIA.pesquisar(pergunta)
+
+    private fun buscarNoGoogle(pergunta: String): Web.Resposta? {
         // Se a chave já recusou a busca há pouco, nem tenta de novo (evita esperar à toa).
         if (System.currentTimeMillis() < buscaRecusadaAte) return null
         val agora = SimpleDateFormat("dd/MM/yyyy", Locale("pt", "BR")).format(Date())

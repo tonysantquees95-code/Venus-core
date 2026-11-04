@@ -101,7 +101,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         super.onCreate(savedInstanceState)
         ferramentas = Ferramentas(this, memoria)
         // A busca no Google roda numa thread de fundo, chamada pela ferramenta buscar_na_internet.
-        ferramentas.buscador = { pergunta -> gemini?.buscarNaInternet(pergunta) }
+        ferramentas.buscador = { pergunta -> gemini?.buscarNaInternet(pergunta) ?: SegundaIA.pesquisar(pergunta) }
         ferramentas.pesquisadorDePrecos = { produto ->
             val k = chave()
             if (k.isBlank() || modoIndependente()) null else Gemini.pesquisarPrecos(k, modelo(), produto)
@@ -1239,6 +1239,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         val conhecimento = ferramentas.conhecimento
         comTempoLimite("PESQUISANDO…") {
             val r = assistente?.buscarNaInternet(termo)
+                ?: SegundaIA.pesquisar(termo)
                 ?: Pesquisa.responderPergunta(termo, conhecimento)
                 ?: try {
                     Web.wikipedia(termo)
