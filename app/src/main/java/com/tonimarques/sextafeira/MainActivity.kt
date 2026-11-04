@@ -115,6 +115,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
             Thread { memoria.guardarVetor("intencao", frase, acao = intencao, fonte = "aprendida") }.start()
         }
         EstudoDiario.agendar(this)
+        StoriesDoDia.agendar(this)
         try {
             if (Calculadora.conversaVazia()) for (m in memoria.mensagens(null, 120)) Calculadora.lembrar(m.texto)
         } catch (e: Exception) {
@@ -958,6 +959,9 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
                 }
                 decisao.nome == "estudo_agora" -> estudarAgora()
                 decisao.nome == "estudo_ideias" -> mostrarIdeiasDePost()
+                decisao.nome == "story_auto" -> storiesAutomaticos(decisao.args["ligado"] as? Boolean)
+                decisao.nome == "story_auto_ver" -> previaDoStory()
+                decisao.nome == "story_auto_agora" -> storyDoDiaAgora()
                 decisao.nome == "diario_resumo" -> {
                     val semana = decisao.args["periodo"] == "semana"
                     val desde = if (semana) System.currentTimeMillis() - 7 * 86_400_000L else Diario.inicioDoDia()
@@ -2079,6 +2083,13 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
                             "Conectado como @$it. Os posts programados saem sozinhos na hora marcada. Pergunte: como está o Instagram, comentários do Instagram."
                         } ?: "Conecte com o token da Meta para a $n publicar os posts programados sozinha, mostrar seguidores e responder comentários."
                     }) { conectarInstagram() },
+                    TelaDeAjustes.Ajuste("Stories automáticos (manhã e tarde)", { StoriesDoDia.descricao(this) }, { StoriesDoDia.ligado(this) }) {
+                        StoriesDoDia.definirLigado(this, !StoriesDoDia.ligado(this))
+                        ajustes?.atualizar()
+                    },
+                    TelaDeAjustes.Ajuste("Horários dos stories", {
+                        "Manhã às ${StoriesDoDia.horaTexto(StoriesDoDia.horario(this, "manha"))} e tarde às ${StoriesDoDia.horaTexto(StoriesDoDia.horario(this, "tarde"))}. Toque para mudar."
+                    }) { escolherHorariosDosStories() },
                 )
             ),
             TelaDeAjustes.Secao(
@@ -3419,6 +3430,68 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
                 adicionarMensagem(Estudo.descrever(r, contagem), false)
             }
         }.start()
+    }
+
+    // ----------------------------------------------------------- stories do dia (dica ou curiosidade, manhã e tarde)
+    private fun storiesAutomaticos(ligar: Boolean?) {
+        if (ligar != null) StoriesDoDia.definirLigado(this, ligar)
+        val estado = if (StoriesDoDia.ligado(this)) "ligados" else "desligados"
+        responder(
+            "Os stories automáticos estão $estado. " + StoriesDoDia.descricao(this) +
+                " Diga: mostra o story do dia, para ver o próximo, ou posta a dica agora."
+        )
+    }
+
+    private fun previaDoStory() {
+        responder("Vou montar o próximo story para você ver, só um instante.")
+        Thread {
+            val r = try {
+                Result.success(StoriesDoDia.previa(this))
+            } catch (e: Exception) {
+                Result.failure(e)
+            }
+            runOnUiThread {
+                r.onSuccess { (tema, arquivo) ->
+                    responder("O próximo story é \"${tema.titulo}\". Abri a imagem para você ver; ela não foi publicada.")
+                    try {
+                        startActivity(
+                            Intent(Intent.ACTION_VIEW).setDataAndType(Uri.parse("content://${FotoProvider.AUTORIDADE}/${arquivo.name}"), "image/jpeg")
+                                .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                        )
+                    } catch (e: Exception) {
+                        responder("Não achei um app para abrir a imagem.")
+                    }
+                }.onFailure { responder("Não consegui montar o story: ${it.message}") }
+            }
+        }.start()
+    }
+
+    private fun storyDoDiaAgora() {
+        responder("Vou montar e publicar o story de dica agora.")
+        Thread {
+            val r = try {
+                Result.success(StoriesDoDia.publicar(this, forcar = true))
+            } catch (e: Exception) {
+                Result.failure(e)
+            }
+            runOnUiThread {
+                r.onSuccess { responder("Publiquei no Instagram o story \"${it.titulo}\". Chegou um aviso para pôr no status do WhatsApp também.") }
+                    .onFailure { responder("Não consegui publicar: ${it.message}") }
+            }
+        }.start()
+    }
+
+    private fun escolherHorariosDosStories() {
+        val manha = StoriesDoDia.horario(this, "manha")
+        android.app.TimePickerDialog(this, { _, h, m ->
+            StoriesDoDia.definirHorario(this, "manha", h * 60 + m)
+            val tarde = StoriesDoDia.horario(this, "tarde")
+            android.app.TimePickerDialog(this, { _, h2, m2 ->
+                StoriesDoDia.definirHorario(this, "tarde", h2 * 60 + m2)
+                ajustes?.atualizar()
+                Toast.makeText(this, "Stories às ${StoriesDoDia.horaTexto(h * 60 + m)} e às ${StoriesDoDia.horaTexto(h2 * 60 + m2)}", Toast.LENGTH_LONG).show()
+            }, tarde / 60, tarde % 60, true).apply { setTitle("Story da tarde") }.show()
+        }, manha / 60, manha % 60, true).apply { setTitle("Story da manhã") }.show()
     }
 
     /** As ideias de post que ela preparou no estudo da semana. */
