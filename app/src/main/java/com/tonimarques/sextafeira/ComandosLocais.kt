@@ -921,10 +921,17 @@ object ComandosLocais {
     /** "no feed", "poste no feed", "troca para story". */
     val TIPO_POST = Regex("^(?:(?:muda|mudar|mude|troca|trocar|troque|passa|poste|posta|postar|publica|publicar|faz|faca|coloca|bota)(?: (?:ele|ela|isso|o post|a postagem))? )?(?:no|pro|para o|pra|para|pelo|como) (feed|story|stories)\\b")
 
+    private val ESTUDO_AGORA = Regex("^(?:vai |pode |quero que (?:voce )?)?(?:estuda|estudar|estude|treina|treinar|treine|aprende|aprender)(?: um pouco| sozinha)? (?:agora|ja|hoje)$")
+    private val ESTUDO_RESUMO = Regex(
+        "\\b(?:o que (?:voce )?(?:estudou|aprendeu|treinou)(?: hoje| sozinha)?|como (?:esta|ta|foi) (?:o |seu |teu )?(?:estudo|treino|aprendizado)|memoria vetorial|quanto (?:voce )?(?:ja )?aprendeu)\\b"
+    )
+
     /** "conecta o Instagram", "como está o Instagram?", "comentários do Instagram". */
     fun instagram(c: String): Resultado? {
         val t = c.trimEnd('.', '!', '?')
         if (POSTAR_AGORA.matches(t)) return Resultado.Acao("postar_agora", emptyMap())
+        if (ESTUDO_AGORA.matches(t)) return Resultado.Acao("estudo_agora", emptyMap())
+        if (ESTUDO_RESUMO.containsMatchIn(t)) return Resultado.Acao("estudo_resumo", emptyMap())
         if (IG_CONECTAR.containsMatchIn(t)) return Resultado.Acao("instagram_conectar", emptyMap())
         if (IG_COMENTARIOS.containsMatchIn(t)) return Resultado.Acao("instagram_comentarios", emptyMap())
         if (IG_RESUMO.containsMatchIn(t)) return Resultado.Acao("instagram_resumo", emptyMap())

@@ -16,7 +16,7 @@ import java.nio.ByteOrder
  *    mesmo sentido ("abre o zap" ~ "abrir o whatsapp") pela similaridade de cosseno;
  *  - uso: o que você mais usa (apps, músicas, contatos), para entender "o de sempre".
  */
-class Memoria(contexto: Context) : SQLiteOpenHelper(contexto, "sexta.db", null, 4) {
+class Memoria(contexto: Context) : SQLiteOpenHelper(contexto, "sexta.db", null, 5) {
 
     data class Mensagem(val quando: Long, val doUsuario: Boolean, val texto: String, val topico: String, val conversa: Long = 0)
 
@@ -40,12 +40,14 @@ class Memoria(contexto: Context) : SQLiteOpenHelper(contexto, "sexta.db", null, 
         db.execSQL("CREATE TABLE aprendidas (id INTEGER PRIMARY KEY AUTOINCREMENT, frase TEXT UNIQUE, intencao TEXT, vetor BLOB, modelo TEXT)")
         db.execSQL("CREATE TABLE uso (chave TEXT PRIMARY KEY, contagem INTEGER, ultimo INTEGER)")
         criarTabelasDeConhecimento(db)
+        db.execSQL(TABELA_VETORES)
     }
 
     override fun onUpgrade(db: SQLiteDatabase, antiga: Int, nova: Int) {
         if (antiga < 2) criarTabelasDeConhecimento(db)
         if (antiga < 3) separarEmConversas(db)
         if (antiga < 4) acrescentarVetores(db)
+        if (antiga < 5) db.execSQL(TABELA_VETORES)
     }
 
     /**
@@ -312,6 +314,20 @@ class Memoria(contexto: Context) : SQLiteOpenHelper(contexto, "sexta.db", null, 
     companion object {
         /** Mais de 3 horas sem falar: a próxima mensagem começa uma conversa nova. */
         const val PAUSA = 3 * 3600_000L
+        /**
+         * Versão 5: a memória vetorial geral. Cada linha é algo que ela sabe, com o vetor do texto:
+         *  - comando: frase → ação (e argumentos) que o app executa;
+         *  - intencao: frase → intenção do vocabulário (as "aprendidas");
+         *  - resposta: pergunta atemporal → resposta já dada;
+         *  - enigma: charada ou problema de lógica → resposta conferida;
+         *  - fato: algo sobre você (vira contexto para a IA);
+         *  - conversa: resumo de uma conversa antiga.
+         */
+        private const val TABELA_VETORES =
+            "CREATE TABLE IF NOT EXISTS vetores (id INTEGER PRIMARY KEY AUTOINCREMENT, tipo TEXT NOT NULL, texto TEXT NOT NULL, " +
+                "resposta TEXT, acao TEXT, args TEXT, fonte TEXT, vetor BLOB, modelo TEXT, criado INTEGER, usos INTEGER DEFAULT 0, " +
+                "UNIQUE(tipo, texto))"
+
         private const val TABELA_CONVERSAS =
             "CREATE TABLE IF NOT EXISTS conversas (id INTEGER PRIMARY KEY AUTOINCREMENT, inicio INTEGER, ultimo INTEGER, titulo TEXT, resumo TEXT)"
 
@@ -321,6 +337,14 @@ class Memoria(contexto: Context) : SQLiteOpenHelper(contexto, "sexta.db", null, 
          * reconhecer sinônimos óbvios, desça (0,75).
          */
         const val MINIMO_SENTIDO = 0.80
+
+        /** Para vetores já normalizados (comprimento 1) o cosseno é só o produto interno: bem mais rápido. */
+        fun produtoInterno(a: FloatArray, b: FloatArray): Double {
+            if (a.size != b.size) return 0.0
+            var s = 0f
+            for (i in a.indices) s += a[i] * b[i]
+            return s.toDouble()
+        }
 
         /** Similaridade de cosseno entre dois vetores: 1 = mesma direção, 0 = sem relação. Sem bibliotecas. */
         fun similaridadeCosseno(a: FloatArray, b: FloatArray): Double {
@@ -504,6 +528,162 @@ class Memoria(contexto: Context) : SQLiteOpenHelper(contexto, "sexta.db", null, 
             feitas++
         }
         return feitas
+    }
+
+    // ------------------------------------------------------ memória vetorial geral
+    data class Item(
+        val id: Long, val tipo: String, val texto: String, val resposta: String?, val acao: String?, val args: String?,
+        val fonte: String?,
+    )
+
+    data class Achado(val item: Item, val nota: Double)
+
+    /** Vetores em memória (lidos do banco na primeira busca e atualizados a cada gravação). */
+    private class Indice(val modelo: String, val itens: MutableList<Pair<Item, FloatArray>>)
+
+    @Volatile
+    private var indice: Indice? = null
+
+    /**
+     * Guarda (ou atualiza) um item. [vetor] é opcional: sem ele, o item ganha o vetor depois em [vetoresPendentes].
+     * Devolve true se o item é novo.
+     */
+    fun guardarVetor(
+        tipo: String, texto: String, resposta: String? = null, acao: String? = null, args: String? = null,
+        fonte: String? = null, vetor: FloatArray? = null, modelo: String? = null,
+    ): Boolean {
+        val t = texto.trim().take(1000)
+        if (t.isEmpty()) return false
+        val valores = ContentValues().apply {
+            put("tipo", tipo)
+            put("texto", t)
+            put("resposta", resposta?.take(4000))
+            put("acao", acao)
+            put("args", args)
+            put("fonte", fonte)
+            put("criado", System.currentTimeMillis())
+            if (vetor != null && modelo != null) {
+                put("vetor", vetorParaBytes(vetor))
+                put("modelo", modelo)
+            }
+        }
+        val id = writableDatabase.insertWithOnConflict("vetores", null, valores, SQLiteDatabase.CONFLICT_IGNORE)
+        val novo = id != -1L
+        if (!novo) {
+            valores.remove("criado")
+            writableDatabase.update("vetores", valores, "tipo = ? AND texto = ?", arrayOf(tipo, t))
+        }
+        indice = null
+        return novo
+    }
+
+    /**
+     * Os itens mais parecidos com o vetor da consulta (similaridade de cosseno), da maior nota para a menor.
+     * [tipos] vazio = todos. Só compara vetores do mesmo [modelo].
+     */
+    fun buscarVetores(consulta: FloatArray, modelo: String, tipos: Set<String> = emptySet(), minimo: Double = MINIMO_SENTIDO, quantos: Int = 5): List<Achado> {
+        val ind = indice?.takeIf { it.modelo == modelo } ?: carregarIndice(modelo)
+        val achados = ArrayList<Achado>()
+        for ((item, v) in ind.itens) {
+            if (tipos.isNotEmpty() && item.tipo !in tipos) continue
+            val nota = produtoInterno(consulta, v)
+            if (nota >= minimo) achados += Achado(item, nota)
+        }
+        return achados.sortedByDescending { it.nota }.take(quantos)
+    }
+
+    private fun carregarIndice(modelo: String): Indice {
+        val lista = mutableListOf<Pair<Item, FloatArray>>()
+        readableDatabase.rawQuery(
+            "SELECT id, tipo, texto, resposta, acao, args, fonte, vetor FROM vetores WHERE vetor IS NOT NULL AND modelo = ?", arrayOf(modelo)
+        ).use { c ->
+            while (c.moveToNext()) {
+                lista += Item(c.getLong(0), c.getString(1), c.getString(2), c.getString(3), c.getString(4), c.getString(5), c.getString(6)) to
+                    bytesParaVetor(c.getBlob(7))
+            }
+        }
+        return Indice(modelo, lista).also { indice = it }
+    }
+
+    fun contarUso(id: Long) {
+        writableDatabase.execSQL("UPDATE vetores SET usos = usos + 1 WHERE id = ?", arrayOf(id))
+    }
+
+    /** Itens sem vetor (ou com vetor de outro modelo), para completar em lote. */
+    fun vetoresPendentes(modelo: String, limite: Int): List<Pair<Long, String>> {
+        val lista = mutableListOf<Pair<Long, String>>()
+        readableDatabase.rawQuery(
+            "SELECT id, texto FROM vetores WHERE vetor IS NULL OR modelo IS NULL OR modelo != ? LIMIT $limite", arrayOf(modelo)
+        ).use { c -> while (c.moveToNext()) lista += c.getLong(0) to c.getString(1) }
+        return lista
+    }
+
+    fun salvarVetores(vetores: List<Pair<Long, FloatArray>>, modelo: String) {
+        val db = writableDatabase
+        db.beginTransaction()
+        try {
+            for ((id, v) in vetores) {
+                db.update("vetores", ContentValues().apply {
+                    put("vetor", vetorParaBytes(v))
+                    put("modelo", modelo)
+                }, "id = ?", arrayOf(id.toString()))
+            }
+            db.setTransactionSuccessful()
+        } finally {
+            db.endTransaction()
+        }
+        indice = null
+    }
+
+    /** Quantos itens de cada tipo (e quantos já têm vetor). */
+    fun contarVetores(): Map<String, Pair<Int, Int>> {
+        val mapa = mutableMapOf<String, Pair<Int, Int>>()
+        readableDatabase.rawQuery("SELECT tipo, COUNT(*), SUM(CASE WHEN vetor IS NULL THEN 0 ELSE 1 END) FROM vetores GROUP BY tipo", null).use { c ->
+            while (c.moveToNext()) mapa[c.getString(0)] = c.getInt(1) to c.getInt(2)
+        }
+        return mapa
+    }
+
+    /** Os últimos textos de um tipo (para o estudo diário não repetir). */
+    fun ultimosTextos(tipo: String, quantos: Int): List<String> {
+        val lista = mutableListOf<String>()
+        readableDatabase.rawQuery("SELECT texto FROM vetores WHERE tipo = ? ORDER BY id DESC LIMIT $quantos", arrayOf(tipo)).use { c ->
+            while (c.moveToNext()) lista += c.getString(0)
+        }
+        return lista
+    }
+
+    /**
+     * Passa para a memória vetorial tudo o que ela sabia só em texto: frases aprendidas, fatos sobre você,
+     * respostas guardadas e resumos de conversas. Não apaga nada das tabelas antigas; os vetores
+     * são gerados depois, em lote. Pode rodar várias vezes (o que já foi passado é ignorado).
+     */
+    fun migrarTextoParaVetores(rotas: Map<String, String> = emptyMap()): Int {
+        var novos = 0
+        for ((frase, intencao) in aprendidas()) if (guardarVetor("intencao", frase, acao = intencao, fonte = "aprendida")) novos++
+        for (f in fatos()) if (guardarVetor("fato", f.texto, acao = f.categoria, fonte = "memoria")) novos++
+        readableDatabase.rawQuery("SELECT pergunta, resposta FROM respostas ORDER BY id DESC LIMIT 500", null).use { c ->
+            while (c.moveToNext()) if (guardarVetor("resposta", c.getString(0), resposta = c.getString(1), fonte = "conhecimento")) novos++
+        }
+        readableDatabase.rawQuery("SELECT titulo, resumo FROM conversas WHERE resumo IS NOT NULL AND resumo != ''", null).use { c ->
+            while (c.moveToNext()) {
+                val titulo = c.getString(0).orEmpty()
+                val resumo = c.getString(1).orEmpty()
+                if (guardarVetor("conversa", "$titulo: $resumo".take(1000), resposta = resumo, fonte = "conversas")) novos++
+            }
+        }
+        // rotas do roteador: frase → {"acao":..,"args":{..}}
+        for ((frase, json) in rotas) {
+            val o = try {
+                org.json.JSONObject(json)
+            } catch (e: Exception) {
+                continue
+            }
+            val acao = o.optString("acao")
+            if (acao.isBlank()) continue
+            if (guardarVetor("comando", frase, acao = acao, args = o.optJSONObject("args")?.toString() ?: "{}", fonte = "roteador")) novos++
+        }
+        return novos
     }
 
     // --------------------------------------------------------------- uso

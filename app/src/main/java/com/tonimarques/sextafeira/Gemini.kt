@@ -662,6 +662,22 @@ class Gemini(
             return textoDaResposta(json)
         }
 
+        /**
+         * Uma pergunta avulsa que devolve JSON (usado no estudo diário). [pensar] = orçamento de raciocínio
+         * (0 = rápido). Tenta o modelo escolhido e os Flash de reserva.
+         */
+        fun gerarJson(chave: String, modelo: String, pedido: String, pensar: Int = 0, temperatura: Double = 0.9): String? {
+            if (chave.isBlank()) return null
+            val config = JSONObject().put("temperature", temperatura).put("responseMimeType", "application/json")
+            if (pensar > 0) config.put("thinkingConfig", JSONObject().put("thinkingBudget", pensar))
+            val corpo = JSONObject()
+                .put("contents", JSONArray().put(JSONObject().put("role", "user").put("parts", JSONArray().put(JSONObject().put("text", pedido)))))
+                .put("generationConfig", config)
+                .toString().toByteArray()
+            val json = chamarAvulso(chave, listOf(modelo, "gemini-2.5-flash", "gemini-flash-lite-latest"), corpo, tempo = 120_000) ?: return null
+            return textoBruto(json)
+        }
+
         private fun textoBruto(json: JSONObject): String? {
             val partes = json.optJSONArray("candidates")?.optJSONObject(0)?.optJSONObject("content")?.optJSONArray("parts") ?: return null
             return (0 until partes.length()).joinToString("") { partes.optJSONObject(it)?.optString("text").orEmpty() }.ifBlank { null }
