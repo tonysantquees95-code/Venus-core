@@ -3534,7 +3534,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         caixa.addView(entrada)
         AlertDialog.Builder(this)
             .setTitle("IA reserva")
-            .setMessage("Quando o Gemini travar ou ficar sem cota, a $n pergunta para esta IA. A Groq é grátis (cerca de 1.000 pedidos por dia): crie a chave em console.groq.com.")
+            .setMessage("Quando o Gemini travar ou ficar sem cota, a ${Marca.nome} pergunta para esta IA. A Groq é grátis (cerca de 1.000 pedidos por dia): crie a chave em console.groq.com.")
             .setView(caixa)
             .setPositiveButton("Salvar e testar") { _, _ ->
                 SegundaIA.salvar(this, opcoes[escolhido].id, entrada.text.toString())
