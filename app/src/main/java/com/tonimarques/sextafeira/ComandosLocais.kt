@@ -934,7 +934,7 @@ object ComandosLocais {
             "o que (?:foi|ja foi) (?:mudado|alterado|ajustado)(?: hoje| essa semana)?|(?:log|registro|historico|diario) (?:de|dos) ajustes|log da venus)\\b"
     )
     private val IDEIAS_POST = Regex("\\b(?:ideias? (?:de|pra|para) (?:post|posts|postagem|postagens|story|stories|instagram|insta|reels)|(?:o que|que) (?:eu )?(?:posto|postar|publico|publicar)(?: no (?:insta|instagram))?(?: essa semana| hoje| amanha)?)\\b")
-    private val ESTUDO_AGORA = Regex("^(?:vai |pode |quero que (?:voce )?)?(?:estuda|estudar|estude|treina|treinar|treine|aprende|aprender)(?: um pouco| sozinha)? (?:agora|ja|hoje)$")
+    private val ESTUDO_AGORA = Regex("^(?:venus,? )?(?:vai |pode |quero que (?:voce )?|hora de )?(?:estuda|estudar|estude|treina|treinar|treine|aprende|aprender)(?: um pouco| sozinha)?(?: (?:agora|ja|hoje))?$|^(?:venus,? )?estudo agora$")
     private val ESTUDO_RESUMO = Regex(
         "\\b(?:o que (?:voce )?(?:estudou|aprendeu|treinou)(?: hoje| sozinha)?|como (?:esta|ta|foi) (?:o |seu |teu )?(?:estudo|treino|aprendizado)|memoria vetorial|quanto (?:voce )?(?:ja )?aprendeu)\\b"
     )
@@ -984,8 +984,10 @@ object ComandosLocais {
             "nota (?:de compra|fiscal da compra|do fornecedor)|(?:entrou|chegou) (?:a )?mercadoria|compra do fornecedor)\\b"
     )
         private val LOJA_CADASTRAR = Regex(
-        "^(?:cadastra|cadastre|cadastrar|adiciona|adicione|cria|crie|inclui|inclua|registra|registre)(?: um| o| uma)? (?:novo )?produto(?: novo)?" +
-            "(?:(?: chamado| com o nome| de nome|:|,)? (.+))?$|^(?:novo produto|cadastro de produto|cadastrar produto)(?:[:,]? (.+))?$"
+        "^(?:(?:eu )?(?:quero|vamos|vou|preciso|pode|bora) )?(?:cadastra|cadastre|cadastrar|adiciona|adicione|adicionar|cria|crie|criar|inclui|inclua|incluir|" +
+            "registra|registre|registrar|coloca|coloque|colocar)(?: um| o| uma)? (?:novo )?produto(?: novo)?(?: na loja| no site)?" +
+            "(?:(?: chamado| com o nome| de nome|:|,)? (.+))?$|" +
+            "^(?:(?:abre|abra|abrir|mostra|mostre) (?:a )?)?(?:tela (?:de|do) )?(?:novo produto|cadastro de produtos?|cadastrar produto)(?: na loja| no site)?(?:[:,]? (.+))?$"
     )
 
     /** "cadastra o produto Gel de Morango 60ml por 29,90 com 10 unidades" → nome, preço e estoque para o formulário. */

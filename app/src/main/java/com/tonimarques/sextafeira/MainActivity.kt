@@ -53,6 +53,9 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
     protected lateinit var botaoMic: ImageButton
     protected lateinit var botaoEnviar: ImageButton
     protected lateinit var botaoAnexar: ImageButton
+    private var alturaOrbe = 0
+    private var tecladoAberto = false
+    private var animacaoOrbe: android.animation.ValueAnimator? = null
     private lateinit var ferramentas: Ferramentas
 
     private val cerebro = Cerebro()
@@ -316,7 +319,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
             setOnClickListener { alternarEscuta() }
             aoMudarCor = { cor -> aplicarCor(cor) }
         }
-        val alturaOrbe = (resources.displayMetrics.heightPixels * 0.38f).toInt()
+        alturaOrbe = (resources.displayMetrics.heightPixels * 0.30f).toInt()
         raiz.addView(orbe, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, alturaOrbe))
 
         status = TextView(this).apply {
@@ -348,6 +351,18 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         }
         rolagem.addView(mensagens)
         raiz.addView(rolagem, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
+
+        // com o teclado aberto, o orbe encolhe para a conversa continuar à vista
+        raiz.viewTreeObserver.addOnGlobalLayoutListener {
+            val visivel = android.graphics.Rect()
+            raiz.getWindowVisibleDisplayFrame(visivel)
+            val total = raiz.rootView.height
+            val aberto = total > 0 && total - visivel.bottom > total * 0.15f
+            if (aberto != tecladoAberto) {
+                tecladoAberto = aberto
+                ajustarOrbeAoTeclado(aberto)
+            }
+        }
 
         val barra = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -394,6 +409,24 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         botaoMic.setColorFilter(cor)
         botaoEnviar.setColorFilter(cor)
         if (::botaoAnexar.isInitialized) botaoAnexar.setColorFilter(cor) // o pop-up não tem o "+"
+    }
+
+    /** Teclado aberto: orbe pequeno (e sem o aviso embaixo); fechado: volta ao tamanho normal. */
+    private fun ajustarOrbeAoTeclado(aberto: Boolean) {
+        val lp = orbe.layoutParams ?: return
+        val destino = if (aberto) dp(96) else alturaOrbe
+        animacaoOrbe?.cancel()
+        animacaoOrbe = android.animation.ValueAnimator.ofInt(lp.height, destino).apply {
+            duration = 220
+            interpolator = android.view.animation.DecelerateInterpolator()
+            addUpdateListener {
+                lp.height = it.animatedValue as Int
+                orbe.layoutParams = lp
+            }
+            start()
+        }
+        status.visibility = if (aberto) View.GONE else View.VISIBLE
+        rolagem.postDelayed({ rolagem.fullScroll(View.FOCUS_DOWN) }, 260)
     }
 
     /** Menu do "+": foto, galeria ou documento; a Vênus lê e responde sobre o que foi anexado. */

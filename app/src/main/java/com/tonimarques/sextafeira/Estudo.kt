@@ -144,7 +144,8 @@ object Estudo {
                     prog.feitas += etapa
                     if (etapa in SEMANAIS) prefs.edit().putLong("semana_$etapa", System.currentTimeMillis()).apply()
                 } catch (e: Exception) {
-                    prog.o.put("erro", "${NOMES[etapa] ?: etapa}: ${e.message ?: e.javaClass.simpleName}")
+                    val antes = prog.o.optString("erro")
+                    prog.o.put("erro", (if (antes.isBlank()) "" else "$antes; ") + "${NOMES[etapa] ?: etapa}: ${e.message ?: e.javaClass.simpleName}")
                 }
                 rodou = true
                 prog.salvar(prefs)
@@ -185,6 +186,7 @@ object Estudo {
             when (etapa) {
                 "preparar" -> {
                     Semantica.migrarSePreciso(ctx, memoria)
+                    prog.somar("removidos", Semantica.limparRespostasRuins(memoria))
                     while (memoria.compactarAntigos() > 0) Unit
                     prog.somar("vetores", Semantica.completar(memoria, chave, 300))
                 }
