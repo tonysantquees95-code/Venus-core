@@ -948,6 +948,7 @@ object ComandosLocais {
     private val STORY_AUTO_AGORA = Regex(
         "^(?:posta|poste|postar|publica|publique|publicar)(?: a| o| uma| um)? (?:dica|curiosidade|story do dia|story da dica|story de dica|story de curiosidade)(?: do dia)?(?: agora| ja)?$"
     )
+    private val STORY_ENQUETE = Regex("^(?:prepara|prepare|preparar|faz|faca|fazer|monta|monte|montar)(?: o| um)? story (?:com|de) enquete(?: agora)?$")
     private val STORY_AUTO_RESUMO = Regex("\\b(?:stories automaticos|story automatico|stories do dia|stories diarios)\\b")
 
     /** "conecta o Instagram", "como está o Instagram?", "comentários do Instagram". */
@@ -957,6 +958,7 @@ object ComandosLocais {
         if (STORY_AUTO_DESLIGA.matches(t)) return Resultado.Acao("story_auto", mapOf("ligado" to false))
         if (STORY_AUTO_VER.matches(t)) return Resultado.Acao("story_auto_ver", emptyMap())
         if (STORY_AUTO_AGORA.matches(t)) return Resultado.Acao("story_auto_agora", emptyMap())
+        if (STORY_ENQUETE.matches(t)) return Resultado.Acao("story_enquete", emptyMap())
         if (STORY_AUTO_RESUMO.containsMatchIn(t)) return Resultado.Acao("story_auto", emptyMap())
         if (POSTAR_AGORA.matches(t)) return Resultado.Acao("postar_agora", emptyMap())
         if (ESTUDO_AGORA.matches(t)) return Resultado.Acao("estudo_agora", emptyMap())

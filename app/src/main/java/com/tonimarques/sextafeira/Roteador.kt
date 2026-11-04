@@ -48,6 +48,7 @@ object Roteador {
         Triple("story_auto", "stories automáticos do Instagram (dica ou curiosidade de manhã e à tarde): ver como estão, ligar ou desligar", "ligado: true|false (opcional)"),
         Triple("story_auto_ver", "mostrar como vai ficar o próximo story automático, sem publicar", ""),
         Triple("story_auto_agora", "publicar agora um story de dica ou curiosidade com a cara da loja", ""),
+        Triple("story_enquete", "preparar agora o story de dica com enquete (a Vênus abre o Instagram e a pessoa põe o adesivo)", ""),
         Triple("robo_resumo", "como está o robô de WhatsApp e Instagram: atendimentos de hoje e clientes esperando a loja", ""),
         Triple("robo_ligar", "ligar ou desligar o robô de respostas do WhatsApp e Instagram", "ligado: true|false"),
         Triple("postar_agora", "publicar agora no Instagram o post programado", ""),

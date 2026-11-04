@@ -43,6 +43,7 @@
     </queries>
 
     <application
+        android:name=".VenusApp"
         android:allowBackup="true"
         android:fullBackupContent="@xml/backup_antigo"
         android:dataExtractionRules="@xml/backup"

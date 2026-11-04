@@ -11,11 +11,13 @@ class StoriesDoDiaTest {
         val t = StoriesDoDia.lerTemas(
             """```json
             {"temas":[{"tipo":"curiosidade","titulo":"O abraço que acalma","texto":"Abraços longos liberam ocitocina, ligada ao vínculo."},
-            {"tipo":"dica","titulo":"x","texto":"curto"},{"tipo":"Dica","titulo":"Durma bem","texto":"Uma boa noite de sono ajuda o humor e a disposição."}]}```"""
+            {"tipo":"dica","titulo":"x","texto":"curto"},{"tipo":"Dica","titulo":"Durma bem","texto":"Uma boa noite de sono ajuda o humor e a disposição.","enquete":"Você dorme 8 horas"}]}```"""
         )
         assertEquals(2, t.size)
         assertEquals("curiosidade", t[0].tipo)
         assertEquals("dica", t[1].tipo)
+        assertEquals("Você dorme 8 horas?", t[1].pergunta)
+        assertEquals("Você já sabia disso?", t[0].pergunta)
         assertTrue(StoriesDoDia.lerTemas("nada").isEmpty())
     }
 
@@ -42,5 +44,6 @@ class StoriesDoDiaTest {
         assertEquals("story_auto_ver", (ComandosLocais.interpretar("mostra o story do dia") as? Acao)?.nome)
         assertEquals("story_auto_agora", (ComandosLocais.interpretar("posta a dica agora") as? Acao)?.nome)
         assertEquals("story_auto", (ComandosLocais.interpretar("como estão os stories automáticos?") as? Acao)?.nome)
+        assertEquals("story_enquete", (ComandosLocais.interpretar("prepara o story com enquete") as? Acao)?.nome)
     }
 }
