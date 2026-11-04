@@ -313,7 +313,13 @@ class Ferramentas(private val activity: Activity, private val memoria: Memoria? 
         executar(nome, JSONObject(argumentos))
 
     private fun executarSeguro(nome: String, argumentos: JSONObject): String = try {
-        executarAqui(nome, argumentos)
+        executarAqui(nome, argumentos).also { resultado ->
+            // o que mudou algo de verdade entra no diário de ajustes
+            Diario.ACOES_QUE_MUDAM[nome]?.let { area ->
+                val falhou = Regex("^(?:Não|Nao|Deu erro|O site recusou|Sem internet|Tudo bem, não mudei)").containsMatchIn(resultado)
+                if (!resultado.endsWith("?") && !resultado.contains("Diga sim")) Diario.anotar(activity, area, resultado, "voz", ok = !falhou)
+            }
+        }
     } catch (e: Instagram.ErroDoInstagram) {
         e.message.orEmpty()
     } catch (e: ActivityNotFoundException) {

@@ -840,6 +840,23 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
                     }.start()
                 }
                 decisao.nome == "estudo_agora" -> estudarAgora()
+                decisao.nome == "diario_resumo" -> {
+                    val semana = decisao.args["periodo"] == "semana"
+                    val desde = if (semana) System.currentTimeMillis() - 7 * 86_400_000L else Diario.inicioDoDia()
+                    Thread {
+                        val lista = Diario.de(this).ultimos(200, desde)
+                        runOnUiThread {
+                            responder(Diario.resumo(lista, if (semana) "nos últimos 7 dias" else "hoje"))
+                            mostrarLog()
+                        }
+                    }.start()
+                }
+                decisao.nome == "log_erros" -> {
+                    val n = Registro.log(this).size
+                    responder(if (n == 0) "Nenhum erro em aberto. 👏" else "$n ${if (n == 1) "erro em aberto" else "erros em aberto"}. Mostrei na tela.")
+                    mostrarLog()
+                }
+                decisao.nome == "limpar_erros" -> limparLogDeErros()
                 decisao.nome == "postar_agora" -> {
                     val alvo = postEmFoco() ?: Postagens.pendentes(this).firstOrNull()?.id
                     if (alvo == null) responder("Não tem post na fila. Diga, por exemplo: programa um story do gel.") else postarAgora(alvo)
@@ -1977,11 +1994,12 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
                         "Versão ${versaoDoApp()} instalada. A ${Marca.nome} avisa sozinha quando sai uma nova; toque para procurar agora."
                     }) { procurarAtualizacao(manual = true) },
                     item("Diagnóstico de conexão", { "Testa a internet e o Gemini e mostra o que está funcionando." }, MENU_DIAGNOSTICO),
-                    TelaDeAjustes.Ajuste("Relatório de erros", {
-                        val n = Registro.pendentes(this).sumOf { it.vezes }
-                        "A ${Marca.nome} anota sozinha o que deu errado e manda para o GitHub do app, para o Claude corrigir nas próximas versões. " +
-                            (if (n == 0) "Nada pendente agora." else "$n ${if (n == 1) "ocorrência esperando" else "ocorrências esperando"} envio; toque para mandar agora.")
-                    }) { enviarRelatorioDeErros(manual = true) },
+                    TelaDeAjustes.Ajuste("Log de ajustes e erros", {
+                        val abertos = Registro.log(this).size
+                        "Tudo o que a ${Marca.nome} mudou (loja, Instagram, caixa, conexões) e os erros em aberto. Os erros são enviados ao GitHub " +
+                            "para o Claude corrigir e saem do log sozinhos quando a versão com o conserto é instalada. " +
+                            (if (abertos == 0) "Nenhum erro em aberto." else "$abertos ${if (abertos == 1) "erro em aberto" else "erros em aberto"}.")
+                    }) { mostrarLog() },
                 )
             ),
         )
@@ -2574,7 +2592,10 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
             comTempoLimite("CADASTRANDO…") {
                 val r = try {
                     val url = fotoFinal?.let { loja.enviarFoto(it) }
-                    loja.cadastrar(novo.copy(imagemUrl = url))
+                    loja.cadastrar(novo.copy(imagemUrl = url)).also {
+                        Diario.anotar(this, "loja", "Produto cadastrado: ${novo.nome}" + (novo.precoCentavos?.let { p -> " por ${Loja.dinheiro(p)}" } ?: "") +
+                            (novo.custoCentavos?.let { c -> ", custo ${Loja.dinheiro(c)}" } ?: "") + if (novo.ativo) ", já no site" else ", escondido", "tela")
+                    }
                 } catch (e: Loja.ErroDaLoja) {
                     "Não consegui cadastrar: ${e.message}"
                 } catch (e: Exception) {
@@ -3139,6 +3160,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
             }
             runOnUiThread {
                 resultado.onSuccess { link ->
+                    Diario.anotar(this, "instagram", (if (p.ehStory) "Story" else "Post") + " publicado agora" + (if (link.isNotBlank()) " ($link)" else ""), "voz")
                     responder(if (p.ehStory) "Story publicado no Instagram." else "Post publicado no Instagram.")
                     if (link.isNotBlank()) mostrarFontes(listOf(Web.Fonte("Ver o post no Instagram", link)))
                 }.onFailure { e ->
@@ -3171,6 +3193,71 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         } catch (e: Exception) {
             responder("Não consegui abrir o Instagram.")
         }
+    }
+
+    // ----------------------------------------------------------- log de ajustes e erros
+    /** Tela com os ajustes feitos (diário) e os erros em aberto, com Enviar relatório e Limpar erros. */
+    private fun mostrarLog() {
+        Thread {
+            val ajustes = Diario.de(this).ultimos(60)
+            val erros = Registro.log(this)
+            runOnUiThread {
+                val f = Formulario(this, "Log da ${Marca.nome}", "Ajustes feitos e erros em aberto")
+                fun linha(titulo: String, texto: String, ruim: Boolean = false) = LinearLayout(this).apply {
+                    orientation = LinearLayout.VERTICAL
+                    setPadding(0, dp(6), 0, dp(6))
+                    addView(TextView(this@MainActivity).apply {
+                        text = titulo
+                        textSize = 11.5f
+                        letterSpacing = 0.05f
+                        setTextColor(if (ruim) Color.parseColor("#FF8A80") else Formulario.COR_APAGADA)
+                    })
+                    addView(TextView(this@MainActivity).apply {
+                        text = texto
+                        textSize = 14.5f
+                        setTextColor(Color.WHITE)
+                        setPadding(0, dp(2), 0, 0)
+                    })
+                }
+                f.cartao("Erros em aberto (${erros.size})")
+                if (erros.isEmpty()) f.adicionar(f.aviso("Nenhum erro em aberto. Quando a ${Marca.nome} anotar um erro, ele aparece aqui até ser consertado."), 2)
+                for (o in erros.take(40)) {
+                    val quando = Diario.hora(o.ultima)
+                    val estado = if (o.status == "enviado") "enviado ao GitHub" else "aguardando envio"
+                    val nome = Registro.NOMES[o.tipo] ?: o.tipo
+                    val texto = listOf(o.frase.takeIf { it.isNotBlank() }?.let { "“$it”" }, o.detalhe.takeIf { it.isNotBlank() }).filterNotNull().joinToString(" → ")
+                    f.adicionar(linha("${o.vezes}x · $nome · v${o.versao} · $quando · $estado", texto, ruim = o.tipo == "falha"), 2)
+                }
+                f.cartao("Últimos ajustes")
+                if (ajustes.isEmpty()) f.adicionar(f.aviso("Ainda não há ajustes registrados."), 2)
+                for (a in ajustes) {
+                    f.adicionar(linha("${Diario.hora(a.quando)} · ${Diario.NOMES_AREA[a.area] ?: a.area}" + if (!a.ok) " · falhou" else "", a.texto, ruim = !a.ok), 2)
+                }
+                f.acoes(
+                    f.botao("Enviar relatório", primario = true) { enviarRelatorioDeErros(manual = true) },
+                    f.botao("Limpar erros") {
+                        f.fechar()
+                        limparLogDeErros()
+                    },
+                )
+                f.mostrar()
+            }
+        }.start()
+    }
+
+    private fun limparLogDeErros() {
+        val n = Registro.log(this).size
+        if (n == 0) return responder("O log de erros já está limpo.")
+        AlertDialog.Builder(this)
+            .setTitle("Limpar o log de erros?")
+            .setMessage("Os $n erros em aberto saem do log. Use quando já foram consertados; os que ainda não foram enviados ao GitHub não serão mais enviados.")
+            .setPositiveButton("Limpar") { _, _ ->
+                Registro.limparTudo(this)
+                Diario.anotar(this, "erro", "Log de erros limpo à mão ($n erros)", "tela")
+                responder("Pronto, limpei o log de erros.")
+            }
+            .setNegativeButton("Cancelar", null)
+            .show()
     }
 
     // ----------------------------------------------------------- estudo diário
@@ -3270,6 +3357,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
                 if (usuario != null) {
                     Instagram.desconectar(this)
                     ajustes?.atualizar()
+                    Diario.anotar(this, "conexao", "Instagram desconectado", "tela")
                     responder("Desconectei o Instagram. Os posts programados voltam a chegar como aviso para você postar.")
                 }
             }
@@ -3294,6 +3382,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
                             d.dismiss()
                             ajustes?.atualizar()
                             val loja = if (ferramentas.loja.conectada) "" else " Para os posts saírem sozinhos, conecte também a loja nos ajustes (a foto sobe pelo site)."
+                            Diario.anotar(this, "conexao", "Instagram conectado: @${conta.usuario}", "tela")
                             responder("Instagram conectado: @${conta.usuario}. Agora os posts programados saem sozinhos na hora marcada.$loja Pergunte: como está o Instagram.")
                         }.onFailure { e -> Toast.makeText(this, e.message ?: "Não deu certo.", Toast.LENGTH_LONG).show() }
                     }
@@ -3370,6 +3459,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
             Instagram.responderComentario(this, c.id, texto.trim())
             val resto = lista.filterIndexed { j, _ -> j != i }
             val acao: () -> Unit = {
+                Diario.anotar(this, "instagram", "Comentário de @${c.usuario} respondido: ${texto.trim().take(120)}", "tela")
                 responder("Respondi @${c.usuario}." + if (resto.isNotEmpty()) " Faltam ${resto.size}." else " Não tem mais comentário esperando.")
                 if (resto.isNotEmpty()) escolherComentario(resto)
             }

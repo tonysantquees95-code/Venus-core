@@ -921,6 +921,12 @@ object ComandosLocais {
     /** "no feed", "poste no feed", "troca para story". */
     val TIPO_POST = Regex("^(?:(?:muda|mudar|mude|troca|trocar|troque|passa|poste|posta|postar|publica|publicar|faz|faca|coloca|bota)(?: (?:ele|ela|isso|o post|a postagem))? )?(?:no|pro|para o|pra|para|pelo|como) (feed|story|stories)\\b")
 
+    private val LIMPAR_ERROS = Regex("\\b(?:limpa|limpar|limpe|apaga|apagar|apague|zera|zerar|zere)(?: o| os)? (?:log de erros|registro de erros|relatorio de erros|erros)\\b")
+    private val LOG_ERROS = Regex("\\b(?:log de erros|registro de erros|quais (?:os |sao os )?erros|erros em aberto|mostra(?:r)? os erros|que erros (?:voce )?(?:teve|deu))\\b")
+    private val DIARIO = Regex(
+        "\\b(?:o que (?:voce |a venus )?(?:mudou|fez|alterou|ajustou|mexeu)(?: na loja| no site| no instagram)?(?: hoje| essa semana| nesta semana)?|" +
+            "o que (?:foi|ja foi) (?:mudado|alterado|ajustado)(?: hoje| essa semana)?|(?:log|registro|historico|diario) (?:de|dos) ajustes|log da venus)\\b"
+    )
     private val ESTUDO_AGORA = Regex("^(?:vai |pode |quero que (?:voce )?)?(?:estuda|estudar|estude|treina|treinar|treine|aprende|aprender)(?: um pouco| sozinha)? (?:agora|ja|hoje)$")
     private val ESTUDO_RESUMO = Regex(
         "\\b(?:o que (?:voce )?(?:estudou|aprendeu|treinou)(?: hoje| sozinha)?|como (?:esta|ta|foi) (?:o |seu |teu )?(?:estudo|treino|aprendizado)|memoria vetorial|quanto (?:voce )?(?:ja )?aprendeu)\\b"
@@ -931,6 +937,9 @@ object ComandosLocais {
         val t = c.trimEnd('.', '!', '?')
         if (POSTAR_AGORA.matches(t)) return Resultado.Acao("postar_agora", emptyMap())
         if (ESTUDO_AGORA.matches(t)) return Resultado.Acao("estudo_agora", emptyMap())
+        if (LIMPAR_ERROS.containsMatchIn(t)) return Resultado.Acao("limpar_erros", emptyMap())
+        if (LOG_ERROS.containsMatchIn(t)) return Resultado.Acao("log_erros", emptyMap())
+        DIARIO.find(t)?.let { m -> return Resultado.Acao("diario_resumo", mapOf("periodo" to if (m.value.contains("semana")) "semana" else "hoje")) }
         if (ESTUDO_RESUMO.containsMatchIn(t)) return Resultado.Acao("estudo_resumo", emptyMap())
         if (IG_CONECTAR.containsMatchIn(t)) return Resultado.Acao("instagram_conectar", emptyMap())
         if (IG_COMENTARIOS.containsMatchIn(t)) return Resultado.Acao("instagram_comentarios", emptyMap())
