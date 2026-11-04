@@ -1,0 +1,9 @@
+# Erros consertados. Uma linha por conserto:
+#   começo da assinatura do erro | versão que consertou | descrição curta
+# A assinatura é "tipo:" + o detalhe sem acentos, em minúsculas, com números trocados por "#"
+# (é como aparece no relatório de erros). Ao abrir a versão nova, a Vênus tira do log
+# as ocorrências anotadas em versões anteriores que começam com esse texto.
+# Se o erro voltar depois do conserto, ele reaparece no log normalmente.
+ia:a inteligencia artificial esta sobrecarregada | 108 | Gemini sobrecarregado: agora ela troca para o gemini-3.8-flash e para o modelo leve
+ia:o gemini respondeu com erro #: this model models/gemini-#.#-flash is no longer | 108 | Modelo gemini-2.5-flash desligado pelo Google: trocado pelo gemini-3.8-flash
+ia:o gemini respondeu com erro #: request contains an invalid argument | 108 | Modelo leve recusava o ajuste de raciocínio: agora ela reenvia sem ele

@@ -94,6 +94,12 @@ object Estudo {
             0
         }
         val r = Resumo(hoje(), frases, enigmas, descartados, vetores, erro)
+        Diario.anotar(
+            ctx, "estudo",
+            if (erro != null && frases + enigmas == 0) "Estudo diário não aconteceu: $erro"
+            else "Estudo diário: +$frases jeitos de pedir, +$enigmas charadas conferidas ($descartados descartadas), $vetores vetores gerados",
+            "automatico", ok = frases + enigmas > 0,
+        )
         prefs.edit()
             .putString("dia", if (frases + enigmas > 0) hoje() else prefs.getString("dia", ""))
             .putString("ultimo", JSONObject().put("data", r.data).put("frases", frases).put("enigmas", enigmas)

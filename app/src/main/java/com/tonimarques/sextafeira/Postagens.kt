@@ -200,6 +200,12 @@ object Postagens {
 
     // ------------------------------------------------------------- o que aconteceu com cada post (aparece no chat)
     private fun anotar(ctx: Context, p: Post, ok: Boolean, detalhe: String) {
+        Diario.anotar(
+            ctx, "instagram",
+            (if (p.ehStory) "Story" else "Post") + " programado para ${Lembretes.quandoFalado(p.quando)}: " +
+                (if (ok) "publicado sozinho" + (if (detalhe.isNotBlank()) " ($detalhe)" else "") else "não publicado ($detalhe)"),
+            "automatico", ok,
+        )
         val prefs = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         val lista = try {
             JSONArray(prefs.getString("resultados", "[]"))
