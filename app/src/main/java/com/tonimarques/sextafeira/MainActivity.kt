@@ -3859,12 +3859,21 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
             } catch (e: Exception) {
                 Result.failure(e)
             }
+            // a Vênus primeiro; o robô só quando ela já está em dia (ou se a busca dela falhou)
+            val robo = if (resultado.getOrNull() == null) atualizador.procurarRobo() else null
             runOnUiThread {
                 if (isFinishing) return@runOnUiThread
                 resultado.onSuccess { v ->
-                    if (v != null) oferecerAtualizacao(v)
-                    else if (manual) Toast.makeText(this, "Você já está com a versão mais nova (${versaoDoApp()}).", Toast.LENGTH_LONG).show()
+                    when {
+                        v != null -> oferecerAtualizacao(v)
+                        robo != null -> oferecerAtualizacao(robo)
+                        manual -> Toast.makeText(this, "Você já está com a versão mais nova (${versaoDoApp()}).", Toast.LENGTH_LONG).show()
+                    }
                 }.onFailure { e ->
+                    if (robo != null) {
+                        oferecerAtualizacao(robo)
+                        return@onFailure
+                    }
                     if (!manual) return@onFailure
                     if (e is Atualizador.ErroDeAtualizacao && e.precisaToken) pedirTokenDoGithub(e.message)
                     else Toast.makeText(this, e.message ?: "Não consegui procurar agora. Confira a internet.", Toast.LENGTH_LONG).show()
@@ -3875,6 +3884,15 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
 
     private fun oferecerAtualizacao(v: Atualizador.Versao) {
         val novidades = v.notas.ifBlank { "Melhorias e correções." }
+        if (v.ehRobo) {
+            AlertDialog.Builder(this)
+                .setTitle("Nova versão do Vênus Robô: 1.${v.numero}")
+                .setMessage("$novidades\n\nO robô continua com a chave, os canais e o acesso às notificações. Toque em Atualizar na tela do Android.")
+                .setPositiveButton("Atualizar o robô") { _, _ -> instalarAtualizacao(v) }
+                .setNegativeButton("Depois", null)
+                .show()
+            return
+        }
         AlertDialog.Builder(this)
             .setTitle("Nova versão da ${Marca.nome}: 1.${v.numero}")
             .setMessage("$novidades\n\nA atualização mantém suas memórias, ajustes e a conexão com a loja.")
@@ -3889,7 +3907,10 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
             setPadding(dp(24), dp(16), dp(24), dp(8))
             textSize = 16f
         }
-        val dialogo = AlertDialog.Builder(this).setTitle("Atualizando a ${Marca.nome}").setView(aviso).setCancelable(false).show()
+        val dialogo = AlertDialog.Builder(this).setTitle(if (v.ehRobo) "Atualizando o Vênus Robô" else "Atualizando a ${Marca.nome}")
+            .setView(aviso).setCancelable(false).show()
+        // depois que a Vênus reabrir atualizada, ela procura de novo e já oferece o robô
+        if (!v.ehRobo) atualizador.esquecerBusca()
         Thread {
             try {
                 atualizador.baixarEInstalar(v) { pct -> runOnUiThread { aviso.text = "Baixando… $pct%" } }
@@ -3921,7 +3942,12 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
                     }
                 }
             }
-            android.content.pm.PackageInstaller.STATUS_SUCCESS -> Toast.makeText(this, "${Marca.nome} atualizada!", Toast.LENGTH_SHORT).show()
+            android.content.pm.PackageInstaller.STATUS_SUCCESS -> {
+                val robo = intent.getBooleanExtra(Atualizador.EXTRA_ROBO, false)
+                val numero = intent.getIntExtra(Atualizador.EXTRA_VERSAO, 0)
+                if (robo) Diario.anotar(this, "app", "Vênus Robô atualizado para a versão 1.$numero", "atualizacao")
+                Toast.makeText(this, if (robo) "Vênus Robô atualizado!" else "${Marca.nome} atualizada!", Toast.LENGTH_SHORT).show()
+            }
             -999 -> {}
             else -> {
                 val msg = intent.getStringExtra(android.content.pm.PackageInstaller.EXTRA_STATUS_MESSAGE).orEmpty()

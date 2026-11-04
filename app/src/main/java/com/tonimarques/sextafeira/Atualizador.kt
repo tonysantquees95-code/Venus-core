@@ -7,6 +7,7 @@ import android.content.pm.PackageInstaller
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import android.util.Base64
+import org.json.JSONArray
 import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
@@ -22,6 +23,9 @@ import javax.crypto.spec.GCMParameterSpec
  *
  * O repositório é privado, então a consulta precisa de um token do GitHub só de leitura
  * (guardado criptografado no celular). Sem token, tenta sem (funciona se o repositório virar público).
+ *
+ * Também cuida do Vênus Robô (app separado, publicado como "robo-1.N"): se ele estiver instalado e houver
+ * versão nova, a Vênus baixa e abre a instalação dele do mesmo jeito. O token fica só na Vênus.
  */
 class Atualizador(private val contexto: Context) {
 
@@ -29,7 +33,13 @@ class Atualizador(private val contexto: Context) {
 
     class ErroDeAtualizacao(mensagem: String, val precisaToken: Boolean = false) : Exception(mensagem)
 
-    data class Versao(val numero: Int, val tag: String, val urlApi: String, val urlPublica: String, val tamanho: Long, val notas: String)
+    data class Versao(
+        val numero: Int, val tag: String, val urlApi: String, val urlPublica: String, val tamanho: Long, val notas: String,
+        /** Qual app esta versão atualiza (vazio = a própria Vênus). */
+        val pacote: String = "",
+    ) {
+        val ehRobo get() = pacote == PACOTE_ROBO
+    }
 
     val temToken get() = prefs.getString(P_TOKEN, null) != null
 
@@ -47,6 +57,36 @@ class Atualizador(private val contexto: Context) {
         numeroDaVersao(contexto.packageManager.getPackageInfo(contexto.packageName, 0).versionName.orEmpty()) ?: 0
     } catch (e: Exception) {
         0
+    }
+
+    /** Versão do Vênus Robô instalado, ou null se ele não está no celular. */
+    fun versaoDoRobo(): Int? = try {
+        numeroDaVersao(contexto.packageManager.getPackageInfo(PACOTE_ROBO, 0).versionName.orEmpty()) ?: 0
+    } catch (e: Exception) {
+        null
+    }
+
+    /** Faz a próxima abertura procurar de novo (depois de atualizar a Vênus, para oferecer o robô em seguida). */
+    fun esquecerBusca() = prefs.edit().remove(P_ULTIMA).apply()
+
+    /**
+     * A versão nova do Vênus Robô, ou null (não instalado, já está na última, ou não deu para consultar).
+     * Nunca lança erro: o robô é extra, não deve atrapalhar a atualização da Vênus.
+     */
+    fun procurarRobo(): Versao? {
+        val instalada = versaoDoRobo() ?: return null
+        return try {
+            val c = abrir("https://api.github.com/repos/$REPO/releases?per_page=30", token())
+            c.setRequestProperty("Accept", "application/vnd.github+json")
+            if (c.responseCode !in 200..299) {
+                c.disconnect()
+                return null
+            }
+            val v = ultimoRobo(JSONArray(ler(c))) ?: return null
+            if (v.numero > instalada) v else null
+        } catch (e: Exception) {
+            null
+        }
     }
 
     /** Já procurou nas últimas horas? (para a busca automática ao abrir o app não gastar internet à toa) */
@@ -78,13 +118,13 @@ class Atualizador(private val contexto: Context) {
         val conexao = baixar(v)
         val instalador = contexto.packageManager.packageInstaller
         val params = PackageInstaller.SessionParams(PackageInstaller.SessionParams.MODE_FULL_INSTALL).apply {
-            setAppPackageName(contexto.packageName)
+            setAppPackageName(v.pacote.ifBlank { contexto.packageName })
         }
         val id = instalador.createSession(params)
         try {
             instalador.openSession(id).use { sessao ->
                 val total = if (conexao.contentLengthLong > 0) conexao.contentLengthLong else v.tamanho
-                sessao.openWrite("Venus.apk", 0, total.coerceAtLeast(-1)).use { saida ->
+                sessao.openWrite(if (v.ehRobo) "VenusRobo.apk" else "Venus.apk", 0, total.coerceAtLeast(-1)).use { saida ->
                     conexao.inputStream.use { entrada ->
                         val buffer = ByteArray(64 * 1024)
                         var lidos = 0L
@@ -105,8 +145,9 @@ class Atualizador(private val contexto: Context) {
                 }
                 // O Android devolve o resultado para a MainActivity, que abre a tela "Instalar?"
                 val volta = Intent(contexto, MainActivity::class.java).setAction(ACAO_INSTALAR)
+                    .putExtra(EXTRA_ROBO, v.ehRobo).putExtra(EXTRA_VERSAO, v.numero)
                 val pendente = PendingIntent.getActivity(
-                    contexto, 77, volta, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE,
+                    contexto, if (v.ehRobo) 78 else 77, volta, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE,
                 )
                 sessao.commit(pendente.intentSender)
             }
@@ -187,12 +228,31 @@ class Atualizador(private val contexto: Context) {
     companion object {
         const val REPO = "tonysantquees95-code/Sexta-feira-"
         const val ACAO_INSTALAR = "com.tonimarques.sextafeira.INSTALAR"
+        const val PACOTE_ROBO = "com.tonimarques.venusrobo"
+        const val EXTRA_ROBO = "robo"
+        const val EXTRA_VERSAO = "versao"
         private const val P_TOKEN = "token"
         private const val P_ULTIMA = "ultima_busca"
         private const val ALIAS = "venus_github"
 
         /** "1.38", "v1.38" → 38. */
         fun numeroDaVersao(texto: String): Int? = Regex("^v?1\\.(\\d+)").find(texto.trim())?.groupValues?.get(1)?.toIntOrNull()
+
+        /** "robo-1.112" → 112. */
+        fun numeroDoRobo(tag: String): Int? = Regex("^robo-1\\.(\\d+)$").find(tag.trim())?.groupValues?.get(1)?.toIntOrNull()
+
+        /** Entre as publicações, a do robô com o número mais alto que tenha o VenusRobo.apk. */
+        fun ultimoRobo(lista: JSONArray): Versao? = (0 until lista.length()).mapNotNull { lista.optJSONObject(it) }
+            .filter { !it.optBoolean("draft") }
+            .mapNotNull { r ->
+                val numero = numeroDoRobo(r.optString("tag_name")) ?: return@mapNotNull null
+                val assets = r.optJSONArray("assets") ?: return@mapNotNull null
+                val apk = (0 until assets.length()).mapNotNull { assets.optJSONObject(it) }
+                    .firstOrNull { it.optString("name").equals("VenusRobo.apk", ignoreCase = true) } ?: return@mapNotNull null
+                Versao(numero, r.optString("tag_name"), apk.optString("url"), apk.optString("browser_download_url"), apk.optLong("size"),
+                    notas(r.optString("body")), PACOTE_ROBO)
+            }
+            .maxByOrNull { it.numero }
 
         /** Lê a publicação do GitHub (tag e o arquivo Venus.apk). */
         fun lerVersao(json: JSONObject): Versao? {

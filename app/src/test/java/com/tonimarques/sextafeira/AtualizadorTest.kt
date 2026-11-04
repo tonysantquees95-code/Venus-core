@@ -1,8 +1,10 @@
 package com.tonimarques.sextafeira
 
+import org.json.JSONArray
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class AtualizadorTest {
@@ -22,5 +24,22 @@ class AtualizadorTest {
         assertEquals(123L, v.tamanho)
         assertEquals("Loja: status por voz", v.notas)
         assertNull(Atualizador.lerVersao(JSONObject("""{"tag_name":"voz-pt","assets":[]}""")))
+    }
+
+    @Test fun achaORoboMaisNovo() {
+        assertEquals(112, Atualizador.numeroDoRobo("robo-1.112"))
+        assertNull(Atualizador.numeroDoRobo("v1.112"))
+        val lista = JSONArray(
+            """[{"tag_name":"v1.113","assets":[{"name":"Venus.apk","url":"u0"}]},
+            {"tag_name":"robo-1.112","body":"Ícone novo","assets":[{"name":"VenusRobo.apk","url":"u1","browser_download_url":"b1","size":9}]},
+            {"tag_name":"robo-1.111","assets":[{"name":"VenusRobo.apk","url":"u2"}]},
+            {"tag_name":"robo-1.200","draft":true,"assets":[{"name":"VenusRobo.apk","url":"u3"}]}]"""
+        )
+        val r = Atualizador.ultimoRobo(lista)!!
+        assertEquals(112, r.numero)
+        assertEquals("u1", r.urlApi)
+        assertTrue(r.ehRobo)
+        assertEquals("Ícone novo", r.notas)
+        assertNull(Atualizador.ultimoRobo(JSONArray("""[{"tag_name":"v1.1","assets":[]}]""")))
     }
 }
