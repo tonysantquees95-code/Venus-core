@@ -62,6 +62,17 @@ object StoriesDoDia {
     const val ACAO = "com.tonimarques.sextafeira.STORY_DO_DIA"
     const val WHATSAPP_BUSINESS = "com.whatsapp.w4b"
     const val ACAO_INTERATIVO = "com.tonimarques.sextafeira.STORY_INTERATIVO"
+    const val ACAO_LEMBRETE = "com.tonimarques.sextafeira.STORY_LEMBRETE"
+    const val ACAO_MARCAR = "com.tonimarques.sextafeira.STORY_MARCAR"
+
+    /** 1 hora depois do story com enquete: o site lembra a equipe, se ninguém marcou que postou. */
+    fun agendarLembrete(ctx: Context, id: Int) {
+        val pi = PendingIntent.getBroadcast(
+            ctx, 74_400, Intent(ctx, AlarmeDoStory::class.java).setAction(ACAO_LEMBRETE).putExtra("id", id),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+        ctx.getSystemService(AlarmManager::class.java).setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, System.currentTimeMillis() + 60 * 60_000L, pi)
+    }
     private val ROSA = Color.parseColor("#FF2E97")
     private val LILAS = Color.parseColor("#9B5CF6")
 
@@ -179,6 +190,12 @@ object StoriesDoDia {
         val url = loja.enviarFoto(jpeg)
         Instagram.publicar(ctx, url, "", story = true)
         usar(ctx, tema)
+        // aparece na página Stories do painel (para repostar no status) e avisa a equipe
+        try {
+            loja.registrarStory(turno, tema.titulo, tema.texto, null, Loja.enderecoCompleto(url), enquete = false, publicado = true)
+        } catch (e: Exception) {
+            Registro.anotar(ctx, "erro", "story no painel → ${e.message}")
+        }
         val arquivo = guardarParaWhatsApp(ctx, jpeg)
         prefs(ctx).edit().putBoolean(marca, true)
             .putString("ultimo", "${nomeTurno(turno)} de ${SimpleDateFormat("dd/MM", Locale("pt", "BR")).format(Date())}: \"${tema.titulo}\"").apply()
@@ -195,6 +212,19 @@ object StoriesDoDia {
         val jpeg = arte(ctx, tema, espacoEnquete = true)
         usar(ctx, tema)
         val arquivo = guardarParaWhatsApp(ctx, jpeg)
+        // manda para a página Stories do painel: o site avisa o celular da Natália (e de quem ligou os avisos)
+        var idNoPainel = 0
+        try {
+            val loja = Loja(ctx)
+            if (loja.conectada) {
+                val url = Loja.enderecoCompleto(loja.enviarFoto(jpeg))
+                idNoPainel = loja.registrarStory("tarde", tema.titulo, tema.texto, tema.pergunta, url, enquete = true, publicado = false)
+                if (idNoPainel > 0) agendarLembrete(ctx, idNoPainel)
+            }
+        } catch (e: Exception) {
+            Registro.anotar(ctx, "erro", "story com enquete no painel → ${e.message}")
+        }
+        prefs(ctx).edit().putInt("id_painel_${arquivo.name}", idNoPainel).apply()
         prefs(ctx).edit().putBoolean(marca, true)
             .putString("ultimo", "tarde de ${SimpleDateFormat("dd/MM", Locale("pt", "BR")).format(Date())} (com enquete): \"${tema.titulo}\"").apply()
         Diario.anotar(ctx, "instagram", "Story com enquete preparado: ${tema.titulo} (pergunta: ${tema.pergunta})", "automatico")
@@ -229,6 +259,16 @@ object StoriesDoDia {
                 "toque no adesivo Enquete e cole a pergunta: ${tema.pergunta}"))
             .setContentIntent(instagram)
             .addAction(Notification.Action.Builder(null, "Status do WhatsApp", whatsapp).build())
+            .also { b ->
+                val id = prefs(ctx).getInt("id_painel_${arquivo.name}", 0)
+                if (id > 0) {
+                    val feito = PendingIntent.getBroadcast(
+                        ctx, 74_212, Intent(ctx, AlarmeDoStory::class.java).setAction(ACAO_MARCAR).putExtra("id", id),
+                        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+                    )
+                    b.addAction(Notification.Action.Builder(null, "Já publiquei", feito).build())
+                }
+            }
             .setAutoCancel(true)
         BitmapFactory.decodeFile(arquivo.absolutePath, BitmapFactory.Options().apply { inSampleSize = 4 })?.let { b.setLargeIcon(it) }
         try {
@@ -558,6 +598,27 @@ class AlarmeDoStory : BroadcastReceiver() {
     override fun onReceive(ctx: Context, intent: Intent) {
         when (intent.action) {
             Intent.ACTION_BOOT_COMPLETED, Intent.ACTION_MY_PACKAGE_REPLACED -> StoriesDoDia.agendar(ctx)
+            StoriesDoDia.ACAO_LEMBRETE, StoriesDoDia.ACAO_MARCAR -> {
+                val id = intent.getIntExtra("id", 0)
+                if (id <= 0) return
+                val lembrete = intent.action == StoriesDoDia.ACAO_LEMBRETE
+                val pendente = goAsync()
+                Thread {
+                    try {
+                        val loja = Loja(ctx)
+                        if (lembrete) loja.lembrarStory(id)
+                        else {
+                            val por = loja.marcarStory(id, "instagram")
+                            Diario.anotar(ctx, "instagram", "Story com enquete marcado como publicado ($por)", "voz")
+                            ctx.getSystemService(NotificationManager::class.java).cancel(74_310)
+                        }
+                    } catch (e: Exception) {
+                        Registro.anotar(ctx, "erro", "story no painel → ${e.message}")
+                    } finally {
+                        pendente.finish()
+                    }
+                }.start()
+            }
             else -> if (StoriesDoDia.ligado(ctx)) StoriesDoDia.disparou(ctx)
         }
     }

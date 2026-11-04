@@ -245,6 +245,21 @@ class Loja(private val contexto: Context) {
     }
 
     /** Envia a foto do produto para o site e devolve o endereço dela. */
+    // ------------------------------------------------------------------ stories do dia (página Stories do painel)
+    /** Guarda o story no painel e avisa a equipe nos celulares. Devolve o número do story. */
+    fun registrarStory(turno: String, titulo: String, texto: String, pergunta: String?, imagemUrl: String, enquete: Boolean, publicado: Boolean): Int =
+        enviar(
+            "/_api/admin/stories_novo",
+            JSONObject().put("turno", turno).put("titulo", titulo.take(120)).put("texto", texto.take(400))
+                .put("pergunta", pergunta ?: JSONObject.NULL).put("imagemUrl", imagemUrl).put("enquete", enquete).put("publicadoInstagram", publicado),
+        ).optInt("id")
+
+    /** Segundo aviso para a equipe, se ninguém marcou que postou. */
+    fun lembrarStory(id: Int): Boolean = enviar("/_api/admin/stories_lembrar", JSONObject().put("id", id)).optBoolean("lembrou")
+
+    /** Marca como publicado (instagram ou whatsapp) em nome da conta da loja. Devolve quem publicou. */
+    fun marcarStory(id: Int, onde: String): String = enviar("/_api/admin/stories_marcar", JSONObject().put("id", id).put("onde", onde)).optString("por")
+
     fun enviarFoto(jpeg: ByteArray): String {
         val r = enviar("/_api/admin/upload", JSONObject().put("contentType", "image/jpeg").put("sizeBytes", jpeg.size))
         val destino = r.optString("presignedUrl").ifBlank { throw ErroDaLoja("O site não aceitou a foto.") }
