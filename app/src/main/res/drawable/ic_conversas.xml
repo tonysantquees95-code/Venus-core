@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Conversas: dois balões, o da frente com o degradê da Vênus (rosa → lilás) -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <!-- balão de trás -->
+    <path
+        android:pathData="M9,6.4V5.6a2.4,2.4 0,0 1,2.4 -2.4h7.2a2.4,2.4 0,0 1,2.4 2.4v4.6a2.4,2.4 0,0 1,-2.4 2.4h-0.4v2.2l-2.4,-2.2"
+        android:strokeWidth="1.5"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:strokeColor="#B3B79CF5" />
+    <!-- balão da frente -->
+    <path android:pathData="M5.4,7.2h8.4a2.4,2.4 0,0 1,2.4 2.4v5a2.4,2.4 0,0 1,-2.4 2.4h-5.2l-3.4,2.9v-2.9h0a2.4,2.4 0,0 1,-2.2 -2.4v-5a2.4,2.4 0,0 1,2.4 -2.4z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:startX="3"
+                android:startY="7"
+                android:endX="16"
+                android:endY="20"
+                android:type="linear">
+                <item android:color="#FFE36BD0" android:offset="0" />
+                <item android:color="#FF9B5CF6" android:offset="1" />
+            </gradient>
+        </aapt:attr>
+    </path>
+    <path android:pathData="M6.6,12.1m-1,0a1,1 0,1 1,2 0a1,1 0,1 1,-2 0" android:fillColor="#FFFFFFFF" />
+    <path android:pathData="M9.6,12.1m-1,0a1,1 0,1 1,2 0a1,1 0,1 1,-2 0" android:fillColor="#FFFFFFFF" />
+    <path android:pathData="M12.6,12.1m-1,0a1,1 0,1 1,2 0a1,1 0,1 1,-2 0" android:fillColor="#FFFFFFFF" />
+</vector>

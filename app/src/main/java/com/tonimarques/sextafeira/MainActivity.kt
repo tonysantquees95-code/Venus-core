@@ -52,6 +52,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
     protected lateinit var campo: EditText
     protected lateinit var botaoMic: ImageButton
     protected lateinit var botaoEnviar: ImageButton
+    protected lateinit var botaoAnexar: ImageButton
     private lateinit var ferramentas: Ferramentas
 
     private val cerebro = Cerebro()
@@ -280,7 +281,12 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
             setPadding(dp(8), dp(14), dp(10), dp(4))
         }
         // Canto esquerdo: histórico de conversas
-        cabecalho.addView(botaoIcone(R.drawable.ic_historico, "Histórico de conversas", COR_TEXTO_APAGADO) { mostrarHistorico() })
+        val botaoConversas = botaoIcone(R.drawable.ic_conversas, "Conversas", COR_TEXTO_APAGADO) { mostrarHistorico() }.apply {
+            clearColorFilter() // o ícone já vem com o degradê da Vênus
+            background = vidro(Color.argb(20, 227, 107, 208), Color.argb(70, 227, 107, 208), 22)
+            setPadding(dp(9), dp(9), dp(9), dp(9))
+        }
+        cabecalho.addView(botaoConversas, LinearLayout.LayoutParams(dp(44), dp(44)).apply { marginStart = dp(4) })
         val nomes = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(4), 0, 0, 0)
@@ -346,9 +352,11 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         val barra = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            setPadding(dp(18), dp(2), dp(4), dp(2))
+            setPadding(dp(2), dp(2), dp(4), dp(2))
             background = vidro(Color.argb(18, 255, 255, 255), Color.argb(40, 255, 255, 255), 28)
         }
+        botaoAnexar = botaoIcone(R.drawable.ic_anexar, "Anexar foto ou arquivo", corAtual) { abrirAnexos(botaoAnexar) }
+        barra.addView(botaoAnexar)
         campo = EditText(this).apply {
             hint = "Digite ou toque no orbe…"
             setHintTextColor(COR_TEXTO_APAGADO)
@@ -385,6 +393,82 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         titulo.setTextColor(cor)
         botaoMic.setColorFilter(cor)
         botaoEnviar.setColorFilter(cor)
+        if (::botaoAnexar.isInitialized) botaoAnexar.setColorFilter(cor) // o pop-up não tem o "+"
+    }
+
+    /** Menu do "+": foto, galeria ou documento; a Vênus lê e responde sobre o que foi anexado. */
+    private fun abrirAnexos(ancora: View) {
+        val caixa = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(6), dp(8), dp(6), dp(8))
+            background = GradientDrawable(GradientDrawable.Orientation.TL_BR, intArrayOf(Color.parseColor("#1B1035"), Color.parseColor("#0A0F24"))).apply {
+                cornerRadius = dp(20).toFloat()
+                setStroke(dp(1).coerceAtLeast(1), Color.argb(90, 227, 107, 208))
+            }
+            elevation = dp(12).toFloat()
+        }
+        val janela = android.widget.PopupWindow(caixa, dp(260), ViewGroup.LayoutParams.WRAP_CONTENT, true).apply {
+            setBackgroundDrawable(android.graphics.drawable.ColorDrawable(Color.TRANSPARENT))
+            elevation = dp(12).toFloat()
+            animationStyle = android.R.style.Animation_Dialog
+        }
+        fun opcao(simbolo: String, titulo: String, detalhe: String, acao: () -> Unit) {
+            val linha = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                setPadding(dp(10), dp(10), dp(10), dp(10))
+                background = android.graphics.drawable.RippleDrawable(
+                    android.content.res.ColorStateList.valueOf(Color.argb(60, 227, 107, 208)), null,
+                    GradientDrawable().apply { cornerRadius = dp(14).toFloat(); setColor(Color.WHITE) })
+                isClickable = true
+                setOnClickListener {
+                    janela.dismiss()
+                    acao()
+                }
+            }
+            linha.addView(TextView(this).apply {
+                text = simbolo
+                textSize = 18f
+                gravity = Gravity.CENTER
+                background = GradientDrawable(GradientDrawable.Orientation.TL_BR, intArrayOf(Color.parseColor("#E36BD0"), Color.parseColor("#9B5CF6"))).apply {
+                    shape = GradientDrawable.OVAL
+                }
+            }, LinearLayout.LayoutParams(dp(38), dp(38)))
+            val textos = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                setPadding(dp(12), 0, 0, 0)
+            }
+            textos.addView(TextView(this).apply {
+                text = titulo
+                textSize = 15f
+                setTextColor(Color.WHITE)
+                typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
+            })
+            textos.addView(TextView(this).apply {
+                text = detalhe
+                textSize = 11.5f
+                setTextColor(COR_TEXTO_APAGADO)
+            })
+            linha.addView(textos, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+            caixa.addView(linha)
+        }
+        val lerFoto: (Uri) -> Unit = { u ->
+            cadastroFoto = null
+            abrirDocumento(u)
+        }
+        opcao("📷", "Tirar foto", "A ${Marca.nome} olha e responde") {
+            cadastroFoto = lerFoto
+            pedirFotoCamera()
+        }
+        opcao("🖼️", "Foto da galeria", "Imagem, print ou nota") {
+            cadastroFoto = lerFoto
+            pedirFotoGaleria()
+        }
+        opcao("📄", "Documento", "PDF, Word, Excel, áudio…") { escolherArquivo() }
+        opcao("🛍️", "Produto novo", "Cadastrar na loja com foto") { abrirCadastro(emptyMap()) }
+        opcao("📣", "Post no Instagram", "Programar feed ou story") { programarPost(emptyMap()) }
+        caixa.measure(View.MeasureSpec.makeMeasureSpec(dp(260), View.MeasureSpec.EXACTLY), View.MeasureSpec.UNSPECIFIED)
+        janela.showAsDropDown(ancora, 0, -(caixa.measuredHeight + ancora.height + dp(8)))
     }
 
     protected fun botaoIcone(icone: Int, descricao: String, cor: Int, acao: () -> Unit) = ImageButton(this).apply {

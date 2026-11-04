@@ -2,6 +2,7 @@
 <resources>
     <color name="fundo">#03040A</color>
     <color name="destaque">#E36BD0</color>
+    <color name="fundo_icone">#1B1035</color>
     <style name="Tema" parent="android:Theme.Material.NoActionBar">
         <item name="android:colorAccent">@color/destaque</item>
         <item name="android:windowBackground">@color/fundo</item>
