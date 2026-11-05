@@ -252,6 +252,14 @@ class Gemini(
         var ultimaResposta: Pair<Int, JSONObject>? = null
         var ultimoErro: IOException? = null
 
+        // 0) A Groq é a principal (mais rápida e sem a cota de 20 pedidos por dia); o Gemini fica de reserva.
+        // Pedido com PDF ou áudio ela não aceita (devolve null) e segue direto para o Gemini.
+        var groqTentou = false
+        if (SegundaIA.principal()) {
+            groqTentou = true
+            SegundaIA.responder(corpo, if (profundo) 60_000 else 25_000, esforco = if (profundo) "medium" else "low")?.let { return 200 to it }
+        }
+
         // Passou para a reserva há mais de 10 minutos: tenta de novo o modelo principal.
         if (modeloAtivo != modelo && System.currentTimeMillis() - reservaDesde > 10 * 60_000L) modeloAtivo = modelo
 
@@ -292,7 +300,7 @@ class Gemini(
             }
         }
         // 3) Nenhum Gemini respondeu: a IA reserva (Groq ou Grok), se estiver configurada.
-        SegundaIA.responder(corpo, if (profundo) 60_000 else 30_000)?.let { return 200 to it }
+        if (!groqTentou) SegundaIA.responder(corpo, if (profundo) 60_000 else 30_000)?.let { return 200 to it }
         return ultimaResposta ?: throw (ultimoErro ?: IOException("sem conexão"))
     }
 
@@ -474,7 +482,8 @@ class Gemini(
                     conexao?.disconnect()
                 }
             }
-            // nenhum Gemini respondeu: a IA reserva (só texto)
+            // nenhum Gemini respondeu: a IA reserva. Pedido com busca no Google não vai: sem a busca ela inventaria preços e fatos.
+            if (String(corpo, Charsets.UTF_8).contains("\"google_search\"")) return null
             return try {
                 SegundaIA.responder(JSONObject(String(corpo, Charsets.UTF_8)), tempo)
             } catch (e: Exception) {
@@ -735,6 +744,18 @@ class Gemini(
          * (0 = rápido). Tenta o modelo escolhido e os Flash de reserva.
          */
         fun gerarJson(chave: String, modelo: String, pedido: String, pensar: Int = 0, temperatura: Double = 0.9): String? {
+            // a Groq vem primeiro: o estudo e os stories gastavam quase toda a cota diária do Gemini (20 pedidos)
+            if (SegundaIA.configurada()) {
+                val simples = JSONObject()
+                    .put("contents", JSONArray().put(JSONObject().put("role", "user").put("parts", JSONArray().put(JSONObject().put("text", pedido)))))
+                    .put("generationConfig", JSONObject().put("temperature", temperatura).put("responseMimeType", "application/json"))
+                val r = try {
+                    SegundaIA.responder(simples, 120_000, esforco = if (pensar >= 2048) "medium" else "low")
+                } catch (e: Exception) {
+                    null
+                }
+                r?.let { textoBruto(it) }?.takeIf { it.contains("{") }?.let { return it }
+            }
             if (chave.isBlank()) return null
             fun corpo(comPensar: Boolean): ByteArray {
                 val config = JSONObject().put("temperature", temperatura).put("responseMimeType", "application/json")

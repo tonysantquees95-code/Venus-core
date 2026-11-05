@@ -89,5 +89,17 @@ class MemoriaVetorialTest {
         assertEquals("estudo_resumo", (ComandosLocais.interpretar("como está seu estudo") as? Acao)?.nome)
         assertEquals("estudo_agora", (ComandosLocais.interpretar("estuda agora") as? Acao)?.nome)
         assertEquals("estudo_agora", (ComandosLocais.interpretar("vai estudar agora") as? Acao)?.nome)
+        assertEquals("aprendizado", (ComandosLocais.interpretar("mostra o que você aprendeu") as? Acao)?.nome)
+        assertEquals("aprendizado", (ComandosLocais.interpretar("o que eu aprendi") as? Acao)?.nome)
+        assertEquals("aprendizado", (ComandosLocais.interpretar("abrir a memória vetorial") as? Acao)?.nome)
+    }
+
+    @Test fun regrasDaLoja() {
+        assertTrue(RegrasDaLoja.REGRAS.all { it.pergunta.isNotBlank() && it.resposta.length in 40..600 })
+        assertEquals(RegrasDaLoja.REGRAS.size, RegrasDaLoja.REGRAS.map { it.pergunta }.toSet().size)
+        assertEquals(
+            listOf("Gel Secret Love Morango", "TURBO GEL 15g"),
+            RegrasDaLoja.suspeitosDaAnvisa(listOf("Gel Secret Love Morango", "Vibrador Bullet", "TURBO GEL 15g", "Óleo de massagem")),
+        )
     }
 }

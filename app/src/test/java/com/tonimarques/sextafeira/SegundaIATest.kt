@@ -51,6 +51,18 @@ class SegundaIATest {
         assertNull(SegundaIA.paraOpenAI(g))
     }
 
+    @Test fun fotoVaiParaOModeloQueEnxerga() {
+        val foto = parte("inline_data" to JSONObject().put("mime_type", "image/jpeg").put("data", "QUJD"))
+        val g = JSONObject().put("contents", JSONArray().put(JSONObject().put("role", "user").put("parts", JSONArray().put(foto).put(parte("text" to "que produto é esse?")))))
+        val o = SegundaIA.paraOpenAI(g)!!
+        val conteudo = o.getJSONArray("messages").getJSONObject(0).getJSONArray("content")
+        assertEquals("text", conteudo.getJSONObject(0).getString("type"))
+        assertEquals("data:image/jpeg;base64,QUJD", conteudo.getJSONObject(1).getJSONObject("image_url").getString("url"))
+        assertTrue(SegundaIA.temFoto(o))
+        val pdf = parte("inline_data" to JSONObject().put("mime_type", "application/pdf").put("data", "QUJD"))
+        assertNull(SegundaIA.paraOpenAI(JSONObject().put("contents", JSONArray().put(JSONObject().put("role", "user").put("parts", JSONArray().put(pdf))))))
+    }
+
     @Test fun respostaVoltaNoFormatoDoGemini() {
         val openai = JSONObject("""{"choices":[{"message":{"role":"assistant","content":null,"tool_calls":[{"id":"x","type":"function","function":{"name":"abrir_app","arguments":"{\"nome\":\"WhatsApp\"}"}}]}}]}""")
         val g = SegundaIA.paraGemini(openai)!!

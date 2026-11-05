@@ -935,6 +935,10 @@ object ComandosLocais {
     )
     private val IDEIAS_POST = Regex("\\b(?:ideias? (?:de|pra|para) (?:post|posts|postagem|postagens|story|stories|instagram|insta|reels)|(?:o que|que) (?:eu )?(?:posto|postar|publico|publicar)(?: no (?:insta|instagram))?(?: essa semana| hoje| amanha)?)\\b")
     private val ESTUDO_AGORA = Regex("^(?:venus,? )?(?:vai |pode |quero que (?:voce )?|hora de )?(?:estuda|estudar|estude|treina|treinar|treine|aprende|aprender)(?: um pouco| sozinha)?(?: (?:agora|ja|hoje))?$|^(?:venus,? )?estudo agora$")
+    private val APRENDIZADO = Regex(
+        "\\b(?:(?:mostra|mostre|ver|veja|abre|abrir|abra|revisar|revisa|revise|lista|listar)(?: (?:o|a|os|as))? (?:(?:o )?que (?:voce )?(?:aprendeu|estudou|guardou)|aprendizados?|memoria(?: vetorial)?)|o que eu aprendi|tela do aprendizado)\\b"
+    )
+
     private val ESTUDO_RESUMO = Regex(
         "\\b(?:o que (?:voce )?(?:estudou|aprendeu|treinou)(?: hoje| sozinha)?|como (?:esta|ta|foi) (?:o |seu |teu )?(?:estudo|treino|aprendizado)|memoria vetorial|quanto (?:voce )?(?:ja )?aprendeu)\\b"
     )
@@ -968,6 +972,7 @@ object ComandosLocais {
         if (LIMPAR_ERROS.containsMatchIn(t)) return Resultado.Acao("limpar_erros", emptyMap())
         if (LOG_ERROS.containsMatchIn(t)) return Resultado.Acao("log_erros", emptyMap())
         DIARIO.find(t)?.let { m -> return Resultado.Acao("diario_resumo", mapOf("periodo" to if (m.value.contains("semana")) "semana" else "hoje")) }
+        if (APRENDIZADO.containsMatchIn(t)) return Resultado.Acao("aprendizado", emptyMap())
         if (ESTUDO_RESUMO.containsMatchIn(t)) return Resultado.Acao("estudo_resumo", emptyMap())
         if (IG_CONECTAR.containsMatchIn(t)) return Resultado.Acao("instagram_conectar", emptyMap())
         if (IG_COMENTARIOS.containsMatchIn(t)) return Resultado.Acao("instagram_comentarios", emptyMap())

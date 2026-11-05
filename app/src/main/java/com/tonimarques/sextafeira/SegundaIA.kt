@@ -21,7 +21,7 @@ class VenusApp : Application() {
  *
  * Para não mexer no resto do app, ela recebe o pedido no formato do Gemini (systemInstruction, contents,
  * functionDeclarations, generationConfig) e devolve a resposta também no formato do Gemini
- * (candidates → content → parts com text ou functionCall). Fotos não vão (a reserva é só texto).
+ * (candidates → content → parts com text ou functionCall). Fotos vão para os modelos que enxergam; PDF e áudio não.
  */
 object SegundaIA {
 
@@ -64,6 +64,15 @@ object SegundaIA {
 
     fun configurada(c: Context? = ctx) = chave(c).isNotBlank()
 
+    /** A Groq (ou o Grok) responde a conversa primeiro, e o Gemini fica de reserva (padrão desde a v1.128). */
+    fun principal(c: Context? = ctx): Boolean =
+        configurada(c) && (c?.getSharedPreferences(PREFS, Context.MODE_PRIVATE)?.getBoolean("reserva_principal", true) ?: true)
+
+    fun definirPrincipal(c: Context, v: Boolean) {
+        c.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putBoolean("reserva_principal", v).apply()
+        Diario.anotar(c, "conexao", if (v) "${provedor(c).nome} passou a ser a IA principal; Gemini de reserva" else "Gemini voltou a ser a IA principal; ${provedor(c).nome} de reserva", "tela")
+    }
+
     fun salvar(c: Context, provedor: String, chave: String) {
         c.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putString("reserva_provedor", provedor).putString("reserva_chave", chave.trim()).apply()
         modeloQueFunciona.clear()
@@ -74,29 +83,52 @@ object SegundaIA {
      * Responde um pedido no formato do Gemini. Null se não houver reserva configurada ou ela também falhar.
      * Bloqueante: chame fora da thread principal.
      */
-    fun responder(corpoGemini: JSONObject, tempo: Int = 30_000): JSONObject? {
+    fun responder(corpoGemini: JSONObject, tempo: Int = 30_000, esforco: String = "low"): JSONObject? {
         val chave = chave()
         if (chave.isBlank()) return null
         val p = provedor()
         val pedido = paraOpenAI(corpoGemini) ?: return null
-        val ordem = (listOfNotNull(modeloQueFunciona[p.id]) + p.modelos).distinct()
+        // com foto: só modelos que enxergam (na Groq, os Llama 4)
+        val comFoto = temFoto(pedido)
+        val modelos = if (comFoto) (VISAO[p.id] ?: return null) else p.modelos
+        val preferencia = if (comFoto) Regex("llama-4|scout|maverick|vision") else p.preferencia
+        val chaveDoModelo = if (comFoto) p.id + ":visao" else p.id
+        val ordem = (listOfNotNull(modeloQueFunciona[chaveDoModelo]) + modelos).distinct()
+        var tentouAlgum = false
         for (modelo in ordem) {
-            when (val r = chamar(p, chave, modelo, pedido, tempo)) {
+            when (val r = chamar(p, chave, modelo, pedido, tempo, esforco = esforco)) {
                 is Resultado.Ok -> {
-                    modeloQueFunciona[p.id] = modelo
+                    modeloQueFunciona[chaveDoModelo] = modelo
                     ultimaVez = System.currentTimeMillis()
                     return paraGemini(r.json)
                 }
                 Resultado.ModeloNaoExiste -> continue
+                // limite por minuto ou por dia é de cada modelo: tenta o próximo
+                Resultado.Limite -> {
+                    tentouAlgum = true
+                    continue
+                }
                 Resultado.Falhou -> return null
             }
         }
+        if (tentouAlgum) return null
         // nenhum dos modelos conhecidos existe mais: pergunta a lista ao provedor e usa o melhor
-        val melhor = listarModelos(p, chave).firstOrNull { p.preferencia.containsMatchIn(it) } ?: return null
-        val r = chamar(p, chave, melhor, pedido, tempo) as? Resultado.Ok ?: return null
-        modeloQueFunciona[p.id] = melhor
+        val melhor = listarModelos(p, chave).firstOrNull { preferencia.containsMatchIn(it) } ?: return null
+        val r = chamar(p, chave, melhor, pedido, tempo, esforco = esforco) as? Resultado.Ok ?: return null
+        modeloQueFunciona[chaveDoModelo] = melhor
         ultimaVez = System.currentTimeMillis()
         return paraGemini(r.json)
+    }
+
+    /** Modelos que leem fotos, por provedor. */
+    val VISAO = mapOf(
+        "groq" to listOf("meta-llama/llama-4-scout-17b-16e-instruct", "meta-llama/llama-4-maverick-17b-128e-instruct"),
+        "xai" to listOf("grok-4-fast-non-reasoning", "grok-2-vision-1212"),
+    )
+
+    fun temFoto(pedido: JSONObject): Boolean {
+        val msgs = pedido.optJSONArray("messages") ?: return false
+        return (0 until msgs.length()).any { msgs.optJSONObject(it)?.opt("content") is JSONArray }
     }
 
     /**
@@ -193,12 +225,13 @@ object SegundaIA {
     private sealed class Resultado {
         class Ok(val json: JSONObject) : Resultado()
         object ModeloNaoExiste : Resultado()
+        object Limite : Resultado()
         object Falhou : Resultado()
     }
 
-    private fun chamar(p: Provedor, chave: String, modelo: String, pedido: JSONObject, tempo: Int, ajuste: Boolean = true): Resultado {
+    private fun chamar(p: Provedor, chave: String, modelo: String, pedido: JSONObject, tempo: Int, ajuste: Boolean = true, esforco: String = "low"): Resultado {
         val corpo = JSONObject(pedido.toString()).put("model", modelo)
-        if (ajuste && modelo.contains("gpt-oss")) corpo.put("reasoning_effort", "low")
+        if (ajuste && modelo.contains("gpt-oss")) corpo.put("reasoning_effort", esforco)
         var c: HttpURLConnection? = null
         return try {
             c = (URL("${p.endereco}/chat/completions").openConnection() as HttpURLConnection).apply {
@@ -215,6 +248,7 @@ object SegundaIA {
             when {
                 codigo in 200..299 -> Resultado.Ok(JSONObject(texto))
                 codigo == 404 || (codigo == 400 && texto.contains("model", true) && (texto.contains("not found", true) || texto.contains("does not exist", true) || texto.contains("decommissioned", true))) -> Resultado.ModeloNaoExiste
+                codigo == 429 || codigo == 413 -> Resultado.Limite
                 // modelo que não aceitou o ajuste de raciocínio: tenta sem ele
                 codigo == 400 && corpo.has("reasoning_effort") -> chamar(p, chave, modelo, pedido, tempo, ajuste = false)
                 else -> {
@@ -243,22 +277,31 @@ object SegundaIA {
     }
 
     // ------------------------------------------------------------------ Gemini → OpenAI
-    /** Converte o pedido do Gemini; null se ele depende de foto ou áudio (a reserva é só texto). */
+    /** Converte o pedido do Gemini; null se ele depende de PDF, áudio ou foto grande demais. */
     fun paraOpenAI(g: JSONObject): JSONObject? {
         val mensagens = JSONArray()
         g.optJSONObject("systemInstruction")?.let { s -> textos(s.optJSONArray("parts")).takeIf { it.isNotBlank() }?.let { mensagens.put(JSONObject().put("role", "system").put("content", it)) } }
         val conteudos = g.optJSONArray("contents") ?: JSONArray()
         var proximoId = 0
+        var fotos = 0
         val pendentes = ArrayDeque<Pair<String, String>>() // (nome da ferramenta, id da chamada)
         for (i in 0 until conteudos.length()) {
             val c = conteudos.optJSONObject(i) ?: continue
             val partes = c.optJSONArray("parts") ?: JSONArray()
             val texto = StringBuilder()
             val chamadas = JSONArray()
+            val imagens = JSONArray()
             for (j in 0 until partes.length()) {
                 val pt = partes.optJSONObject(j) ?: continue
                 when {
-                    pt.has("inlineData") || pt.has("inline_data") || pt.has("fileData") || pt.has("file_data") -> return null
+                    pt.has("inlineData") || pt.has("inline_data") -> {
+                        // foto vai como imagem (data URI) para os modelos que enxergam; PDF e áudio não
+                        val d = pt.optJSONObject("inlineData") ?: pt.optJSONObject("inline_data") ?: return null
+                        val tipo = d.optString("mimeType").ifBlank { d.optString("mime_type") }
+                        if (!tipo.startsWith("image/") || d.optString("data").length > LIMITE_FOTO) return null
+                        imagens.put(JSONObject().put("type", "image_url").put("image_url", JSONObject().put("url", "data:$tipo;base64,${d.optString("data")}")))
+                    }
+                    pt.has("fileData") || pt.has("file_data") -> return null
                     pt.optBoolean("thought", false) -> Unit
                     pt.has("functionCall") -> {
                         val fc = pt.getJSONObject("functionCall")
@@ -285,6 +328,13 @@ object SegundaIA {
             val papel = if (c.optString("role") == "model") "assistant" else "user"
             if (papel == "assistant" && chamadas.length() > 0) {
                 mensagens.put(JSONObject().put("role", "assistant").put("content", texto.toString().ifBlank { JSONObject.NULL }).put("tool_calls", chamadas))
+            } else if (imagens.length() > 0 && papel == "user") {
+                if (fotos + imagens.length() > MAXIMO_FOTOS) return null
+                fotos += imagens.length()
+                val partes = JSONArray()
+                if (texto.isNotBlank()) partes.put(JSONObject().put("type", "text").put("text", texto.toString()))
+                for (k in 0 until imagens.length()) partes.put(imagens.get(k))
+                mensagens.put(JSONObject().put("role", "user").put("content", partes))
             } else if (texto.isNotBlank()) {
                 mensagens.put(JSONObject().put("role", papel).put("content", texto.toString()))
             }
@@ -311,6 +361,10 @@ object SegundaIA {
         if (config?.optString("responseMimeType") == "application/json") pedido.put("response_format", JSONObject().put("type", "json_object"))
         return pedido
     }
+
+    /** A Groq aceita até 5 fotos por pedido, cada uma com até 4 MB em base64. */
+    const val MAXIMO_FOTOS = 5
+    const val LIMITE_FOTO = 4_000_000
 
     /** Esquema do Gemini (tipos em maiúsculas) → JSON Schema (minúsculas). */
     fun esquema(e: JSONObject): JSONObject {
