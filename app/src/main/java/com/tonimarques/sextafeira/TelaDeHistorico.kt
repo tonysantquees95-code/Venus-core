@@ -304,7 +304,7 @@ class TelaDeHistorico(
             }
             lista.addView(balao(m))
         }
-        rolagem.post { rolagem.fullScroll(View.FOCUS_DOWN) }
+        rolagem.post { rolagem.scrollTo(0, maxOf(0, (rolagem.getChildAt(0)?.height ?: 0) - rolagem.height)) }
     }
 
     private fun mostrarBusca(termo: String) {
