@@ -29,6 +29,7 @@ class TelaDeAjustes(
     private val activity: Activity,
     private val versao: String,
     private val secoes: List<Secao>,
+    private val titulo: String = "AJUSTES",
 ) : Dialog(activity, R.style.Tema) {
 
     /** [ligado] != null mostra um interruptor; senão, uma setinha. [descricao] é recalculada ao atualizar. */
@@ -98,7 +99,7 @@ class TelaDeAjustes(
             setPadding(dp(4), 0, 0, 0)
         }
         tituloTela = TextView(context).apply {
-            text = "AJUSTES"
+            text = titulo
             textSize = 15f
             letterSpacing = 0.35f
             typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
