@@ -1053,6 +1053,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
                 decisao.nome == "estudo_ideias" -> mostrarIdeiasDePost()
                 decisao.nome == "story_auto" -> storiesAutomaticos(decisao.args["ligado"] as? Boolean)
                 decisao.nome == "story_auto_ver" -> previaDoStory()
+                decisao.nome == "stories_pagina" -> abrirStoriesDoDia()
                 decisao.nome == "story_auto_agora" -> storyDoDiaAgora()
                 decisao.nome == "story_enquete" -> storyComEnqueteAgora()
                 decisao.nome == "diario_resumo" -> {
@@ -3847,6 +3848,80 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
             whatsappDepois = null
             responder("Não achei o Instagram neste celular.")
         }
+    }
+
+    // ----------------------------------------------------------- página Stories do dia
+    /** Os stories de hoje (manhã e tarde): prévia, Publicar no Instagram, Publicar no WhatsApp e Gerar outro. */
+    private fun abrirStoriesDoDia() {
+        val f = Formulario(this, "Stories do dia", "Veja, publique no Instagram e no status do WhatsApp ou gere outro")
+        for (turno in listOf("manha", "tarde")) {
+            val hora = StoriesDoDia.horaTexto(StoriesDoDia.horario(this, turno))
+            f.cartao("${StoriesDoDia.nomeTurno(turno).replaceFirstChar { it.uppercase() }} · $hora")
+            val r = StoriesDoDia.registroDeHoje(this, turno)
+            if (r == null || !r.arquivo.exists()) {
+                f.adicionar(f.aviso(if (r == null) "Ainda não preparado hoje. Sai sozinho às $hora, ou prepare agora." else "A imagem de hoje não está mais no celular. Gere outra."), 2)
+                f.adicionar(f.botao("Preparar agora", primario = true) { gerarOutroStory(f, turno) })
+                continue
+            }
+            val previa = f.previa().apply {
+                visibility = android.view.View.VISIBLE
+                setImageBitmap(android.graphics.BitmapFactory.decodeFile(r.arquivo.absolutePath, android.graphics.BitmapFactory.Options().apply { inSampleSize = 2 }))
+                setOnClickListener { verFotoGrande(r.arquivo) }
+            }
+            f.adicionar(previa, 2)
+            val situacao = listOf(
+                if (r.automatico) "Instagram: publicado sozinho ✓" else if (r.instagram) "Instagram: aberto para publicar ✓" else "Instagram: falta publicar",
+                if (r.whatsapp) "WhatsApp: aberto para o status ✓" else "WhatsApp: falta pôr no status",
+            ).joinToString(" · ")
+            f.adicionar(f.aviso("\"${r.titulo}\"\n$situacao" + (if (r.pergunta.isNotBlank()) "\nEnquete: ${r.pergunta} (copio ao abrir o Instagram)" else "")), 8)
+            val instagram = f.botao("Publicar Instagram", primario = !r.instagram && !r.automatico) {
+                if (r.pergunta.isNotBlank()) {
+                    (getSystemService(CLIPBOARD_SERVICE) as android.content.ClipboardManager).setPrimaryClip(android.content.ClipData.newPlainText("Enquete", r.pergunta))
+                }
+                try {
+                    startActivity(StoriesDoDia.intencaoInstagram(r.arquivo))
+                    StoriesDoDia.marcarCanal(this, turno, "instagram")
+                    f.fechar()
+                    Toast.makeText(this, if (r.pergunta.isNotBlank()) "Escolha Story, ponha o adesivo Enquete e cole: ${r.pergunta}" else "Escolha Story e publique.", Toast.LENGTH_LONG).show()
+                } catch (e: ActivityNotFoundException) {
+                    Toast.makeText(this, "Não achei o Instagram neste celular.", Toast.LENGTH_SHORT).show()
+                }
+            }
+            val whatsapp = f.botao("Publicar WhatsApp", primario = r.instagram || r.automatico) {
+                try {
+                    startActivity(StoriesDoDia.intencaoWhatsApp(this, r.arquivo))
+                    StoriesDoDia.marcarCanal(this, turno, "whatsapp")
+                    f.fechar()
+                    Toast.makeText(this, "Escolha Meu status e envie.", Toast.LENGTH_LONG).show()
+                } catch (e: Exception) {
+                    Toast.makeText(this, "Não consegui abrir o WhatsApp.", Toast.LENGTH_SHORT).show()
+                }
+            }
+            f.lado(instagram, whatsapp)
+            f.adicionar(f.botao("Não gostei: gerar outro") { gerarOutroStory(f, turno) }, 8)
+        }
+        f.cartao("Automático")
+        f.adicionar(f.aviso(StoriesDoDia.descricao(this)), 2)
+        f.acoes(f.botao("Fechar", primario = true) { f.fechar() })
+        f.mostrar()
+    }
+
+    private fun gerarOutroStory(f: Formulario, turno: String) {
+        f.fechar()
+        responder("Gerando outro story da ${StoriesDoDia.nomeTurno(turno)}…")
+        Thread {
+            val r = try {
+                Result.success(StoriesDoDia.refazer(applicationContext, turno))
+            } catch (e: Exception) {
+                Result.failure(e)
+            }
+            runOnUiThread {
+                r.onSuccess {
+                    responder("Pronto: \"${it.titulo}\".")
+                    abrirStoriesDoDia()
+                }.onFailure { responder("Não consegui gerar outro: ${it.message}") }
+            }
+        }.start()
     }
 
     /** Chamado no onResume: se voltou do Instagram com um story pendente, abre o status do WhatsApp. */

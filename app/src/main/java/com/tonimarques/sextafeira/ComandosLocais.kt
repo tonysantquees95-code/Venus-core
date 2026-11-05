@@ -953,6 +953,12 @@ object ComandosLocais {
         "^(?:posta|poste|postar|publica|publique|publicar)(?: a| o| uma| um)? (?:dica|curiosidade|story do dia|story da dica|story de dica|story de curiosidade)(?: do dia)?(?: agora| ja)?$"
     )
     private val STORY_ENQUETE = Regex("^(?:prepara|prepare|preparar|faz|faca|fazer|monta|monte|montar)(?: o| um)? story (?:com|de) enquete(?: agora)?$")
+    /** "stories do dia", "stories diários", "publicações diárias", "abre os stories": a página com a prévia e os botões. */
+    private val STORY_PAGINA = Regex(
+        "\\b(?:(?:stories|storys|storis|story|storie) (?:do dia|diarios?|de hoje|de amanha)|publicac(?:oes|ao) (?:diarias?|do dia|de hoje)|" +
+            "postage(?:ns|m) (?:diarias?|do dia|de hoje)|posts? (?:diarios?|do dia|de hoje)|pagina dos? (?:stories|story)|" +
+            "(?:abre|abrir|abra|mostra|mostre|ver|quero ver) (?:os |o |as )?(?:stories|storys|storis|story))\\b"
+    )
     private val STORY_AUTO_RESUMO = Regex("\\b(?:stories automaticos|story automatico|stories do dia|stories diarios)\\b")
 
     /** "conecta o Instagram", "como está o Instagram?", "comentários do Instagram". */
@@ -960,9 +966,9 @@ object ComandosLocais {
         val t = c.trimEnd('.', '!', '?')
         if (STORY_AUTO_LIGA.matches(t)) return Resultado.Acao("story_auto", mapOf("ligado" to true))
         if (STORY_AUTO_DESLIGA.matches(t)) return Resultado.Acao("story_auto", mapOf("ligado" to false))
-        if (STORY_AUTO_VER.matches(t)) return Resultado.Acao("story_auto_ver", emptyMap())
         if (STORY_AUTO_AGORA.matches(t)) return Resultado.Acao("story_auto_agora", emptyMap())
         if (STORY_ENQUETE.matches(t)) return Resultado.Acao("story_enquete", emptyMap())
+        if (STORY_AUTO_VER.matches(t) || STORY_PAGINA.containsMatchIn(t)) return Resultado.Acao("stories_pagina", emptyMap())
         if (STORY_AUTO_RESUMO.containsMatchIn(t)) return Resultado.Acao("story_auto", emptyMap())
         if (POSTAR_AGORA.matches(t)) return Resultado.Acao("postar_agora", emptyMap())
         if (ESTUDO_AGORA.matches(t)) return Resultado.Acao("estudo_agora", emptyMap())
