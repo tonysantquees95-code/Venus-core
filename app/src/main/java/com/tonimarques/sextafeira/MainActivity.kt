@@ -4006,8 +4006,17 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         }
         AlertDialog.Builder(this)
             .setTitle("Site, ramo e regras de venda")
-            .setMessage("A ${Marca.nome} só promete às clientes o que estiver aqui. Deixe vazio o que a loja não quiser informar.")
-            .setView(ScrollView(this).apply { addView(caixa) })
+            // a área dos campos tem altura fixa e rola por dentro: assim Salvar e Cancelar ficam sempre à vista
+            .setView(LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                addView(TextView(this@MainActivity).apply {
+                    text = "A ${Marca.nome} só promete às clientes o que estiver aqui. Deixe vazio o que a loja não quiser informar."
+                    textSize = 13f
+                    setPadding(dp(24), dp(4), dp(24), dp(4))
+                })
+                addView(ScrollView(this@MainActivity).apply { addView(caixa) },
+                    LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, (resources.displayMetrics.heightPixels * 0.55).toInt()))
+            })
             .setPositiveButton("Salvar") { _, _ ->
                 if (site.text.isBlank()) return@setPositiveButton Toast.makeText(this, "Preencha o endereço do site.", Toast.LENGTH_SHORT).show()
                 fun int(e: EditText) = e.text.toString().trim().toIntOrNull()
