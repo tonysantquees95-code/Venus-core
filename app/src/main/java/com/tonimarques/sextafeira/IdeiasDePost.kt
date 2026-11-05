@@ -84,6 +84,7 @@ object IdeiasDePost {
         val url = b.optString("imageUrl").ifBlank { b.optString("image") }.ifBlank {
             b.optJSONArray("images")?.let { a -> a.optJSONObject(0)?.optString("src") ?: a.optString(0) }.orEmpty()
         }.ifBlank { return null }
+        if (url.startsWith("file://")) return BitmapFactory.decodeFile(url.removePrefix("file://"))
         return try {
             val c = URL(Loja.enderecoCompleto(url)).openConnection() as HttpURLConnection
             c.connectTimeout = 10_000

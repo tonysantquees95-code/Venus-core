@@ -74,9 +74,11 @@ object AtendenteDoRobo {
             return Decisao(r + RODAPE, false, if (numero == 1) null else "principal")
         }
         if (CEP.containsMatchIn(mensagem)) {
-            val r = (if (site.isNotBlank()) "Para ver o valor e o prazo para o seu CEP, é só colocar os produtos no carrinho do site: $site" else "Vou verificar o frete para o seu CEP.") +
+            if (site.isBlank()) return Decisao("Vou pedir para a equipe calcular o frete para o seu CEP, só um instante 💗", true, null)
+            val r = "Para ver o valor e o prazo para o seu CEP, é só colocar os produtos no carrinho do site: $site" +
                 (texto("frete_gratis")?.let { " $it" } ?: "")
-            return Decisao(r + RODAPE, false, null)
+            // sem site, quem calcula o frete é a equipe
+            return Decisao(r + RODAPE, site.isBlank(), null)
         }
         return null
     }
@@ -164,7 +166,8 @@ object AtendenteDoRobo {
         val pedido = "Você é a ${Marca.nome}, atendente virtual da ${Perfil.loja} (${Perfil.ramo}). Está respondendo no " +
             (if (canal == "whatsapp") "WhatsApp" else "direct do Instagram") + " da loja. " + Perfil.injecao() + "\n" +
             "Escreva como uma pessoa simpática e discreta escreve no celular: curto (1 a 3 frases), no máximo 1 emoji, sem markdown, sem palavras vulgares. " +
-            "Use SOMENTE as regras acima e os produtos abaixo; não invente produtos, preços, prazos nem políticas. Quando indicar produto, mande o link dele. " +
+            "Use SOMENTE as regras acima e os produtos abaixo; não invente produtos, preços, prazos nem políticas. Quando indicar produto, mande o link dele (se tiver). " +
+            (if (Plataformas.tipo(ctx) == "interno") "A loja não tem site: quando a cliente quiser comprar, confirme o produto e marque chamarHumano=true para a equipe fechar o pedido (pagamento e entrega). " else "") +
             "Nunca peça CPF, endereço ou dados de cartão na conversa. Marque chamarHumano=true quando a cliente pedir para falar com alguém; " +
             "for troca, defeito, reclamação, pedido atrasado ou problema com pagamento; ou você não tiver a informação. Nesses casos, diga que vai chamar a equipe da loja.\n\n" +
             "Produtos (nome | preço | preço no Pix | estoque | link):\n${catalogo.ifBlank { "(catálogo indisponível agora)" }}\n\n" +

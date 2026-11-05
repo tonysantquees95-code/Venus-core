@@ -222,7 +222,7 @@ object Roteador {
         }
         if (acao == "financeiro_calculo" && args["tipo"] !in setOf("juros_compostos", "parcela", "desconto_venda", "markup")) return null
         if (obrigatorios[acao].orEmpty().any { it !in args }) return null
-        if (acao == "loja_alterar" && args["tipo"] !in setOf("estoque_somar", "estoque_tirar", "estoque_definir", "preco", "custo", "promocao", "promocao_pct", "fim_promocao", "ativar", "desativar")) return null
+        if (acao == "loja_alterar" && args["tipo"] !in setOf("estoque_somar", "estoque_tirar", "estoque_definir", "venda", "preco", "custo", "promocao", "promocao_pct", "fim_promocao", "ativar", "desativar")) return null
         if (acao == "loja_status" && args["status"] !in setOf("paid", "preparing", "shipped")) return null
         return Rota(acao, args)
     }

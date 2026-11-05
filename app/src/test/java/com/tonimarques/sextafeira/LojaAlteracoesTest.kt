@@ -46,7 +46,7 @@ class LojaAlteracoesTest {
         val t = acao("tira 2 unidades do estoque do gel KGEL")!!
         assertEquals("estoque_tirar", t.args["tipo"])
         assertEquals(2, t.args["valor"])
-        assertEquals("estoque_tirar", acao("vendi 1 gel kgel na mão")!!.args["tipo"])
+        assertEquals("venda", acao("vendi 1 gel kgel na mão")!!.args["tipo"])
         val d = acao("muda o estoque do vibrador rosa para 8")!!
         assertEquals("estoque_definir", d.args["tipo"])
         assertEquals(8, d.args["valor"])

@@ -637,8 +637,11 @@ internal fun MainActivity.lerNota(uri: Uri?) {
 }
 
 internal fun MainActivity.confirmarCompra(itens: List<Loja.ItemDeCompra>, produtos: List<Loja.Produto>) {
-    val podeCusto = produtos.any { it.bruto?.has(Loja.CAMPO_CUSTO) == true }
-    val opcoes = listOf("— ignorar este item —") + produtos.sortedBy { it.nome }.map { it.nome }
+    val podeCusto = produtos.any { it.bruto?.has(Loja.CAMPO_CUSTO) == true } || ferramentas.loja.ehInterno
+    // sem site (catálogo na Vênus): o item da nota pode virar um produto novo, com o nome, a quantidade e o custo da nota
+    val interno = ferramentas.loja.ehInterno
+    val extras = if (interno) listOf("— ignorar este item —", "+ cadastrar como produto novo") else listOf("— ignorar este item —")
+    val opcoes = extras + produtos.sortedBy { it.nome }.map { it.nome }
     val ordenados = produtos.sortedBy { it.nome }
     val caixa = LinearLayout(this).apply {
         orientation = LinearLayout.VERTICAL
@@ -653,7 +656,7 @@ internal fun MainActivity.confirmarCompra(itens: List<Loja.ItemDeCompra>, produt
         })
         val sp = android.widget.Spinner(this).apply {
             adapter = android.widget.ArrayAdapter(this@confirmarCompra, android.R.layout.simple_spinner_dropdown_item, opcoes)
-            setSelection(item.produto?.let { p -> ordenados.indexOfFirst { it.id == p.id } + 1 } ?: 0)
+            setSelection(item.produto?.let { p -> ordenados.indexOfFirst { it.id == p.id } + extras.size } ?: if (interno) 1 else 0)
         }
         caixa.addView(sp)
         val linha = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
@@ -692,23 +695,44 @@ internal fun MainActivity.confirmarCompra(itens: List<Loja.ItemDeCompra>, produt
         .setTitle("Compra lida da nota")
         .setView(ScrollView(this).apply { addView(caixa) })
         .setPositiveButton("Salvar") { _, _ ->
+            val novos = mutableListOf<Loja.NovoProduto>()
             val escolhidos = linhas.mapNotNull { l ->
                 val pos = l.produto.selectedItemPosition
                 if (pos <= 0) return@mapNotNull null
                 val q = l.qtd.text.toString().trim().toIntOrNull() ?: return@mapNotNull null
                 val c = ComandosLocais.centavos(l.custo.text.toString().replace(Regex("[^0-9,.]"), "")) ?: l.item.custoUnitario
-                Loja.ItemDeCompra(l.item.descricao, q, c, ordenados[pos - 1])
+                if (interno && pos == 1) {
+                    novos += Loja.NovoProduto(l.item.descricao.trim(), "", null, null, q, null, true, c)
+                    return@mapNotNull null
+                }
+                Loja.ItemDeCompra(l.item.descricao, q, c, ordenados[pos - extras.size])
             }
-            if (escolhidos.isEmpty() || (!somar.isChecked && !salvar.isChecked)) {
+            val mudaExistentes = escolhidos.isNotEmpty() && (somar.isChecked || salvar.isChecked)
+            if (novos.isEmpty() && !mudaExistentes) {
                 responder("Nada foi mudado.")
                 return@setPositiveButton
             }
             comTempoLimite("SALVANDO…") {
-                val r = try {
-                    ferramentas.loja.aplicarCompra(escolhidos, somar.isChecked, salvar.isChecked)
-                } catch (e: Exception) {
-                    "Não consegui salvar a compra: ${e.message ?: "erro de conexão"}"
+                val partes = mutableListOf<String>()
+                if (mudaExistentes) {
+                    partes += try {
+                        ferramentas.loja.aplicarCompra(escolhidos, somar.isChecked, salvar.isChecked)
+                    } catch (e: Exception) {
+                        "Não consegui salvar a compra: ${e.message ?: "erro de conexão"}"
+                    }
                 }
+                if (novos.isNotEmpty()) {
+                    partes += try {
+                        val cat = CatalogoInterno(this)
+                        novos.forEach { cat.adicionar(it) }
+                        Diario.anotar(this, "loja", "Nota de compra: ${novos.size} produto(s) novo(s) no catálogo (${novos.joinToString(", ") { it.nome }.take(200)})", "tela")
+                        "Cadastrei ${if (novos.size == 1) "1 produto novo" else "${novos.size} produtos novos"} no catálogo, com quantidade e custo da nota. " +
+                            "Falta só o preço de venda e a foto: abra o Catálogo da loja e toque em cada um."
+                    } catch (e: Exception) {
+                        "Não consegui cadastrar os produtos novos: ${e.message}"
+                    }
+                }
+                val r = partes.joinToString(" ")
                 val acao: () -> Unit = { responder(r) }
                 acao
             }

@@ -218,6 +218,12 @@ internal fun MainActivity.escolherPlataforma() {
 }
 
 internal fun MainActivity.configurarPlataforma(t: Plataformas.Tipo) {
+    if (t.id == "interno") {
+        Plataformas.salvar(this, Plataformas.Config("interno", "", "", "", ""))
+        ajustes?.atualizar()
+        return responder("Pronto: loja sem site, com o catálogo aqui na ${Marca.nome}. Abra o Catálogo da loja para cadastrar os produtos " +
+            "(pela foto, pela nota de compra ou à mão). O robô do WhatsApp já passa a usar esse catálogo.")
+    }
     if (t.id == "floot") {
         Plataformas.salvar(this, Plataformas.Config("floot", "", "", "", ""))
         ajustes?.atualizar()

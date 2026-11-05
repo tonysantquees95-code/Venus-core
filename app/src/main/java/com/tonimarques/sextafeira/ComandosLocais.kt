@@ -454,7 +454,8 @@ object ComandosLocais {
             LOJA_TIRAR.matchEntire(c)?.let { m -> return acao("estoque_tirar", m.groupValues[2], m.groupValues[1].toInt()) }
         }
         if (!Regex("\\bvendi (?:mais )?\\d+(?:[.,]\\d+)? ?(?:reais|real|no pix|em dinheiro|no dinheiro|no cartao|por fora)\\b|\\bvendi r\\$").containsMatchIn(c)) {
-            LOJA_VENDI.matchEntire(c)?.let { m -> return acao("estoque_tirar", m.groupValues[2], m.groupValues[1].toInt()) }
+            // "vendi 2 géis": na loja sem site vira uma venda registrada; nas outras, tira do estoque
+            LOJA_VENDI.matchEntire(c)?.let { m -> return acao("venda", m.groupValues[2], m.groupValues[1].toInt()) }
         }
         LOJA_DEFINIR_A.matchEntire(c)?.let { m -> return acao("estoque_definir", m.groupValues[1], m.groupValues[2].toInt()) }
         LOJA_DEFINIR_B.matchEntire(c)?.let { m -> return acao("estoque_definir", m.groupValues[2], m.groupValues[1].toInt()) }
@@ -959,11 +960,19 @@ object ComandosLocais {
             "postage(?:ns|m) (?:diarias?|do dia|de hoje)|posts? (?:diarios?|do dia|de hoje)|pagina dos? (?:stories|story)|" +
             "(?:abre|abrir|abra|mostra|mostre|ver|quero ver) (?:os |o |as )?(?:stories|storys|storis|story))\\b"
     )
+    /** "abre o catálogo", "gera o catálogo em PDF": a tela do Catálogo da loja. */
+    private val CATALOGO = Regex(
+        "^(?:(?:abre|abrir|abra|mostra|mostre|ver|quero ver|gera|gerar|gere|faz|fazer|faca|monta|montar|monte|manda|mandar|cria|criar|crie) )?" +
+            "(?:o |meu |o meu |um |uma )?catalogo(?: da loja| de produtos| dos produtos| em pdf| pdf)?$"
+    )
+    private val REGISTRAR_VENDA = Regex("^(?:registra|registrar|registre|anota|anotar|anote|lanca|lancar|lance) (?:uma |a |nova )?venda$")
     private val STORY_AUTO_RESUMO = Regex("\\b(?:stories automaticos|story automatico|stories do dia|stories diarios)\\b")
 
     /** "conecta o Instagram", "como está o Instagram?", "comentários do Instagram". */
     fun instagram(c: String): Resultado? {
         val t = c.trimEnd('.', '!', '?')
+        if (CATALOGO.matches(t)) return Resultado.Acao("catalogo", emptyMap())
+        if (REGISTRAR_VENDA.matches(t)) return Resultado.Acao("catalogo_venda", emptyMap())
         if (STORY_AUTO_LIGA.matches(t)) return Resultado.Acao("story_auto", mapOf("ligado" to true))
         if (STORY_AUTO_DESLIGA.matches(t)) return Resultado.Acao("story_auto", mapOf("ligado" to false))
         if (STORY_AUTO_AGORA.matches(t)) return Resultado.Acao("story_auto_agora", emptyMap())

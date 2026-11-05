@@ -707,7 +707,7 @@ object StoriesDoDia {
         null
     }
 
-    /** O logo do site (baixado uma vez e guardado). */
+    /** O logo da loja: o escolhido no Catálogo (logo_loja.png) ou o do site, baixado uma vez e guardado. */
     private fun logo(ctx: Context): Bitmap? {
         val arquivo = File(ctx.filesDir, "logo_loja.png")
         if (!arquivo.exists() || arquivo.length() == 0L) {
@@ -727,6 +727,8 @@ object StoriesDoDia {
     private const val LOGO = "/_cdn/static/5fca2697-82ee-406c-9472-4a112f72f1b7-C-pia-de-C-pia-de-Logotipo-Boutique_20261026_013613_0000.png"
 
     private fun baixarImagem(url: String): Bitmap? {
+        // foto do catálogo da Vênus (loja sem site): já está no celular
+        if (url.startsWith("file://")) return BitmapFactory.decodeFile(url.removePrefix("file://"))
         val c = URL(url).openConnection() as HttpURLConnection
         return try {
             c.connectTimeout = 10_000
