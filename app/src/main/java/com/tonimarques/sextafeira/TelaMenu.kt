@@ -175,6 +175,10 @@ internal fun MainActivity.abrirMenu(@Suppress("UNUSED_PARAMETER") ancora: View) 
                     if (Plataformas.tipo(this) == "floot") "$t. Também funciona com Shopify, WooCommerce e Nuvemshop."
                     else "$t" + (if (ferramentas.loja.conectada) ", conectada." else ", falta a chave.")
                 }) { escolherPlataforma() },
+                TelaDeAjustes.Ajuste("Catálogo da loja", {
+                    if (Plataformas.tipo(this) == "interno") "Produtos, fotos, estoque, vendas e o catálogo em PDF para mandar às clientes."
+                    else "Catálogo em PDF com os produtos do site, para mandar no WhatsApp. Sem site? Escolha \"Sem site\" em Plataforma da loja."
+                }) { abrirCatalogo() },
                 TelaDeAjustes.Ajuste("Conectar à loja", {
                     ferramentas.loja.email?.let { "Conectada como $it. Pergunte: como foram as vendas hoje, tem pedido novo, o que está acabando. Toque para desconectar." }
                         ?: "Entre com o login de administrador do site para a $n consultar vendas, pedidos e estoque. A senha fica criptografada só no celular."

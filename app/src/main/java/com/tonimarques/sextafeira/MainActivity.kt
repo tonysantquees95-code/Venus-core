@@ -979,6 +979,8 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
                 decisao.nome == "story_auto" -> storiesAutomaticos(decisao.args["ligado"] as? Boolean)
                 decisao.nome == "story_auto_ver" -> previaDoStory()
                 decisao.nome == "stories_pagina" -> abrirStoriesDoDia()
+                decisao.nome == "catalogo" -> abrirCatalogo()
+                decisao.nome == "catalogo_venda" -> registrarVenda(null)
                 decisao.nome == "story_auto_agora" -> storyDoDiaAgora()
                 decisao.nome == "story_enquete" -> storyComEnqueteAgora()
                 decisao.nome == "diario_resumo" -> {

@@ -85,9 +85,17 @@ internal fun MainActivity.abrirCadastro(args: Map<String, Any>, fotoInicial: Byt
     f.cartao("Produto")
     val (blocoNome, nome) = f.campo("Nome", nomeFalado, "Ex.: Gel de massagem morango 60ml")
     f.adicionar(blocoNome, 2)
-    f.adicionar(f.rotulo("Categoria"), 12)
+    // sem site (catálogo na Vênus): a categoria é livre, do ramo de cada loja
+    val interno = loja.ehInterno
     val categoria = f.seletor(categorias.map { it.second }, categorias.indexOfFirst { it.first == Loja.categoriaProvavel(nomeFalado) }.coerceAtLeast(0))
-    f.adicionar(categoria, 5)
+    val (blocoCategoria, categoriaLivre) = f.campo("Categoria", "", "Ex.: Vestidos, Bolsas, Acessórios")
+    if (interno) f.adicionar(blocoCategoria, 12)
+    else {
+        f.adicionar(f.rotulo("Categoria"), 12)
+        f.adicionar(categoria, 5)
+    }
+    fun categoriaEscolhida(): Pair<String, String> =
+        if (interno) categoriaLivre.text.toString().trim().let { it to it.ifBlank { Perfil.ramo } } else categorias[categoria.selectedItemPosition]
 
     // --- preço, custo e estoque
     f.cartao("Preço e estoque")
@@ -149,7 +157,7 @@ internal fun MainActivity.abrirCadastro(args: Map<String, Any>, fotoInicial: Byt
 
     // --- descrição e vitrine
     f.cartao("Descrição")
-    val (blocoDescricao, descricao) = f.campo("Texto que aparece no site", "", "Descrição curta (até 300 letras)",
+    val (blocoDescricao, descricao) = f.campo(if (interno) "Descrição (vai para o catálogo)" else "Texto que aparece no site", "", "Descrição curta (até 300 letras)",
         InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE or InputType.TYPE_TEXT_FLAG_CAP_SENTENCES, linhas = 3)
     descricao.maxLines = 6
     descricao.filters = arrayOf(android.text.InputFilter.LengthFilter(300))
@@ -163,7 +171,7 @@ internal fun MainActivity.abrirCadastro(args: Map<String, Any>, fotoInicial: Byt
         }
         ia.isEnabled = false
         ia.text = "Escrevendo…"
-        val cat = categorias[categoria.selectedItemPosition].second
+        val cat = categoriaEscolhida().second
         val k = chave()
         val m = modelo()
         val fotoAtual = foto
@@ -178,7 +186,7 @@ internal fun MainActivity.abrirCadastro(args: Map<String, Any>, fotoInicial: Byt
         }.start()
     }
     if (chave().isNotBlank()) f.adicionar(ia, 10)
-    val mostrar = f.interruptor("Já mostrar no site", false)
+    val mostrar = f.interruptor(if (interno) "Já mostrar para as clientes" else "Já mostrar no site", interno)
     f.adicionar(mostrar, 12)
 
     cadastroFoto = { uri ->
@@ -208,13 +216,13 @@ internal fun MainActivity.abrirCadastro(args: Map<String, Any>, fotoInicial: Byt
             Toast.makeText(this, "Confira o preço de custo (ex.: 15,00).", Toast.LENGTH_SHORT).show()
             return@botao
         }
-        if (mostrar.isChecked && centavos == null) {
+        if (mostrar.isChecked && centavos == null && !interno) {
             Toast.makeText(this, "Para mostrar no site, informe o preço.", Toast.LENGTH_LONG).show()
             return@botao
         }
         val novo = Loja.NovoProduto(
             nome = n,
-            categoria = categorias[categoria.selectedItemPosition].first,
+            categoria = categoriaEscolhida().first,
             descricao = descricao.text.toString().trim().ifBlank { null },
             precoCentavos = centavos,
             estoque = estoque.text.toString().trim().toIntOrNull(),

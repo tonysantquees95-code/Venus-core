@@ -25,6 +25,7 @@ object Plataformas {
         Tipo("floot", "Floot (site próprio)", "Entre com o e-mail e a senha de administrador do site."),
         Tipo("shopify", "Shopify", "No painel da Shopify: Configurações → Apps → Desenvolver apps → criar app → dar acesso a produtos, estoque e pedidos → instalar e copiar o token da Admin API (começa com shpat_)."),
         Tipo("woocommerce", "WooCommerce", "No WordPress: WooCommerce → Configurações → Avançado → REST API → Adicionar chave, com permissão de leitura e escrita. Copie a chave (ck_…) e o segredo (cs_…)."),
+        Tipo("interno", "Sem site (catálogo na Vênus)", "Para quem vende pelo WhatsApp, Instagram e Facebook: os produtos, fotos, estoque e vendas ficam aqui na Vênus."),
         Tipo("nuvemshop", "Nuvemshop", "Precisa do token de acesso e do número da loja (user_id), que vêm de um app instalado na sua loja pelo portal de parceiros da Nuvemshop."),
     )
 
@@ -51,6 +52,7 @@ object Plataformas {
 
     /** O adaptador da plataforma escolhida; null para o Floot (que é o Loja.kt) ou se faltar configuração. */
     fun ativa(ctx: Context): Adaptador? {
+        if (tipo(ctx) == "interno") return CatalogoInterno(ctx.applicationContext ?: ctx)
         val c = config(ctx)
         if (c.chave.isBlank()) return null
         return when (c.tipo) {

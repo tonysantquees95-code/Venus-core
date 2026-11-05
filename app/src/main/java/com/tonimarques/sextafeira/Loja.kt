@@ -35,6 +35,8 @@ class Loja(private val contexto: Context) {
     /** Loja em outra plataforma (Shopify, WooCommerce, Nuvemshop); null = site no Floot (o padrão). */
     private val externa: Plataformas.Adaptador? get() = Plataformas.ativa(contexto)
     private val ehFloot get() = Plataformas.tipo(contexto) == "floot"
+    /** Sem site: catálogo dentro da Vênus. */
+    val ehInterno get() = Plataformas.tipo(contexto) == "interno"
 
     // ------------------------------------------------------------- conta
     val conectada get() = if (ehFloot) prefs.getString(P_EMAIL, null) != null && prefs.getString(P_SENHA, null) != null else externa != null
@@ -201,7 +203,10 @@ class Loja(private val contexto: Context) {
                     else enviar("/_api/admin/stock_update", JSONObject().put("productId", p.id).put("quantity", i.quantidade).put("mode", "add"))
                     estoque++
                 }
-                if (salvarCusto && ehFloot) {
+                if (salvarCusto && ehInterno) {
+                    CatalogoInterno(contexto).mudarProduto(p, "custo", i.custoUnitario)
+                    custos++
+                } else if (salvarCusto && ehFloot) {
                     val atual = produtos().firstOrNull { it.id == p.id }
                     val corpo = corpoDoProduto(atual?.bruto, "custo", i.custoUnitario)
                     if (corpo != null) {
@@ -239,7 +244,22 @@ class Loja(private val contexto: Context) {
                     else -> "Pronto: ${p.nome} foi escondido da loja."
                 }
             }
-            "custo" -> throw ErroDaLoja("O custo do produto só fica guardado no site do Floot por enquanto.")
+            "venda" -> {
+                val p = a.produto!!
+                if (x !is CatalogoInterno) {
+                    val atual = p.estoque ?: throw ErroDaLoja("${p.nome} está sem controle de estoque.")
+                    x.definirEstoque(p, (atual - a.valor!!).coerceAtLeast(0))
+                    return "Pronto: ${p.nome} agora tem ${plural((atual - a.valor).coerceAtLeast(0), "unidade", "unidades")} no estoque da ${x.nome}."
+                }
+                val v = x.registrarVenda("Cliente", listOf(Triple(p, a.valor!!, null)), "não informado", "não informada")
+                return "Pronto: venda registrada (${dinheiro(v.totalCentavos)})." + (p.estoque?.let { " ${p.nome} fica com ${(it - a.valor).coerceAtLeast(0)} no estoque." } ?: "")
+            }
+            "custo" -> {
+                if (x !is CatalogoInterno) throw ErroDaLoja("O custo do produto só fica guardado no site do Floot ou no catálogo da Vênus por enquanto.")
+                val p = a.produto!!
+                x.mudarProduto(p, "custo", a.valor)
+                return "Pronto: custo de ${p.nome} cadastrado em ${dinheiro(a.valor!!)}."
+            }
             "entregue", "status" -> {
                 val o = a.pedido!!
                 val status = if (a.tipo == "entregue") "delivered" else a.status!!
@@ -265,7 +285,8 @@ class Loja(private val contexto: Context) {
     fun pedido(id: Int): Pedido? = pedidos().firstOrNull { it.id == id }
 
     /** Monta a pergunta de confirmação (nada muda no site ainda). */
-    fun prepararAlteracao(tipo: String, falado: String, valor: Int?): Preparo = montarAlteracao(produtos(), tipo, falado, valor)
+    fun prepararAlteracao(tipo: String, falado: String, valor: Int?): Preparo =
+        montarAlteracao(produtos(), if (tipo == "venda" && !ehInterno) "estoque_tirar" else tipo, falado, valor)
 
     fun prepararEntregue(id: Int): Preparo = montarEntregue(pedidos(), id)
 
@@ -335,6 +356,7 @@ class Loja(private val contexto: Context) {
     }
 
     fun enviarFoto(jpeg: ByteArray): String {
+        if (ehInterno) return CatalogoInterno(contexto).guardarFoto(jpeg)
         val r = enviar("/_api/admin/upload", JSONObject().put("contentType", "image/jpeg").put("sizeBytes", jpeg.size))
         val destino = r.optString("presignedUrl").ifBlank { throw ErroDaLoja("O site não aceitou a foto.") }
         val url = r.optString("url").ifBlank { throw ErroDaLoja("O site não devolveu o endereço da foto.") }
@@ -362,6 +384,11 @@ class Loja(private val contexto: Context) {
 
     /** Cria um produto novo no site. */
     fun cadastrar(p: NovoProduto): String {
+        if (ehInterno) {
+            CatalogoInterno(contexto).adicionar(p)
+            val onde = if (p.ativo) "já aparece para as clientes (robô e catálogo)" else "ficou escondido até você mostrar"
+            return "Pronto: ${p.nome} cadastrado no catálogo" + (p.precoCentavos?.let { " por ${dinheiro(it)}" } ?: "") + " e $onde."
+        }
         enviar("/_api/admin/product_save", corpoDoNovo(p))
         val onde = if (p.ativo) "já aparece no site" else "ficou escondido do site até você mostrar (diga: mostra o ${p.nome} no site)"
         return "Pronto: ${p.nome} cadastrado" + (p.precoCentavos?.let { " por ${dinheiro(it)}" } ?: "") + " e $onde."
@@ -867,7 +894,7 @@ class Loja(private val contexto: Context) {
                 p.estoque <= 0 -> "esgotado"
                 else -> "${p.estoque} un."
             }
-            "${p.nome} | ${dinheiro(preco)}${if (promo != null) " (promoção, de ${dinheiro(promo)})" else ""} | ${dinheiro(pix)} | $estoque | ${p.link ?: "$SITE/produto/${p.id}"}"
+            "${p.nome} | ${dinheiro(preco)}${if (promo != null) " (promoção, de ${dinheiro(promo)})" else ""} | ${dinheiro(pix)} | $estoque | ${p.link?.ifBlank { "sem site: a compra é combinada na conversa" } ?: "$SITE/produto/${p.id}"}"
         }
 
         /** As categorias do site (id, nome). */
@@ -978,6 +1005,16 @@ class Loja(private val contexto: Context) {
                     val novo = if (tipo == "estoque_somar") atual + n else atual - n
                     val verbo = if (tipo == "estoque_somar") "Somar ${plural(n, "unidade", "unidades")} ao estoque de" else "Tirar ${plural(n, "unidade", "unidades")} do estoque de"
                     Preparo("$verbo ${p.nome}? Fica com $novo (hoje tem $atual).$CONFIRMA", Alteracao("estoque_definir", p, valor = novo))
+                }
+                "venda" -> {
+                    val n = valor ?: return Preparo("Quantas unidades?", null)
+                    if (n <= 0) return Preparo("Me diga uma quantidade maior que zero.", null)
+                    if (atual != null && n > atual) {
+                        return Preparo("${p.nome} só tem ${plural(atual, "unidade", "unidades")} no estoque. Confira a quantidade. Nada foi mudado.", null)
+                    }
+                    val total = p.precoCentavos?.let { " por ${dinheiro(it * n)}" } ?: ""
+                    val resto = if (atual != null) " O estoque fica com ${atual - n}." else ""
+                    Preparo("Registrar a venda de $n ${if (n == 1) "unidade" else "unidades"} de ${p.nome}$total?$resto$CONFIRMA", Alteracao("venda", p, valor = n))
                 }
                 "estoque_definir" -> {
                     val n = valor ?: return Preparo("Qual a quantidade?", null)
