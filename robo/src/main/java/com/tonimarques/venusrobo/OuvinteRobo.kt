@@ -41,6 +41,8 @@ class OuvinteRobo : NotificationListenerService() {
     private fun tratar(sbn: StatusBarNotification) {
         val pacote = sbn.packageName
         if (pacote !in Robo.NOMES.keys || !Robo.ligado(this) || !Robo.canalLigado(this, pacote)) return
+        // período de testes da Vênus encerrado sem código de liberação: o robô também pausa
+        if (RegrasDaVenus.ler(this)?.liberada == false) return
         val n = sbn.notification ?: return
         if (n.flags and Notification.FLAG_GROUP_SUMMARY != 0) return
         val extras = n.extras ?: return
