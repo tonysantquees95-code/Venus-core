@@ -193,6 +193,16 @@
             </intent-filter>
         </receiver>
 
+        <!-- Pedidos da página Publicações do site: confere a cada 2 minutos -->
+        <receiver
+            android:name=".AlarmeDosPedidos"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
+
         <!-- Avisos da loja: olha pedidos e estoque de tempos em tempos -->
         <service
             android:name=".VigiaDaLoja"

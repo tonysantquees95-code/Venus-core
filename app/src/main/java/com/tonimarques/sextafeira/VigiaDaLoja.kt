@@ -35,6 +35,11 @@ class VigiaDaLoja : JobService() {
             } catch (e: Exception) {
                 // sem internet ou site fora do ar: tenta de novo na próxima rodada
             }
+            try {
+                // rede de segurança dos pedidos da página Publicações (o normal é o alarme de 2 minutos)
+                PedidosDoSite.conferir(applicationContext)
+            } catch (e: Exception) {
+            }
             if (!parar) jobFinished(params, false)
         }.start()
         return true
@@ -99,7 +104,7 @@ class VigiaDaLoja : JobService() {
         /** Garante que está agendado (chamado ao abrir o app, caso o Android tenha esquecido). */
         fun garantir(c: Context) {
             // também serve de rede de segurança dos stories: a cada 15 minutos confere se algum ficou para trás
-            if (!ligado(c) && !StoriesDoDia.ligado(c)) return
+            if (!ligado(c) && !StoriesDoDia.ligado(c) && !PedidosDoSite.ativo(c)) return
             val agendador = c.getSystemService(JobScheduler::class.java)
             if (agendador.allPendingJobs.none { it.id == JOB_ID }) agendar(c)
         }

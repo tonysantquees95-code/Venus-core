@@ -70,7 +70,7 @@ object RegrasDaLoja {
             try {
                 val loja = Loja(ctx)
                 if (loja.conectada && Plataformas.tipo(ctx) == "floot") {
-                    loja.enviarRegrasDeVenda(Perfil.regras.json())
+                    loja.enviarRegrasDeVenda(Perfil.regras, Perfil.loja)
                     prefs.edit().putString("venda_site", marca).apply()
                     Diario.anotar(ctx, "loja", "Regras de venda enviadas ao site", "automatico")
                 }
