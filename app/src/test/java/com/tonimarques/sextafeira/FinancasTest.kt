@@ -38,7 +38,7 @@ class FinancasTest {
         // vender unidades continua sendo baixa no estoque
         val v = acao("vendi 3 gel kgel")!!
         assertEquals("loja_alterar", v.nome)
-        assertEquals("estoque_tirar", v.args["tipo"])
+        assertEquals("venda", v.args["tipo"]) // baixa no estoque (com site) ou venda registrada (sem site)
         // custo de produto continua sendo custo; "paguei X no Y" pode virar despesa se não for produto
         val c = acao("paguei 50 no gás")!!
         assertEquals("loja_alterar", c.nome)
