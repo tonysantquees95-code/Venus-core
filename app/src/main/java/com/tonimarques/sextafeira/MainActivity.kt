@@ -360,6 +360,13 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         nomes.addView(titulo)
         nomes.addView(subtitulo)
         cabecalho.addView(nomes, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        // Publicações (stories, posts, Instagram e status) ao lado dos ajustes
+        val botaoPublicacoes = botaoIcone(R.drawable.ic_publicacoes, "Publicações", COR_TEXTO_APAGADO) { abrirPublicacoes() }.apply {
+            clearColorFilter() // o ícone já vem com o degradê da Vênus
+            background = vidro(Color.argb(20, 227, 107, 208), Color.argb(70, 227, 107, 208), 22)
+            setPadding(dp(9), dp(9), dp(9), dp(9))
+        }
+        cabecalho.addView(botaoPublicacoes, LinearLayout.LayoutParams(dp(44), dp(44)).apply { marginEnd = dp(6) })
         val botaoMenu = botaoIcone(R.drawable.ic_menu_futuro, "Menu", COR_TEXTO_APAGADO) { }
         botaoMenu.setOnClickListener { abrirMenu(it) }
         cabecalho.addView(botaoMenu)
@@ -2407,25 +2414,6 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
                         VigiaDaLoja.definirResumo(this, !VigiaDaLoja.resumoLigado(this))
                         ajustes?.atualizar()
                     },
-                    TelaDeAjustes.Ajuste("Instagram da loja", {
-                        Instagram.usuario(this)?.let {
-                            "Conectado como @$it. Os posts programados saem sozinhos na hora marcada. Pergunte: como está o Instagram, comentários do Instagram."
-                        } ?: "Conecte com o token da Meta para a $n publicar os posts programados sozinha, mostrar seguidores e responder comentários."
-                    }) { conectarInstagram() },
-                    TelaDeAjustes.Ajuste("Stories automáticos (manhã e tarde)", { StoriesDoDia.descricao(this) }, { StoriesDoDia.ligado(this) }) {
-                        StoriesDoDia.definirLigado(this, !StoriesDoDia.ligado(this))
-                        ajustes?.atualizar()
-                    },
-                    TelaDeAjustes.Ajuste("Story da tarde com enquete", {
-                        "A API do Instagram não põe adesivos. À tarde a $n prepara a imagem, copia a pergunta e abre o Instagram: " +
-                            "você toca em Enquete, cola e publica. Desligado: a tarde também sai sozinha, sem enquete."
-                    }, { StoriesDoDia.tardeInterativa(this) }) {
-                        StoriesDoDia.definirTardeInterativa(this, !StoriesDoDia.tardeInterativa(this))
-                        ajustes?.atualizar()
-                    },
-                    TelaDeAjustes.Ajuste("Horários dos stories", {
-                        "Manhã às ${StoriesDoDia.horaTexto(StoriesDoDia.horario(this, "manha"))} e tarde às ${StoriesDoDia.horaTexto(StoriesDoDia.horario(this, "tarde"))}. Toque para mudar."
-                    }) { escolherHorariosDosStories() },
                 )
             ),
             TelaDeAjustes.Secao(
@@ -2434,7 +2422,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
                         "Responde só com os próprios recursos (comandos, pesquisa e notícias), sem usar o Gemini."
                     }, MENU_INDEPENDENTE) { modoIndependente() },
                     item("Chave do Gemini", { if (chave().isBlank()) "Não configurada" else "Configurada" }, MENU_CHAVE),
-                    TelaDeAjustes.Ajuste("IA reserva (quando o Gemini travar)", {
+                    TelaDeAjustes.Ajuste("IA reserva (Groq ou Grok)", {
                         if (!SegundaIA.configurada(this)) "Não configurada. Com uma chave grátis da Groq, a $n continua respondendo quando o Gemini falhar ou ficar sem cota."
                         else "Usando ${SegundaIA.provedor(this).nome}." + (if (SegundaIA.ultimaVez > 0) " Última vez que ajudou: ${Diario.hora(SegundaIA.ultimaVez)}." else "")
                     }) { pedirIAReserva() },
@@ -2492,6 +2480,74 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
             ),
         )
         ajustes = TelaDeAjustes(this, versaoDoApp(), secoes).also {
+            it.setOnDismissListener { ajustes = null }
+            it.show()
+        }
+    }
+
+    // ---------------------------------------------------------------- publicações
+    /** Tudo de publicação num lugar só: stories do dia, automático, enquete, horários, posts, ideias e contas. */
+    private fun abrirPublicacoes() {
+        if (ajustes?.isShowing == true) return
+        val n = Marca.nome
+        val secoes = listOf(
+            TelaDeAjustes.Secao(
+                "Stories do dia", listOf(
+                    TelaDeAjustes.Ajuste("Ver os stories de hoje", {
+                        "Prévia da manhã e da tarde, Publicar Instagram, Publicar WhatsApp e Gerar outro. Também abre ao dizer: stories do dia."
+                    }) { ajustes?.dismiss(); abrirStoriesDoDia() },
+                    TelaDeAjustes.Ajuste("Stories automáticos (manhã e tarde)", { StoriesDoDia.descricao(this) }, { StoriesDoDia.ligado(this) }) {
+                        StoriesDoDia.definirLigado(this, !StoriesDoDia.ligado(this))
+                        ajustes?.atualizar()
+                    },
+                    TelaDeAjustes.Ajuste("Story da tarde com enquete", {
+                        "A API do Instagram não põe adesivos. À tarde a $n prepara a imagem, copia a pergunta e abre o Instagram: " +
+                            "você toca em Enquete, cola e publica. Desligado: a tarde também sai sozinha, sem enquete."
+                    }, { StoriesDoDia.tardeInterativa(this) }) {
+                        StoriesDoDia.definirTardeInterativa(this, !StoriesDoDia.tardeInterativa(this))
+                        ajustes?.atualizar()
+                    },
+                    TelaDeAjustes.Ajuste("Horários dos stories", {
+                        "Manhã às ${StoriesDoDia.horaTexto(StoriesDoDia.horario(this, "manha"))} e tarde às ${StoriesDoDia.horaTexto(StoriesDoDia.horario(this, "tarde"))}. Toque para mudar."
+                    }) { escolherHorariosDosStories() },
+                )
+            ),
+            TelaDeAjustes.Secao(
+                "Posts no Instagram", listOf(
+                    TelaDeAjustes.Ajuste("Programar um post", { "Feed ou story, com foto, legenda e dia e hora para sair sozinho." }) {
+                        ajustes?.dismiss()
+                        programarPost(emptyMap())
+                    },
+                    TelaDeAjustes.Ajuste("Posts programados", {
+                        val k = Postagens.pendentes(this).size
+                        if (k == 0) "Nenhum post na fila." else "$k ${if (k == 1) "post na fila" else "posts na fila"}. Toque para ver, mudar ou apagar."
+                    }) {
+                        ajustes?.dismiss()
+                        listarPosts()
+                    },
+                    TelaDeAjustes.Ajuste("Ideias de post", { "As ideias que a $n estudou para a semana, prontas para virar post." }) {
+                        ajustes?.dismiss()
+                        mostrarIdeiasDePost()
+                    },
+                )
+            ),
+            TelaDeAjustes.Secao(
+                "Contas e respostas", listOf(
+                    TelaDeAjustes.Ajuste("Instagram da loja", {
+                        Instagram.usuario(this)?.takeIf { Instagram.conectado(this) }?.let {
+                            "Conectado como @$it. Os posts programados e os stories saem sozinhos."
+                        } ?: "Desconectado: os stories chegam no aviso para postar com um toque. Toque para colar o token da Meta."
+                    }) { conectarInstagram() },
+                    TelaDeAjustes.Ajuste("Respostas do Instagram (Vênus Robô)", {
+                        "As respostas prontas para colar nas Perguntas frequentes e Respostas salvas do Instagram."
+                    }) {
+                        val robo = packageManager.getLaunchIntentForPackage(Atualizador.PACOTE_ROBO)
+                        if (robo != null) startActivity(robo) else responder("O Vênus Robô não está instalado neste celular.")
+                    },
+                )
+            ),
+        )
+        ajustes = TelaDeAjustes(this, versaoDoApp(), secoes, "PUBLICAÇÕES").also {
             it.setOnDismissListener { ajustes = null }
             it.show()
         }
@@ -3902,7 +3958,10 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         }
         f.cartao("Automático")
         f.adicionar(f.aviso(StoriesDoDia.descricao(this)), 2)
-        f.acoes(f.botao("Fechar", primario = true) { f.fechar() })
+        f.acoes(f.botao("Fechar", primario = true) { f.fechar() }, f.botao("Horários e ajustes") {
+            f.fechar()
+            abrirPublicacoes()
+        })
         f.mostrar()
     }
 
