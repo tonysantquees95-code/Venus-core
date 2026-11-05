@@ -238,6 +238,7 @@ object StoriesDoDia {
             Registro.anotar(ctx, "erro", "story no painel → ${e.message}")
         }
         val arquivo = guardarParaWhatsApp(ctx, jpeg)
+        registrar(ctx, turno, arquivo, tema, automatico = true, enquete = false)
         prefs(ctx).edit().putBoolean(marca, true)
             .putString("ultimo", "${nomeTurno(turno)} de ${SimpleDateFormat("dd/MM", Locale("pt", "BR")).format(Date())}: \"${tema.titulo}\"").apply()
         Diario.anotar(ctx, "instagram", "Story do dia (${nomeTurno(turno)}) publicado: ${tema.titulo}", "automatico")
@@ -246,6 +247,67 @@ object StoriesDoDia {
     }
 
     fun nomeTurno(turno: String) = if (turno == "manha") "manhã" else "tarde"
+
+    // ------------------------------------------------------------------ registro do dia (página Stories do dia)
+    /** O story de um turno de hoje: a imagem, o tema e onde já foi publicado. */
+    data class Registro(
+        val turno: String, val arquivo: File, val titulo: String, val texto: String, val pergunta: String,
+        val automatico: Boolean, val instagram: Boolean, val whatsapp: Boolean,
+    )
+
+    private fun chaveRegistro(turno: String) = "registro_${hoje()}_$turno"
+
+    private fun registrar(ctx: Context, turno: String, arquivo: File, tema: Tema, automatico: Boolean, enquete: Boolean) {
+        val p = prefs(ctx)
+        val e = p.edit()
+        // só guarda os de hoje
+        p.all.keys.filter { it.startsWith("registro_") && !it.startsWith("registro_${hoje()}_") }.forEach { e.remove(it) }
+        e.putString(chaveRegistro(turno), JSONObject()
+            .put("arquivo", arquivo.name).put("titulo", tema.titulo).put("texto", tema.texto)
+            .put("pergunta", if (enquete) tema.pergunta else "")
+            .put("automatico", automatico).put("instagram", automatico).put("whatsapp", false).toString())
+        e.apply()
+    }
+
+    fun registroDeHoje(ctx: Context, turno: String): Registro? {
+        val o = try {
+            JSONObject(prefs(ctx).getString(chaveRegistro(turno), null) ?: return null)
+        } catch (e: Exception) {
+            return null
+        }
+        return Registro(
+            turno, File(FotoProvider.pasta(ctx), o.optString("arquivo")), o.optString("titulo"), o.optString("texto"), o.optString("pergunta"),
+            o.optBoolean("automatico"), o.optBoolean("instagram"), o.optBoolean("whatsapp"),
+        )
+    }
+
+    /** Marca que o story do turno foi aberto para publicar no [canal] ("instagram" ou "whatsapp"). */
+    fun marcarCanal(ctx: Context, turno: String, canal: String) {
+        val p = prefs(ctx)
+        val o = try {
+            JSONObject(p.getString(chaveRegistro(turno), null) ?: return)
+        } catch (e: Exception) {
+            return
+        }
+        p.edit().putString(chaveRegistro(turno), o.put(canal, true).toString()).apply()
+        Diario.anotar(ctx, "instagram", "Story da ${nomeTurno(turno)} aberto para publicar no ${if (canal == "instagram") "Instagram" else "WhatsApp"}", "tela")
+    }
+
+    /**
+     * Gera outro story para o turno (tema e arte novos), sem publicar: fica na página para você publicar.
+     * Serve também para preparar antes da hora. Bloqueante: chame fora da thread principal.
+     */
+    fun refazer(ctx: Context, turno: String): Registro {
+        val enquete = turno == "tarde" && tardeInterativa(ctx)
+        val tema = proximoTema(ctx)
+        val jpeg = arte(ctx, tema, espacoEnquete = enquete)
+        usar(ctx, tema)
+        val arquivo = guardarParaWhatsApp(ctx, jpeg)
+        registrar(ctx, turno, arquivo, tema, automatico = false, enquete = enquete)
+        prefs(ctx).edit().putBoolean("feito_${hoje()}_$turno", true).apply()
+        Diario.anotar(ctx, "instagram", "Story da ${nomeTurno(turno)} gerado de novo pela página: ${tema.titulo}", "tela")
+        return registroDeHoje(ctx, turno)!!
+    }
 
     /**
      * Quando a publicação automática não dá (Instagram desconectado ou recusando): monta a arte, guarda para o
@@ -256,6 +318,7 @@ object StoriesDoDia {
         val jpeg = jpegPronto ?: arte(ctx, tema)
         usar(ctx, tema)
         val arquivo = guardarParaWhatsApp(ctx, jpeg)
+        registrar(ctx, turno, arquivo, tema, automatico = false, enquete = false)
         prefs(ctx).edit().putBoolean(marca, true)
             .putString("ultimo", "${nomeTurno(turno)} de ${SimpleDateFormat("dd/MM", Locale("pt", "BR")).format(Date())} (para postar com um toque): \"${tema.titulo}\"").apply()
         Diario.anotar(ctx, "instagram", "Story da ${nomeTurno(turno)} preparado para postar com um toque ($motivo): ${tema.titulo}", "automatico", ok = false)
@@ -294,6 +357,7 @@ object StoriesDoDia {
         val jpeg = arte(ctx, tema, espacoEnquete = true)
         usar(ctx, tema)
         val arquivo = guardarParaWhatsApp(ctx, jpeg)
+        registrar(ctx, "tarde", arquivo, tema, automatico = false, enquete = true)
         // manda para a página Stories do painel: o site avisa o celular da Natália (e de quem ligou os avisos)
         var idNoPainel = 0
         try {
