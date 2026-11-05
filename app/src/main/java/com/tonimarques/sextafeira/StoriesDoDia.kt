@@ -250,7 +250,7 @@ object StoriesDoDia {
 
     // ------------------------------------------------------------------ registro do dia (página Stories do dia)
     /** O story de um turno de hoje: a imagem, o tema e onde já foi publicado. */
-    data class Registro(
+    data class StoryDeHoje(
         val turno: String, val arquivo: File, val titulo: String, val texto: String, val pergunta: String,
         val automatico: Boolean, val instagram: Boolean, val whatsapp: Boolean,
     )
@@ -269,13 +269,13 @@ object StoriesDoDia {
         e.apply()
     }
 
-    fun registroDeHoje(ctx: Context, turno: String): Registro? {
+    fun registroDeHoje(ctx: Context, turno: String): StoryDeHoje? {
         val o = try {
             JSONObject(prefs(ctx).getString(chaveRegistro(turno), null) ?: return null)
         } catch (e: Exception) {
             return null
         }
-        return Registro(
+        return StoryDeHoje(
             turno, File(FotoProvider.pasta(ctx), o.optString("arquivo")), o.optString("titulo"), o.optString("texto"), o.optString("pergunta"),
             o.optBoolean("automatico"), o.optBoolean("instagram"), o.optBoolean("whatsapp"),
         )
@@ -297,7 +297,7 @@ object StoriesDoDia {
      * Gera outro story para o turno (tema e arte novos), sem publicar: fica na página para você publicar.
      * Serve também para preparar antes da hora. Bloqueante: chame fora da thread principal.
      */
-    fun refazer(ctx: Context, turno: String): Registro {
+    fun refazer(ctx: Context, turno: String): StoryDeHoje {
         val enquete = turno == "tarde" && tardeInterativa(ctx)
         val tema = proximoTema(ctx)
         val jpeg = arte(ctx, tema, espacoEnquete = enquete)
