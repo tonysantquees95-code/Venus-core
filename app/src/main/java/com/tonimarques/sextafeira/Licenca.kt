@@ -32,7 +32,7 @@ object Licenca {
 
     const val DIAS_DE_TESTE = 30
     /** Chave pública do administrador (X.509, base64). Vazia até o dono criar a chave nos ajustes e mandar para embutir. */
-    const val CHAVE_PUBLICA = ""
+    const val CHAVE_PUBLICA = "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEJxSy4bs6oprS9X4ke9cu0JJgq0L39UCjjA9aCh/SYDdelBVC2UfLF8idqbXbKdw7CZlHGYYMFrgiUwK5jDP9ew=="
     const val SEM_PRAZO = "99991231"
 
     private const val PREFS = "licenca"
