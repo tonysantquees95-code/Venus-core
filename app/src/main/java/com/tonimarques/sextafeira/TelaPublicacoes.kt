@@ -338,7 +338,7 @@ internal fun MainActivity.postarPeloApp(p: Postagens.Post) {
     val arquivo = java.io.File(p.foto)
     if (!arquivo.exists()) return responder("A foto desse post sumiu. Programe de novo.")
     if (p.legenda.isNotBlank()) {
-        (getSystemService(CLIPBOARD_SERVICE) as android.content.ClipboardManager)
+        (getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager)
             .setPrimaryClip(android.content.ClipData.newPlainText("Legenda", p.legenda))
     }
     val (copia, uri) = FotoProvider.novaFoto(this)
@@ -395,7 +395,7 @@ internal fun MainActivity.abrirStoryComEnquete(arquivo: String, pergunta: String
     val f = java.io.File(FotoProvider.pasta(this), arquivo)
     if (!f.exists()) return responder("A imagem desse story não está mais aqui (passou mais de um dia). Diga: prepara o story com enquete.")
     if (pergunta.isNotBlank()) {
-        (getSystemService(CLIPBOARD_SERVICE) as android.content.ClipboardManager).setPrimaryClip(android.content.ClipData.newPlainText("Enquete", pergunta))
+        (getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager).setPrimaryClip(android.content.ClipData.newPlainText("Enquete", pergunta))
     }
     try {
         whatsappDepois = f
@@ -439,7 +439,7 @@ internal fun MainActivity.abrirStoriesDoDia() {
         f.adicionar(f.aviso("\"${r.titulo}\"\n$situacao" + (if (r.pergunta.isNotBlank()) "\nEnquete: ${r.pergunta} (copio ao abrir o Instagram)" else "")), 8)
         val instagram = f.botao("Publicar Instagram", primario = !r.instagram && !r.automatico) {
             if (r.pergunta.isNotBlank()) {
-                (getSystemService(CLIPBOARD_SERVICE) as android.content.ClipboardManager).setPrimaryClip(android.content.ClipData.newPlainText("Enquete", r.pergunta))
+                (getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager).setPrimaryClip(android.content.ClipData.newPlainText("Enquete", r.pergunta))
             }
             try {
                 startActivity(StoriesDoDia.intencaoInstagram(r.arquivo))

@@ -44,16 +44,16 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
 
     internal enum class Escuta { NADA, VIGILIA, COMANDO }
 
-    protected lateinit var orbe: Orbe
-    protected lateinit var titulo: TextView
-    protected lateinit var status: TextView
-    protected lateinit var parcial: TextView
-    protected lateinit var mensagens: LinearLayout
-    protected lateinit var rolagem: ScrollView
-    protected lateinit var campo: EditText
-    protected lateinit var botaoMic: ImageButton
-    protected lateinit var botaoEnviar: ImageButton
-    protected lateinit var botaoAnexar: ImageButton
+    internal lateinit var orbe: Orbe
+    internal lateinit var titulo: TextView
+    internal lateinit var status: TextView
+    internal lateinit var parcial: TextView
+    internal lateinit var mensagens: LinearLayout
+    internal lateinit var rolagem: ScrollView
+    internal lateinit var campo: EditText
+    internal lateinit var botaoMic: ImageButton
+    internal lateinit var botaoEnviar: ImageButton
+    internal lateinit var botaoAnexar: ImageButton
     internal lateinit var bandejaAnexos: LinearLayout
     internal lateinit var rolagemAnexos: android.widget.HorizontalScrollView
 
@@ -72,7 +72,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
     internal lateinit var ferramentas: Ferramentas
 
     internal val cerebro = Cerebro()
-    protected val principal = Handler(Looper.getMainLooper())
+    internal val principal = Handler(Looper.getMainLooper())
 
     internal var gemini: Gemini? = null
     internal var tts: TextToSpeech? = null
@@ -238,10 +238,10 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         super.onDestroy()
     }
 
-    protected open fun mensagemInicial(): String? = "Olá! Diga \"${Marca.nome}, ativar\", toque no orbe ou digite abaixo."
+    internal open fun mensagemInicial(): String? = "Olá! Diga \"${Marca.nome}, ativar\", toque no orbe ou digite abaixo."
 
     /** Quando a conversa termina e não há mais nada a ouvir. Na tela principal, volta a esperar a ativação. */
-    protected open fun aoFicarOcioso() {
+    internal open fun aoFicarOcioso() {
         agendarVigilia(500)
     }
 
@@ -278,7 +278,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         }
     }
 
-    protected fun estaOcioso() = !ocupado && !falando && escuta == Escuta.NADA
+    internal fun estaOcioso() = !ocupado && !falando && escuta == Escuta.NADA
 
     internal fun tratarIntent(intent: Intent?) {
         val acao = intent?.action ?: return
@@ -320,7 +320,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
     }
 
     // --------------------------------------------------------------------- tela
-    protected open fun montarTela(): View {
+    internal open fun montarTela(): View {
         val raiz = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             background = GradientDrawable(
@@ -474,7 +474,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         return raiz
     }
 
-    protected fun aplicarCor(cor: Int) {
+    internal fun aplicarCor(cor: Int) {
         corAtual = cor
         titulo.setTextColor(cor)
         botaoMic.setColorFilter(cor)
@@ -572,7 +572,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         janela.showAsDropDown(ancora, 0, -(caixa.measuredHeight + ancora.height + dp(8)))
     }
 
-    protected fun botaoIcone(icone: Int, descricao: String, cor: Int, acao: () -> Unit) = ImageButton(this).apply {
+    internal fun botaoIcone(icone: Int, descricao: String, cor: Int, acao: () -> Unit) = ImageButton(this).apply {
         setImageResource(icone)
         setColorFilter(cor)
         contentDescription = descricao
@@ -581,7 +581,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         setOnClickListener { acao() }
     }
 
-    protected fun vidro(preenchimento: Int, borda: Int, raio: Int) = GradientDrawable().apply {
+    internal fun vidro(preenchimento: Int, borda: Int, raio: Int) = GradientDrawable().apply {
         setColor(preenchimento)
         setStroke(dp(1).coerceAtLeast(1), borda)
         cornerRadius = dp(raio).toFloat()
@@ -589,13 +589,13 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
 
     internal fun comAlfa(cor: Int, alfa: Int) = Color.argb(alfa, Color.red(cor), Color.green(cor), Color.blue(cor))
 
-    protected fun dp(valor: Int) = (valor * resources.displayMetrics.density).toInt()
+    internal fun dp(valor: Int) = (valor * resources.displayMetrics.density).toInt()
 
     /**
      * Se a conversa atual ainda está em andamento (menos de 3 horas sem falar), mostra as últimas mensagens dela.
      * Senão, a tela abre em branco: a conversa antiga fica guardada no histórico e a próxima começa do zero.
      */
-    protected open fun carregarConversaAnterior() {
+    internal open fun carregarConversaAnterior() {
         val anteriores = try {
             memoria.conversaRecente()?.let { memoria.mensagensDaConversa(it, 12) }.orEmpty()
         } catch (e: Exception) {
@@ -762,7 +762,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         }.start()
     }
 
-    protected open fun adicionarMensagem(texto: String, doUsuario: Boolean, salvar: Boolean = true): TextView {
+    internal open fun adicionarMensagem(texto: String, doUsuario: Boolean, salvar: Boolean = true): TextView {
         // Contexto da conversa: valores e nomes citados ficam disponíveis para as próximas contas.
         if (salvar) Calculadora.lembrar(texto)
         if (salvar) {
@@ -2029,7 +2029,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
     }
 
     // ------------------------------------------------------- escuta (microfone)
-    protected open fun vigiliaLigada() = prefs.getBoolean(PREF_VIGILIA, true)
+    internal open fun vigiliaLigada() = prefs.getBoolean(PREF_VIGILIA, true)
 
     internal fun temMicrofone() =
         checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
@@ -2105,7 +2105,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         }
     }
 
-    protected fun alternarEscuta() {
+    internal fun alternarEscuta() {
         when (escuta) {
             Escuta.COMANDO -> {
                 escutaAte = 0L
