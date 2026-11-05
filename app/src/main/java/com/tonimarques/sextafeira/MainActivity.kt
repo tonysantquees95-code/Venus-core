@@ -2406,6 +2406,10 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
                         if (!SegundaIA.configurada(this)) "Não configurada. Com uma chave grátis da Groq, a $n continua respondendo quando o Gemini falhar ou ficar sem cota."
                         else "Usando ${SegundaIA.provedor(this).nome}." + (if (SegundaIA.ultimaVez > 0) " Última vez que ajudou: ${Diario.hora(SegundaIA.ultimaVez)}." else "")
                     }) { pedirIAReserva() },
+                    TelaDeAjustes.Ajuste("Segunda reserva: Cerebras", {
+                        if (SegundaIA.chaveCerebras(this).isBlank()) "Não configurada. Grátis (1 milhão de tokens por dia): entra quando a Groq atingir o limite, antes do Gemini."
+                        else "Configurada: entra quando a ${SegundaIA.provedor(this).nome.substringBefore(" (")} atingir o limite, antes do Gemini."
+                    }) { pedirCerebras() },
                     TelaDeAjustes.Ajuste("IA reserva como principal", {
                         if (!SegundaIA.configurada(this)) "Configure a IA reserva primeiro."
                         else if (SegundaIA.principal(this)) "Ligado: a ${SegundaIA.provedor(this).nome.substringBefore(" (")} responde primeiro (mais rápida) e o Gemini entra se ela falhar. PDF, áudio e busca no Google continuam no Gemini."
@@ -3859,6 +3863,47 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
             .setNeutralButton("Criar chave") { _, _ ->
                 try {
                     startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(opcoes[escolhido].site)))
+                } catch (e: ActivityNotFoundException) {
+                    Toast.makeText(this, "Nenhum navegador encontrado.", Toast.LENGTH_SHORT).show()
+                }
+            }
+            .setNegativeButton("Cancelar", null)
+            .show()
+    }
+
+    private fun pedirCerebras() {
+        val caixa = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(20), dp(8), dp(20), 0)
+        }
+        val entrada = campoDeDialogo(SegundaIA.chaveCerebras(this), "Cole aqui a chave da Cerebras")
+        caixa.addView(entrada)
+        AlertDialog.Builder(this)
+            .setTitle("Segunda reserva: Cerebras")
+            .setMessage("Quando a ${SegundaIA.provedor(this).nome.substringBefore(" (")} atingir o limite do dia, a ${Marca.nome} pergunta para a Cerebras antes de ir ao Gemini. " +
+                "É grátis: entre em cloud.cerebras.ai, crie a conta e copie a chave em API Keys.")
+            .setView(caixa)
+            .setPositiveButton("Salvar e testar") { _, _ ->
+                SegundaIA.salvarCerebras(this, entrada.text.toString())
+                ajustes?.atualizar()
+                if (entrada.text.isBlank()) return@setPositiveButton responder("Segunda reserva desligada.")
+                responder("Testando a Cerebras…")
+                Thread {
+                    val r = try {
+                        Result.success(SegundaIA.testar(this, cerebras = true))
+                    } catch (e: Exception) {
+                        Result.failure(e)
+                    }
+                    runOnUiThread {
+                        r.onSuccess { responder("A Cerebras respondeu: \"${it.take(60)}\". Agora a ordem é ${SegundaIA.provedor(this).nome.substringBefore(" (")}, Cerebras e, por último, o Gemini.") }
+                            .onFailure { responder(it.message ?: "Não funcionou.") }
+                        ajustes?.atualizar()
+                    }
+                }.start()
+            }
+            .setNeutralButton("Criar chave") { _, _ ->
+                try {
+                    startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(SegundaIA.CEREBRAS.site)))
                 } catch (e: ActivityNotFoundException) {
                     Toast.makeText(this, "Nenhum navegador encontrado.", Toast.LENGTH_SHORT).show()
                 }
