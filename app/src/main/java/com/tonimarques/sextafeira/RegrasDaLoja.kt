@@ -49,6 +49,37 @@ object RegrasDaLoja {
         ),
     )
 
+    const val FONTE_VENDA = "regras de venda"
+
+    /**
+     * As regras de venda do Perfil viram perguntas e respostas na memória (tipo "regra") e vão para o site.
+     * Só refaz quando as regras mudam. Bloqueante (banco e internet): chame em segundo plano.
+     */
+    fun sincronizarVenda(ctx: Context, memoria: Memoria) {
+        val prefs = ctx.getSharedPreferences("regras_da_loja", Context.MODE_PRIVATE)
+        val json = Perfil.regras.json().toString()
+        val marca = json.hashCode().toString() + ":" + Perfil.loja
+        if (prefs.getString("venda", null) != marca) {
+            memoria.apagarDaFonte(TIPO, FONTE_VENDA)
+            for ((p, r) in Perfil.regras.perguntas(Perfil.loja)) memoria.guardarVetor(TIPO, p, resposta = r, fonte = FONTE_VENDA)
+            prefs.edit().putString("venda", marca).apply()
+            Consciencia.esquecerRetrato()
+        }
+        // o site (Vênus da Loja, robô e Direct do Instagram) usa as mesmas regras
+        if (prefs.getString("venda_site", null) != marca) {
+            try {
+                val loja = Loja(ctx)
+                if (loja.conectada && Plataformas.tipo(ctx) == "floot") {
+                    loja.enviarRegrasDeVenda(Perfil.regras.json())
+                    prefs.edit().putString("venda_site", marca).apply()
+                    Diario.anotar(ctx, "loja", "Regras de venda enviadas ao site", "automatico")
+                }
+            } catch (e: Exception) {
+                // o site ainda não recebe as regras (ou está sem internet): tenta de novo na próxima vez
+            }
+        }
+    }
+
     /** Linhas dos produtos proibidos pela Anvisa (para conferir o catálogo). */
     private val PROIBIDOS = Regex("\\b(?:secret love|black ice|kama sutra|turbo gel|uzempica)\\b")
 

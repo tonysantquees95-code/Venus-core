@@ -813,6 +813,13 @@ class Memoria(contexto: Context) : SQLiteOpenHelper(contexto, "sexta.db", null, 
         return n
     }
 
+    /** Apaga os itens de um tipo que vieram de uma fonte (para refazer as regras de venda, por exemplo). */
+    fun apagarDaFonte(tipo: String, fonte: String): Int {
+        val n = writableDatabase.delete("vetores", "tipo = ? AND fonte = ?", arrayOf(tipo, fonte))
+        if (n > 0) mudou(null)
+        return n
+    }
+
     /** Apaga um aprendizado (pela tela "O que eu aprendi"). */
     fun apagarItem(id: Long): Boolean {
         val n = writableDatabase.delete("vetores", "id = ?", arrayOf(id.toString()))

@@ -25,14 +25,14 @@ object Perfil {
     /** O ramo da loja, como aparece nos textos das IAs. */
     @Volatile var ramo: String = "moda íntima e sex shop"
         private set
+    /** Pagamento, frete, retirada, envio, trocas, atendimento e restrições, em campos (ver RegrasDeVenda). */
+    @Volatile var regras: RegrasDeVenda = RegrasDeVenda()
+        private set
     /** Desconto no Pix, em %, usado nos preços que a Vênus passa para as clientes. */
-    @Volatile var pixPorcento: Int = 5
-        private set
-    /** Entrega, pagamento, retirada e embalagem: o que a Vênus pode prometer às clientes. */
-    @Volatile var regrasDeVenda: String = "entrega discreta para todo o Brasil pelos Correios (SEDEX ou PAC), frete calculado pelo CEP no site; " +
-        "pagamento por Pix com 5% de desconto (exceto produtos em promoção) ou cartão em até 3x; retirada grátis em ponto de retirada em Porto Alegre, " +
-        "com dia e horário combinados pelo WhatsApp depois da compra; embalagem neutra e sem identificação; venda só para maiores de 18 anos."
-        private set
+    val pixPorcento: Int get() = regras.pixDescontoPct
+    /** As regras em texto, para as IAs: o que a Vênus pode prometer às clientes. */
+    val regrasDeVenda: String get() = regras.texto()
+
     /** Uma frase sobre o dono (rotina, trabalho), usada no estudo de saberes. */
     @Volatile var sobre: String = "mora em Porto Alegre e trabalha num hotel"
         private set
@@ -46,8 +46,14 @@ object Perfil {
         p.getString("sobre", null)?.let { sobre = it }
         p.getString("site", null)?.takeIf { it.isNotBlank() }?.let { site = normalizarSite(it) }
         p.getString("ramo", null)?.takeIf { it.isNotBlank() }?.let { ramo = it }
-        p.getString("regras", null)?.takeIf { it.isNotBlank() }?.let { regrasDeVenda = it }
-        if (p.contains("pix")) pixPorcento = p.getInt("pix", 5).coerceIn(0, 50)
+        regras = RegrasDeVenda.ler(p.getString("regras_json", null)).let { r ->
+            if (p.contains("regras_json")) r
+            // versão 1.133/1.134 guardava texto livre e o Pix à parte: vira observações e o campo do Pix
+            else r.copy(
+                pixDescontoPct = if (p.contains("pix")) p.getInt("pix", 5).coerceIn(0, 50) else r.pixDescontoPct,
+                observacoes = p.getString("regras", null)?.takeIf { it.isNotBlank() && !it.startsWith("entrega discreta para todo o Brasil pelos Correios") }.orEmpty(),
+            )
+        }
     }
 
     /** "minhaloja.com.br/" → "https://minhaloja.com.br". */
@@ -56,15 +62,16 @@ object Perfil {
         return if (s.startsWith("http://") || s.startsWith("https://")) s.replace("http://", "https://") else "https://$s"
     }
 
-    /** Dados da loja (site, ramo, Pix e regras de venda). */
-    fun salvarLoja(ctx: Context, site: String, ramo: String, pix: Int, regras: String) {
+    /** Dados da loja (site, ramo e regras de venda em campos). Leva as regras para a memória e para o site. */
+    fun salvarLoja(ctx: Context, site: String, ramo: String, novas: RegrasDeVenda) {
         ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
-            .putString("site", normalizarSite(site)).putString("ramo", ramo.trim()).putInt("pix", pix.coerceIn(0, 50))
-            .putString("regras", regras.trim())
+            .putString("site", normalizarSite(site)).putString("ramo", ramo.trim())
+            .putString("regras_json", novas.json(ramo.trim()).toString())
+            .remove("regras").remove("pix")
             .apply()
         carregar(ctx)
         Consciencia.esquecerRetrato()
-        Diario.anotar(ctx, "perfil", "Dados da loja atualizados: $site, $ramo, Pix $pixPorcento%", "tela")
+        Diario.anotar(ctx, "perfil", "Regras de venda atualizadas: $site, $ramo, Pix $pixPorcento%, ${regras.cartaoParcelasMax}x no cartão", "tela")
     }
 
     /** "Porto Alegre, RS" ou "Porto Alegre RS" → cidade e UF. */
