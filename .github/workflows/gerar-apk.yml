@@ -29,16 +29,20 @@ jobs:
         with:
           gradle-version: "8.11.1"
 
-      - name: Chave de assinatura (segredos do GitHub)
+      # O Gradle assina sempre com a chave antiga do repositório; se já existir a chave nova (segredos criados pela
+      # rotina "Criar chave nova"), os APKs são assinados de novo, depois, com a chave nova + a linhagem.
+      - name: Chave nova (segredos do GitHub)
         env:
           ASSINATURA_BASE64: ${{ secrets.ASSINATURA_BASE64 }}
+          ASSINATURA_LINHAGEM: ${{ secrets.ASSINATURA_LINHAGEM }}
         run: |
-          if [ -n "$ASSINATURA_BASE64" ]; then
-            echo "$ASSINATURA_BASE64" | base64 -d > "$RUNNER_TEMP/venus.keystore"
-            echo "ASSINATURA_ARQUIVO=$RUNNER_TEMP/venus.keystore" >> "$GITHUB_ENV"
-            echo "Usando a chave dos segredos do GitHub."
+          if [ -n "$ASSINATURA_BASE64" ] && [ -n "$ASSINATURA_LINHAGEM" ]; then
+            echo "$ASSINATURA_BASE64" | base64 -d > "$RUNNER_TEMP/nova.keystore"
+            echo "$ASSINATURA_LINHAGEM" | base64 -d > "$RUNNER_TEMP/linhagem.bin"
+            echo "CHAVE_NOVA=sim" >> "$GITHUB_ENV"
+            echo "Chave nova encontrada: os APKs vão sair com a chave nova e a linhagem."
           else
-            echo "::warning::Sem o segredo ASSINATURA_BASE64: usando a chave antiga do repositório."
+            echo "Ainda sem a chave nova: assinando com a chave do repositório."
           fi
 
       - name: Testar os comandos locais
@@ -47,10 +51,6 @@ jobs:
           gradle testDebugUnitTest --no-daemon 2>&1 | tee build.log
 
       - name: Compilar o APK
-        env:
-          ASSINATURA_SENHA: ${{ secrets.ASSINATURA_SENHA }}
-          ASSINATURA_APELIDO: ${{ secrets.ASSINATURA_APELIDO }}
-          ASSINATURA_SENHA_CHAVE: ${{ secrets.ASSINATURA_SENHA_CHAVE }}
         run: |
           set -o pipefail
           gradle assembleRelease --no-daemon 2>&1 | tee -a build.log
@@ -71,6 +71,24 @@ jobs:
         run: |
           cp app/build/outputs/apk/release/app-release.apk Venus.apk
           cp robo/build/outputs/apk/release/robo-release.apk VenusRobo.apk
+
+      # Assinatura v1/v2 com a chave antiga (Android 8) e v3 com a chave nova + linhagem (Android 9 em diante):
+      # quem já tem a Vênus instalada recebe a atualização por cima, sem perder nada.
+      - name: Assinar com a chave nova (linhagem)
+        if: env.CHAVE_NOVA == 'sim'
+        env:
+          SENHA: ${{ secrets.ASSINATURA_SENHA }}
+        run: |
+          set -e
+          BT=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -n 1)
+          for apk in Venus.apk VenusRobo.apk; do
+            "$BT/apksigner" sign \
+              --ks app/sexta.keystore --ks-pass pass:sextafeira --ks-key-alias sexta --key-pass pass:sextafeira \
+              --next-signer --ks "$RUNNER_TEMP/nova.keystore" --ks-pass env:SENHA --ks-key-alias venus --key-pass env:SENHA \
+              --lineage "$RUNNER_TEMP/linhagem.bin" --rotation-min-sdk-version 28 "$apk"
+            "$BT/apksigner" verify --verbose "$apk" | grep -E "Verified using|Number of signers" || true
+          done
+          shred -u "$RUNNER_TEMP/nova.keystore" "$RUNNER_TEMP/linhagem.bin"
 
       - name: Notas da versão
         run: |
