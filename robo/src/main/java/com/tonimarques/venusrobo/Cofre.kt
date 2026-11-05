@@ -24,9 +24,17 @@ object Cofre {
     /** Decifrar a cada leitura é caro: guarda o último par (cifrado → texto) de cada valor. */
     private val lembrados = java.util.concurrent.ConcurrentHashMap<String, String>()
 
+    @Volatile private var guardada: SecretKey? = null
+
+    /**
+     * Uma só chave, criada uma vez: sincronizado porque duas partes do app abrindo ao mesmo tempo
+     * criavam duas chaves com o mesmo nome, e o que foi cifrado com a primeira não abria mais.
+     */
+    @Synchronized
     private fun chave(): SecretKey {
+        guardada?.let { return it }
         val ks = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
-        (ks.getKey(ALIAS, null) as? SecretKey)?.let { return it }
+        (ks.getKey(ALIAS, null) as? SecretKey)?.let { guardada = it; return it }
         val gerador = KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, "AndroidKeyStore")
         gerador.init(
             KeyGenParameterSpec.Builder(ALIAS, KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT)
@@ -34,7 +42,7 @@ object Cofre {
                 .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
                 .build()
         )
-        return gerador.generateKey()
+        return gerador.generateKey().also { guardada = it }
     }
 
     /** Valor pronto para salvar: cifrado quando o Android deixa; em texto só se o cofre não funcionar (testes). */
