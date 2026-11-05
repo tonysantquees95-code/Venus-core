@@ -218,13 +218,18 @@ object StoriesDoDia {
         val marca = "feito_${hoje()}_$turno"
         if (!forcar && prefs(ctx).getBoolean(marca, false)) throw IllegalStateException("O story da ${nomeTurno(turno)} de hoje já foi publicado.")
         if (!forcar && turno == "tarde" && tardeInterativa(ctx)) return prepararComEnquete(ctx, marca)
-        if (!Instagram.conectado(ctx)) throw IllegalStateException("O Instagram da loja não está conectado.")
+        // sem o Instagram conectado (ou sem a loja para subir a imagem): a arte sai do mesmo jeito, para postar com um toque
+        if (!Instagram.conectado(ctx)) return prepararManual(ctx, marca, turno, "o Instagram não está conectado")
         val loja = Loja(ctx)
-        if (!loja.conectada) throw IllegalStateException("A loja não está conectada nos ajustes (a imagem sobe pelo site).")
+        if (!loja.conectada) return prepararManual(ctx, marca, turno, "a loja não está conectada")
         val tema = proximoTema(ctx)
         val jpeg = arte(ctx, tema)
         val url = loja.enviarFoto(jpeg)
-        Instagram.publicar(ctx, url, "", story = true)
+        try {
+            Instagram.publicar(ctx, url, "", story = true)
+        } catch (e: Instagram.ErroDoInstagram) {
+            return prepararManual(ctx, marca, turno, e.message ?: "o Instagram recusou", tema, jpeg)
+        }
         usar(ctx, tema)
         // aparece na página Stories do painel (para repostar no status) e avisa a equipe
         try {
@@ -241,6 +246,40 @@ object StoriesDoDia {
     }
 
     fun nomeTurno(turno: String) = if (turno == "manha") "manhã" else "tarde"
+
+    /**
+     * Quando a publicação automática não dá (Instagram desconectado ou recusando): monta a arte, guarda para o
+     * status do WhatsApp e avisa "story pronto". O toque abre o Instagram com a imagem; é só escolher Story e publicar.
+     */
+    private fun prepararManual(ctx: Context, marca: String, turno: String, motivo: String, pronto: Tema? = null, jpegPronto: ByteArray? = null): Tema {
+        val tema = pronto ?: proximoTema(ctx)
+        val jpeg = jpegPronto ?: arte(ctx, tema)
+        usar(ctx, tema)
+        val arquivo = guardarParaWhatsApp(ctx, jpeg)
+        prefs(ctx).edit().putBoolean(marca, true)
+            .putString("ultimo", "${nomeTurno(turno)} de ${SimpleDateFormat("dd/MM", Locale("pt", "BR")).format(Date())} (para postar com um toque): \"${tema.titulo}\"").apply()
+        Diario.anotar(ctx, "instagram", "Story da ${nomeTurno(turno)} preparado para postar com um toque ($motivo): ${tema.titulo}", "automatico", ok = false)
+        val gerente = ctx.getSystemService(NotificationManager::class.java)
+        gerente.createNotificationChannel(NotificationChannel(CANAL, "Stories do dia", NotificationManager.IMPORTANCE_DEFAULT))
+        val instagram = PendingIntent.getActivity(ctx, 74_220, intencaoInstagram(arquivo), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+        val whatsapp = PendingIntent.getActivity(ctx, 74_221, intencaoWhatsApp(ctx, arquivo), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+        val b = Notification.Builder(ctx, CANAL)
+            .setSmallIcon(R.drawable.ic_venus_simbolo)
+            .setContentTitle("Story da ${nomeTurno(turno)} pronto para postar")
+            .setContentText("Não publiquei sozinha ($motivo). Toque: abre o Instagram com a imagem, escolha Story e publique.")
+            .setStyle(Notification.BigTextStyle().bigText("\"${tema.titulo}\"\nNão publiquei sozinha ($motivo). Toque para abrir o Instagram com a imagem, escolha Story e publique."))
+            .setContentIntent(instagram)
+            .addAction(Notification.Action.Builder(null, "Status do WhatsApp", whatsapp).build())
+            .setAutoCancel(true)
+        BitmapFactory.decodeFile(arquivo.absolutePath, BitmapFactory.Options().apply { inSampleSize = 4 })?.let {
+            b.setLargeIcon(it).setStyle(Notification.BigPictureStyle().bigPicture(it).setSummaryText("Toque para postar no Instagram"))
+        }
+        try {
+            gerente.notify(74_320, b.build())
+        } catch (e: SecurityException) {
+        }
+        return tema
+    }
 
     /** Story com enquete: monta a imagem (com espaço para o adesivo) e avisa; quem publica é você. */
     fun prepararComEnquete(ctx: Context, marca: String = "feito_${hoje()}_tarde"): Tema {
