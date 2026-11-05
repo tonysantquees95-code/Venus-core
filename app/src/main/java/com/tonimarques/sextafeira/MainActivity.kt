@@ -133,6 +133,11 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         EstudoDiario.agendar(this)
         StoriesDoDia.agendar(this)
         // o Direct automático roda no site: ele precisa do token do Instagram em dia
+        // quem instala do zero (sem nenhuma chave) vê os primeiros passos uma vez
+        if (!prefs.getBoolean("primeiros_passos_visto", false)) {
+            if (chave().isBlank() && !SegundaIA.configurada(this)) window.decorView.postDelayed({ primeirosPassos() }, 900)
+            prefs.edit().putBoolean("primeiros_passos_visto", true).apply()
+        }
         Thread {
             try {
                 RegrasDaLoja.semear(applicationContext, memoria)
@@ -1590,7 +1595,8 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
     private fun obterGemini(): Gemini? {
         if (modoIndependente()) return null
         val k = chave()
-        if (k.isBlank()) return null
+        // sem a chave do Gemini, a conversa ainda funciona se houver IA reserva (Groq, Cloudflare)
+        if (k.isBlank() && !SegundaIA.configurada(this)) return null
         return gemini ?: Gemini(k, modelo(), ferramentas, autoconhecimento = { Consciencia.retrato(this, memoria, ferramentas) }) { memoria.resumoParaIA() }.also { g ->
             // continua a conversa em andamento (mesmo depois de fechar o app), sem misturar com as outras
             try {
@@ -1772,7 +1778,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         }
         caixa.addView(grupoEstilo)
         caixa.addView(rotulo("Chave do Azure Speech"))
-        val chave = campoDeDialogo(VozNeural.chave(this), "Cole aqui a chave (KEY 1)")
+        val chave = campoSecreto(VozNeural.chave(this), "Cole aqui a chave (KEY 1)")
         caixa.addView(chave)
         caixa.addView(rotulo("Região do recurso"))
         val regiao = campoDeDialogo(VozNeural.regiao(this), "brazilsouth")
@@ -2354,6 +2360,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
             ),
             TelaDeAjustes.Secao(
                 "Loja ${Perfil.loja}", listOf(
+                    TelaDeAjustes.Ajuste("Primeiros passos", { "A lista do que configurar para a $n funcionar com a sua loja." }) { primeirosPassos() },
                     TelaDeAjustes.Ajuste("Perfil do dono e da loja", { Perfil.resumo() + ". A $n usa esses dados nas respostas, nos avisos e no estudo." }) { editarPerfil() },
                     TelaDeAjustes.Ajuste("Site, ramo e regras de venda", {
                         "${Loja.SITE.removePrefix("https://")} · ${Perfil.ramo} · Pix ${Perfil.pixPorcento}%. É o que a $n pode prometer às clientes."
@@ -3847,7 +3854,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         }
         grupo.setOnCheckedChangeListener { _, id -> escolhido = id - 9100 }
         caixa.addView(grupo)
-        val entrada = campoDeDialogo(SegundaIA.chave(this), "Cole aqui a chave")
+        val entrada = campoSecreto(SegundaIA.chave(this), "Cole aqui a chave")
         caixa.addView(entrada)
         AlertDialog.Builder(this)
             .setTitle("IA reserva")
@@ -3878,6 +3885,27 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
                 }
             }
             .setNegativeButton("Cancelar", null)
+            .show()
+    }
+
+    /** Lista do que configurar, com ✓ no que já está pronto; cada item abre o seu ajuste. */
+    private fun primeirosPassos() {
+        val perfil = getSharedPreferences("perfil", MODE_PRIVATE)
+        val passos = listOf(
+            Triple("Seu nome e o da loja", perfil.contains("dono")) { editarPerfil() },
+            Triple("Site, ramo e regras de venda", perfil.contains("regras")) { editarDadosDaLoja() },
+            Triple("Plataforma da loja (Floot, Shopify, WooCommerce, Nuvemshop)", ferramentas.loja.conectada) { escolherPlataforma() },
+            Triple("IA grátis principal: Groq", SegundaIA.chave(this).isNotBlank()) { pedirIAReserva() },
+            Triple("IA grátis reserva: Cloudflare (opcional)", SegundaIA.chaveCloudflare(this).isNotBlank()) { pedirCloudflare() },
+            Triple("Gemini grátis: memória, estudo, PDF e áudio", chave().isNotBlank()) { pedirChave() },
+            Triple("Instagram da loja (opcional)", Instagram.conectado(this)) { conectarInstagram() },
+            Triple("Voz neural da Microsoft (opcional)", VozNeural.chave(this).isNotBlank()) { configurarVozNeural() },
+        )
+        val feitos = passos.count { it.second }
+        AlertDialog.Builder(this)
+            .setTitle("Primeiros passos ($feitos de ${passos.size})")
+            .setItems(passos.map { (if (it.second) "✓  " else "○  ") + it.first }.toTypedArray()) { _, i -> passos[i].third() }
+            .setPositiveButton("Fechar", null)
             .show()
     }
 
@@ -4009,7 +4037,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
             setPadding(dp(20), dp(8), dp(20), 0)
         }
         val conta = campoDeDialogo(SegundaIA.contaCloudflare(this), "Código da conta (Account ID)")
-        val chave = campoDeDialogo(SegundaIA.chaveCloudflare(this), "Chave do Workers AI (API Token)")
+        val chave = campoSecreto(SegundaIA.chaveCloudflare(this), "Chave do Workers AI (API Token)")
         caixa.addView(conta)
         caixa.addView(chave)
         val primeira = SegundaIA.provedor(this).nome.substringBefore(" (")
@@ -5280,7 +5308,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
     }
 
     private fun pedirChave() {
-        val entrada = campoDeDialogo(chave(), "Cole aqui sua chave")
+        val entrada = campoSecreto(chave(), "Cole aqui sua chave")
         AlertDialog.Builder(this)
             .setTitle("Chave do Gemini")
             .setMessage(
@@ -5320,6 +5348,11 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
             }
             .setNegativeButton("Cancelar", null)
             .show()
+    }
+
+    /** Campo de chave: aparece em pontinhos (para colar a nova, apague e cole por cima). */
+    private fun campoSecreto(valor: String, dica: String) = campoDeDialogo(valor, dica).apply {
+        inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
     }
 
     private fun campoDeDialogo(valor: String, dica: String) = EditText(this).apply {

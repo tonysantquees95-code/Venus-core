@@ -30,9 +30,10 @@ object Robo {
     fun ligado(ctx: Context) = prefs(ctx).getBoolean("ligado", true)
     fun definirLigado(ctx: Context, v: Boolean) = prefs(ctx).edit().putBoolean("ligado", v).apply()
     fun endereco(ctx: Context) = prefs(ctx).getString("endereco", ENDERECO_PADRAO).orEmpty().ifBlank { ENDERECO_PADRAO }
-    fun chave(ctx: Context) = prefs(ctx).getString("chave", "").orEmpty()
+    /** A chave fica cifrada com o chip de segurança do Android (as antigas, em texto, são cifradas na primeira leitura). */
+    fun chave(ctx: Context) = Cofre.ler(prefs(ctx), "chave")
     fun salvar(ctx: Context, endereco: String, chave: String) =
-        prefs(ctx).edit().putString("endereco", endereco.trim()).putString("chave", chave.trim()).apply()
+        prefs(ctx).edit().putString("endereco", endereco.trim()).putString("chave", Cofre.selar(chave.trim())).apply()
 
     /** Em quais apps ele responde (padrão: WhatsApp Business e Instagram). */
     fun canalLigado(ctx: Context, pacote: String) = prefs(ctx).getBoolean("canal_$pacote", pacote != WHATSAPP)
