@@ -301,6 +301,11 @@ class Loja(private val contexto: Context) {
     /** Marca como publicado (instagram ou whatsapp) em nome da conta da loja. Devolve quem publicou. */
     fun marcarStory(id: Int, onde: String): String = enviar("/_api/admin/stories_marcar", JSONObject().put("id", id).put("onde", onde)).optString("por")
 
+    /** Entrega ao site as regras de venda (pagamento, frete, retirada…), as mesmas que a Vênus usa no app. */
+    fun enviarRegrasDeVenda(regras: JSONObject) {
+        enviar("/_api/admin/regras_venda", JSONObject().put("regras", regras))
+    }
+
     /** Entrega ao site o token do Instagram (para o Direct automático responder pela API oficial). */
     fun enviarTokenDoInstagram(token: String, contaId: String, usuario: String) {
         enviar("/_api/admin/instagram_token", JSONObject().put("token", token).put("contaId", contaId).put("usuario", usuario))
@@ -729,8 +734,11 @@ class Loja(private val contexto: Context) {
             if (preco == null) partes += "${p.nome} está sem preço"
             else {
                 val promo = p.precoAntigo?.takeIf { it > preco }
-                partes += if (promo != null) "${p.nome} está em promoção: de ${dinheiro(promo)} por ${dinheiro(preco)} (no Pix também ${dinheiro(preco)})"
-                else "${p.nome} custa ${dinheiro(preco)}, ou ${dinheiro(preco - (preco * 5 + 50) / 100)} no Pix"
+                val r = Perfil.regras
+                val pix = r.precoNoPix(preco, emPromocao = promo != null)?.let { "${dinheiro(it)} no Pix" }
+                val vezes = r.parcelas(preco)?.let { "ou $it" }
+                partes += (if (promo != null) "${p.nome} está em promoção: de ${dinheiro(promo)} por ${dinheiro(preco)}" else "${p.nome} custa ${dinheiro(preco)}") +
+                    listOfNotNull(pix, vezes).joinToString(" ", prefix = if (pix != null || vezes != null) " (" else "", postfix = if (pix != null || vezes != null) ")" else "")
             }
             partes += when {
                 p.estoque == null -> "sem controle de estoque"
@@ -830,7 +838,7 @@ class Loja(private val contexto: Context) {
         fun catalogoParaIA(produtos: List<Produto>): String = produtos.filter { it.ativo && it.precoCentavos != null }.take(80).joinToString("\n") { p ->
             val preco = p.precoCentavos!!
             val promo = p.precoAntigo?.takeIf { it > preco }
-            val pix = if (promo != null) preco else preco - (preco * Perfil.pixPorcento + 50) / 100
+            val pix = Perfil.regras.precoNoPix(preco, emPromocao = promo != null) ?: preco
             val estoque = when {
                 p.estoque == null -> "disponível"
                 p.estoque <= 0 -> "esgotado"

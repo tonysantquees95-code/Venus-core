@@ -141,6 +141,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         Thread {
             try {
                 RegrasDaLoja.semear(applicationContext, memoria)
+                RegrasDaLoja.sincronizarVenda(applicationContext, memoria)
             } catch (e: Exception) {
             }
             if (Instagram.conectado(this)) Instagram.sincronizarComSite(applicationContext)
@@ -3893,7 +3894,159 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         val perfil = getSharedPreferences("perfil", MODE_PRIVATE)
         val passos = listOf(
             Triple("Seu nome e o da loja", perfil.contains("dono")) { editarPerfil() },
-            Triple("Site, ramo e regras de venda", perfil.contains("regras")) { editarDadosDaLoja() },
+            Triple("Site, ramo e regras de venda", perfil.contains("regras_json")) { editarDadosDaLoja() },
+            Triple("Plataforma da loja (Floot, Shopify, WooCommerce, Nuvemshop)", ferramentas.loja.conectada) { escolherPlataforma() },
+            Triple("IA grátis principal: Groq", SegundaIA.chave(this).isNotBlank()) { pedirIAReserva() },
+            Triple("IA grátis reserva: Cloudflare (opcional)", SegundaIA.chaveCloudflare(this).isNotBlank()) { pedirCloudflare() },
+            Triple("Gemini grátis: memória, estudo, PDF e áudio", chave().isNotBlank()) { pedirChave() },
+            Triple("Instagram da loja (opcional)", Instagram.conectado(this)) { conectarInstagram() },
+            Triple("Voz neural da Microsoft (opcional)", VozNeural.chave(this).isNotBlank()) { configurarVozNeural() },
+        )
+        val feitos = passos.count { it.second }
+        AlertDialog.Builder(this)
+            .setTitle("Primeiros passos ($feitos de ${passos.size})")
+            .setItems(passos.map { (if (it.second) "✓  " else "○  ") + it.first }.toTypedArray()) { _, i -> passos[i].third() }
+            .setPositiveButton("Fechar", null)
+            .show()
+    }
+
+    private fun editarPerfil() {
+        val caixa = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(20), dp(8), dp(20), 0)
+        }
+        fun campo(valor: String, dica: String) = campoDeDialogo(valor, dica).apply {
+            inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_FLAG_CAP_WORDS
+        }
+        val dono = campo(Perfil.dono, "Seu nome")
+        val loja = campo(Perfil.loja, "Nome da loja")
+        val cidade = campo(Perfil.cidade + if (Perfil.uf.isNotBlank()) ", ${Perfil.uf}" else "", "Cidade e estado (ex.: Porto Alegre, RS)")
+        val sobre = campoDeDialogo(Perfil.sobre, "Uma frase sobre você (ex.: trabalho num hotel)")
+        listOf(dono, loja, cidade, sobre).forEach { caixa.addView(it) }
+        AlertDialog.Builder(this)
+            .setTitle("Perfil do dono e da loja")
+            .setMessage("A ${Marca.nome} usa esses dados para falar com você, escrever para as clientes e estudar.")
+            .setView(caixa)
+            .setPositiveButton("Salvar") { _, _ ->
+                if (dono.text.isBlank() || loja.text.isBlank()) return@setPositiveButton Toast.makeText(this, "Preencha seu nome e o da loja.", Toast.LENGTH_SHORT).show()
+                Perfil.salvar(this, dono.text.toString(), loja.text.toString(), cidade.text.toString(), sobre.text.toString())
+                ajustes?.atualizar()
+                responder("Perfil salvo: ${Perfil.resumo()}.")
+            }
+            .setNegativeButton("Cancelar", null)
+            .show()
+    }
+
+    /** Site, ramo e as regras de venda em campos (a fonte única que vai para a memória e para o site). */
+    private fun editarDadosDaLoja() {
+        val r = Perfil.regras
+        val caixa = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(20), dp(8), dp(20), dp(8))
+        }
+        fun secao(t: String) = caixa.addView(TextView(this).apply {
+            text = t
+            textSize = 13f
+            setTypeface(typeface, android.graphics.Typeface.BOLD)
+            setPadding(dp(4), dp(18), 0, dp(2))
+        })
+        fun texto(valor: String, dica: String) = campoDeDialogo(valor, dica).apply {
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
+            caixa.addView(this)
+        }
+        fun numero(valor: Int?, dica: String, decimal: Boolean = false) = campoDeDialogo(valor?.toString().orEmpty(), dica).apply {
+            inputType = InputType.TYPE_CLASS_NUMBER or (if (decimal) InputType.TYPE_NUMBER_FLAG_DECIMAL else 0)
+            caixa.addView(this)
+        }
+        fun marcar(valor: Boolean, t: String) = android.widget.CheckBox(this).apply {
+            text = t
+            isChecked = valor
+            caixa.addView(this)
+        }
+        fun reais(c: Int?) = c?.let { String.format(java.util.Locale("pt", "BR"), "%.2f", it / 100.0) }.orEmpty()
+
+        secao("Loja")
+        val site = texto(Perfil.site.removePrefix("https://"), "Endereço do site (ex.: minhaloja.com.br)")
+        val ramo = texto(Perfil.ramo, "Ramo (ex.: moda íntima e sex shop)")
+        secao("Pagamento")
+        val pix = numero(r.pixDescontoPct, "Desconto no Pix (%)")
+        val pixPromo = marcar(r.pixValeEmPromocao, "Desconto do Pix vale também em produtos em promoção")
+        val parcelas = numero(r.cartaoParcelasMax, "Parcelas no cartão (máximo)")
+        val semJuros = numero(r.parcelasSemJuros, "Parcelas sem juros (até quantas)")
+        secao("Frete e envio")
+        val metodos = texto(r.freteMetodos.joinToString(", "), "Formas de envio (ex.: PAC, SEDEX, motoboy)")
+        val calculo = texto(r.freteCalculo, "Como o frete é calculado (ex.: pelo CEP no site)")
+        val gratis = campoDeDialogo(reais(r.freteGratisAcimaDe), "Frete grátis acima de R$ (vazio = não tem)").apply {
+            inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_FLAG_DECIMAL
+            caixa.addView(this)
+        }
+        val postagem = numero(r.prazoPostagemDias, "Posta em até quantos dias úteis (vazio = não informar)")
+        val abrangencia = texto(r.abrangencia, "Para onde entrega (ex.: todo o Brasil)")
+        val discreta = marcar(r.embalagemDiscreta, "Embalagem discreta, sem identificação")
+        secao("Retirada")
+        val retirada = marcar(r.retiradaDisponivel, "Cliente pode retirar pessoalmente")
+        val retCidade = texto(r.retiradaCidade.ifBlank { Perfil.cidade }, "Cidade da retirada")
+        val retComo = texto(r.retiradaComo, "Como combina (ex.: dia e horário pelo WhatsApp)")
+        val retCusto = campoDeDialogo(reais(r.retiradaCustoCentavos.takeIf { it > 0 }), "Custo da retirada em R$ (vazio = grátis)").apply {
+            inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_FLAG_DECIMAL
+            caixa.addView(this)
+        }
+        secao("Trocas, atendimento e regras")
+        val arrependimento = numero(r.arrependimentoDias, "Dias para desistir da compra (mínimo 7, pela lei)")
+        val canais = texto(r.canais.joinToString(", "), "Canais de atendimento (ex.: site, WhatsApp, Instagram)")
+        val horario = texto(r.horarioAtendimento.orEmpty(), "Horário de atendimento (ex.: seg a sex, 9h às 18h)")
+        val idade = numero(r.idadeMinima, "Idade mínima para comprar (vazio = sem restrição)")
+        val obs = EditText(this).apply {
+            setText(r.observacoes)
+            hint = "Outras regras (texto livre)"
+            minLines = 3
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE or InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
+            setPadding(dp(24), dp(16), dp(24), dp(16))
+            caixa.addView(this)
+        }
+        AlertDialog.Builder(this)
+            .setTitle("Site, ramo e regras de venda")
+            .setMessage("A ${Marca.nome} só promete às clientes o que estiver aqui. Deixe vazio o que a loja não quiser informar.")
+            .setView(ScrollView(this).apply { addView(caixa) })
+            .setPositiveButton("Salvar") { _, _ ->
+                if (site.text.isBlank()) return@setPositiveButton Toast.makeText(this, "Preencha o endereço do site.", Toast.LENGTH_SHORT).show()
+                fun int(e: EditText) = e.text.toString().trim().toIntOrNull()
+                val novas = RegrasDeVenda(
+                    pixDescontoPct = (int(pix) ?: 0).coerceIn(0, 50),
+                    pixValeEmPromocao = pixPromo.isChecked,
+                    cartaoParcelasMax = (int(parcelas) ?: 1).coerceIn(1, 24),
+                    parcelasSemJuros = (int(semJuros) ?: 1).coerceIn(1, 24),
+                    freteMetodos = RegrasDeVenda.separar(metodos.text.toString()),
+                    freteCalculo = calculo.text.toString().trim(),
+                    freteGratisAcimaDe = RegrasDeVenda.centavosDe(gratis.text.toString()),
+                    prazoPostagemDias = int(postagem),
+                    retiradaDisponivel = retirada.isChecked,
+                    retiradaCidade = retCidade.text.toString().trim(),
+                    retiradaComo = retComo.text.toString().trim(),
+                    retiradaCustoCentavos = RegrasDeVenda.centavosDe(retCusto.text.toString()) ?: 0,
+                    embalagemDiscreta = discreta.isChecked,
+                    abrangencia = abrangencia.text.toString().trim().ifBlank { "todo o Brasil" },
+                    arrependimentoDias = (int(arrependimento) ?: 7).coerceAtLeast(7),
+                    canais = RegrasDeVenda.separar(canais.text.toString()),
+                    horarioAtendimento = horario.text.toString().trim().ifBlank { null },
+                    idadeMinima = int(idade),
+                    observacoes = obs.text.toString().trim(),
+                )
+                Perfil.salvarLoja(this, site.text.toString(), ramo.text.toString(), novas)
+                ajustes?.atualizar()
+                Thread { RegrasDaLoja.sincronizarVenda(applicationContext, memoria) }.start()
+                responder("Regras de venda salvas. Resumo: ${Perfil.regrasDeVenda}")
+            }
+            .setNegativeButton("Cancelar", null)
+            .show()
+    }
+
+    /** Lista do que configurar, com ✓ no que já está pronto; cada item abre o seu ajuste. */
+    private fun primeirosPassos() {
+        val perfil = getSharedPreferences("perfil", MODE_PRIVATE)
+        val passos = listOf(
+            Triple("Seu nome e o da loja", perfil.contains("dono")) { editarPerfil() },
+            Triple("Site, ramo e regras de venda", perfil.contains("regras_json")) { editarDadosDaLoja() },
             Triple("Plataforma da loja (Floot, Shopify, WooCommerce, Nuvemshop)", ferramentas.loja.conectada) { escolherPlataforma() },
             Triple("IA grátis principal: Groq", SegundaIA.chave(this).isNotBlank()) { pedirIAReserva() },
             Triple("IA grátis reserva: Cloudflare (opcional)", SegundaIA.chaveCloudflare(this).isNotBlank()) { pedirCloudflare() },
