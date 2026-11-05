@@ -57,6 +57,15 @@ class Ferramentas(private val activity: Activity, private val memoria: Memoria? 
     fun declaracoes(): JSONArray = JSONArray()
         .put(
             funcao(
+                "sobre_mim",
+                "Mostra quem você (a Vênus) é: versão, IAs que usa e em que ordem, todas as suas ferramentas, o que está ligado, " +
+                    "memória e estudo, limites, lições dos seus erros, erros recentes e últimos ajustes. Use para responder sobre você mesma " +
+                    "ou para explicar por que algo não funcionou.",
+                emptyList(),
+            )
+        )
+        .put(
+            funcao(
                 "instagram_resumo",
                 "Seguidores e desempenho dos últimos posts do Instagram da loja (curtidas, comentários, post que mais engajou).",
                 emptyList(),
@@ -332,6 +341,7 @@ class Ferramentas(private val activity: Activity, private val memoria: Memoria? 
     }
 
     private fun executarAqui(nome: String, a: JSONObject): String = when (nome) {
+        "sobre_mim" -> memoria?.let { Consciencia.relatorio(activity, it, this) } ?: "Minha memória não está disponível agora."
         "abrir_app" -> abrirApp(a.optString("nome"))
         "tocar_musica" -> tocarMusica(a.optString("busca"), a.optString("app"))
         "controlar_midia" -> controlarMidia(a.optString("acao"), a.optString("app"))
@@ -1252,7 +1262,7 @@ class Ferramentas(private val activity: Activity, private val memoria: Memoria? 
         const val PEDIDO_CONTATOS = 20
         const val PEDIDO_LOCALIZACAO = 21
         val USAM_REDE = setOf(
-            "previsao_do_tempo", "resumo_wikipedia", "buscar_na_internet", "cotacao_moeda", "noticias",
+            "sobre_mim", "previsao_do_tempo", "resumo_wikipedia", "buscar_na_internet", "cotacao_moeda", "noticias",
             "acompanhar_tema", "atualizar_noticias", "traduzir", "consultar_cep", "consultar_cnpj", "consultar_ddd", "feriados",
             "buscar_cep", "dicionario", "ortografia", "distancia",
             "loja_resumo", "loja_pedidos", "loja_acabando", "loja_estoque",

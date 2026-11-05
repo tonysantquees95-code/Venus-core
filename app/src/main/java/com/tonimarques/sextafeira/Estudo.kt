@@ -21,7 +21,9 @@ import java.util.Locale
  *  - clientes: 100 perguntas de clientes sobre o catálogo e a compra, com resposta conferida contra os dados da loja;
  *  - revisao: até 30 coisas que ela não entendeu ou errou nas conversas do dia, já com o jeito certo;
  *  - voz: 30 frases como o reconhecimento de voz e o teclado erram, gírias gaúchas e abreviações;
+ *  - licoes: até 5 lições tiradas dos próprios erros (conversas e log de erros), que vão nas instruções dela;
  *  - objecoes: 20 respostas acolhedoras para "tá caro", "tenho vergonha", "e se alguém vir?";
+ *  - saberes: 12 perguntas e respostas conferidas de uma área por dia, em rodízio (marketing, finanças, direito, tecnologia…);
  *  - ideias (1 vez por semana): 10 ideias de post para as próximas datas;
  *  - limpeza (1 vez por semana): tira o que o estudo criou e nunca foi usado em 60 dias.
  * Antes de guardar, cada item é comparado pelo sentido com o que ela já sabe: quase igual (≥ 0,95) é descartado.
@@ -35,16 +37,40 @@ object Estudo {
     const val VOZ_POR_DIA = 30
     const val OBJECOES_POR_DIA = 20
     const val IDEIAS_POR_SEMANA = 10
+    const val LICOES_MAXIMO = 5
+    const val LICOES_GUARDADAS = 30
+    const val SABERES_POR_DIA = 12
+    const val TIPO_SABER = "saber"
+
+    /** Uma área por dia, em rodízio (os saberes que ela estuda além da loja). */
+    val DISCIPLINAS = listOf(
+        "marketing digital e Instagram para pequenas lojas",
+        "atendimento e vendas por WhatsApp e Direct",
+        "finanças de pequeno negócio: preço, margem, fluxo de caixa e estoque",
+        "direito do consumidor e comércio eletrônico no Brasil",
+        "educação sexual e bem-estar íntimo (informativo, sem orientação médica individual)",
+        "psicologia do consumidor e comportamento de compra",
+        "logística, embalagem discreta e envio no Brasil",
+        "hotelaria e atendimento ao hóspede",
+        "tecnologia: Android, aplicativos e segurança digital",
+        "comunicação, escrita persuasiva e negociação",
+        "produtividade, organização e rotina de quem trabalha e empreende",
+        "cultura, história e expressões do Rio Grande do Sul",
+    )
+
+    fun disciplinaDoDia(diaDoAno: Int = java.util.Calendar.getInstance().get(java.util.Calendar.DAY_OF_YEAR)): String =
+        DISCIPLINAS[Math.floorMod(diaDoAno, DISCIPLINAS.size)]
     /** Nota de sentido a partir da qual um item novo é "repetido" e não entra. */
     const val LIMIAR_REPETIDO = 0.95
     private const val PREFS = "estudo"
 
-    val ETAPAS = listOf("preparar", "frases", "enigmas", "clientes", "revisao", "voz", "objecoes", "ideias", "limpeza")
+    val ETAPAS = listOf("preparar", "frases", "enigmas", "clientes", "revisao", "licoes", "voz", "objecoes", "saberes", "ideias", "limpeza")
     private val SEMANAIS = setOf("ideias", "limpeza")
     val NOMES = linkedMapOf(
         "frases" to "jeitos de pedir", "enigmas" to "charadas", "clientes" to "respostas para clientes",
         "revisao" to "correções das conversas", "voz" to "frases com erro de voz e digitação",
         "objecoes" to "respostas a objeções de venda", "ideias" to "ideias de post",
+        "licoes" to "lições dos próprios erros", "saberes" to "saberes de outras áreas",
     )
 
     data class Resumo(
@@ -214,6 +240,8 @@ object Estudo {
                     val json = Gemini.gerarJson(chave, modelo, pedidoDeObjecoes(memoria.ultimosTextos("objecao", 60)), temperatura = 0.8) ?: throw falhou()
                     guardar(etapa, lerPares(json, "objecoes", "objecao").map { (o, r) -> Novo("objecao", o, resposta = r) })
                 }
+                "licoes" -> licoes()
+                "saberes" -> saberes()
                 "ideias" -> {
                     val agora = java.util.Calendar.getInstance()
                     val datas = Gestao.textoDatas(Gestao.proximasDatas(agora, 45), 45)
@@ -264,6 +292,38 @@ object Estudo {
                 prog.somar("descartados", pares.size - bons.size)
                 guardar("clientes", bons.map { (p, r) -> Novo("cliente", p, resposta = r) })
             }
+        }
+
+        /** Reflexão: o que deu errado nas conversas e no log de erros vira lição curta, que ela passa a seguir. */
+        private fun licoes() {
+            val prefs = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            val desde = maxOf(prefs.getLong("licoes_desde", 0), System.currentTimeMillis() - 2 * 86_400_000L)
+            val msgs = memoria.mensagensDesde(desde, 200)
+            val erros = Registro.log(ctx).filter { it.ultima >= desde }.take(15)
+            if (msgs.count { it.doUsuario } >= 2 || erros.isNotEmpty()) {
+                val ja = memoria.ultimosTextos(Consciencia.TIPO_LICAO, LICOES_GUARDADAS)
+                val json = Gemini.gerarJson(chave, modelo, pedidoDeLicoes(msgs, erros.map { "${it.tipo}: ${it.detalhe.ifBlank { it.frase }.take(160)} (${it.vezes}x)" }, ja),
+                    pensar = 2048, temperatura = 0.3) ?: throw falhou()
+                val novas = lerPares(json, "licoes", "licao").take(LICOES_MAXIMO)
+                guardar("licoes", novas.map { (l, porque) -> Novo(Consciencia.TIPO_LICAO, l.take(220), resposta = porque.take(400), fonte = "reflexao") })
+                memoria.manterUltimos(Consciencia.TIPO_LICAO, LICOES_GUARDADAS)
+                Consciencia.esquecerRetrato()
+            }
+            prefs.edit().putLong("licoes_desde", System.currentTimeMillis()).apply()
+        }
+
+        /** Uma área por dia: perguntas e respostas atemporais, conferidas por uma segunda leitura antes de guardar. */
+        private fun saberes() {
+            val area = disciplinaDoDia()
+            val ja = memoria.ultimosTextos(TIPO_SABER, 80)
+            val json = Gemini.gerarJson(chave, modelo, pedidoDeSaberes(area, ja), temperatura = 0.7) ?: throw falhou()
+            val pares = lerPares(json, "perguntas", "pergunta").take(SABERES_POR_DIA)
+            if (pares.isEmpty()) return
+            val notas = Gemini.gerarJson(chave, modelo, pedidoDeConferenciaDeSaberes(area, pares), pensar = 2048, temperatura = 0.1)
+                ?.let { lerAprovados(it, pares.size) } ?: throw falhou()
+            val bons = pares.filterIndexed { i, _ -> notas[i] }
+            prog.somar("descartados", pares.size - bons.size)
+            guardar("saberes", bons.map { (p, r) -> Novo(TIPO_SABER, p, resposta = r, fonte = "saber: $area".take(80)) })
         }
 
         /** Lê as conversas desde a última revisão e aprende o jeito certo do que deu errado. */
@@ -422,6 +482,36 @@ object Estudo {
             "Para cada uma: título curto, quando postar (data ou semana), formato e uma legenda pronta com chamada para o link da bio. " +
             (if (jaFeitas.isNotEmpty()) "Não repita estas: ${jaFeitas.joinToString(" | ")}. " else "") +
             "Responda só com JSON: {\"ideias\":[{\"titulo\":\"...\",\"quando\":\"...\",\"formato\":\"feed|story|reels\",\"legenda\":\"...\"}]}"
+
+    fun pedidoDeLicoes(msgs: List<Memoria.Mensagem>, erros: List<String>, jaSabidas: List<String>): String =
+        "Você ajuda a Vênus, a assistente pessoal e comercial do Toni (app Android), a aprender com os próprios erros. " +
+            "Leia as conversas e os erros abaixo e escreva até $LICOES_MAXIMO lições NOVAS para ela seguir daqui para frente.\n" +
+            "Cada lição: uma regra curta e geral, no imperativo, em até 25 palavras (ex.: \"Quando o Toni pedir preço de concorrente, pesquise antes de responder\"), " +
+            "e o porquê em uma frase, citando o que aconteceu. Só lições que mudam o comportamento dela; nada óbvio, nada sobre um caso único. " +
+            "Se nada deu errado, devolva a lista vazia.\n" +
+            (if (jaSabidas.isNotEmpty()) "Ela já segue estas (não repita nem contradiga sem motivo):\n" + jaSabidas.joinToString("\n") { "- $it" } + "\n" else "") +
+            (if (erros.isNotEmpty()) "\nErros registrados no app:\n" + erros.joinToString("\n") { "- $it" } + "\n" else "") +
+            (if (msgs.isNotEmpty()) "\nConversas:\n" + msgs.joinToString("\n") { (if (it.doUsuario) "Toni: " else "Vênus: ") + it.texto.replace('\n', ' ').take(300) } + "\n" else "") +
+            "\nResponda só com JSON: {\"licoes\":[{\"licao\":\"...\",\"resposta\":\"o porquê\"}]}"
+
+    fun pedidoDeSaberes(area: String, jaConhecidas: List<String>): String =
+        "Você monta o estudo diário da Vênus, assistente pessoal e comercial do Toni: ele mora em Porto Alegre, trabalha num hotel " +
+            "e tem a Desejo de Intimidade, loja online de produtos para o bem-estar íntimo, e faz tudo pelo celular Android.\n" +
+            "Área de hoje: $area.\n" +
+            "Escreva exatamente $SABERES_POR_DIA perguntas DIFERENTES que o Toni poderia fazer sobre essa área, úteis na vida ou no negócio dele, " +
+            "cada uma com uma resposta correta, prática e curta (até 3 frases), em português do Brasil. " +
+            "Só conhecimento que não muda com o tempo: nada de preços, valores de impostos, datas futuras, notícias ou leis recentes. " +
+            "Sem orientação médica, jurídica ou financeira individual; em saúde, termine indicando procurar um profissional quando fizer sentido. " +
+            "Sem linguagem explícita. " +
+            (if (jaConhecidas.isNotEmpty()) "Não repita estas: ${jaConhecidas.take(80).joinToString(" | ")}. " else "") +
+            "Responda só com JSON: {\"perguntas\":[{\"pergunta\":\"...\",\"resposta\":\"...\"}]}"
+
+    fun pedidoDeConferenciaDeSaberes(area: String, pares: List<Pair<String, String>>): String =
+        "Você confere respostas sobre $area antes de uma assistente guardar na memória. Aprove (true) só se a resposta estiver correta, " +
+            "responder à pergunta, não depender de data (preços, valores, leis recentes), não der orientação médica, jurídica ou financeira individual " +
+            "e não tiver linguagem explícita. Na dúvida, reprove (false). " +
+            "Responda só com JSON, na mesma ordem e quantidade: {\"aprovadas\":[true,false,...]}\n" +
+            pares.mapIndexed { i, (p, r) -> "${i + 1}. Pergunta: $p\n   Resposta: $r" }.joinToString("\n")
 
     fun pedidoDeRevisao(msgs: List<Memoria.Mensagem>): String =
         "Você revisa as conversas do Toni com a Vênus, a assistente de voz dele, para ela aprender com os erros. Ações que ela executa:\n" +

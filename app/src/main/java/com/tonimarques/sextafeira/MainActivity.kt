@@ -1591,7 +1591,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         if (modoIndependente()) return null
         val k = chave()
         if (k.isBlank()) return null
-        return gemini ?: Gemini(k, modelo(), ferramentas) { memoria.resumoParaIA() }.also { g ->
+        return gemini ?: Gemini(k, modelo(), ferramentas, autoconhecimento = { Consciencia.retrato(this, memoria, ferramentas) }) { memoria.resumoParaIA() }.also { g ->
             // continua a conversa em andamento (mesmo depois de fechar o app), sem misturar com as outras
             try {
                 memoria.conversaRecente()?.let { id -> g.carregarHistorico(memoria.mensagensDaConversa(id, 40).map { it.doUsuario to it.texto }) }
@@ -2426,7 +2426,8 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
                         val r = Estudo.ultimo(this)
                         "Todo dia, em segundo plano: ${Estudo.FRASES_POR_DIA} jeitos de pedir, ${Estudo.ENIGMAS_POR_DIA} charadas, " +
                             "${Estudo.CLIENTES_POR_DIA} respostas para clientes conferidas, até ${Estudo.REVISAO_MAXIMO} correções das suas conversas, " +
-                            "${Estudo.VOZ_POR_DIA} erros de voz e digitação e ${Estudo.OBJECOES_POR_DIA} objeções de venda; " +
+                            "${Estudo.VOZ_POR_DIA} erros de voz e digitação, ${Estudo.OBJECOES_POR_DIA} objeções de venda, " +
+                            "até ${Estudo.LICOES_MAXIMO} lições dos próprios erros e ${Estudo.SABERES_POR_DIA} saberes de uma área por dia (hoje: ${Estudo.disciplinaDoDia()}); " +
                             "${Estudo.IDEIAS_POR_SEMANA} ideias de post por semana. Descarta o que já sabe e limpa o que nunca usou." +
                             (r?.let { " Último: ${it.data.split("-").reversed().take(2).joinToString("/")}, +${it.total} itens." } ?: "") +
                             " Pergunte: o que você estudou hoje?"
@@ -3949,6 +3950,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         "comando" to "Jeitos de pedir", "intencao" to "Frases que entendi", "resposta" to "Respostas guardadas",
         "cliente" to "Respostas para clientes", "objecao" to "Objeções de venda", RegrasDaLoja.TIPO to "Regras da loja",
         "enigma" to "Charadas", "ideia_post" to "Ideias de post", "fato" to "Fatos sobre você", "conversa" to "Resumos de conversas",
+        Consciencia.TIPO_LICAO to "Lições dos meus erros", Estudo.TIPO_SABER to "Saberes de outras áreas",
     )
 
     private fun mostrarAprendizado() {

@@ -17,6 +17,8 @@ class Gemini(
     private val chave: String,
     modelo: String,
     private val ferramentas: Ferramentas,
+    /** O que ela sabe de si mesma (versão, IAs, ferramentas, estado e lições), incluído nas instruções. */
+    private val autoconhecimento: () -> String = { "" },
     /** O que a Sexta-feira sabe sobre o usuário (memórias), incluído nas instruções. */
     private val contexto: () -> String = { "" },
 ) {
@@ -149,7 +151,8 @@ class Gemini(
             Quando o usuário retomar um assunto de uma conversa antiga (o histórico dela já vem carregado),
             relembre em uma frase o ponto em que vocês pararam e continue dali, sem repetir tudo.
             Agora é $agora.
-        """.trimIndent() + contexto().let { if (it.isBlank()) "" else "\n\nSobre o usuário:\n$it" }
+        """.trimIndent() + autoconhecimento().let { if (it.isBlank()) "" else "\n\nSobre você mesma:\n$it" } +
+            contexto().let { if (it.isBlank()) "" else "\n\nSobre o usuário:\n$it" }
     }
 
     /**

@@ -804,6 +804,15 @@ class Memoria(contexto: Context) : SQLiteOpenHelper(contexto, "sexta.db", null, 
         return apagar.size
     }
 
+    /** Deixa só os [quantos] mais novos de um tipo (as lições, por exemplo). Devolve quantos saíram. */
+    fun manterUltimos(tipo: String, quantos: Int): Int {
+        val n = writableDatabase.delete(
+            "vetores", "tipo = ? AND id NOT IN (SELECT id FROM vetores WHERE tipo = ? ORDER BY id DESC LIMIT $quantos)", arrayOf(tipo, tipo)
+        )
+        if (n > 0) mudou(null)
+        return n
+    }
+
     /** Apaga um aprendizado (pela tela "O que eu aprendi"). */
     fun apagarItem(id: Long): Boolean {
         val n = writableDatabase.delete("vetores", "id = ?", arrayOf(id.toString()))
