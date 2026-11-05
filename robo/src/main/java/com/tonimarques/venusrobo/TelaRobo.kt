@@ -52,6 +52,15 @@ class TelaRobo : TelaBase() {
             else "$prontas de ${Respostas.MODELOS.size} respostas prontas para colar no Instagram.",
             13.5f, Color.WHITE,
         ))
+        val regras = RegrasDaVenus.ler(this)
+        adicionar(texto(
+            when {
+                regras == null -> "Regras de venda: não consegui ler da Vênus (atualize a Vênus e o robô). Uso só a Vênus da loja do site."
+                !regras.configuradas -> "Regras de venda: ainda não preenchidas na Vênus (Ajustes → Site, ramo e regras de venda)."
+                else -> "✓ Regras de venda lidas da Vênus: ${regras.respostas.size} respostas exatas (pagamento, frete, retirada…)."
+            },
+            12.5f, apagado,
+        ))
         adicionar(botao(if (prontas == 0) "Gerar as respostas do Instagram" else "Ver e copiar as respostas", true) {
             startActivity(Intent(this, TelaRespostas::class.java))
         })

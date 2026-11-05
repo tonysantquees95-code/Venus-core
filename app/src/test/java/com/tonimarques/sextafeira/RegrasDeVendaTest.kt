@@ -55,4 +55,15 @@ class RegrasDeVendaTest {
         assertFalse(padrao.perguntas("Loja X").any { it.first.contains("frete grátis") })
         assertFalse(padrao.perguntas("Loja X").any { it.first.contains("horário") })
     }
+
+    @Test fun injecaoNoPrompt() {
+        val t = Perfil.injecao()
+        assertTrue(t.startsWith("Perfil da loja"))
+        assertTrue(t.contains(Perfil.loja) && t.contains("Regras de venda: " + padrao.texto()))
+        assertTrue(t.contains("Não informado pela loja: frete grátis, prazo de postagem, horário de atendimento"))
+        assertTrue(t.contains("Nunca prometa"))
+        assertEquals(listOf("frete grátis", "prazo de postagem", "horário de atendimento"), padrao.faltando())
+        assertTrue(RegrasDeVenda.VAZIA.faltando().containsAll(listOf("formas de envio", "canais de atendimento")))
+        assertEquals(listOf("pagamento", "frete", "retirada", "discreto", "troca", "idade"), padrao.perguntasComId("X").map { it.first })
+    }
 }

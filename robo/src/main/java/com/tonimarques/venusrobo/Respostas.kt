@@ -63,6 +63,8 @@ object Respostas {
      * Cada pergunta vai com um remetente próprio para não misturar as conversas.
      */
     fun gerar(ctx: Context, m: Modelo): Gerada? {
+        // pagamento, frete, retirada, embalagem, trocas e horário: direto das regras que o dono preencheu na Vênus
+        RegrasDaVenus.ler(ctx)?.respostas?.get(m.id)?.let { return Gerada(it, false) }
         val r = Robo.perguntar(ctx, Robo.INSTAGRAM, "Respostas prontas (${m.id})", m.pergunta, teste = true)
         return juntar(r.mensagens)?.let { Gerada(it, r.humano) }
     }
