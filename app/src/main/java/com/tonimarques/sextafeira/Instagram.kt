@@ -45,7 +45,8 @@ object Instagram {
     data class Comentario(val id: String, val postId: String, val usuario: String, val texto: String, val quando: Long, val legendaDoPost: String)
 
     // ------------------------------------------------------------- conta
-    fun conectado(ctx: Context) = prefs(ctx).getString("token", null) != null
+    /** Só conta como conectado se o token abre (um token que o cofre não consegue abrir precisa ser colado de novo). */
+    fun conectado(ctx: Context) = Cofre.ler(prefs(ctx), "token").isNotBlank()
     fun usuario(ctx: Context): String? = prefs(ctx).getString("usuario", null)
 
     private fun prefs(ctx: Context) = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
