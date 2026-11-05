@@ -650,6 +650,43 @@ class Gemini(
             return Analise(o.optString("tipo", "outro").ifBlank { "outro" }, resumo, venc, valor, linha)
         }
 
+        /** Vários arquivos no mesmo pedido, cada um com o nome antes, e o pedido no fim. */
+        private fun partesDosDocumentos(docs: List<Arquivos.Documento>, texto: String): JSONArray {
+            val partes = JSONArray()
+            docs.forEachIndexed { i, doc ->
+                partes.put(JSONObject().put("text", "Arquivo ${i + 1}: \"${doc.nome}\" (${doc.tipoFalado})"))
+                if (doc.bytes != null) partes.put(imagem(doc.bytes, doc.mime))
+                else partes.put(JSONObject().put("text", "Conteúdo:\n${doc.texto}"))
+            }
+            partes.put(JSONObject().put("text", texto))
+            return partes
+        }
+
+        /**
+         * O pedido do usuário sobre um ou mais anexos (fotos, PDFs, planilhas, áudios), como no chat do Gemini:
+         * entende o que é cada arquivo e responde o que foi pedido. Pedido vazio = diz o que é e o principal de cada um.
+         */
+        fun perguntarDocumentos(chave: String, modelo: String, docs: List<Arquivos.Documento>, pergunta: String, conversa: List<Pair<String, String>>): String? {
+            if (docs.isEmpty()) return null
+            if (chave.isBlank() && docs.any { it.bytes != null }) return null
+            val antes = if (conversa.isEmpty()) "" else "Conversa até aqui sobre os arquivos:\n" +
+                conversa.takeLast(4).joinToString("\n") { "Usuário: ${it.first}\nVênus: ${it.second}" } + "\n\n"
+            val pedido = antes + "Você é a Vênus, assistente pessoal e da loja do Toni. Responda em português do Brasil, direto e sem markdown. " +
+                "Entenda sozinha o que é cada arquivo (foto de produto, nota fiscal, boleto, print, documento, planilha, áudio...). " +
+                "Use o conteúdo dos arquivos e, quando a pergunta pedir, também o seu conhecimento geral; diga quando algo não está nos arquivos. " +
+                (if (docs.size > 1) "Quando ajudar, diga de qual arquivo veio cada informação. " else "") +
+                "Pedido: " + pergunta.ifBlank {
+                    if (docs.size == 1) "Diga em poucas frases o que é este arquivo e o que ele tem de mais importante (números, datas, valores)."
+                    else "Diga em poucas frases o que é cada arquivo e o principal de cada um."
+                }
+            val corpo = JSONObject()
+                .put("contents", JSONArray().put(JSONObject().put("role", "user").put("parts", partesDosDocumentos(docs, pedido))))
+                .put("generationConfig", JSONObject().put("temperature", 0.3))
+                .toString().toByteArray()
+            val json = chamarAvulso(chave, listOf(modelo, "gemini-3.8-flash", "gemini-flash-lite-latest"), corpo, tempo = 120_000) ?: return null
+            return textoDaResposta(json)
+        }
+
         /** Pergunta sobre o arquivo aberto (cada pergunta manda o arquivo de novo, com as últimas trocas). */
         fun perguntarDocumento(chave: String, modelo: String, doc: Arquivos.Documento, pergunta: String, conversa: List<Pair<String, String>>): String? {
             if (chave.isBlank()) return null

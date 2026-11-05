@@ -53,6 +53,18 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
     protected lateinit var botaoMic: ImageButton
     protected lateinit var botaoEnviar: ImageButton
     protected lateinit var botaoAnexar: ImageButton
+    private lateinit var bandejaAnexos: LinearLayout
+    private lateinit var rolagemAnexos: android.widget.HorizontalScrollView
+
+    /** Um anexo escolhido: carrega em segundo plano (foto reduzida, texto do Word/Excel...). */
+    private class Anexo(val uri: Uri, var nome: String) {
+        var doc: Arquivos.Documento? = null
+        var miniatura: android.graphics.Bitmap? = null
+        var erro: String? = null
+        var vista: View? = null
+    }
+
+    private val anexos = mutableListOf<Anexo>()
     private var alturaOrbe = 0
     private var tecladoAberto = false
     private var animacaoOrbe: android.animation.ValueAnimator? = null
@@ -261,13 +273,18 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
                 val pergunta = intent.getStringExtra("pergunta").orEmpty()
                 if (arquivo.isNotBlank()) orbe.post { abrirStoryComEnquete(arquivo, pergunta) }
             }
-            Intent.ACTION_VIEW -> intent.data?.takeIf { it.scheme == "content" || it.scheme == "file" }?.let { u -> orbe.post { abrirDocumento(u) } }
+            Intent.ACTION_VIEW -> intent.data?.takeIf { it.scheme == "content" || it.scheme == "file" }?.let { u -> orbe.post { anexar(listOf(u)) } }
+            Intent.ACTION_SEND_MULTIPLE -> {
+                @Suppress("DEPRECATION")
+                val lista = if (Build.VERSION.SDK_INT >= 33) intent.getParcelableArrayListExtra(Intent.EXTRA_STREAM, Uri::class.java)
+                else intent.getParcelableArrayListExtra<Uri>(Intent.EXTRA_STREAM)
+                if (!lista.isNullOrEmpty()) orbe.post { anexar(lista) }
+            }
             Intent.ACTION_SEND -> {
                 @Suppress("DEPRECATION")
                 val uri = if (Build.VERSION.SDK_INT >= 33) intent.getParcelableExtra(Intent.EXTRA_STREAM, Uri::class.java)
                 else intent.getParcelableExtra<Uri>(Intent.EXTRA_STREAM)
-                if (uri != null && intent.type?.startsWith("image/") == true) orbe.post { fotoCompartilhada(uri) }
-                else if (uri != null) orbe.post { abrirDocumento(uri) }
+                if (uri != null) orbe.post { anexar(listOf(uri)) }
                 else intent.getStringExtra(Intent.EXTRA_TEXT)?.takeIf { it.isNotBlank() }?.let { t -> orbe.post { textoCompartilhado(t) } }
             }
             ACAO_PEDIDO -> {
@@ -407,6 +424,19 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         botaoEnviar = botaoIcone(R.drawable.ic_enviar, "Enviar", corAtual) { enviarTexto() }
         barra.addView(botaoMic)
         barra.addView(botaoEnviar)
+        // anexos escolhidos (fotos e arquivos), esperando o pedido, como no chat do Gemini
+        bandejaAnexos = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            setPadding(dp(2), dp(4), dp(2), dp(2))
+        }
+        rolagemAnexos = android.widget.HorizontalScrollView(this).apply {
+            isHorizontalScrollBarEnabled = false
+            visibility = View.GONE
+            addView(bandejaAnexos)
+        }
+        raiz.addView(rolagemAnexos, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+            setMargins(dp(14), dp(4), dp(14), 0)
+        })
         val paramsBarra = LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
         ).apply { setMargins(dp(14), dp(6), dp(14), dp(14)) }
@@ -499,17 +529,14 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         }
         val lerFoto: (Uri) -> Unit = { u ->
             cadastroFoto = null
-            abrirDocumento(u)
+            anexar(listOf(u))
         }
         opcao("📷", "Tirar foto", "A ${Marca.nome} olha e responde") {
             cadastroFoto = lerFoto
             pedirFotoCamera()
         }
-        opcao("🖼️", "Foto da galeria", "Imagem, print ou nota") {
-            cadastroFoto = lerFoto
-            pedirFotoGaleria()
-        }
-        opcao("📄", "Documento", "PDF, Word, Excel, áudio…") { escolherArquivo() }
+        opcao("🖼️", "Fotos da galeria", "Uma ou várias: imagem, print, nota") { escolherFotos() }
+        opcao("📄", "Arquivos", "PDF, Word, Excel, áudio… (um ou vários)") { escolherArquivo() }
         opcao("🛍️", "Produto novo", "Cadastrar na loja com foto") { abrirCadastro(emptyMap()) }
         opcao("📣", "Post no Instagram", "Programar feed ou story") { programarPost(emptyMap()) }
         caixa.measure(View.MeasureSpec.makeMeasureSpec(dp(260), View.MeasureSpec.EXACTLY), View.MeasureSpec.UNSPECIFIED)
@@ -617,7 +644,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         gemini = null
         cerebro.esquecerPendencias()
         Contexto.limpar()
-        documentoAberto = null
+        documentosAbertos = emptyList()
         mensagens.removeAllViews()
         resumirConversasAntigas()
     }
@@ -628,7 +655,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         gemini = null
         cerebro.esquecerPendencias()
         Contexto.limpar()
-        documentoAberto = null
+        documentosAbertos = emptyList()
         mensagens.removeAllViews()
         val c = try { memoria.conversa(id) } catch (e: Exception) { null }
         if (aviso && c != null) {
@@ -753,6 +780,12 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
     // ---------------------------------------------------------------- conversa
     private fun enviarTexto() {
         val texto = campo.text.toString().trim()
+        if (temAnexos()) {
+            campo.setText("")
+            ultimaFoiVoz = false
+            enviarComAnexos(texto)
+            return
+        }
         if (texto.isEmpty()) return
         campo.setText("")
         ultimaFoiVoz = false
@@ -761,6 +794,11 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
 
     private fun processar(entrada: String) {
         if (ocupado) return
+        // com anexos esperando, o que você falar é o pedido sobre eles
+        if (temAnexos() && Cerebro.restoDepoisDaAtivacao(entrada)?.isBlank() != true) {
+            enviarComAnexos(Cerebro.restoDepoisDaAtivacao(entrada) ?: entrada)
+            return
+        }
         pararVigilia()
         respostaAtrasada = 0
         var pedido = entrada
@@ -809,7 +847,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
             val chave = ComandosLocais.normalizar(pedido)
             if (Regex("^(?:fecha|feche|fechar|esquece|esqueca|sai|sair) (?:d?o |d?a |desse |deste )?(?:documento|arquivo|pdf|audio|planilha|boleto|nota)\\b").containsMatchIn(chave)) {
                 adicionarMensagem(original, true)
-                documentoAberto = null
+                documentosAbertos = emptyList()
                 responder("Pronto, fechei o arquivo.")
                 return
             }
@@ -2195,8 +2233,13 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
     @Deprecated("API clássica, suficiente para este app")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
-        if (requestCode == PEDIDO_ARQUIVO) {
-            if (resultCode == RESULT_OK) data?.data?.let { abrirDocumento(it) }
+        if (requestCode == PEDIDO_ARQUIVO || requestCode == PEDIDO_ANEXO_FOTOS) {
+            if (resultCode == RESULT_OK && data != null) {
+                val uris = mutableListOf<Uri>()
+                data.clipData?.let { c -> for (i in 0 until c.itemCount) c.getItemAt(i).uri?.let { uris += it } }
+                if (uris.isEmpty()) data.data?.let { uris += it }
+                anexar(uris)
+            }
             return
         }
         if (requestCode == PEDIDO_FOTO_CAMERA || requestCode == PEDIDO_FOTO_GALERIA) {
@@ -4017,22 +4060,290 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
     }
 
     // ----------------------------------------------------------- arquivos (PDF, Word, Excel, áudio...)
-    private var documentoAberto: Arquivos.Documento? = null
+    private var documentosAbertos: List<Arquivos.Documento> = emptyList()
     private var documentoQuando = 0L
     private val conversaDocumento = mutableListOf<Pair<String, String>>()
 
     /** O arquivo continua "aberto" para perguntas por 30 minutos. */
     private fun documentoAtivo(): Arquivos.Documento? =
-        documentoAberto?.takeIf { System.currentTimeMillis() - documentoQuando < 30 * 60_000L }
+        documentosAtivos().firstOrNull()
+
+    private fun documentosAtivos(): List<Arquivos.Documento> =
+        if (System.currentTimeMillis() - documentoQuando < 30 * 60_000L) documentosAbertos else emptyList()
 
     private fun escolherArquivo() {
         try {
             startActivityForResult(
-                Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("*/*"),
+                Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("*/*")
+                    .putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true),
                 PEDIDO_ARQUIVO,
             )
         } catch (e: Exception) {
             responder("Não consegui abrir o seletor de arquivos.")
+        }
+    }
+
+    // ----------------------------------------------------------- anexos (vários, com o seu pedido)
+    private fun temAnexos() = ::bandejaAnexos.isInitialized && anexos.isNotEmpty()
+
+    private fun escolherFotos() {
+        val intencao = if (Build.VERSION.SDK_INT >= 33) {
+            Intent(android.provider.MediaStore.ACTION_PICK_IMAGES)
+                .putExtra(android.provider.MediaStore.EXTRA_PICK_IMAGES_MAX, minOf(MAXIMO_ANEXOS, android.provider.MediaStore.getPickImagesMaxLimit()))
+        } else {
+            Intent(Intent.ACTION_GET_CONTENT).setType("image/*").addCategory(Intent.CATEGORY_OPENABLE).putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
+        }
+        try {
+            startActivityForResult(intencao, PEDIDO_ANEXO_FOTOS)
+        } catch (e: Exception) {
+            try {
+                startActivityForResult(Intent(Intent.ACTION_GET_CONTENT).setType("image/*").putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true), PEDIDO_ANEXO_FOTOS)
+            } catch (e2: Exception) {
+                responder("Não consegui abrir a galeria.")
+            }
+        }
+    }
+
+    private fun nomeDoArquivo(uri: Uri): String = try {
+        contentResolver.query(uri, arrayOf(android.provider.OpenableColumns.DISPLAY_NAME), null, null, null)?.use { c ->
+            if (c.moveToFirst()) c.getString(0) else null
+        } ?: uri.lastPathSegment ?: "arquivo"
+    } catch (e: Exception) {
+        uri.lastPathSegment ?: "arquivo"
+    }
+
+    /** Põe fotos e arquivos na bandeja acima do campo; nada é enviado até você tocar em enviar (com ou sem texto). */
+    private fun anexar(uris: List<Uri>) {
+        if (!::bandejaAnexos.isInitialized || uris.isEmpty()) return
+        val cabem = MAXIMO_ANEXOS - anexos.size
+        if (cabem <= 0) return Toast.makeText(this, "No máximo $MAXIMO_ANEXOS anexos por vez.", Toast.LENGTH_SHORT).show()
+        if (uris.size > cabem) Toast.makeText(this, "Peguei só $cabem; o máximo é $MAXIMO_ANEXOS por vez.", Toast.LENGTH_SHORT).show()
+        for (uri in uris.take(cabem)) {
+            val a = Anexo(uri, nomeDoArquivo(uri))
+            anexos += a
+            a.vista = vistaDoAnexo(a)
+            bandejaAnexos.addView(a.vista)
+            Thread {
+                try {
+                    val mime = Arquivos.tipo(contentResolver.getType(uri), a.nome)
+                    if (mime.startsWith("image/")) {
+                        val bytes = FotoProvider.prepararParaEnviar(this, uri, 1600) ?: throw Arquivos.ErroDeArquivo("Não consegui abrir essa foto.")
+                        a.doc = Arquivos.Documento(a.nome, "image/jpeg", bytes, null)
+                        a.miniatura = android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size, android.graphics.BitmapFactory.Options().apply { inSampleSize = 4 })
+                    } else {
+                        a.doc = Arquivos.abrir(this, uri)
+                    }
+                } catch (e: Exception) {
+                    a.erro = (e as? Arquivos.ErroDeArquivo)?.message ?: "Não consegui abrir ${a.nome}."
+                }
+                runOnUiThread {
+                    if (a.erro != null) {
+                        Toast.makeText(this, a.erro, Toast.LENGTH_LONG).show()
+                        tirarAnexo(a)
+                    } else atualizarVistaDoAnexo(a)
+                }
+            }.start()
+        }
+        rolagemAnexos.visibility = View.VISIBLE
+        campo.hint = "Peça algo sobre ${if (anexos.size == 1) "o anexo" else "os anexos"} (ou só envie)"
+        campo.requestFocus()
+    }
+
+    private fun tirarAnexo(a: Anexo) {
+        anexos.remove(a)
+        a.vista?.let { bandejaAnexos.removeView(it) }
+        if (anexos.isEmpty()) {
+            rolagemAnexos.visibility = View.GONE
+            campo.hint = "Digite ou toque no orbe…"
+        }
+    }
+
+    private fun limparAnexos() {
+        anexos.clear()
+        if (::bandejaAnexos.isInitialized) {
+            bandejaAnexos.removeAllViews()
+            rolagemAnexos.visibility = View.GONE
+            campo.hint = "Digite ou toque no orbe…"
+        }
+    }
+
+    private fun iconeDoArquivo(nome: String, mime: String) = when {
+        mime == "application/pdf" -> "PDF"
+        mime.startsWith("audio/") -> "🎧"
+        nome.endsWith(".xlsx", true) || nome.endsWith(".csv", true) -> "📊"
+        nome.endsWith(".pptx", true) -> "📽"
+        else -> "📄"
+    }
+
+    /** O quadradinho do anexo: miniatura da foto (ou ícone do arquivo), nome embaixo e um × para tirar. */
+    private fun vistaDoAnexo(a: Anexo): View {
+        val quadro = android.widget.FrameLayout(this).apply { alpha = 0.55f }
+        val cartao = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER
+            background = vidro(Color.argb(22, 255, 255, 255), Color.argb(60, 255, 255, 255), 14)
+            clipToOutline = true
+        }
+        val imagem = android.widget.ImageView(this).apply {
+            scaleType = android.widget.ImageView.ScaleType.CENTER_CROP
+            tag = "imagem"
+            visibility = View.GONE
+        }
+        val icone = TextView(this).apply {
+            text = "…"
+            textSize = 18f
+            gravity = Gravity.CENTER
+            setTextColor(Color.WHITE)
+            tag = "icone"
+        }
+        val nome = TextView(this).apply {
+            text = a.nome
+            textSize = 9.5f
+            maxLines = 1
+            ellipsize = TextUtils.TruncateAt.MIDDLE
+            setTextColor(COR_TEXTO_APAGADO)
+            setPadding(dp(4), 0, dp(4), dp(3))
+            gravity = Gravity.CENTER
+            tag = "nome"
+        }
+        cartao.addView(imagem, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
+        cartao.addView(icone, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
+        cartao.addView(nome, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+        quadro.addView(cartao, android.widget.FrameLayout.LayoutParams(dp(72), dp(72)).apply { setMargins(0, dp(6), dp(6), 0) })
+        val fechar = TextView(this).apply {
+            text = "×"
+            textSize = 13f
+            gravity = Gravity.CENTER
+            setTextColor(Color.WHITE)
+            background = GradientDrawable().apply {
+                shape = GradientDrawable.OVAL
+                setColor(Color.argb(230, 30, 20, 50))
+                setStroke(dp(1), Color.argb(120, 255, 255, 255))
+            }
+            contentDescription = "Tirar ${a.nome}"
+            setOnClickListener { tirarAnexo(a) }
+        }
+        quadro.addView(fechar, android.widget.FrameLayout.LayoutParams(dp(22), dp(22), Gravity.END or Gravity.TOP))
+        return quadro
+    }
+
+    private fun atualizarVistaDoAnexo(a: Anexo) {
+        val v = a.vista ?: return
+        v.alpha = 1f
+        val imagem = v.findViewWithTag<android.widget.ImageView>("imagem")
+        val icone = v.findViewWithTag<TextView>("icone")
+        val nome = v.findViewWithTag<TextView>("nome")
+        val doc = a.doc ?: return
+        if (a.miniatura != null) {
+            imagem.setImageBitmap(a.miniatura)
+            imagem.visibility = View.VISIBLE
+            icone.visibility = View.GONE
+            nome.visibility = View.GONE
+        } else {
+            icone.text = iconeDoArquivo(doc.nome, doc.mime)
+            icone.setTextColor(corAtual)
+        }
+    }
+
+    /** Botõezinhos de sugestão no chat (no lugar das caixas de pergunta). */
+    private fun mostrarSugestoes(opcoes: List<Pair<String, () -> Unit>>) {
+        if (opcoes.isEmpty()) return
+        val linha = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            setPadding(dp(2), dp(2), 0, dp(6))
+        }
+        for ((rotulo, acao) in opcoes) {
+            linha.addView(TextView(this).apply {
+                text = rotulo
+                textSize = 12.5f
+                setTextColor(corAtual)
+                setPadding(dp(12), dp(7), dp(12), dp(7))
+                background = vidro(Color.argb(14, 255, 255, 255), Color.argb(90, Color.red(corAtual), Color.green(corAtual), Color.blue(corAtual)), 16)
+                isClickable = true
+                setOnClickListener {
+                    linha.alpha = 0.4f
+                    linha.isEnabled = false
+                    acao()
+                }
+            }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { marginEnd = dp(8) })
+        }
+        mensagens.addView(android.widget.HorizontalScrollView(this).apply {
+            isHorizontalScrollBarEnabled = false
+            addView(linha)
+        })
+        rolarParaBaixo()
+    }
+
+    private val PEDE_NOTA = Regex("\\b(?:nota (?:de compra|fiscal)|lanca|lancar|lance|compra do fornecedor|soma(?:r)? (?:ao|no) estoque|entrada de estoque)\\b")
+    private val PEDE_FUNDO = Regex("\\b(?:fundo|tira(?:r)? o fundo|troca(?:r)? o fundo|recort(?:a|ar|e))\\b")
+
+    /**
+     * Envia os anexos com o seu pedido (ou sem nada: ela entende sozinha o que é cada arquivo).
+     * Pedidos de loja com foto vão direto para a tela certa (cadastro, nota de compra, fundo).
+     */
+    private fun enviarComAnexos(texto: String) {
+        if (anexos.any { it.doc == null && it.erro == null }) {
+            mudarEstado(Orbe.Estado.PENSANDO, "CARREGANDO OS ANEXOS…")
+            principal.postDelayed({ enviarComAnexos(texto) }, 500)
+            return
+        }
+        val docs = anexos.mapNotNull { it.doc }
+        limparAnexos()
+        if (docs.isEmpty()) return
+        topicoAtual = "Arquivos"
+        adicionarMensagem("📎 " + docs.joinToString(", ") { it.nome } + if (texto.isNotBlank()) "\n$texto" else "", true)
+        val chaveTexto = ComandosLocais.normalizar(texto)
+        val fotos = docs.filter { it.mime.startsWith("image/") && it.bytes != null }
+        val comando = if (texto.isNotBlank()) ComandosLocais.interpretar(texto) else null
+        when {
+            fotos.isNotEmpty() && (comando as? ComandosLocais.Resultado.Acao)?.nome == "loja_cadastrar" ->
+                return abrirCadastro((comando as ComandosLocais.Resultado.Acao).args, fotos.first().bytes)
+            texto.isNotBlank() && PEDE_NOTA.containsMatchIn(chaveTexto) && docs.first().bytes != null && ferramentas.loja.conectada ->
+                return lerNotaDoDocumento(docs.first())
+            fotos.isNotEmpty() && PEDE_FUNDO.containsMatchIn(chaveTexto) -> return editarFundo(fotos.first().bytes)
+        }
+        lerAnexos(docs, texto)
+    }
+
+    private fun lerAnexos(docs: List<Arquivos.Documento>, texto: String) {
+        val k = chave()
+        val m = modelo()
+        if (docs.any { it.bytes != null } && (k.isBlank() || modoIndependente())) {
+            return responder("Para ler fotos, PDFs e áudios eu uso o Gemini. Configure a chave do Gemini e deixe o modo independente desligado.")
+        }
+        if (!prefs.getBoolean(PREF_AVISO_ARQUIVOS, false)) {
+            prefs.edit().putBoolean(PREF_AVISO_ARQUIVOS, true).apply()
+            mostrarNota("Para ler anexos, o conteúdo vai para a IA (Google). Evite documentos com senhas.")
+        }
+        comTempoLimite(if (docs.size > 1) "LENDO OS ANEXOS…" else "LENDO O ANEXO…") {
+            // sem pedido e um arquivo só: a leitura completa (boleto e nota viram sugestões)
+            if (texto.isBlank() && docs.size == 1) {
+                val doc = docs.first()
+                val analise = Gemini.analisarDocumento(k, m, doc)
+                val acao: () -> Unit = {
+                    if (analise == null) responder("Não consegui ler ${doc.nome} agora. Tente de novo em instantes.")
+                    else {
+                        documentosAbertos = docs
+                        documentoQuando = System.currentTimeMillis()
+                        conversaDocumento.clear()
+                        responder(analise.resumo)
+                        oferecerAcoesDoDocumento(doc, analise)
+                    }
+                }
+                return@comTempoLimite acao
+            }
+            val r = Gemini.perguntarDocumentos(k, m, docs, texto, emptyList())
+            val acao: () -> Unit = {
+                if (r == null) responder("Não consegui ler ${if (docs.size > 1) "os anexos" else "o anexo"} agora. Tente de novo em instantes.")
+                else {
+                    documentosAbertos = docs
+                    documentoQuando = System.currentTimeMillis()
+                    conversaDocumento.clear()
+                    if (texto.isNotBlank()) conversaDocumento += texto to r
+                    responder(r)
+                }
+            }
+            acao
         }
     }
 
@@ -4070,7 +4381,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
                 if (analise == null) {
                     responder("Abri ${doc.nome}, mas o Gemini não conseguiu ler agora. Tente de novo em instantes.")
                 } else {
-                    documentoAberto = doc
+                    documentosAbertos = listOf(doc)
                     documentoQuando = System.currentTimeMillis()
                     conversaDocumento.clear()
                     adicionarMensagem("📎 ${doc.nome}", true)
@@ -4104,19 +4415,10 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
                         Toast.makeText(this, "Linha digitável copiada. É só colar no app do banco.", Toast.LENGTH_LONG).show()
                     }
                 }
-                AlertDialog.Builder(this)
-                    .setTitle("Boleto" + (a.valorCentavos?.let { " de " + Loja.dinheiro(it) } ?: ""))
-                    .setItems(opcoes.map { it.first }.toTypedArray()) { _, i -> opcoes[i].second() }
-                    .setNegativeButton("Agora não", null)
-                    .show()
+                mostrarSugestoes(opcoes)
             }
             a.tipo == "nota_fiscal" && doc.bytes != null && ferramentas.loja.conectada -> {
-                AlertDialog.Builder(this)
-                    .setTitle("Nota de compra?")
-                    .setMessage("Se for uma compra de produtos para a loja, eu posso somar ao estoque e guardar o custo de cada um.")
-                    .setPositiveButton("Lançar a compra") { _, _ -> lerNotaDoDocumento(doc) }
-                    .setNegativeButton("Agora não", null)
-                    .show()
+                mostrarSugestoes(listOf("Lançar a compra no estoque" to { lerNotaDoDocumento(doc) }))
             }
         }
     }
@@ -4142,13 +4444,13 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
     }
 
     private fun perguntarAoDocumento(pergunta: String) {
-        val doc = documentoAtivo() ?: return responder("Nenhum arquivo aberto. Compartilhe um arquivo comigo ou diga: abre um arquivo.")
+        val docs = documentosAtivos().ifEmpty { return responder("Nenhum arquivo aberto. Toque no + para anexar fotos ou arquivos.") }
         documentoQuando = System.currentTimeMillis()
         val k = chave()
         val m = modelo()
         val historico = conversaDocumento.toList()
-        comTempoLimite("LENDO O ARQUIVO…") {
-            val r = Gemini.perguntarDocumento(k, m, doc, pergunta, historico)
+        comTempoLimite(if (docs.size > 1) "LENDO OS ARQUIVOS…" else "LENDO O ARQUIVO…") {
+            val r = Gemini.perguntarDocumentos(k, m, docs, pergunta, historico)
             val acao: () -> Unit = {
                 if (r == null) responder("O Gemini não respondeu agora. Pode perguntar de novo?")
                 else {
@@ -4563,6 +4865,8 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         private const val PEDIDO_FOTO_CAMERA = 40
         private const val PEDIDO_FOTO_GALERIA = 41
         private const val PEDIDO_ARQUIVO = 42
+        private const val PEDIDO_ANEXO_FOTOS = 43
+        private const val MAXIMO_ANEXOS = 10
         private const val PREF_AVISO_ARQUIVOS = "aviso_arquivos"
         private const val LIMITE_IA_MS = 35_000L
         private const val LIMITE_IA_PROFUNDO_MS = 90_000L
