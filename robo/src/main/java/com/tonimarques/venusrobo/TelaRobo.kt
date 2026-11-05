@@ -25,13 +25,7 @@ import android.widget.Toast
  * A tela do Vênus Robô: liga e desliga, mostra se tem acesso às notificações, guarda o endereço e a chave
  * da Vênus da loja, escolhe em quais apps responder, testa a conversa e mostra as últimas respostas.
  */
-class TelaRobo : Activity() {
-
-    private val destaque = Color.parseColor("#E36BD0")
-    private val apagado = Color.parseColor("#8E87A8")
-    private lateinit var coluna: LinearLayout
-
-    private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
+class TelaRobo : TelaBase() {
 
     override fun onResume() {
         super.onResume()
@@ -39,14 +33,7 @@ class TelaRobo : Activity() {
     }
 
     private fun montar() {
-        coluna = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(dp(18), dp(24), dp(18), dp(32))
-        }
-        setContentView(ScrollView(this).apply {
-            background = GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, intArrayOf(Color.parseColor("#0D0A1F"), Color.parseColor("#03040A")))
-            addView(coluna)
-        })
+        novaTela()
 
         coluna.addView(TextView(this).apply {
             text = "VÊNUS ROBÔ"
@@ -55,7 +42,19 @@ class TelaRobo : Activity() {
             typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
             setTextColor(destaque)
         })
-        coluna.addView(texto("Responde as clientes no WhatsApp Business e no Instagram com a Vênus da loja. Se ela não souber, passa para você.", 13f, apagado))
+        coluna.addView(texto("Responde as clientes no WhatsApp Business com a Vênus da loja (se ela não souber, passa para você) e prepara as respostas prontas do Instagram.", 13f, apagado))
+
+        // ---- respostas prontas do Instagram
+        cartao("Respostas do Instagram")
+        val prontas = Respostas.lista(this).count { it.texto.isNotBlank() }
+        adicionar(texto(
+            if (prontas == 0) "A Vênus da loja escreve as respostas para as perguntas mais comuns, e você cola nas ferramentas oficiais do Instagram. O Instagram responde sozinho, sem risco de bloqueio."
+            else "$prontas de ${Respostas.MODELOS.size} respostas prontas para colar no Instagram.",
+            13.5f, Color.WHITE,
+        ))
+        adicionar(botao(if (prontas == 0) "Gerar as respostas do Instagram" else "Ver e copiar as respostas", true) {
+            startActivity(Intent(this, TelaRespostas::class.java))
+        })
 
         // ---- situação
         val acesso = OuvinteRobo.temAcesso(this)
@@ -100,6 +99,8 @@ class TelaRobo : Activity() {
             })
         }
 
+        adicionar(texto("No Instagram, o melhor é usar as respostas prontas acima: o Instagram desconfia de respostas feitas pelas notificações do celular.", 12.5f, apagado))
+
         // ---- ligação com a Vênus da loja
         cartao("Vênus da loja")
         adicionar(texto("Endereço", 12.5f, apagado))
@@ -137,67 +138,5 @@ class TelaRobo : Activity() {
             adicionar(texto(titulo, 11.5f, if (r.erro) Color.parseColor("#FF8A80") else apagado))
             adicionar(texto("“${r.mensagem}”\n→ ${r.resposta}", 14f, Color.WHITE))
         }
-    }
-
-    // ------------------------------------------------------------------ peças da tela
-    private var cartaoAtual: LinearLayout? = null
-
-    private fun cartao(titulo: String) {
-        coluna.addView(TextView(this).apply {
-            text = titulo.uppercase()
-            textSize = 11f
-            letterSpacing = 0.25f
-            setTextColor(destaque)
-            setPadding(dp(6), dp(20), 0, dp(8))
-        })
-        val c = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(dp(14), dp(8), dp(14), dp(14))
-            background = GradientDrawable().apply {
-                cornerRadius = dp(20).toFloat()
-                setColor(Color.argb(150, 24, 19, 44))
-                setStroke(dp(1), Color.parseColor("#2C2546"))
-            }
-        }
-        coluna.addView(c)
-        cartaoAtual = c
-    }
-
-    private fun adicionar(v: View) {
-        (cartaoAtual ?: coluna).addView(v, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(8) })
-    }
-
-    private fun texto(t: String, tamanho: Float, cor: Int) = TextView(this).apply {
-        text = t
-        textSize = tamanho
-        setTextColor(cor)
-        setPadding(dp(2), 0, dp(2), 0)
-    }
-
-    private fun campo(valor: String, variacao: Int) = EditText(this).apply {
-        setText(valor)
-        inputType = InputType.TYPE_CLASS_TEXT or variacao
-        textSize = 14.5f
-        setTextColor(Color.WHITE)
-        setPadding(dp(14), dp(12), dp(14), dp(12))
-        background = GradientDrawable().apply {
-            cornerRadius = dp(14).toFloat()
-            setColor(Color.parseColor("#120E22"))
-            setStroke(dp(1), Color.parseColor("#2C2546"))
-        }
-    }
-
-    private fun botao(t: String, primario: Boolean, aoTocar: () -> Unit) = TextView(this).apply {
-        text = t
-        textSize = 15f
-        gravity = Gravity.CENTER
-        setPadding(dp(14), dp(13), dp(14), dp(13))
-        setTextColor(if (primario) Color.WHITE else destaque)
-        background = if (primario) GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT, intArrayOf(destaque, Color.parseColor("#9B5CF6"))).apply { cornerRadius = dp(26).toFloat() }
-        else GradientDrawable().apply {
-            cornerRadius = dp(26).toFloat()
-            setStroke(dp(1), destaque)
-        }
-        setOnClickListener { aoTocar() }
     }
 }
