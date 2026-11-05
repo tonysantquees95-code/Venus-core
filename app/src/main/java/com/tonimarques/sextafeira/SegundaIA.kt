@@ -40,6 +40,13 @@ object SegundaIA {
         ),
     )
 
+    /** Segunda reserva: depois da Groq (ou do Grok) e antes do Gemini. Grátis com 1 milhão de tokens por dia, 5 pedidos por minuto. */
+    val CEREBRAS = Provedor(
+        "cerebras", "Cerebras (grátis)", "https://api.cerebras.ai/v1",
+        listOf("gpt-oss-120b", "qwen-3.8-27b", "llama-3.3-70b"),
+        Regex("gpt-oss-120b|qwen|llama-3\\.3|gpt-oss|llama"), "https://cloud.cerebras.ai",
+    )
+
     private const val PREFS = "config"
     @Volatile
     private var ctx: Context? = null
@@ -62,7 +69,21 @@ object SegundaIA {
 
     fun chave(c: Context? = ctx): String = c?.getSharedPreferences(PREFS, Context.MODE_PRIVATE)?.getString("reserva_chave", "").orEmpty()
 
-    fun configurada(c: Context? = ctx) = chave(c).isNotBlank()
+    fun chaveCerebras(c: Context? = ctx): String = c?.getSharedPreferences(PREFS, Context.MODE_PRIVATE)?.getString("cerebras_chave", "").orEmpty()
+
+    fun salvarCerebras(c: Context, chave: String) {
+        c.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putString("cerebras_chave", chave.trim()).apply()
+        modeloQueFunciona.remove(CEREBRAS.id)
+        Diario.anotar(c, "conexao", if (chave.isBlank()) "Segunda reserva (Cerebras) desligada" else "Segunda reserva configurada: Cerebras", "tela")
+    }
+
+    /** As IAs reserva na ordem em que são tentadas: a escolhida (Groq ou Grok) e depois a Cerebras. */
+    fun cadeia(c: Context? = ctx): List<Pair<Provedor, String>> = listOfNotNull(
+        chave(c).takeIf { it.isNotBlank() }?.let { provedor(c) to it },
+        chaveCerebras(c).takeIf { it.isNotBlank() }?.let { CEREBRAS to it },
+    )
+
+    fun configurada(c: Context? = ctx) = cadeia(c).isNotEmpty()
 
     /** A Groq (ou o Grok) responde a conversa primeiro, e o Gemini fica de reserva (padrão desde a v1.128). */
     fun principal(c: Context? = ctx): Boolean =
@@ -84,10 +105,15 @@ object SegundaIA {
      * Bloqueante: chame fora da thread principal.
      */
     fun responder(corpoGemini: JSONObject, tempo: Int = 30_000, esforco: String = "low"): JSONObject? {
-        val chave = chave()
-        if (chave.isBlank()) return null
-        val p = provedor()
+        val cadeia = cadeia()
+        if (cadeia.isEmpty()) return null
         val pedido = paraOpenAI(corpoGemini) ?: return null
+        for ((p, chave) in cadeia) responderCom(p, chave, pedido, tempo, esforco)?.let { return it }
+        return null
+    }
+
+    /** Tenta os modelos de um provedor (o que respondeu por último primeiro). */
+    private fun responderCom(p: Provedor, chave: String, pedido: JSONObject, tempo: Int, esforco: String): JSONObject? {
         // com foto: só modelos que enxergam (na Groq, os Llama 4)
         val comFoto = temFoto(pedido)
         val modelos = if (comFoto) (VISAO[p.id] ?: return null) else p.modelos
@@ -213,12 +239,15 @@ object SegundaIA {
     }
 
     /** Teste rápido da chave (para o botão "Salvar e testar"). Devolve a resposta ou lança erro com a explicação. */
-    fun testar(c: Context): String {
+    fun testar(c: Context, cerebras: Boolean = false): String {
         iniciar(c)
+        val p = if (cerebras) CEREBRAS else provedor(c)
+        val chave = if (cerebras) chaveCerebras(c) else chave(c)
         val corpo = JSONObject().put(
             "contents", JSONArray().put(JSONObject().put("role", "user").put("parts", JSONArray().put(JSONObject().put("text", "Responda só: funcionando"))))
         )
-        val r = responder(corpo, 20_000) ?: throw IllegalStateException("A ${provedor(c).nome} não respondeu. Confira a chave.")
+        val pedido = paraOpenAI(corpo) ?: throw IllegalStateException("Pedido de teste inválido.")
+        val r = responderCom(p, chave, pedido, 20_000, "low") ?: throw IllegalStateException("A ${p.nome} não respondeu. Confira a chave.")
         return textoDe(r)
     }
 
@@ -251,6 +280,8 @@ object SegundaIA {
                 codigo == 429 || codigo == 413 -> Resultado.Limite
                 // modelo que não aceitou o ajuste de raciocínio: tenta sem ele
                 codigo == 400 && corpo.has("reasoning_effort") -> chamar(p, chave, modelo, pedido, tempo, ajuste = false)
+                // modelo que não aceitou o formato JSON obrigatório: o pedido já diz para responder em JSON
+                codigo == 400 && pedido.has("response_format") -> chamar(p, chave, modelo, JSONObject(pedido.toString()).apply { remove("response_format") }, tempo, ajuste, esforco)
                 else -> {
                     ctx?.let { Registro.anotar(it, "erro", "IA reserva ${p.nome} → $codigo ${texto.take(200)}") }
                     Resultado.Falhou
