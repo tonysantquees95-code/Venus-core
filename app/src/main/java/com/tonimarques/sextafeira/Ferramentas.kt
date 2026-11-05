@@ -214,7 +214,7 @@ class Ferramentas(private val activity: Activity, private val memoria: Memoria? 
                 "Guarda o endereço de um lugar do usuário (casa, trabalho, academia...) para rotas como 'me leva para casa'.",
                 listOf("lugar", "endereco"),
                 "lugar" to texto("Nome do lugar: casa, trabalho, academia, casa da mãe..."),
-                "endereco" to texto("Endereço completo ou nome do lugar (ex.: Hotel Intercity Aeroporto, Porto Alegre).")
+                "endereco" to texto("Endereço completo ou nome do lugar (ex.: Rua dos Andradas, 1000, Centro).")
             )
         )
         .put(

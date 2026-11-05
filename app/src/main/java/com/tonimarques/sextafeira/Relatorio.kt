@@ -150,7 +150,7 @@ object Relatorio {
             }
         }
         val rodape = Paint(leg).apply { textSize = 24 * u }
-        c.drawText("${Marca.nome} · Desejo de Intimidade", 60 * u, h - 40 * u, rodape)
+        c.drawText("${Marca.nome} · ${Perfil.loja}", 60 * u, h - 40 * u, rodape)
     }
 
     fun jpeg(b: Bitmap): ByteArray = ByteArrayOutputStream().use { out ->
@@ -195,7 +195,7 @@ object Relatorio {
             c = pagina!!.canvas
             val faixa = Paint().apply { shader = LinearGradient(0f, 0f, largura.toFloat(), 0f, ROSA, ROXO, Shader.TileMode.CLAMP) }
             c!!.drawRect(0f, 0f, largura.toFloat(), 6f, faixa)
-            c!!.drawText("Desejo de Intimidade · relatório financeiro · página $numero", margem, altura - 20f, cinza)
+            c!!.drawText("${Perfil.loja} · relatório financeiro · página $numero", margem, altura - 20f, cinza)
             y = margem + 10f
         }
         fun espaco(precisa: Float) {

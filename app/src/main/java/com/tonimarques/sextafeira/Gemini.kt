@@ -423,7 +423,7 @@ class Gemini(
          */
         fun descreverProduto(chave: String, modelo: String, foto: ByteArray?, nome: String, categoria: String): String? {
             if (chave.isBlank()) return null
-            val pedido = "Você escreve descrições de produtos para a loja online Desejo de Intimidade (moda íntima e sex shop). " +
+            val pedido = "Você escreve descrições de produtos para a loja online ${Perfil.loja} (moda íntima e sex shop). " +
                 "Tom elegante, acolhedor e discreto, sem palavras vulgares nem explícitas. " +
                 "Escreva em português do Brasil a descrição do produto \"$nome\" (categoria: $categoria), com no máximo 280 caracteres: " +
                 "o que é, para que serve e o principal diferencial. Sem emojis, sem preço, sem markdown, sem aspas. " +
@@ -566,9 +566,9 @@ class Gemini(
         /** Rascunho de resposta a uma cliente, usando só o catálogo e as regras da loja. */
         fun respostaCliente(chave: String, modelo: String, mensagem: String, catalogo: String): String? {
             if (chave.isBlank()) return null
-            val pedido = "Você atende clientes da Desejo de Intimidade (moda íntima e sex shop, Porto Alegre, site desejo-de-intimidade.floot.app) pelo WhatsApp. " +
+            val pedido = "Você atende clientes da ${Perfil.loja} (moda íntima e sex shop, ${Perfil.cidade}, site desejo-de-intimidade.floot.app) pelo WhatsApp. " +
                 "Regras da loja: entrega discreta para todo o Brasil pelos Correios (SEDEX ou PAC), frete calculado pelo CEP no site; " +
-                "pagamento por Pix com 5% de desconto (exceto produtos em promoção) ou cartão em até 3x; retirada grátis em ponto de retirada em Porto Alegre, " +
+                "pagamento por Pix com 5% de desconto (exceto produtos em promoção) ou cartão em até 3x; retirada grátis em ponto de retirada em ${Perfil.cidade}, " +
                 "com dia e horário combinados pelo WhatsApp depois da compra; embalagem neutra e sem identificação; venda só para maiores de 18 anos. " +
                 "Catálogo atual (nome | preço | preço no Pix | estoque | link):\n$catalogo\n\n" +
                 "Escreva a resposta para a mensagem abaixo, como a loja, em português do Brasil: simpática, curta (até 5 frases), discreta, sem palavras vulgares, " +
@@ -585,7 +585,7 @@ class Gemini(
         /** Legenda para Instagram (feed ou story) a partir da foto e do que se sabe do produto. */
         fun legendaInstagram(chave: String, modelo: String, foto: ByteArray?, contexto: String, story: Boolean): String? {
             if (chave.isBlank()) return null
-            val pedido = "Você cuida do Instagram da Desejo de Intimidade, loja de moda íntima e sex shop com entrega discreta em todo o Brasil " +
+            val pedido = "Você cuida do Instagram da ${Perfil.loja}, loja de moda íntima e sex shop com entrega discreta em todo o Brasil " +
                 "(site desejo-de-intimidade.floot.app). Tom elegante, provocante na medida e acolhedor, sem palavras explícitas nem vulgares " +
                 "(o Instagram remove conteúdo sexual explícito). " +
                 (if (story) "Escreva um texto curto para um story (até 90 caracteres) com uma chamada para ação. "
@@ -607,7 +607,7 @@ class Gemini(
         /** Resposta pública a um comentário no Instagram da loja (curta, discreta, chama para o direct ou o WhatsApp). */
         fun respostaComentario(chave: String, modelo: String, comentario: String, usuario: String, legendaDoPost: String, catalogo: String): String? {
             if (chave.isBlank()) return null
-            val pedido = "Você responde comentários no Instagram da Desejo de Intimidade, loja de moda íntima e sex shop com entrega discreta " +
+            val pedido = "Você responde comentários no Instagram da ${Perfil.loja}, loja de moda íntima e sex shop com entrega discreta " +
                 "em todo o Brasil (site desejo-de-intimidade.floot.app). A resposta é PÚBLICA: seja simpática, curta (1 ou 2 frases), elegante, " +
                 "sem palavras explícitas, no máximo 1 emoji, começando com @$usuario. Se perguntarem preço ou detalhes, responda se estiver no catálogo " +
                 "e convide para chamar no direct ou no WhatsApp para atendimento discreto. Elogio: agradeça com carinho. Reclamação: peça desculpas e " +
@@ -711,7 +711,7 @@ class Gemini(
             if (chave.isBlank() && docs.any { it.bytes != null }) return null
             val antes = if (conversa.isEmpty()) "" else "Conversa até aqui sobre os arquivos:\n" +
                 conversa.takeLast(4).joinToString("\n") { "Usuário: ${it.first}\nVênus: ${it.second}" } + "\n\n"
-            val pedido = antes + "Você é a Vênus, assistente pessoal e da loja do Toni. Responda em português do Brasil, direto e sem markdown. " +
+            val pedido = antes + "Você é a Vênus, assistente pessoal e da loja do ${Perfil.dono}. Responda em português do Brasil, direto e sem markdown. " +
                 "Entenda sozinha o que é cada arquivo (foto de produto, nota fiscal, boleto, print, documento, planilha, áudio...). " +
                 "Use o conteúdo dos arquivos e, quando a pergunta pedir, também o seu conhecimento geral; diga quando algo não está nos arquivos. " +
                 (if (docs.size > 1) "Quando ajudar, diga de qual arquivo veio cada informação. " else "") +

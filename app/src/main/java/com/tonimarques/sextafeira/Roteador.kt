@@ -120,7 +120,7 @@ object Roteador {
 
     // ------------------------------------------------------------------ pergunta ao Gemini
     fun montarPedido(frase: String, contexto: String): String =
-        "Você é o interpretador de comandos da Vênus, assistente de voz do Toni, dono da loja online Desejo de Intimidade. " +
+        "Você é o interpretador de comandos da Vênus, assistente de voz do ${Perfil.dono}, dono da loja online ${Perfil.loja}. " +
             "Escolha qual ação da lista atende a frase dele, ou \"conversa\" se for pergunta geral, papo, conhecimento ou algo fora da lista. " +
             "Use o contexto para entender \"ele\", \"dela\", \"e o do…\", \"o mesmo\". Datas relativas em relação a ${java.text.SimpleDateFormat("yyyy-MM-dd HH:mm (EEEE)", java.util.Locale("pt", "BR")).format(java.util.Date())}.\n" +
             "Ações:\n" + ACOES.joinToString("\n") { "- ${it.first}: ${it.second}" + if (it.third.isNotBlank()) " | ${it.third}" else "" } +

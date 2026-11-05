@@ -203,7 +203,7 @@ class VigiaDaLoja : JobService() {
             val gerente = c.getSystemService(NotificationManager::class.java)
             gerente.createNotificationChannel(
                 NotificationChannel(CANAL, "Avisos da loja", NotificationManager.IMPORTANCE_HIGH).apply {
-                    description = "Pedidos pagos e produtos acabando na Desejo de Intimidade"
+                    description = "Pedidos pagos e produtos acabando na ${Perfil.loja}"
                 }
             )
             val abrir = PendingIntent.getActivity(

@@ -1601,7 +1601,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         }
     }
 
-    private fun chave() = prefs.getString(PREF_CHAVE, "").orEmpty()
+    private fun chave() = Cofre.ler(prefs, PREF_CHAVE)
     private fun modelo() = prefs.getString(PREF_MODELO, MODELO_PADRAO).orEmpty().ifBlank { MODELO_PADRAO }
 
     // ---------------------------------------------------------------- ativação
@@ -1784,7 +1784,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
             val opcao = VozNeural.VOZES[voz]
             val jeito = VozNeural.ESTILOS[estilo]
             Thread {
-                val f = VozNeural.sintetizar(this, "Olá, Toni. Eu sou a ${Marca.nome}. Sistemas prontos. No que posso ajudar?", opcao, jeito, 10_000)
+                val f = VozNeural.sintetizar(this, "Olá, ${Perfil.dono}. Eu sou a ${Marca.nome}. Sistemas prontos. No que posso ajudar?", opcao, jeito, 10_000)
                 runOnUiThread {
                     if (f != null) {
                         pararFala()
@@ -2353,7 +2353,8 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
                 )
             ),
             TelaDeAjustes.Secao(
-                "Loja Desejo de Intimidade", listOf(
+                "Loja ${Perfil.loja}", listOf(
+                    TelaDeAjustes.Ajuste("Perfil do dono e da loja", { Perfil.resumo() + ". A $n usa esses dados nas respostas, nos avisos e no estudo." }) { editarPerfil() },
                     TelaDeAjustes.Ajuste("Conectar à loja", {
                         ferramentas.loja.email?.let { "Conectada como $it. Pergunte: como foram as vendas hoje, tem pedido novo, o que está acabando. Toque para desconectar." }
                             ?: "Entre com o login de administrador do site para a $n consultar vendas, pedidos e estoque. A senha fica criptografada só no celular."
@@ -3872,6 +3873,33 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
             .show()
     }
 
+    private fun editarPerfil() {
+        val caixa = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(20), dp(8), dp(20), 0)
+        }
+        fun campo(valor: String, dica: String) = campoDeDialogo(valor, dica).apply {
+            inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_FLAG_CAP_WORDS
+        }
+        val dono = campo(Perfil.dono, "Seu nome")
+        val loja = campo(Perfil.loja, "Nome da loja")
+        val cidade = campo(Perfil.cidade + if (Perfil.uf.isNotBlank()) ", ${Perfil.uf}" else "", "Cidade e estado (ex.: Porto Alegre, RS)")
+        val sobre = campoDeDialogo(Perfil.sobre, "Uma frase sobre você (ex.: trabalho num hotel)")
+        listOf(dono, loja, cidade, sobre).forEach { caixa.addView(it) }
+        AlertDialog.Builder(this)
+            .setTitle("Perfil do dono e da loja")
+            .setMessage("A ${Marca.nome} usa esses dados para falar com você, escrever para as clientes e estudar.")
+            .setView(caixa)
+            .setPositiveButton("Salvar") { _, _ ->
+                if (dono.text.isBlank() || loja.text.isBlank()) return@setPositiveButton Toast.makeText(this, "Preencha seu nome e o da loja.", Toast.LENGTH_SHORT).show()
+                Perfil.salvar(this, dono.text.toString(), loja.text.toString(), cidade.text.toString(), sobre.text.toString())
+                ajustes?.atualizar()
+                responder("Perfil salvo: ${Perfil.resumo()}.")
+            }
+            .setNegativeButton("Cancelar", null)
+            .show()
+    }
+
     private fun pedirCloudflare() {
         val caixa = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -5158,7 +5186,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
             )
             .setView(entrada)
             .setPositiveButton("Salvar") { _, _ ->
-                prefs.edit().putString(PREF_CHAVE, entrada.text.toString().trim()).apply()
+                Cofre.guardar(prefs, PREF_CHAVE, entrada.text.toString())
                 gemini = null
                 Toast.makeText(this, "Chave salva.", Toast.LENGTH_SHORT).show()
             }

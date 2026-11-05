@@ -97,7 +97,7 @@ object Panorama {
             linhas += "Clientes: ${porCliente.size} compradores; ${voltaram} compraram mais de uma vez (${(voltaram * 100.0 / porCliente.size).roundToInt()}% de recompra)."
         }
         val retirada = pagos.count { it.entrega == "pickup" }
-        if (pagos.isNotEmpty()) linhas += "Entrega: ${(retirada * 100.0 / pagos.size).roundToInt()}% dos pedidos são retirada em Porto Alegre, o resto vai pelos Correios. Frete e taxa do cartão são pagos pelo cliente; Pix sem taxa."
+        if (pagos.isNotEmpty()) linhas += "Entrega: ${(retirada * 100.0 / pagos.size).roundToInt()}% dos pedidos são retirada em ${Perfil.cidade}, o resto vai pelos Correios. Frete e taxa do cartão são pagos pelo cliente; Pix sem taxa."
 
         // datas
         val datas = Gestao.proximasDatas(agora, 60)
@@ -107,6 +107,6 @@ object Panorama {
 
     /** O bloco que vai junto com a pergunta. */
     fun anexar(pergunta: String, panorama: String): String =
-        "$pergunta\n\n[Dados reais da loja Desejo de Intimidade (só totais, sem dados de clientes). " +
+        "$pergunta\n\n[Dados reais da loja ${Perfil.loja} (só totais, sem dados de clientes). " +
             "Baseie números, riscos e recomendação nestes dados em vez de médias de mercado; se faltar algum dado, diga qual.]\n$panorama"
 }

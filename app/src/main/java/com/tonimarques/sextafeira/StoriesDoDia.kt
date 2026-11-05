@@ -375,7 +375,7 @@ object StoriesDoDia {
 
     private fun gerarTemas(ctx: Context): List<Tema> {
         val config = ctx.getSharedPreferences("config", Context.MODE_PRIVATE)
-        val chave = config.getString("chave", "").orEmpty()
+        val chave = Cofre.ler(config, "chave")
         if (chave.isBlank()) return emptyList()
         val modelo = config.getString("modelo", "").orEmpty().ifBlank { "gemini-flash-latest" }
         val json = Gemini.gerarJson(chave, modelo, pedidoDeTemas(usados(ctx).takeLast(60)), temperatura = 0.9) ?: return emptyList()
@@ -383,7 +383,7 @@ object StoriesDoDia {
     }
 
     fun pedidoDeTemas(jaUsados: List<String>): String =
-        "Você é a social media da Desejo de Intimidade, loja online de moda íntima e bem-estar sexual de Porto Alegre. " +
+        "Você é a social media da ${Perfil.loja}, loja online de moda íntima e bem-estar sexual de ${Perfil.cidade}. " +
             "Crie 14 textos curtos para stories do Instagram, metade \"dica\" e metade \"curiosidade\", sobre: autoestima, amor-próprio, " +
             "autocuidado, bem-estar íntimo, relacionamento e comunicação a dois, conhecer o próprio corpo, sono, estresse e libido, " +
             "romance e datas especiais. Tom acolhedor, elegante, inclusivo e sem julgamento, em português do Brasil. " +
@@ -529,7 +529,7 @@ object StoriesDoDia {
         tela.restore()
 
         // rodapé: @ da loja e site
-        val usuario = Instagram.usuario(ctx)?.takeIf { it.isNotBlank() }?.let { "@$it" } ?: "Desejo de Intimidade"
+        val usuario = Instagram.usuario(ctx)?.takeIf { it.isNotBlank() }?.let { "@$it" } ?: "${Perfil.loja}"
         val arroba = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
             color = Color.WHITE
             textSize = 44f

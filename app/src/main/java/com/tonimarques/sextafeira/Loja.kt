@@ -1320,8 +1320,8 @@ class Loja(private val contexto: Context) {
             if (tel.length < 10) return null
             val numero = if (tel.startsWith("55") && tel.length > 11) tel else "55$tel"
             val nome = p.cliente.trim().split(Regex("\\s+")).firstOrNull().orEmpty()
-            val texto = "Olá${if (nome.isNotBlank()) ", $nome" else ""}! Aqui é da Desejo de Intimidade. " +
-                "Seu pedido #${p.id} já está separado para retirada em Porto Alegre. " +
+            val texto = "Olá${if (nome.isNotBlank()) ", $nome" else ""}! Aqui é da ${Perfil.loja}. " +
+                "Seu pedido #${p.id} já está separado para retirada em ${Perfil.cidade}. " +
                 "Qual dia e horário ficam melhor para você? Assim que combinarmos, te passo o local certinho. 💖"
             return "https://wa.me/$numero?text=" + java.net.URLEncoder.encode(texto, "UTF-8").replace("+", "%20")
         }

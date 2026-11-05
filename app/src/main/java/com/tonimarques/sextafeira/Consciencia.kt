@@ -53,7 +53,7 @@ object Consciencia {
         val licoes = memoria.itensDoTipo(TIPO_LICAO, LICOES_NAS_INSTRUCOES).map { it.texto }
         val estado = estadoCurto(ctx)
         return buildString {
-            append("Quem você é: a ${Marca.nome} versão ${versao(ctx)}, um app Android feito sob medida para o Toni (ele mesmo pede as mudanças). ")
+            append("Quem você é: a ${Marca.nome} versão ${versao(ctx)}, um app Android feito sob medida para o ${Perfil.dono} (ele mesmo pede as mudanças). ")
             append("Você pensa com estas IAs, nesta ordem: ${cerebro(ctx).joinToString(" → ")}. ")
             append("Tem ${nomes.size} ferramentas de ação (${nomes.joinToString(", ")}), comandos rápidos que rodam sem IA, ")
             append("memória vetorial com $total itens e um estudo diário toda noite. ")
@@ -102,7 +102,7 @@ object Consciencia {
         val licoes = memoria.itensDoTipo(TIPO_LICAO, 12).joinToString("\n") { "- ${it.texto}" }
         val ultimaReserva = if (SegundaIA.ultimaVez > 0) Diario.hora(SegundaIA.ultimaVez) else "ainda não usada nesta sessão"
         return listOf(
-            "IDENTIDADE: ${Marca.nome} ${versao(ctx)}, assistente pessoal e comercial do Toni, app Android próprio. Também existem a Vênus da Loja " +
+            "IDENTIDADE: ${Marca.nome} ${versao(ctx)}, assistente pessoal e comercial do ${Perfil.dono}, app Android próprio. Também existem a Vênus da Loja " +
                 "(atende no site desejo-de-intimidade.floot.app) e o Vênus Robô (responde o WhatsApp Business pelas notificações).",
             "CÉREBRO (ordem): ${cerebro(ctx).joinToString(" → ")}. IA reserva usada pela última vez: $ultimaReserva. Voz: ${VozNeural.resumo(ctx)}",
             "ESTADO: ${estadoCurto(ctx)}.",
@@ -113,7 +113,7 @@ object Consciencia {
                 "anexos de fotos e arquivos, pesquisa de produto pela foto, atualização do app e do robô.",
             "LIMITES: Groq grátis ~1.000 pedidos e 200 mil tokens por dia por modelo; Cloudflare 10 mil neurons por dia; Gemini grátis ~20 pedidos por dia " +
                 "(zera por volta das 5h). PDF, áudio e busca no Google só no Gemini. Voz Microsoft: 500 mil caracteres por mês (para em 470 mil). " +
-                "Não lê a tela de outros apps; mensagens e ligações precisam do toque do Toni em Enviar ou Ligar; o Direct do Instagram é respondido pelo site, não pelo app.",
+                "Não lê a tela de outros apps; mensagens e ligações precisam do toque do ${Perfil.dono} em Enviar ou Ligar; o Direct do Instagram é respondido pelo site, não pelo app.",
             "LIÇÕES DOS SEUS ERROS:\n${licoes.ifBlank { "- (nenhuma ainda)" }}",
             "ERROS RECENTES:\n${erros.ifBlank { "- nenhum" }}",
             "ÚLTIMOS AJUSTES:\n${ajustes.ifBlank { "- nenhum" }}",

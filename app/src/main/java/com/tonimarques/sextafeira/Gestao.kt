@@ -125,7 +125,7 @@ object Gestao {
     fun mensagemRecompra(c: Cliente): String {
         val nome = c.nome.split(" ").firstOrNull()?.lowercase()?.replaceFirstChar { it.uppercase() }.orEmpty()
         val produto = c.produtos.firstOrNull()
-        return "Oi${if (nome.isNotBlank()) ", $nome" else ""}! Aqui é da Desejo de Intimidade 💕 " +
+        return "Oi${if (nome.isNotBlank()) ", $nome" else ""}! Aqui é da ${Perfil.loja} 💕 " +
             (if (produto != null) "Esperamos que esteja curtindo o $produto. " else "") +
             "Chegaram novidades na loja e separamos um carinho para clientes especiais como você. Quer dar uma olhadinha? ${Loja.SITE}"
     }
