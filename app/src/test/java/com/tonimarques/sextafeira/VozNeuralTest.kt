@@ -27,3 +27,12 @@ class FontesSalvasTest {
         org.junit.Assert.assertEquals("https://www.google.com/search?q=gremio", f[1].url)
     }
 }
+
+class ProdutoDaFotoTest {
+    @Test fun leProduto() {
+        val p = Gemini.lerProdutoDaFoto("""```json {"nome":"Gel Hot Ball Beija Muito","marca":"Hot Flowers","termos":"hot ball beija muito morango","descricao":"Gel comestível."} ```""")!!
+        org.junit.Assert.assertEquals("Hot Flowers", p.marca)
+        org.junit.Assert.assertEquals("hot ball beija muito morango", p.termos)
+        org.junit.Assert.assertNull(Gemini.lerProdutoDaFoto("""{"nome":""}"""))
+    }
+}

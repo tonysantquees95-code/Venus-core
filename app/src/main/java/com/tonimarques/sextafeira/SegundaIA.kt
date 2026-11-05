@@ -103,7 +103,7 @@ object SegundaIA {
      * Pesquisa na internet pela Groq (busca no navegador do próprio modelo gpt-oss), para quando a busca do Google
      * pelo Gemini não está disponível (cota esgotada ou plano grátis). Null sem chave ou se não der.
      */
-    fun pesquisar(pergunta: String): Web.Resposta? {
+    fun pesquisar(pergunta: String, instrucao: String? = null): Web.Resposta? {
         val chave = chave()
         if (chave.isBlank() || provedor().id != "groq") return null
         val agora = java.text.SimpleDateFormat("dd/MM/yyyy", java.util.Locale("pt", "BR")).format(java.util.Date())
@@ -112,8 +112,8 @@ object SegundaIA {
                 .put("model", modelo)
                 .put("messages", JSONArray()
                     .put(JSONObject().put("role", "system").put("content",
-                        "Pesquise na internet e responda em português do Brasil, em até 4 frases, direto ao ponto, sem markdown e sem tabelas. " +
-                            "Se for sobre uma loja ou produto, resuma a reputação e as reclamações mais comuns. Hoje é $agora."))
+                        (instrucao ?: ("Pesquise na internet e responda em português do Brasil, em até 4 frases, direto ao ponto, sem markdown e sem tabelas. " +
+                            "Se for sobre uma loja ou produto, resuma a reputação e as reclamações mais comuns.")) + " Hoje é $agora."))
                     .put(JSONObject().put("role", "user").put("content", pergunta)))
                 .put("tools", JSONArray().put(JSONObject().put("type", "browser_search")))
                 .put("tool_choice", "required")

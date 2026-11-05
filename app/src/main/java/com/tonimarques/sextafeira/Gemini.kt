@@ -156,9 +156,10 @@ class Gemini(
      * Pesquisa no Google pelo Gemini ("grounding") e devolve o resumo com as fontes.
      * Null se não der (por exemplo: a chave está no plano gratuito, que não inclui a busca).
      */
-    fun buscarNaInternet(pergunta: String): Web.Resposta? = buscarNoGoogle(pergunta) ?: SegundaIA.pesquisar(pergunta)
+    fun buscarNaInternet(pergunta: String, instrucao: String? = null): Web.Resposta? =
+        buscarNoGoogle(pergunta, instrucao) ?: SegundaIA.pesquisar(pergunta, instrucao)
 
-    private fun buscarNoGoogle(pergunta: String): Web.Resposta? {
+    private fun buscarNoGoogle(pergunta: String, instrucao: String? = null): Web.Resposta? {
         // Se a chave já recusou a busca há pouco, nem tenta de novo (evita esperar à toa).
         if (System.currentTimeMillis() < buscaRecusadaAte) return null
         val agora = SimpleDateFormat("dd/MM/yyyy", Locale("pt", "BR")).format(Date())
@@ -169,9 +170,9 @@ class Gemini(
                     "parts", JSONArray().put(
                         JSONObject().put(
                             "text",
-                            "Responda em português do Brasil, em até 4 frases, direto ao ponto e sem markdown. " +
-                                "Se for sobre uma loja ou produto, resuma a reputação e as reclamações mais comuns. " +
-                                "Hoje é $agora." + contexto().let { if (it.isBlank()) "" else "\nSobre o usuário:\n$it" }
+                            (instrucao ?: ("Responda em português do Brasil, em até 4 frases, direto ao ponto e sem markdown. " +
+                                "Se for sobre uma loja ou produto, resuma a reputação e as reclamações mais comuns.")) +
+                                " Hoje é $agora." + contexto().let { if (it.isBlank()) "" else "\nSobre o usuário:\n$it" }
                         )
                     )
                 )
@@ -648,6 +649,33 @@ class Gemini(
             val valor = o.optDouble("valor", Double.NaN).takeIf { !it.isNaN() && it > 0 }?.let { Math.round(it * 100).toInt() }
             val linha = o.optString("linha_digitavel").replace(Regex("\\D"), "").takeIf { it.length in 44..48 }
             return Analise(o.optString("tipo", "outro").ifBlank { "outro" }, resumo, venc, valor, linha)
+        }
+
+        /** O que a foto mostra, para pesquisar preço (nome comercial, marca, modelo e termos de busca). */
+        data class ProdutoDaFoto(val nome: String, val marca: String, val termos: String, val descricao: String)
+
+        fun identificarProduto(chave: String, modelo: String, foto: ByteArray, mime: String, pedido: String): ProdutoDaFoto? {
+            if (chave.isBlank()) return null
+            val texto = "Identifique o produto principal desta foto para pesquisar preço em lojas do Brasil. " +
+                (if (pedido.isNotBlank()) "Pedido do usuário: $pedido. " else "") +
+                "Responda só com JSON: {\"nome\":\"nome comercial mais provável\",\"marca\":\"marca ou vazio\"," +
+                "\"termos\":\"termos de busca curtos para achar este produto à venda (marca, modelo, tamanho, cor)\"," +
+                "\"descricao\":\"1 frase dizendo o que é\"}"
+            val corpo = JSONObject()
+                .put("contents", JSONArray().put(JSONObject().put("role", "user").put("parts", JSONArray().put(imagem(foto, mime)).put(JSONObject().put("text", texto)))))
+                .put("generationConfig", JSONObject().put("temperature", 0.2).put("responseMimeType", "application/json"))
+                .toString().toByteArray()
+            val json = chamarAvulso(chave, listOf(modelo, "gemini-3.8-flash", "gemini-flash-lite-latest"), corpo, tempo = 60_000) ?: return null
+            return lerProdutoDaFoto(textoBruto(json) ?: return null)
+        }
+
+        fun lerProdutoDaFoto(t: String): ProdutoDaFoto? = try {
+            val o = JSONObject("{" + t.substringAfter("{").substringBeforeLast("}") + "}")
+            val nome = o.optString("nome").trim()
+            if (nome.isBlank()) null
+            else ProdutoDaFoto(nome, o.optString("marca").trim(), o.optString("termos").trim().ifBlank { nome }, o.optString("descricao").trim())
+        } catch (e: Exception) {
+            null
         }
 
         /** Vários arquivos no mesmo pedido, cada um com o nome antes, e o pedido no fim. */
