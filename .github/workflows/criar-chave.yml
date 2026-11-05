@@ -1,0 +1,61 @@
+name: Criar chave nova
+
+# Cria a chave nova de assinatura dos APKs e a "linhagem" (prova de que a chave nova substitui a antiga),
+# e guarda as duas nos segredos do GitHub. Rode uma vez só, pela aba Actions → "Criar chave nova" → Run workflow.
+# Antes, crie os segredos ASSINATURA_SENHA (senha forte, guarde com você) e SEGREDOS_TOKEN
+# (token fine-grained só deste repositório, com "Secrets: Read and write").
+# A chave nunca aparece no registro: sai direto do runner para os segredos.
+
+on: workflow_dispatch
+
+permissions:
+  contents: read
+
+jobs:
+  chave:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Baixar o código
+        uses: actions/checkout@v4
+
+      - name: Instalar Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Conferir os segredos
+        env:
+          SENHA: ${{ secrets.ASSINATURA_SENHA }}
+          TOKEN: ${{ secrets.SEGREDOS_TOKEN }}
+          JA_EXISTE: ${{ secrets.ASSINATURA_LINHAGEM }}
+        run: |
+          if [ -z "$SENHA" ]; then echo "::error::Falta o segredo ASSINATURA_SENHA."; exit 1; fi
+          if [ ${#SENHA} -lt 12 ]; then echo "::error::A ASSINATURA_SENHA precisa ter pelo menos 12 caracteres."; exit 1; fi
+          if [ -z "$TOKEN" ]; then echo "::error::Falta o segredo SEGREDOS_TOKEN."; exit 1; fi
+          if [ -n "$JA_EXISTE" ]; then echo "::error::A chave nova já foi criada (existe ASSINATURA_LINHAGEM). Não vou trocar de novo."; exit 1; fi
+
+      - name: Criar a chave nova e a linhagem
+        env:
+          SENHA: ${{ secrets.ASSINATURA_SENHA }}
+        run: |
+          set -e
+          keytool -genkeypair -keystore "$RUNNER_TEMP/nova.keystore" -storetype PKCS12 -alias venus \
+            -keyalg RSA -keysize 4096 -validity 10000 -storepass "$SENHA" -keypass "$SENHA" \
+            -dname "CN=Venus, O=Toni Marques, L=Porto Alegre, ST=RS, C=BR" > /dev/null 2>&1
+          BT=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -n 1)
+          "$BT/apksigner" rotate --out "$RUNNER_TEMP/linhagem.bin" \
+            --old-signer --ks app/sexta.keystore --ks-pass pass:sextafeira --ks-key-alias sexta --key-pass pass:sextafeira \
+            --new-signer --ks "$RUNNER_TEMP/nova.keystore" --ks-pass env:SENHA --ks-key-alias venus --key-pass env:SENHA
+          "$BT/apksigner" lineage --in "$RUNNER_TEMP/linhagem.bin" --print-certs | grep -i "SHA-256" || true
+
+      - name: Guardar nos segredos do GitHub
+        env:
+          GH_TOKEN: ${{ secrets.SEGREDOS_TOKEN }}
+        run: |
+          set -e
+          base64 -w0 "$RUNNER_TEMP/nova.keystore" | gh secret set ASSINATURA_BASE64 --repo "$GITHUB_REPOSITORY"
+          base64 -w0 "$RUNNER_TEMP/linhagem.bin" | gh secret set ASSINATURA_LINHAGEM --repo "$GITHUB_REPOSITORY"
+          gh secret set ASSINATURA_APELIDO --body venus --repo "$GITHUB_REPOSITORY"
+          shred -u "$RUNNER_TEMP/nova.keystore" "$RUNNER_TEMP/linhagem.bin"
+          echo "Pronto: a partir da próxima versão os APKs saem com a chave nova (e continuam atualizando por cima)."
