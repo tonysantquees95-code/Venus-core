@@ -546,7 +546,10 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
             emptyList()
         }
         for (m in anteriores) {
-            if (m.texto.startsWith("Fontes: ")) continue
+            if (m.texto.startsWith("Fontes: ")) {
+                mostrarFontes(Web.lerFontesSalvas(m.texto), salvar = false)
+                continue
+            }
             adicionarMensagem(m.texto, m.doUsuario, salvar = false).alpha = 0.7f
         }
     }
@@ -633,7 +636,10 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
             mostrarNota("Conversa de $data: ${c.titulo.ifBlank { "sem título" }}")
         }
         for (m in memoria.mensagensDaConversa(id, 16)) {
-            if (m.texto.startsWith("Fontes: ")) continue
+            if (m.texto.startsWith("Fontes: ")) {
+                mostrarFontes(Web.lerFontesSalvas(m.texto), salvar = false)
+                continue
+            }
             adicionarMensagem(m.texto, m.doUsuario, salvar = false).alpha = 0.7f
         }
         rolarParaBaixo()
@@ -1392,20 +1398,66 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
 
     private fun modoIndependente() = prefs.getBoolean(PREF_INDEPENDENTE, false)
 
-    private fun mostrarFontes(fontes: List<Web.Fonte>) {
+    /**
+     * Fontes discretas: um selinho "• • • Consultou N fontes" embaixo da resposta.
+     * Tocando, abre a lista com todas (cada uma abre no navegador).
+     */
+    private fun mostrarFontes(fontes: List<Web.Fonte>, salvar: Boolean = true) {
         if (fontes.isEmpty()) return
-        val html = fontes.joinToString(" · ") { "<a href=\"${TextUtils.htmlEncode(it.url)}\">${TextUtils.htmlEncode(it.titulo)}</a>" }
-        val vista = TextView(this).apply {
-            text = Html.fromHtml("Fontes: $html", Html.FROM_HTML_MODE_COMPACT)
-            textSize = 12f
-            setTextColor(COR_TEXTO_APAGADO)
-            setLinkTextColor(corAtual)
-            movementMethod = LinkMovementMethod.getInstance()
-            setPadding(dp(6), dp(4), dp(6), 0)
+        val selo = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(10), dp(5), dp(12), dp(5))
+            background = vidro(Color.argb(16, 255, 255, 255), Color.argb(40, 255, 255, 255), 14)
+            isClickable = true
+            contentDescription = "Ver as ${fontes.size} fontes"
+            setOnClickListener { listarFontes(fontes) }
         }
-        mensagens.addView(vista)
+        // uma bolinha por fonte (até 3), com a cor da Vênus
+        repeat(minOf(3, fontes.size)) { i ->
+            selo.addView(View(this).apply {
+                background = GradientDrawable().apply {
+                    shape = GradientDrawable.OVAL
+                    setColor(corAtual)
+                    alpha = 255 - i * 60
+                }
+            }, LinearLayout.LayoutParams(dp(7), dp(7)).apply { marginEnd = dp(3) })
+        }
+        selo.addView(TextView(this).apply {
+            text = if (fontes.size == 1) "Consultou 1 fonte" else "Consultou ${fontes.size} fontes"
+            textSize = 11.5f
+            setTextColor(COR_TEXTO_APAGADO)
+            setPadding(dp(4), 0, 0, 0)
+        })
+        mensagens.addView(selo, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+            topMargin = dp(2)
+            bottomMargin = dp(6)
+            marginStart = dp(4)
+        })
         rolarParaBaixo()
-        memoria.salvarMensagem(false, "Fontes: " + fontes.joinToString("; ") { "${it.titulo} (${it.url})" }, topicoAtual)
+        if (salvar) memoria.salvarMensagem(false, "Fontes: " + fontes.joinToString("; ") { "${it.titulo} (${it.url})" }, topicoAtual)
+    }
+
+    private fun listarFontes(fontes: List<Web.Fonte>) {
+        val nomes = fontes.map { f ->
+            val site = try {
+                Uri.parse(f.url).host.orEmpty().removePrefix("www.")
+            } catch (e: Exception) {
+                ""
+            }
+            if (site.isNotBlank() && !f.titulo.contains(site, ignoreCase = true)) "${f.titulo}\n$site" else f.titulo
+        }.toTypedArray()
+        AlertDialog.Builder(this)
+            .setTitle("Fontes consultadas")
+            .setItems(nomes) { _, i ->
+                try {
+                    startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(fontes[i].url)))
+                } catch (e: ActivityNotFoundException) {
+                    Toast.makeText(this, "Nenhum navegador encontrado.", Toast.LENGTH_SHORT).show()
+                }
+            }
+            .setNegativeButton("Fechar", null)
+            .show()
     }
 
     /** Envia para o Gemini, com tempo limite: se ele travar ou falhar, o cérebro local assume. */
