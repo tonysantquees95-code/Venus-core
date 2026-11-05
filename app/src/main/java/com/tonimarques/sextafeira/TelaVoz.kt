@@ -292,9 +292,6 @@ internal fun MainActivity.ajustarVoz() {
         .show()
 }
 
-// ------------------------------------------------------- escuta (microfone)
-internal open fun vigiliaLigada() = prefs.getBoolean(PREF_VIGILIA, true)
-
 internal fun MainActivity.descricaoVozOffline(): String = progressoVozOffline ?: if (ModeloDeVoz.pronto(this)) {
     "Instalada. O microfone fica aberto direto, só com o pontinho verde, sem o ícone piscando. Toque para remover."
 } else {
