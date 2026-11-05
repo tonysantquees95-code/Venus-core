@@ -28,7 +28,7 @@ class OuvinteRobo : NotificationListenerService() {
     private class Pendente(val pacote: String, val cliente: String, val textos: MutableList<String>, var acao: Notification.Action, var trabalho: Runnable? = null)
 
     private val pendentes = HashMap<String, Pendente>()
-    private val vistas = LinkedHashSet<String>()
+    private val vistasEm = HashMap<String, Long>()
     private val minhasRespostas = HashMap<String, MutableList<String>>()
 
     override fun onNotificationPosted(sbn: StatusBarNotification) {
@@ -54,26 +54,34 @@ class OuvinteRobo : NotificationListenerService() {
 
         // a última mensagem da conversa (no estilo de conversa do Android), senão o texto simples
         var cliente = extras.getCharSequence(Notification.EXTRA_TITLE)?.toString().orEmpty()
+        // a conversa é identificada pelo título da notificação (o nome do contato), não por quem mandou a última
+        val chat = cliente
+        // quem é "eu" nessa conversa (a loja): mensagens dela não são de cliente
+        val eu = extras.getParcelable<android.app.Person>(Notification.EXTRA_MESSAGING_PERSON)?.name?.toString()
+            ?: extras.getCharSequence(Notification.EXTRA_SELF_DISPLAY_NAME)?.toString()
         var texto = extras.getCharSequence(Notification.EXTRA_TEXT)?.toString()
         val mensagens = extras.getParcelableArray(Notification.EXTRA_MESSAGES)
         if (mensagens != null && mensagens.isNotEmpty()) {
             val ultima = mensagens.last() as? Bundle
             if (ultima != null) {
                 val quem = ultima.getParcelable<android.app.Person>("sender_person")?.name?.toString() ?: ultima.getCharSequence("sender")?.toString()
-                // sem remetente = mensagem que saiu deste celular (a loja ou o próprio robô)
-                if (quem.isNullOrBlank()) return
+                // sem remetente, ou o próprio "eu" = mensagem que saiu deste celular (a loja ou o próprio robô)
+                if (quem.isNullOrBlank() || (eu != null && quem == eu)) return
                 cliente = quem
                 texto = ultima.getCharSequence("text")?.toString()
             }
         }
         val limpo = Robo.textoDaCliente(texto) ?: return
         if (cliente.isBlank()) return
-        val conversa = "$pacote|$cliente"
-        // o próprio robô acabou de mandar isso (o WhatsApp reapresenta a conversa na notificação)
-        if (minhasRespostas[conversa]?.any { it.trim() == limpo } == true) return
-        val marca = "$conversa|$limpo|${n.`when`}"
-        if (!vistas.add(marca)) return
-        while (vistas.size > 300) vistas.remove(vistas.first())
+        val conversa = "$pacote|${chat.ifBlank { cliente }}"
+        // o próprio robô mandou isso há pouco (o WhatsApp Business mostra a resposta na notificação com o nome da loja)
+        if (ehMinhaResposta(limpo)) return
+        // a mesma mensagem da mesma conversa nos últimos 3 minutos: é a notificação sendo reapresentada
+        val agora = System.currentTimeMillis()
+        val marca = "$conversa|$limpo"
+        vistasEm[marca]?.let { if (agora - it < 3 * 60_000L) return }
+        vistasEm[marca] = agora
+        if (vistasEm.size > 300) vistasEm.entries.removeAll { agora - it.value > 10 * 60_000L }
 
         principal.post { agendar(conversa, pacote, cliente, limpo, acao) }
     }
@@ -128,8 +136,18 @@ class OuvinteRobo : NotificationListenerService() {
             val lista = minhasRespostas.getOrPut(conversa) { mutableListOf() }
             lista += texto.trim()
             while (lista.size > 5) lista.removeAt(0)
+            enviadas += System.currentTimeMillis() to texto.trim()
+            while (enviadas.size > 40) enviadas.removeAt(0)
         } catch (e: PendingIntent.CanceledException) {
         }
+    }
+
+    /** Respostas que o robô mandou nos últimos 15 minutos, em qualquer conversa. */
+    private val enviadas = mutableListOf<Pair<Long, String>>()
+
+    private fun ehMinhaResposta(texto: String): Boolean {
+        val limite = System.currentTimeMillis() - 15 * 60_000L
+        return enviadas.any { (quando, r) -> quando >= limite && Robo.mesmoTexto(r, texto) }
     }
 
     private fun acaoDeResponder(n: Notification): Notification.Action? =
