@@ -63,6 +63,13 @@ class SegundaIATest {
         assertNull(SegundaIA.paraOpenAI(JSONObject().put("contents", JSONArray().put(JSONObject().put("role", "user").put("parts", JSONArray().put(pdf))))))
     }
 
+    @Test fun contaDaCloudflare() {
+        val id = "0123456789abcdef0123456789ABCDEF"
+        assertEquals(id.lowercase(), SegundaIA.lerContaCloudflare(" $id "))
+        assertEquals(id.lowercase(), SegundaIA.lerContaCloudflare("https://api.cloudflare.com/client/v4/accounts/$id/ai/run/@cf/x"))
+        assertEquals("@cf/openai/gpt-oss-120b", SegundaIA.CLOUDFLARE.modelos.first())
+    }
+
     @Test fun respostaVoltaNoFormatoDoGemini() {
         val openai = JSONObject("""{"choices":[{"message":{"role":"assistant","content":null,"tool_calls":[{"id":"x","type":"function","function":{"name":"abrir_app","arguments":"{\"nome\":\"WhatsApp\"}"}}]}}]}""")
         val g = SegundaIA.paraGemini(openai)!!

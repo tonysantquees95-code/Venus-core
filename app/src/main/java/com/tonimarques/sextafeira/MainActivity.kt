@@ -2406,10 +2406,10 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
                         if (!SegundaIA.configurada(this)) "Não configurada. Com uma chave grátis da Groq, a $n continua respondendo quando o Gemini falhar ou ficar sem cota."
                         else "Usando ${SegundaIA.provedor(this).nome}." + (if (SegundaIA.ultimaVez > 0) " Última vez que ajudou: ${Diario.hora(SegundaIA.ultimaVez)}." else "")
                     }) { pedirIAReserva() },
-                    TelaDeAjustes.Ajuste("Segunda reserva: Cerebras", {
-                        if (SegundaIA.chaveCerebras(this).isBlank()) "Não configurada. Grátis (1 milhão de tokens por dia): entra quando a Groq atingir o limite, antes do Gemini."
+                    TelaDeAjustes.Ajuste("Segunda reserva: Cloudflare", {
+                        if (SegundaIA.chaveCloudflare(this).isBlank()) "Não configurada. Grátis todo dia, sem cartão: entra quando a Groq atingir o limite, antes do Gemini."
                         else "Configurada: entra quando a ${SegundaIA.provedor(this).nome.substringBefore(" (")} atingir o limite, antes do Gemini."
-                    }) { pedirCerebras() },
+                    }) { pedirCloudflare() },
                     TelaDeAjustes.Ajuste("IA reserva como principal", {
                         if (!SegundaIA.configurada(this)) "Configure a IA reserva primeiro."
                         else if (SegundaIA.principal(this)) "Ligado: a ${SegundaIA.provedor(this).nome.substringBefore(" (")} responde primeiro (mais rápida) e o Gemini entra se ela falhar. PDF, áudio e busca no Google continuam no Gemini."
@@ -3871,39 +3871,42 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
             .show()
     }
 
-    private fun pedirCerebras() {
+    private fun pedirCloudflare() {
         val caixa = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(20), dp(8), dp(20), 0)
         }
-        val entrada = campoDeDialogo(SegundaIA.chaveCerebras(this), "Cole aqui a chave da Cerebras")
-        caixa.addView(entrada)
+        val conta = campoDeDialogo(SegundaIA.contaCloudflare(this), "Código da conta (Account ID)")
+        val chave = campoDeDialogo(SegundaIA.chaveCloudflare(this), "Chave do Workers AI (API Token)")
+        caixa.addView(conta)
+        caixa.addView(chave)
+        val primeira = SegundaIA.provedor(this).nome.substringBefore(" (")
         AlertDialog.Builder(this)
-            .setTitle("Segunda reserva: Cerebras")
-            .setMessage("Quando a ${SegundaIA.provedor(this).nome.substringBefore(" (")} atingir o limite do dia, a ${Marca.nome} pergunta para a Cerebras antes de ir ao Gemini. " +
-                "É grátis: entre em cloud.cerebras.ai, crie a conta e copie a chave em API Keys.")
+            .setTitle("Segunda reserva: Cloudflare")
+            .setMessage("Quando a $primeira atingir o limite do dia, a ${Marca.nome} pergunta para a Cloudflare antes de ir ao Gemini. Grátis todo dia, sem cartão.\n\n" +
+                "No site da Cloudflare: crie a conta → menu AI → Workers AI → Use REST API. Lá aparece o código da conta; toque em Create a Workers AI API Token e copie a chave.")
             .setView(caixa)
             .setPositiveButton("Salvar e testar") { _, _ ->
-                SegundaIA.salvarCerebras(this, entrada.text.toString())
+                SegundaIA.salvarCloudflare(this, conta.text.toString(), chave.text.toString())
                 ajustes?.atualizar()
-                if (entrada.text.isBlank()) return@setPositiveButton responder("Segunda reserva desligada.")
-                responder("Testando a Cerebras…")
+                if (chave.text.isBlank()) return@setPositiveButton responder("Segunda reserva desligada.")
+                responder("Testando a Cloudflare…")
                 Thread {
                     val r = try {
-                        Result.success(SegundaIA.testar(this, cerebras = true))
+                        Result.success(SegundaIA.testar(this, segunda = true))
                     } catch (e: Exception) {
                         Result.failure(e)
                     }
                     runOnUiThread {
-                        r.onSuccess { responder("A Cerebras respondeu: \"${it.take(60)}\". Agora a ordem é ${SegundaIA.provedor(this).nome.substringBefore(" (")}, Cerebras e, por último, o Gemini.") }
+                        r.onSuccess { responder("A Cloudflare respondeu: \"${it.take(60)}\". Agora a ordem é $primeira, Cloudflare e, por último, o Gemini.") }
                             .onFailure { responder(it.message ?: "Não funcionou.") }
                         ajustes?.atualizar()
                     }
                 }.start()
             }
-            .setNeutralButton("Criar chave") { _, _ ->
+            .setNeutralButton("Abrir a Cloudflare") { _, _ ->
                 try {
-                    startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(SegundaIA.CEREBRAS.site)))
+                    startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(SegundaIA.CLOUDFLARE.site)))
                 } catch (e: ActivityNotFoundException) {
                     Toast.makeText(this, "Nenhum navegador encontrado.", Toast.LENGTH_SHORT).show()
                 }

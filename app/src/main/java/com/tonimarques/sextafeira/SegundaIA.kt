@@ -40,11 +40,14 @@ object SegundaIA {
         ),
     )
 
-    /** Segunda reserva: depois da Groq (ou do Grok) e antes do Gemini. Grátis com 1 milhão de tokens por dia, 5 pedidos por minuto. */
-    val CEREBRAS = Provedor(
-        "cerebras", "Cerebras (grátis)", "https://api.cerebras.ai/v1",
-        listOf("gpt-oss-120b", "qwen-3.8-27b", "llama-3.3-70b"),
-        Regex("gpt-oss-120b|qwen|llama-3\\.3|gpt-oss|llama"), "https://cloud.cerebras.ai",
+    /**
+     * Segunda reserva: depois da Groq (ou do Grok) e antes do Gemini. Cloudflare Workers AI, grátis todo dia
+     * (10 mil "neurons", sem cartão e sem usar os pedidos para treinar). O endereço leva o código da conta.
+     */
+    val CLOUDFLARE = Provedor(
+        "cloudflare", "Cloudflare (grátis)", "https://api.cloudflare.com/client/v4/accounts/{conta}/ai/v1",
+        listOf("@cf/openai/gpt-oss-120b", "@cf/openai/gpt-oss-20b", "@cf/qwen/qwen3-30b-a3b-fp8"),
+        Regex("gpt-oss|qwen3|llama-3\\.3"), "https://dash.cloudflare.com/?to=/:account/ai/workers-ai",
     )
 
     private const val PREFS = "config"
@@ -58,6 +61,11 @@ object SegundaIA {
     var ultimaVez: Long = 0
         private set
 
+    /** O último erro de uma IA reserva (para o teste da chave explicar o que houve). */
+    @Volatile
+    var ultimoErro: String? = null
+        private set
+
     fun iniciar(c: Context) {
         ctx = c.applicationContext
     }
@@ -69,18 +77,35 @@ object SegundaIA {
 
     fun chave(c: Context? = ctx): String = c?.getSharedPreferences(PREFS, Context.MODE_PRIVATE)?.getString("reserva_chave", "").orEmpty()
 
-    fun chaveCerebras(c: Context? = ctx): String = c?.getSharedPreferences(PREFS, Context.MODE_PRIVATE)?.getString("cerebras_chave", "").orEmpty()
+    fun chaveCloudflare(c: Context? = ctx): String = c?.getSharedPreferences(PREFS, Context.MODE_PRIVATE)?.getString("cloudflare_chave", "").orEmpty()
+    fun contaCloudflare(c: Context? = ctx): String = c?.getSharedPreferences(PREFS, Context.MODE_PRIVATE)?.getString("cloudflare_conta", "").orEmpty()
 
-    fun salvarCerebras(c: Context, chave: String) {
-        c.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putString("cerebras_chave", chave.trim()).apply()
-        modeloQueFunciona.remove(CEREBRAS.id)
-        Diario.anotar(c, "conexao", if (chave.isBlank()) "Segunda reserva (Cerebras) desligada" else "Segunda reserva configurada: Cerebras", "tela")
+    /** Aceita o código da conta sozinho ou colado junto com o endereço (…/accounts/CODIGO/ai/…). */
+    fun lerContaCloudflare(t: String): String {
+        val limpo = t.trim()
+        Regex("accounts/([0-9a-fA-F]{32})").find(limpo)?.let { return it.groupValues[1].lowercase() }
+        return Regex("[0-9a-fA-F]{32}").find(limpo)?.value?.lowercase() ?: limpo
     }
 
-    /** As IAs reserva na ordem em que são tentadas: a escolhida (Groq ou Grok) e depois a Cerebras. */
+    fun salvarCloudflare(c: Context, conta: String, chave: String) {
+        c.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+            .putString("cloudflare_conta", lerContaCloudflare(conta)).putString("cloudflare_chave", Instagram.limparToken(chave))
+            .remove("cerebras_chave").apply()
+        modeloQueFunciona.remove(CLOUDFLARE.id)
+        modeloQueFunciona.remove(CLOUDFLARE.id + ":visao")
+        Diario.anotar(c, "conexao", if (chave.isBlank()) "Segunda reserva (Cloudflare) desligada" else "Segunda reserva configurada: Cloudflare Workers AI", "tela")
+    }
+
+    private fun cloudflare(c: Context?): Pair<Provedor, String>? {
+        val chave = chaveCloudflare(c).takeIf { it.isNotBlank() } ?: return null
+        val conta = contaCloudflare(c).takeIf { it.matches(Regex("[0-9a-f]{32}")) } ?: return null
+        return CLOUDFLARE.copy(endereco = CLOUDFLARE.endereco.replace("{conta}", conta)) to chave
+    }
+
+    /** As IAs reserva na ordem em que são tentadas: a escolhida (Groq ou Grok) e depois a Cloudflare. */
     fun cadeia(c: Context? = ctx): List<Pair<Provedor, String>> = listOfNotNull(
         chave(c).takeIf { it.isNotBlank() }?.let { provedor(c) to it },
-        chaveCerebras(c).takeIf { it.isNotBlank() }?.let { CEREBRAS to it },
+        cloudflare(c),
     )
 
     fun configurada(c: Context? = ctx) = cadeia(c).isNotEmpty()
@@ -150,6 +175,7 @@ object SegundaIA {
     val VISAO = mapOf(
         "groq" to listOf("meta-llama/llama-4-scout-17b-16e-instruct", "meta-llama/llama-4-maverick-17b-128e-instruct"),
         "xai" to listOf("grok-4-fast-non-reasoning", "grok-2-vision-1212"),
+        "cloudflare" to listOf("@cf/meta/llama-4-scout-17b-16e-instruct"),
     )
 
     fun temFoto(pedido: JSONObject): Boolean {
@@ -239,15 +265,17 @@ object SegundaIA {
     }
 
     /** Teste rápido da chave (para o botão "Salvar e testar"). Devolve a resposta ou lança erro com a explicação. */
-    fun testar(c: Context, cerebras: Boolean = false): String {
+    fun testar(c: Context, segunda: Boolean = false): String {
         iniciar(c)
-        val p = if (cerebras) CEREBRAS else provedor(c)
-        val chave = if (cerebras) chaveCerebras(c) else chave(c)
+        val (p, k) = if (segunda) (cloudflare(c) ?: throw IllegalStateException("Falta o código da conta (32 letras e números) ou a chave da Cloudflare."))
+        else provedor(c) to chave(c)
         val corpo = JSONObject().put(
             "contents", JSONArray().put(JSONObject().put("role", "user").put("parts", JSONArray().put(JSONObject().put("text", "Responda só: funcionando"))))
         )
         val pedido = paraOpenAI(corpo) ?: throw IllegalStateException("Pedido de teste inválido.")
-        val r = responderCom(p, chave, pedido, 20_000, "low") ?: throw IllegalStateException("A ${p.nome} não respondeu. Confira a chave.")
+        ultimoErro = null
+        val r = responderCom(p, k, pedido, 20_000, "low")
+            ?: throw IllegalStateException("A ${p.nome.substringBefore(" (")} não respondeu. Confira a chave." + (ultimoErro?.let { " ($it)" } ?: ""))
         return textoDe(r)
     }
 
@@ -277,12 +305,13 @@ object SegundaIA {
             when {
                 codigo in 200..299 -> Resultado.Ok(JSONObject(texto))
                 codigo == 404 || (codigo == 400 && texto.contains("model", true) && (texto.contains("not found", true) || texto.contains("does not exist", true) || texto.contains("decommissioned", true))) -> Resultado.ModeloNaoExiste
-                codigo == 429 || codigo == 413 -> Resultado.Limite
+                codigo == 429 || codigo == 413 || texto.contains("allocation", true) -> Resultado.Limite
                 // modelo que não aceitou o ajuste de raciocínio: tenta sem ele
                 codigo == 400 && corpo.has("reasoning_effort") -> chamar(p, chave, modelo, pedido, tempo, ajuste = false)
                 // modelo que não aceitou o formato JSON obrigatório: o pedido já diz para responder em JSON
                 codigo == 400 && pedido.has("response_format") -> chamar(p, chave, modelo, JSONObject(pedido.toString()).apply { remove("response_format") }, tempo, ajuste, esforco)
                 else -> {
+                    ultimoErro = "erro $codigo: ${texto.take(160)}"
                     ctx?.let { Registro.anotar(it, "erro", "IA reserva ${p.nome} → $codigo ${texto.take(200)}") }
                     Resultado.Falhou
                 }
