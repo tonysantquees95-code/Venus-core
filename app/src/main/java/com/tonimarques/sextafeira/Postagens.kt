@@ -274,6 +274,8 @@ object Postagens {
      */
     fun montarStory(jpeg: ByteArray, texto: String, link: String): ByteArray {
         val foto = android.graphics.BitmapFactory.decodeByteArray(jpeg, 0, jpeg.size) ?: return jpeg
+        // arte já pronta em 9:16 (a das ideias de post): vai como está
+        if (kotlin.math.abs(foto.width * 16 - foto.height * 9) <= foto.width / 20) return jpeg
         val w = 1080
         val h = 1920
         val arte = android.graphics.Bitmap.createBitmap(w, h, android.graphics.Bitmap.Config.ARGB_8888)
