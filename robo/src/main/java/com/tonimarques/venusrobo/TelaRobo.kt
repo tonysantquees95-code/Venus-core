@@ -110,8 +110,18 @@ class TelaRobo : TelaBase() {
 
         adicionar(texto("No Instagram, o melhor é usar as respostas prontas acima: o Instagram desconfia de respostas feitas pelas notificações do celular.", 12.5f, apagado))
 
-        // ---- ligação com a Vênus da loja
-        cartao("Vênus da loja")
+        // ---- quem responde: a Vênus deste celular (cada lojista) ou a Vênus da loja no site
+        cartao("Quem responde")
+        adicionar(Switch(this).apply {
+            text = "Responder com a Vênus deste celular"
+            isChecked = Robo.pelaVenusDoCelular(this@TelaRobo)
+            setTextColor(Color.WHITE)
+            textSize = 15f
+            setOnCheckedChangeListener { _, v -> Robo.definirModo(this@TelaRobo, v) }
+        })
+        adicionar(texto("Ligado: o robô responde com as regras, os produtos e as IAs da Vênus instalada aqui (o normal para cada loja). " +
+            "Desligado: pergunta à Vênus da loja no site, com o endereço e a chave abaixo.", 12.5f, apagado))
+        cartao("Vênus da loja (site)")
         adicionar(texto("Endereço", 12.5f, apagado))
         val endereco = campo(Robo.endereco(this), InputType.TYPE_TEXT_VARIATION_URI)
         adicionar(endereco)

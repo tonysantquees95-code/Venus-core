@@ -21,8 +21,9 @@ import javax.crypto.spec.GCMParameterSpec
  * Atualização automática: procura uma versão nova nas publicações do GitHub (as mesmas do link de download),
  * baixa o Venus.apk e abre a tela de instalação do Android. Os dados do app continuam.
  *
- * O repositório é privado, então a consulta precisa de um token do GitHub só de leitura
- * (guardado criptografado no celular). Sem token, tenta sem (funciona se o repositório virar público).
+ * O repositório é privado: o dono consulta com um token do GitHub só de leitura (guardado criptografado no celular);
+ * os outros lojistas, sem token, usam o canal público do site ([CANAL]), que devolve a versão nova com um link
+ * temporário do APK. Nos dois casos o arquivo é conferido pelo SHA-256 publicado antes de instalar.
  *
  * Também cuida do Vênus Robô (app separado, publicado como "robo-1.N"): se ele estiver instalado e houver
  * versão nova, a Vênus baixa e abre a instalação dele do mesmo jeito. O token fica só na Vênus.
@@ -39,6 +40,8 @@ class Atualizador(private val contexto: Context) {
         val pacote: String = "",
         /** Impressão digital SHA-256 que o GitHub publica para o arquivo (vazio = o GitHub não informou). */
         val sha256: String = "",
+        /** Veio do canal do site: o link do APK vale poucos minutos, então é pedido de novo na hora de baixar. */
+        val viaSite: Boolean = false,
     ) {
         val ehRobo get() = pacote == PACOTE_ROBO
     }
@@ -77,6 +80,11 @@ class Atualizador(private val contexto: Context) {
      */
     fun procurarRobo(): Versao? {
         val instalada = versaoDoRobo() ?: return null
+        if (token() == null) return try {
+            doCanal(robo = true)?.takeIf { it.numero > instalada }
+        } catch (e: Exception) {
+            null
+        }
         return try {
             val c = abrir("https://api.github.com/repos/$REPO/releases?per_page=30", token())
             c.setRequestProperty("Accept", "application/vnd.github+json")
@@ -98,6 +106,10 @@ class Atualizador(private val contexto: Context) {
     /** A versão mais nova publicada, ou null se a instalada já é a última. Roda fora da thread principal. */
     fun procurar(): Versao? {
         prefs.edit().putLong(P_ULTIMA, System.currentTimeMillis()).apply()
+        if (token() == null) {
+            val v = doCanal(robo = false) ?: throw ErroDeAtualizacao("Não consegui consultar as versões agora. Tente mais tarde.")
+            return if (v.numero > versaoInstalada()) v else null
+        }
         val c = abrir("https://api.github.com/repos/$REPO/releases/latest", token())
         c.setRequestProperty("Accept", "application/vnd.github+json")
         val codigo = c.responseCode
@@ -171,8 +183,10 @@ class Atualizador(private val contexto: Context) {
 
     /** Abre o download do APK, seguindo o redirecionamento do GitHub sem mandar o token para o outro site. */
     private fun baixar(v: Versao): HttpURLConnection {
-        val t = token()
-        var c = if (t != null) abrir(v.urlApi, t) else abrir(v.urlPublica, null)
+        val t = if (v.viaSite) null else token()
+        // pelo canal do site, pede um link novo agora (o anterior pode ter vencido)
+        val url = if (v.viaSite) (doCanal(v.ehRobo)?.urlPublica ?: throw ErroDeAtualizacao("Não consegui o link de download agora.")) else v.urlPublica
+        var c = if (t != null) abrir(v.urlApi, t) else abrir(url, null)
         if (t != null) c.setRequestProperty("Accept", "application/octet-stream")
         repeat(5) {
             val codigo = c.responseCode
@@ -186,6 +200,15 @@ class Atualizador(private val contexto: Context) {
             return c
         }
         throw ErroDeAtualizacao("O download não abriu.")
+    }
+
+    /** A versão mais nova pelo canal público do site (sem token). */
+    private fun doCanal(robo: Boolean): Versao? {
+        val c = abrir("$CANAL?app=${if (robo) "robo" else "venus"}", null)
+        val codigo = c.responseCode
+        val texto = ler(c)
+        if (codigo !in 200..299) return null
+        return lerCanal(JSONObject(texto), robo)
     }
 
     private fun abrir(url: String, token: String?): HttpURLConnection =
@@ -234,6 +257,8 @@ class Atualizador(private val contexto: Context) {
 
     companion object {
         const val REPO = "tonysantquees95-code/Sexta-feira-"
+        /** Canal público de atualização (para lojistas sem token do GitHub). */
+        const val CANAL = "https://desejo-de-intimidade.floot.app/_api/venus/atualizacao"
         const val ACAO_INSTALAR = "com.tonimarques.sextafeira.INSTALAR"
         const val PACOTE_ROBO = "com.tonimarques.venusrobo"
         const val EXTRA_ROBO = "robo"
@@ -284,6 +309,15 @@ class Atualizador(private val contexto: Context) {
                 )
             }
             return null
+        }
+
+        /** A resposta do canal do site: {numero, tag, notas, tamanho, sha256, url}. */
+        fun lerCanal(o: JSONObject, robo: Boolean): Versao? {
+            val numero = o.optInt("numero")
+            val url = o.optString("url")
+            if (numero <= 0 || !url.startsWith("https://")) return null
+            return Versao(numero, o.optString("tag"), "", url, o.optLong("tamanho"), o.optString("notas").take(600),
+                if (robo) PACOTE_ROBO else "", o.optString("sha256").lowercase(), viaSite = true)
         }
 
         /** O texto da publicação, sem as linhas técnicas. */

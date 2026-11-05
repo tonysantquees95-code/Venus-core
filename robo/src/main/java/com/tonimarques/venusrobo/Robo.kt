@@ -1,6 +1,8 @@
 package com.tonimarques.venusrobo
 
 import android.content.Context
+import android.net.Uri
+import android.os.Bundle
 import org.json.JSONArray
 import org.json.JSONObject
 import java.net.HttpURLConnection
@@ -10,7 +12,8 @@ import java.util.Date
 import java.util.Locale
 
 /**
- * Configuração do robô e a conversa com a Vênus da loja (site).
+ * Configuração do robô e a conversa com a Vênus: a deste celular (padrão para cada lojista, com a loja dele)
+ * ou a Vênus da loja no site (o modo antigo, com endereço e chave).
  * O site recebe {messengerPackageName, query:{sender, message, isGroup}} com a chave no cabeçalho x-venus-chave
  * e devolve {"replies":[{"message","delay","delayMax"}], "humano": true|false}.
  */
@@ -47,6 +50,34 @@ object Robo {
     }
 
     fun chave(ctx: Context) = Cofre.ler(prefs(ctx), "chave")
+
+    /**
+     * true = responde pela Vênus deste celular; false = pela Vênus do site. Quem já tinha a chave do site
+     * continua no site (nada muda); instalações novas usam a Vênus do celular.
+     */
+    fun pelaVenusDoCelular(ctx: Context): Boolean = prefs(ctx).getString("modo", null)?.let { it == "local" } ?: chave(ctx).isBlank()
+    fun definirModo(ctx: Context, local: Boolean) = prefs(ctx).edit().putString("modo", if (local) "local" else "site").apply()
+
+    private val VENUS: Uri by lazy { Uri.parse("content://com.tonimarques.sextafeira.regras") }
+
+    /** Pergunta à Vênus deste celular (pelo provedor protegido por assinatura). Bloqueante. */
+    fun perguntarNoCelular(ctx: Context, pacote: String, cliente: String, mensagem: String, teste: Boolean): Resposta {
+        val extras = Bundle().apply {
+            putString("pacote", pacote)
+            putString("cliente", cliente.take(200))
+            putString("mensagem", mensagem.take(4000))
+            putBoolean("teste", teste)
+        }
+        val r = try {
+            ctx.contentResolver.call(VENUS, "atender", null, extras)
+        } catch (e: SecurityException) {
+            throw IllegalStateException("A Vênus deste celular não deixou o robô perguntar. Atualize a Vênus e depois o robô.")
+        } catch (e: Exception) {
+            throw IllegalStateException("Não achei a Vênus neste celular (instale ou atualize a Vênus).")
+        }
+        val json = r?.getString("json") ?: throw IllegalStateException("A Vênus deste celular é antiga: atualize para o robô responder por ela.")
+        return lerResposta(json) ?: throw IllegalStateException("A Vênus respondeu algo que não entendi.")
+    }
     fun salvar(ctx: Context, endereco: String, chave: String) =
         prefs(ctx).edit().putString("endereco", endereco.trim()).putString("chave", Cofre.selar(chave.trim())).apply()
 
@@ -78,6 +109,7 @@ object Robo {
 
     /** Bloqueante: chame fora da thread principal. Devolve a resposta ou lança erro com a explicação. */
     fun perguntar(ctx: Context, pacote: String, cliente: String, mensagem: String, teste: Boolean = false): Resposta {
+        if (pelaVenusDoCelular(ctx)) return perguntarNoCelular(ctx, pacote, cliente, mensagem, teste)
         val chave = chave(ctx)
         if (chave.isBlank()) throw IllegalStateException("Falta a chave do robô (está no painel da loja).")
         val c = URL(endereco(ctx)).openConnection() as HttpURLConnection

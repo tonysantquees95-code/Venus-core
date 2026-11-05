@@ -47,3 +47,17 @@ class PedidosDoSiteTest {
         assertEquals("outro story da manhã", PedidosDoSite.descricao(p))
     }
 }
+
+class CanalDeAtualizacaoTest {
+    @Test fun leOCanalDoSite() {
+        val v = Atualizador.lerCanal(JSONObject("""{"numero":160,"tag":"v1.160","notas":"Novidades","tamanho":123,"sha256":"ABC","url":"https://objects.githubusercontent.com/x?sig=1"}"""), robo = false)!!
+        assertEquals(160, v.numero)
+        assertEquals("abc", v.sha256)
+        assertTrue(v.viaSite)
+        assertTrue(!v.ehRobo)
+        val r = Atualizador.lerCanal(JSONObject("""{"numero":150,"url":"https://x"}"""), robo = true)!!
+        assertTrue(r.ehRobo)
+        assertNull(Atualizador.lerCanal(JSONObject("""{"numero":0,"url":"https://x"}"""), false))
+        assertNull(Atualizador.lerCanal(JSONObject("""{"numero":3,"url":"http://x"}"""), false))
+    }
+}
