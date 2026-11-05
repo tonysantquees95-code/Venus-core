@@ -186,6 +186,15 @@ object Estudo {
             when (etapa) {
                 "preparar" -> {
                     Semantica.migrarSePreciso(ctx, memoria)
+                    RegrasDaLoja.semear(ctx, memoria)
+                    produtosDaLoja()?.let { lista ->
+                        val suspeitos = RegrasDaLoja.suspeitosDaAnvisa(lista.filter { it.ativo }.map { it.nome })
+                        if (suspeitos.isNotEmpty()) Diario.anotar(
+                            ctx, "loja",
+                            "Atenção Anvisa: ${suspeitos.joinToString(", ")} tem nome de linha de gel proibida em 25/02/2026. Confira o fabricante.",
+                            "automatico", ok = false,
+                        )
+                    }
                     prog.somar("removidos", Semantica.limparRespostasRuins(memoria))
                     while (memoria.compactarAntigos() > 0) Unit
                     prog.somar("vetores", Semantica.completar(memoria, chave, 300))

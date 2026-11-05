@@ -133,7 +133,13 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         EstudoDiario.agendar(this)
         StoriesDoDia.agendar(this)
         // o Direct automático roda no site: ele precisa do token do Instagram em dia
-        if (Instagram.conectado(this)) Thread { Instagram.sincronizarComSite(applicationContext) }.start()
+        Thread {
+            try {
+                RegrasDaLoja.semear(applicationContext, memoria)
+            } catch (e: Exception) {
+            }
+            if (Instagram.conectado(this)) Instagram.sincronizarComSite(applicationContext)
+        }.start()
         try {
             if (Calculadora.conversaVazia()) for (m in memoria.mensagens(null, 120)) Calculadora.lembrar(m.texto)
         } catch (e: Exception) {
@@ -1029,6 +1035,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
                         runOnUiThread { responder(Estudo.descrever(r, contagem)) }
                     }.start()
                 }
+                decisao.nome == "aprendizado" -> mostrarAprendizado()
                 decisao.nome == "estudo_agora" -> estudarAgora()
                 decisao.nome == "estudo_ideias" -> mostrarIdeiasDePost()
                 decisao.nome == "story_auto" -> storiesAutomaticos(decisao.args["ligado"] as? Boolean)
@@ -2399,6 +2406,18 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
                         if (!SegundaIA.configurada(this)) "Não configurada. Com uma chave grátis da Groq, a $n continua respondendo quando o Gemini falhar ou ficar sem cota."
                         else "Usando ${SegundaIA.provedor(this).nome}." + (if (SegundaIA.ultimaVez > 0) " Última vez que ajudou: ${Diario.hora(SegundaIA.ultimaVez)}." else "")
                     }) { pedirIAReserva() },
+                    TelaDeAjustes.Ajuste("IA reserva como principal", {
+                        if (!SegundaIA.configurada(this)) "Configure a IA reserva primeiro."
+                        else if (SegundaIA.principal(this)) "Ligado: a ${SegundaIA.provedor(this).nome.substringBefore(" (")} responde primeiro (mais rápida) e o Gemini entra se ela falhar. PDF, áudio e busca no Google continuam no Gemini."
+                        else "Desligado: o Gemini responde primeiro e a ${SegundaIA.provedor(this).nome.substringBefore(" (")} entra se ele falhar."
+                    }, { SegundaIA.principal(this) }) {
+                        if (!SegundaIA.configurada(this)) pedirIAReserva()
+                        else {
+                            SegundaIA.definirPrincipal(this, !SegundaIA.principal(this))
+                            ajustes?.atualizar()
+                        }
+                    },
+                    TelaDeAjustes.Ajuste("O que eu aprendi", { "Veja por tipo tudo o que a $n guardou na memória e apague o que estiver errado." }) { mostrarAprendizado() },
                     TelaDeAjustes.Ajuste("Estudo diário (memória vetorial)", {
                         val r = Estudo.ultimo(this)
                         "Todo dia, em segundo plano: ${Estudo.FRASES_POR_DIA} jeitos de pedir, ${Estudo.ENIGMAS_POR_DIA} charadas, " +
@@ -3352,7 +3371,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
             // o que ela já aprendeu e conferiu no estudo (respostas para clientes e objeções)
             val conferidas = try {
                 Semantica.vetorDe(mensagem, k)?.let { v ->
-                    memoria.buscarVetores(v, EmbeddingsGemini.MODELO, setOf("cliente", "objecao"), minimo = 0.80, quantos = 3)
+                    memoria.buscarVetores(v, EmbeddingsGemini.MODELO, setOf("cliente", "objecao", RegrasDaLoja.TIPO), minimo = 0.80, quantos = 4)
                 }.orEmpty()
             } catch (e: Exception) {
                 emptyList()
@@ -3877,6 +3896,82 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
     }
 
     /** As ideias de post que ela preparou no estudo da semana. */
+    // ----------------------------------------------------------- "O que eu aprendi": ver e apagar aprendizados
+    private val NOMES_DO_APRENDIZADO = linkedMapOf(
+        "comando" to "Jeitos de pedir", "intencao" to "Frases que entendi", "resposta" to "Respostas guardadas",
+        "cliente" to "Respostas para clientes", "objecao" to "Objeções de venda", RegrasDaLoja.TIPO to "Regras da loja",
+        "enigma" to "Charadas", "ideia_post" to "Ideias de post", "fato" to "Fatos sobre você", "conversa" to "Resumos de conversas",
+    )
+
+    private fun mostrarAprendizado() {
+        Thread {
+            val contagem = try {
+                memoria.contarVetores()
+            } catch (e: Exception) {
+                emptyMap()
+            }
+            runOnUiThread {
+                if (contagem.isEmpty()) return@runOnUiThread responder("Minha memória ainda está vazia.")
+                val tipos = contagem.entries.sortedByDescending { it.value.first }.map { it.key }
+                val total = contagem.values.sumOf { it.first }
+                AlertDialog.Builder(this)
+                    .setTitle("O que eu aprendi ($total)")
+                    .setItems(tipos.map { "${NOMES_DO_APRENDIZADO[it] ?: it}: ${contagem[it]?.first ?: 0}" }.toTypedArray()) { _, i -> listarAprendizado(tipos[i]) }
+                    .setNegativeButton("Fechar", null)
+                    .show()
+            }
+        }.start()
+    }
+
+    private fun listarAprendizado(tipo: String) {
+        Thread {
+            val itens = try {
+                memoria.itensDoTipo(tipo, 60)
+            } catch (e: Exception) {
+                emptyList()
+            }
+            runOnUiThread {
+                if (itens.isEmpty()) return@runOnUiThread Toast.makeText(this, "Nada aqui.", Toast.LENGTH_SHORT).show()
+                fun linha(x: Memoria.Item) = x.texto.take(90) + when {
+                    !x.resposta.isNullOrBlank() -> "\n→ " + x.resposta.take(90)
+                    !x.acao.isNullOrBlank() -> "\n→ ${x.acao}"
+                    else -> ""
+                }
+                AlertDialog.Builder(this)
+                    .setTitle("${NOMES_DO_APRENDIZADO[tipo] ?: tipo} (últimos ${itens.size})")
+                    .setItems(itens.map { linha(it) }.toTypedArray()) { _, i -> verAprendizado(itens[i]) }
+                    .setPositiveButton("Voltar") { _, _ -> mostrarAprendizado() }
+                    .setNegativeButton("Fechar", null)
+                    .show()
+            }
+        }.start()
+    }
+
+    private fun verAprendizado(item: Memoria.Item) {
+        val texto = item.texto + (item.resposta?.takeIf { it.isNotBlank() }?.let { "\n\nResposta: $it" } ?: "") +
+            (item.acao?.takeIf { it.isNotBlank() }?.let { "\n\nAção: $it ${item.args.orEmpty()}" } ?: "") +
+            (item.fonte?.takeIf { it.isNotBlank() }?.let { "\n\nDe onde veio: $it" } ?: "")
+        AlertDialog.Builder(this)
+            .setTitle(NOMES_DO_APRENDIZADO[item.tipo] ?: item.tipo)
+            .setMessage(texto)
+            .setPositiveButton("Voltar") { _, _ -> listarAprendizado(item.tipo) }
+            .setNegativeButton("Apagar") { _, _ ->
+                Thread {
+                    val ok = try {
+                        memoria.apagarItem(item.id)
+                    } catch (e: Exception) {
+                        false
+                    }
+                    if (ok) Diario.anotar(this, "memoria", "Aprendizado apagado (${NOMES_DO_APRENDIZADO[item.tipo] ?: item.tipo}): ${item.texto.take(80)}", "tela")
+                    runOnUiThread {
+                        Toast.makeText(this, if (ok) "Apagado. Não uso mais isso." else "Não consegui apagar.", Toast.LENGTH_SHORT).show()
+                        listarAprendizado(item.tipo)
+                    }
+                }.start()
+            }
+            .show()
+    }
+
     private fun mostrarIdeiasDePost() {
         Thread {
             val ideias = try {

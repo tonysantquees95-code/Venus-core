@@ -804,6 +804,13 @@ class Memoria(contexto: Context) : SQLiteOpenHelper(contexto, "sexta.db", null, 
         return apagar.size
     }
 
+    /** Apaga um aprendizado (pela tela "O que eu aprendi"). */
+    fun apagarItem(id: Long): Boolean {
+        val n = writableDatabase.delete("vetores", "id = ?", arrayOf(id.toString()))
+        if (n > 0) mudou(null)
+        return n > 0
+    }
+
     /** Itens de um tipo, mais novos primeiro (para mostrar as ideias de post, por exemplo). */
     fun itensDoTipo(tipo: String, quantos: Int): List<Item> {
         val lista = mutableListOf<Item>()

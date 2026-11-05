@@ -54,7 +54,7 @@ object Semantica {
     fun entender(memoria: Memoria, chaveApi: String, frase: String, soRespostas: Boolean = false): Decisao? {
         if (chave(frase).split(" ").size < 2) return null
         val v = vetorDe(frase, chaveApi) ?: return null
-        val tipos = if (soRespostas) setOf("resposta", "enigma") else setOf("comando", "intencao", "resposta", "enigma")
+        val tipos = if (soRespostas) setOf("resposta", "enigma", RegrasDaLoja.TIPO) else setOf("comando", "intencao", "resposta", "enigma", RegrasDaLoja.TIPO)
         val achados = memoria.buscarVetores(v, EmbeddingsGemini.MODELO, tipos, minimo = 0.8, quantos = 3)
         for (a in achados) decidir(a, frase)?.let { return it }
         return null
@@ -74,6 +74,7 @@ object Semantica {
             }
             "intencao" -> if (a.nota >= LIMIAR_INTENCAO) Decisao.Frase(i.texto, a.nota, i.id) else null
             "resposta" -> if (a.nota >= LIMIAR_RESPOSTA && !i.resposta.isNullOrBlank() && vale(frase, i.resposta)) Decisao.Responder(i.resposta, a.nota, i.id) else null
+            RegrasDaLoja.TIPO -> if (a.nota >= LIMIAR_RESPOSTA && !i.resposta.isNullOrBlank()) Decisao.Responder(i.resposta, a.nota, i.id) else null
             "enigma" -> if (a.nota >= LIMIAR_ENIGMA && !i.resposta.isNullOrBlank()) Decisao.Responder(i.resposta, a.nota, i.id) else null
             else -> null
         }
