@@ -445,9 +445,10 @@ object Estudo {
             "Responda só com JSON: {\"frases\":[{\"frase\":\"...\",\"acao\":\"nome\",\"args\":{}}]}"
 
     fun pedidoDeClientes(catalogo: String, foco: String, jaConhecidas: List<String>): String =
-        "Você treina a atendente virtual da ${Perfil.loja}, sex shop online de ${Perfil.cidade} (site ${Loja.SITE}). " +
+        "Você treina a atendente virtual da ${Perfil.loja}, loja online de ${Perfil.ramo} de ${Perfil.cidade} (site ${Loja.SITE}). " +
             "Dados da loja (produto | preço | preço no Pix | estoque | link):\n$catalogo\n" +
-            "No Pix há 5% de desconto. Compras pelo site; atendimento também pelo WhatsApp.\n\n" +
+            "No Pix há ${Perfil.pixPorcento}% de desconto. Compras pelo site; atendimento também pelo WhatsApp.\n" +
+            "Regras da loja: ${Perfil.regrasDeVenda}\n\n" +
             "Escreva exatamente ${CLIENTES_POR_DIA / 2} perguntas DIFERENTES que clientes mandam de verdade no WhatsApp ou no Instagram, $foco. " +
             "Varie o jeito (curtas, com erro de digitação, tímidas, diretas) e cite produtos reais da lista. " +
             "Para cada uma, a resposta ideal da loja: acolhedora, discreta, sem julgamento, em até 3 frases, no máximo 1 emoji. " +
@@ -458,7 +459,7 @@ object Estudo {
             "Responda só com JSON: {\"perguntas\":[{\"pergunta\":\"...\",\"resposta\":\"...\"}]}"
 
     fun pedidoDeConferencia(catalogo: String, pares: List<Pair<String, String>>): String =
-        "Você confere respostas de atendimento de uma loja. Dados verdadeiros da loja:\n$catalogo\nNo Pix há 5% de desconto.\n\n" +
+        "Você confere respostas de atendimento de uma loja. Dados verdadeiros da loja:\n$catalogo\nNo Pix há ${Perfil.pixPorcento}% de desconto. Regras da loja: ${Perfil.regrasDeVenda}\n\n" +
             "Para cada par abaixo, aprove (true) só se a resposta: responde à pergunta; não inventa nada fora dos dados " +
             "(prazos, medidas, políticas, promoções); não diz preço nem estoque; cita o produto e o link certos quando fala de produto; " +
             "é gentil e sem linguagem explícita. Na dúvida, reprove (false). " +
@@ -466,7 +467,7 @@ object Estudo {
             pares.mapIndexed { i, (p, r) -> "${i + 1}. Pergunta: $p\n   Resposta: $r" }.joinToString("\n")
 
     fun pedidoDeObjecoes(jaConhecidas: List<String>): String =
-        "Você treina a atendente virtual de uma sex shop online (${Perfil.loja}). Escreva exatamente $OBJECOES_POR_DIA objeções " +
+        "Você treina a atendente virtual de uma loja online de ${Perfil.ramo} (${Perfil.loja}). Escreva exatamente $OBJECOES_POR_DIA objeções " +
             "DIFERENTES que clientes falam antes de comprar (preço, vergonha, medo de alguém ver a encomenda, dúvida se funciona, " +
             "primeira vez, parceiro(a) não sabe, vou pensar, achei mais barato em outro lugar, e se não gostar) e para cada uma a melhor resposta: " +
             "acolhedora, respeitosa, sem pressão e sem julgamento, em até 3 frases, no máximo 1 emoji. Não invente preços, descontos, " +
@@ -475,7 +476,7 @@ object Estudo {
             "Responda só com JSON: {\"objecoes\":[{\"objecao\":\"...\",\"resposta\":\"...\"}]}"
 
     fun pedidoDeIdeias(datas: String, produtos: String, jaFeitas: List<String>, hoje: String): String =
-        "Hoje é $hoje. Você é social media da ${Perfil.loja}, sex shop online de ${Perfil.cidade} (Instagram da loja). " +
+        "Hoje é $hoje. Você é social media da ${Perfil.loja}, loja online de ${Perfil.ramo} de ${Perfil.cidade} (Instagram da loja). " +
             "$datas\n" + (if (produtos.isNotBlank()) "Produtos à venda: $produtos\n" else "") +
             "Crie exatamente $IDEIAS_POR_SEMANA ideias de post para as próximas semanas, aproveitando as datas e os produtos: " +
             "variadas (feed, story, reels), elegantes, sem nudez nem linguagem explícita (regras do Instagram). " +
@@ -495,8 +496,8 @@ object Estudo {
             "\nResponda só com JSON: {\"licoes\":[{\"licao\":\"...\",\"resposta\":\"o porquê\"}]}"
 
     fun pedidoDeSaberes(area: String, jaConhecidas: List<String>): String =
-        "Você monta o estudo diário da Vênus, assistente pessoal e comercial do ${Perfil.dono}: ele mora em ${Perfil.cidade}, trabalha num hotel " +
-            "e tem a ${Perfil.loja}, loja online de produtos para o bem-estar íntimo, e faz tudo pelo celular Android.\n" +
+        "Você monta o estudo diário da Vênus, assistente pessoal e comercial do ${Perfil.dono}: ele ${Perfil.sobre.ifBlank { "mora em ${Perfil.cidade}" }} " +
+            "e tem a ${Perfil.loja}, loja online de ${Perfil.ramo}, e faz tudo pelo celular Android.\n" +
             "Área de hoje: $area.\n" +
             "Escreva exatamente $SABERES_POR_DIA perguntas DIFERENTES que o ${Perfil.dono} poderia fazer sobre essa área, úteis na vida ou no negócio dele, " +
             "cada uma com uma resposta correta, prática e curta (até 3 frases), em português do Brasil. " +

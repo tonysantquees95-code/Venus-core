@@ -32,9 +32,13 @@ class Loja(private val contexto: Context) {
 
     class ErroDaLoja(mensagem: String) : Exception(mensagem)
 
+    /** Loja em outra plataforma (Shopify, WooCommerce, Nuvemshop); null = site no Floot (o padrão). */
+    private val externa: Plataformas.Adaptador? get() = Plataformas.ativa(contexto)
+    private val ehFloot get() = Plataformas.tipo(contexto) == "floot"
+
     // ------------------------------------------------------------- conta
-    val conectada get() = prefs.getString(P_EMAIL, null) != null && prefs.getString(P_SENHA, null) != null
-    val email get() = prefs.getString(P_EMAIL, null)
+    val conectada get() = if (ehFloot) prefs.getString(P_EMAIL, null) != null && prefs.getString(P_SENHA, null) != null else externa != null
+    val email get() = if (ehFloot) prefs.getString(P_EMAIL, null) else externa?.nome
 
     /** Testa o login e, se der certo, guarda o e-mail e a senha (criptografada). Devolve null ou o erro. */
     fun conectar(email: String, senha: String): String? {
@@ -76,6 +80,7 @@ class Loja(private val contexto: Context) {
 
     /** GET num endereço do painel, entrando de novo sozinha quando a sessão vence (ela dura 1 dia). */
     private fun buscar(caminho: String): JSONObject {
+        if (!ehFloot) throw ErroDaLoja(SO_FLOOT)
         repeat(2) { tentativa ->
             val cookie = prefs.getString(P_COOKIE, null)
             if (cookie == null || tentativa == 1) reentrar()
@@ -95,6 +100,7 @@ class Loja(private val contexto: Context) {
 
     /** POST num endereço do painel (formato superjson), entrando de novo quando a sessão vence. */
     private fun enviar(caminho: String, corpo: JSONObject): JSONObject {
+        if (!ehFloot) throw ErroDaLoja(SO_FLOOT)
         val texto = JSONObject().put("json", corpo).toString()
         repeat(2) { tentativa ->
             val cookie = prefs.getString(P_COOKIE, null)
@@ -143,11 +149,13 @@ class Loja(private val contexto: Context) {
 
     // ------------------------------------------------------------- dados
     fun pedidos(): List<Pedido> {
+        if (!ehFloot) return (externa ?: throw ErroDaLoja(SEM_PLATAFORMA)).pedidos()
         val lista = buscar("/_api/admin/orders").optJSONArray("orders") ?: JSONArray()
         return lerPedidos(lista)
     }
 
     fun produtos(): List<Produto> {
+        if (!ehFloot) return (externa ?: throw ErroDaLoja(SEM_PLATAFORMA)).produtos()
         val lista = buscar("/_api/admin/products").optJSONArray("products") ?: JSONArray()
         return lerProdutos(lista)
     }
@@ -184,13 +192,16 @@ class Loja(private val contexto: Context) {
         for (i in itens) {
             val p = i.produto ?: continue
             try {
-                if (somarEstoque && i.quantidade > 0) {
+                if (somarEstoque && i.quantidade > 0 && !ehFloot) {
+                    (externa ?: throw ErroDaLoja(SEM_PLATAFORMA)).definirEstoque(p, (p.estoque ?: 0) + i.quantidade)
+                    estoque++
+                } else if (somarEstoque && i.quantidade > 0) {
                     val atual = p.estoque
                     if (atual == null) enviar("/_api/admin/stock_update", JSONObject().put("productId", p.id).put("quantity", i.quantidade).put("mode", "set"))
                     else enviar("/_api/admin/stock_update", JSONObject().put("productId", p.id).put("quantity", i.quantidade).put("mode", "add"))
                     estoque++
                 }
-                if (salvarCusto) {
+                if (salvarCusto && ehFloot) {
                     val atual = produtos().firstOrNull { it.id == p.id }
                     val corpo = corpoDoProduto(atual?.bruto, "custo", i.custoUnitario)
                     if (corpo != null) {
@@ -207,6 +218,36 @@ class Loja(private val contexto: Context) {
         if (salvarCusto) texto += " Custo salvo em ${plural(custos, "produto", "produtos")}."
         if (erros.isNotEmpty()) texto += " Não consegui atualizar: ${erros.joinToString(", ")}."
         return texto
+    }
+
+    /** A mesma alteração confirmada, feita na plataforma da loja (Shopify, WooCommerce, Nuvemshop). */
+    private fun aplicarFora(x: Plataformas.Adaptador, a: Alteracao): String {
+        when (a.tipo) {
+            "estoque_somar", "estoque_tirar", "estoque_definir" -> {
+                val p = a.produto!!
+                x.definirEstoque(p, a.valor!!)
+                return "Pronto: ${p.nome} agora tem ${plural(a.valor, "unidade", "unidades")} no estoque da ${x.nome}."
+            }
+            "preco", "ativar", "desativar", "promocao", "fim_promocao" -> {
+                val p = a.produto!!
+                x.mudarProduto(p, a.tipo, a.valor)
+                return when (a.tipo) {
+                    "preco" -> "Pronto: ${p.nome} agora custa ${dinheiro(a.valor!!)} na ${x.nome}."
+                    "promocao" -> "Pronto: ${p.nome} está em promoção por ${dinheiro(a.valor!!)} na ${x.nome}."
+                    "fim_promocao" -> "Pronto: ${p.nome} saiu da promoção."
+                    "ativar" -> "Pronto: ${p.nome} voltou a aparecer na loja."
+                    else -> "Pronto: ${p.nome} foi escondido da loja."
+                }
+            }
+            "custo" -> throw ErroDaLoja("O custo do produto só fica guardado no site do Floot por enquanto.")
+            "entregue", "status" -> {
+                val o = a.pedido!!
+                val status = if (a.tipo == "entregue") "delivered" else a.status!!
+                x.mudarPedido(o, status, a.rastreio ?: o.rastreio)
+                return "Pronto: o pedido ${o.id} está ${NOME_STATUS[status] ?: status} na ${x.nome}."
+            }
+        }
+        throw ErroDaLoja("Não sei fazer essa mudança na ${x.nome}.")
     }
 
     fun maisVendidos(periodo: String): String = montarMaisVendidos(pedidos(), periodo, Calendar.getInstance())
@@ -300,6 +341,7 @@ class Loja(private val contexto: Context) {
 
     /** Aplica uma alteração já confirmada. */
     fun aplicar(a: Alteracao): String {
+        if (!ehFloot && a.tipo != "lote") return aplicarFora(externa ?: throw ErroDaLoja(SEM_PLATAFORMA), a)
         when (a.tipo) {
             "lote" -> {
                 var ok = 0
@@ -392,6 +434,8 @@ class Loja(private val contexto: Context) {
     data class Produto(
         val id: Int, val nome: String, val ativo: Boolean, val estoque: Int?, val precoCentavos: Int?,
         val precoAntigo: Int? = null, val bruto: JSONObject? = null,
+        /** Endereço do produto na loja (outras plataformas); null = SITE/produto/id (Floot). */
+        val link: String? = null,
     ) {
         /** Quanto o produto custou para a loja (null se ainda não cadastrado ou se o site ainda não guarda custo). */
         val custoCentavos: Int? get() = bruto?.takeIf { it.has(CAMPO_CUSTO) && !it.isNull(CAMPO_CUSTO) }?.optInt(CAMPO_CUSTO)
@@ -450,7 +494,8 @@ class Loja(private val contexto: Context) {
 
         /** "/_cdn/…" → "https://desejo-de-intimidade.floot.app/_cdn/…" (o Instagram precisa do endereço completo). */
         fun enderecoCompleto(url: String): String = if (url.startsWith("/")) SITE + url else url
-        const val SITE = "https://desejo-de-intimidade.floot.app"
+        /** O site da loja (vem do Perfil; o padrão é o da Desejo de Intimidade). */
+        val SITE: String get() = Perfil.site
         private const val COOKIE = "floot_built_app_session"
         private const val ALIAS = "venus_loja"
         private const val P_EMAIL = "email"
@@ -460,6 +505,8 @@ class Loja(private val contexto: Context) {
 
         /** Igual ao site: com 2 unidades ou menos o produto está acabando. */
         const val ESTOQUE_BAIXO = 2
+        const val SO_FLOOT = "Isso só funciona com o site no Floot por enquanto (robô, stories com foto, cadastro e custo de produto)."
+        const val SEM_PLATAFORMA = "A loja ainda não está conectada. Nos ajustes, toque em Plataforma da loja."
 
         private val BR = Locale("pt", "BR")
         private val PAGOS = setOf("paid", "preparing", "shipped", "delivered")
@@ -709,9 +756,9 @@ class Loja(private val contexto: Context) {
             var texto = "${p.nome}: vende por ${dinheiro(preco)}, custou ${dinheiro(custo)}. Lucro de ${dinheiro(lucro)} por unidade, " +
                 "${pct(lucro.toLong(), preco.toLong())}% do preço (markup de ${pct(lucro.toLong(), custo.toLong())}% sobre o custo)."
             val promo = p.precoAntigo
-            if (promo == null || promo <= preco) {
-                val pix = preco - (preco * 5 + 50) / 100
-                texto += " No Pix, com 5% de desconto, o lucro fica ${dinheiro(pix - custo)}."
+            if ((promo == null || promo <= preco) && Perfil.pixPorcento > 0) {
+                val pix = preco - (preco * Perfil.pixPorcento + 50) / 100
+                texto += " No Pix, com ${Perfil.pixPorcento}% de desconto, o lucro fica ${dinheiro(pix - custo)}."
             }
             return texto
         }
@@ -783,13 +830,13 @@ class Loja(private val contexto: Context) {
         fun catalogoParaIA(produtos: List<Produto>): String = produtos.filter { it.ativo && it.precoCentavos != null }.take(80).joinToString("\n") { p ->
             val preco = p.precoCentavos!!
             val promo = p.precoAntigo?.takeIf { it > preco }
-            val pix = if (promo != null) preco else preco - (preco * 5 + 50) / 100
+            val pix = if (promo != null) preco else preco - (preco * Perfil.pixPorcento + 50) / 100
             val estoque = when {
                 p.estoque == null -> "disponível"
                 p.estoque <= 0 -> "esgotado"
                 else -> "${p.estoque} un."
             }
-            "${p.nome} | ${dinheiro(preco)}${if (promo != null) " (promoção, de ${dinheiro(promo)})" else ""} | ${dinheiro(pix)} | $estoque | $SITE/produto/${p.id}"
+            "${p.nome} | ${dinheiro(preco)}${if (promo != null) " (promoção, de ${dinheiro(promo)})" else ""} | ${dinheiro(pix)} | $estoque | ${p.link ?: "$SITE/produto/${p.id}"}"
         }
 
         /** As categorias do site (id, nome). */
