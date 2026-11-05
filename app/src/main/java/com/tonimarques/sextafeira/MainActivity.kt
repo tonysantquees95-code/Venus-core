@@ -180,6 +180,8 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
             StoriesDoDia.recuperarAtrasado(this)
         } catch (e: Exception) {
         }
+        // pedidos da página Publicações do site (Natália): confere ao abrir e mantém o alarme de 2 minutos
+        PedidosDoSite.conferirEmSegundoPlano(this)
         VigiliaService.pausarPorTela(true)
         VigiliaService.aoGestoNaTela = {
             if (!ocupado && escuta != Escuta.COMANDO) {

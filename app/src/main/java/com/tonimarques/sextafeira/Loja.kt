@@ -301,9 +301,32 @@ class Loja(private val contexto: Context) {
     /** Marca como publicado (instagram ou whatsapp) em nome da conta da loja. Devolve quem publicou. */
     fun marcarStory(id: Int, onde: String): String = enviar("/_api/admin/stories_marcar", JSONObject().put("id", id).put("onde", onde)).optString("por")
 
-    /** Entrega ao site as regras de venda (pagamento, frete, retirada…), as mesmas que a Vênus usa no app. */
-    fun enviarRegrasDeVenda(regras: JSONObject) {
-        enviar("/_api/admin/regras_venda", JSONObject().put("regras", regras))
+    /**
+     * Entrega ao site as regras de venda (pagamento, frete, retirada…), as mesmas que a Vênus usa no app,
+     * com o resumo e as respostas prontas (o robô e o Direct do Instagram respondem com elas).
+     */
+    fun enviarRegrasDeVenda(regras: RegrasDeVenda, loja: String) {
+        val respostas = JSONArray()
+        for ((id, pergunta, resposta) in regras.perguntasComId(loja)) {
+            respostas.put(JSONObject().put("id", id).put("pergunta", pergunta.take(300)).put("resposta", resposta.take(1500)))
+        }
+        enviar("/_api/admin/regras_venda", JSONObject().put("regras", regras.json()).put("texto", regras.texto().take(4000)).put("respostas", respostas))
+    }
+
+    // ------------------------------------------------------------------ pedidos da página Publicações do site
+    /** Pedidos novos da página Publicações (o site já marca como "fazendo"). */
+    fun pedidosDePublicacao(): List<PedidosDoSite.Pedido> = PedidosDoSite.lerPedidos(buscar("/_api/admin/pedidos_publicacao"))
+
+    fun responderPedidoDePublicacao(id: Int, ok: Boolean, resultado: String, imagemUrl: String?) {
+        enviar(
+            "/_api/admin/pedidos_publicacao",
+            JSONObject().put("id", id).put("ok", ok).put("resultado", resultado.take(500)).put("imagemUrl", imagemUrl ?: JSONObject.NULL),
+        )
+    }
+
+    /** As ideias de post da Vênus, para a página Publicações do site. */
+    fun enviarIdeias(ideias: JSONArray) {
+        enviar("/_api/admin/ideias", JSONObject().put("ideias", ideias))
     }
 
     /** Entrega ao site o token do Instagram (para o Direct automático responder pela API oficial). */
