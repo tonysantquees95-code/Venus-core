@@ -101,6 +101,37 @@ object Instagram {
                 (0 until a.length()).mapNotNull { a.optJSONObject(it)?.optJSONObject("instagram_business_account") }
                     .firstOrNull { it.optString("id").isNotBlank() }?.let { Conta(it.optString("id"), it.optString("username"), "BUSINESS") }
             },
+            // o próprio token diz a que contas dá acesso (escopos granulares do instagram_basic)
+            {
+                val dados = pedir("GET", "/debug_token", mapOf("input_token" to token), token).optJSONObject("data") ?: JSONObject()
+                val escopos = dados.optJSONArray("granular_scopes") ?: JSONArray()
+                val alvos = (0 until escopos.length()).mapNotNull { escopos.optJSONObject(it) }
+                    .filter { it.optString("scope").startsWith("instagram_") }
+                    .flatMap { e -> e.optJSONArray("target_ids")?.let { a -> (0 until a.length()).map { a.optString(it) } }.orEmpty() }
+                    .filter { it.isNotBlank() }.distinct()
+                alvos.firstNotNullOfOrNull { id ->
+                    try {
+                        val r = pedir("GET", "/$id", mapOf("fields" to "id,username"), token)
+                        Conta(r.optString("id").ifBlank { id }, r.optString("username"), "BUSINESS")
+                    } catch (e: ErroDoInstagram) {
+                        null
+                    }
+                }
+            },
+            {
+                // login unificado: as contas ficam no portfólio da empresa
+                val empresas = pedir("GET", "/me/businesses", mapOf("fields" to "id"), token).optJSONArray("data") ?: JSONArray()
+                (0 until empresas.length()).mapNotNull { empresas.optJSONObject(it)?.optString("id")?.takeIf { s -> s.isNotBlank() } }
+                    .firstNotNullOfOrNull { b ->
+                        listOf("owned_instagram_accounts", "instagram_business_accounts", "instagram_accounts").firstNotNullOfOrNull { borda ->
+                            try {
+                                primeiraConta(pedir("GET", "/$b/$borda", mapOf("fields" to "id,username"), token))
+                            } catch (e: ErroDoInstagram) {
+                                null
+                            }
+                        }
+                    }
+            },
             { primeiraConta(pedir("GET", "/me/assigned_instagram_accounts", mapOf("fields" to "id,username"), token)) },
             { primeiraConta(pedir("GET", "/me/instagram_accounts", mapOf("fields" to "id,username"), token)) },
             {
@@ -117,9 +148,9 @@ object Instagram {
             }
         }
         throw ErroDoInstagram(
-            "Esse token (EAA…) é do login unificado da Meta, e a conta da loja não abriu com ele" +
-                (ultimoErro?.message?.let { " ($it)" } ?: "") + ". Gere o token em Casos de uso → API do Instagram → " +
-                "Configuração da API com login do Instagram (o token começa com IG)."
+            "Esse token (EAA…) é do login unificado da Meta, e a conta da loja não abriu com ele por nenhum dos 6 caminhos" +
+                (ultimoErro?.message?.let { " ($it)" } ?: "") + ". Abra developers.facebook.com/tools/debug/accesstoken, " +
+                "cole o token e confira em Escopos granulares se o instagram_basic aponta para a conta da loja."
         )
     }
 
