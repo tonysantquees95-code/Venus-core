@@ -31,6 +31,21 @@ object Robo {
     fun definirLigado(ctx: Context, v: Boolean) = prefs(ctx).edit().putBoolean("ligado", v).apply()
     fun endereco(ctx: Context) = prefs(ctx).getString("endereco", ENDERECO_PADRAO).orEmpty().ifBlank { ENDERECO_PADRAO }
     /** A chave fica cifrada com o chip de segurança do Android (as antigas, em texto, são cifradas na primeira leitura). */
+    /**
+     * Mesmo texto, ignorando maiúsculas, acentos de digitação, emojis e espaços; e o WhatsApp às vezes corta o texto
+     * longo na notificação, então um começo igual (de pelo menos 12 letras) também conta.
+     */
+    fun mesmoTexto(a: String, b: String): Boolean {
+        fun base(t: String) = t.lowercase().filter { it.isLetterOrDigit() }
+        val x = base(a)
+        val y = base(b)
+        if (x.isEmpty() || y.isEmpty()) return false
+        if (x == y) return true
+        val curto = if (x.length <= y.length) x else y
+        val longo = if (x.length <= y.length) y else x
+        return curto.length >= 12 && longo.startsWith(curto)
+    }
+
     fun chave(ctx: Context) = Cofre.ler(prefs(ctx), "chave")
     fun salvar(ctx: Context, endereco: String, chave: String) =
         prefs(ctx).edit().putString("endereco", endereco.trim()).putString("chave", Cofre.selar(chave.trim())).apply()

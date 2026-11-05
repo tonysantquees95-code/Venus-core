@@ -48,4 +48,13 @@ class RespostasTest {
         assertTrue(RegrasDaVenus.lerRespostas("lixo").isEmpty())
         assertTrue(Respostas.MODELOS.map { it.id }.containsAll(listOf("pagamento", "frete", "retirada", "discreto", "troca", "horario")))
     }
+
+    @Test fun reconheceAPropriaResposta() {
+        val minha = "Temos gel excitante masculino por R$ 26,50 no Pix (Volumão). Quer o link de algum?"
+        assertTrue(Robo.mesmoTexto(minha, "Temos gel excitante masculino por R$ 26,50 no Pix (Volumão). Quer o link de algum?"))
+        assertTrue(Robo.mesmoTexto(minha, "Temos gel excitante masculino por R$ 26,50…"))
+        assertTrue(Robo.mesmoTexto("Oi, tudo bem! Em que posso ajudar? 🌸", "oi tudo bem em que posso ajudar"))
+        assertTrue(!Robo.mesmoTexto(minha, "Promoções"))
+        assertTrue(!Robo.mesmoTexto("Oi", "Oi, quero o link"))
+    }
 }
