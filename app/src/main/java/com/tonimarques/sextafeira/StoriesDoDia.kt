@@ -114,7 +114,12 @@ object StoriesDoDia {
             !Loja(ctx).conectada -> " Falta conectar a loja (a imagem sobe pelo site)."
             else -> ""
         }
-        return base + ultimo + falta
+        val p = prefs(ctx)
+        val rastro = listOfNotNull(
+            p.getLong("disparou_em", 0).takeIf { it > 0 }?.let { "último alarme ${Diario.hora(it)}" },
+            p.getLong("trabalho_em", 0).takeIf { it > 0 }?.let { "última tentativa ${Diario.hora(it)}" },
+        ).joinToString(", ").let { if (it.isBlank()) "" else " ($it)" }
+        return base + ultimo + falta + rastro
     }
 
     // ------------------------------------------------------------------ agenda
@@ -157,7 +162,38 @@ object StoriesDoDia {
     /** Na hora: um trabalho em segundo plano que espera a internet publica o story. */
     internal fun disparou(ctx: Context) {
         val turno = prefs(ctx).getString("proximo_turno", null) ?: turnoDeAgora()
+        prefs(ctx).edit().putLong("disparou_em", System.currentTimeMillis()).apply()
+        Diario.anotar(ctx, "instagram", "Alarme do story da ${nomeTurno(turno)} disparou", "automatico")
         agendar(ctx) // já marca o próximo
+        publicarEmSegundoPlano(ctx, turno)
+    }
+
+    /**
+     * Se o horário de um story já passou (mais de 20 minutos) e ele não saiu hoje, publica agora.
+     * Cobre o Android que segurou o alarme ou o trabalho em segundo plano (economia de bateria).
+     * Chamado ao abrir o app, ao ligar o celular, depois de atualizar e a cada rodada da vigia da loja.
+     * No máximo 3 tentativas por turno no dia, com 30 minutos entre elas, e só até 6 horas depois do horário.
+     */
+    fun recuperarAtrasado(ctx: Context) {
+        if (!ligado(ctx)) return
+        val agora = Calendar.getInstance()
+        val minutos = agora.get(Calendar.HOUR_OF_DAY) * 60 + agora.get(Calendar.MINUTE)
+        val p = prefs(ctx)
+        for (turno in listOf("manha", "tarde")) {
+            val h = horario(ctx, turno)
+            if (minutos < h + 20 || minutos > h + 6 * 60) continue
+            if (p.getBoolean("feito_${hoje()}_$turno", false)) continue
+            val chave = "tentativas_${hoje()}_$turno"
+            val tentativas = p.getInt(chave, 0)
+            if (tentativas >= 3 || System.currentTimeMillis() - p.getLong("ultima_tentativa", 0) < 30 * 60_000L) continue
+            p.edit().putInt(chave, tentativas + 1).putLong("ultima_tentativa", System.currentTimeMillis()).apply()
+            Diario.anotar(ctx, "instagram", "Story da ${nomeTurno(turno)} atrasado: publicando agora (tentativa ${tentativas + 1})", "automatico")
+            publicarEmSegundoPlano(ctx, turno)
+            return
+        }
+    }
+
+    private fun publicarEmSegundoPlano(ctx: Context, turno: String) {
         val info = JobInfo.Builder(JOB_ID, ComponentName(ctx, PublicadorDeStory::class.java))
             .setRequiredNetworkType(JobInfo.NETWORK_TYPE_ANY)
             .setOverrideDeadline(30 * 60_000L)
@@ -597,7 +633,10 @@ object StoriesDoDia {
 class AlarmeDoStory : BroadcastReceiver() {
     override fun onReceive(ctx: Context, intent: Intent) {
         when (intent.action) {
-            Intent.ACTION_BOOT_COMPLETED, Intent.ACTION_MY_PACKAGE_REPLACED -> StoriesDoDia.agendar(ctx)
+            Intent.ACTION_BOOT_COMPLETED, Intent.ACTION_MY_PACKAGE_REPLACED -> {
+                StoriesDoDia.agendar(ctx)
+                StoriesDoDia.recuperarAtrasado(ctx)
+            }
             StoriesDoDia.ACAO_LEMBRETE, StoriesDoDia.ACAO_MARCAR -> {
                 val id = intent.getIntExtra("id", 0)
                 if (id <= 0) return
@@ -628,6 +667,7 @@ class AlarmeDoStory : BroadcastReceiver() {
 class PublicadorDeStory : JobService() {
     override fun onStartJob(params: JobParameters): Boolean {
         val turno = params.extras.getString("turno") ?: "manha"
+        getSharedPreferences("stories_dia", MODE_PRIVATE).edit().putLong("trabalho_em", System.currentTimeMillis()).apply()
         Thread {
             try {
                 StoriesDoDia.publicar(applicationContext, turno)

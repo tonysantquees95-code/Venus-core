@@ -172,6 +172,10 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         super.onResume()
         naTela = true
         conferirLicenca()
+        try {
+            StoriesDoDia.recuperarAtrasado(this)
+        } catch (e: Exception) {
+        }
         VigiliaService.pausarPorTela(true)
         VigiliaService.aoGestoNaTela = {
             if (!ocupado && escuta != Escuta.COMANDO) {

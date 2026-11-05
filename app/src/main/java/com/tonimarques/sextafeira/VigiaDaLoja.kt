@@ -27,6 +27,10 @@ class VigiaDaLoja : JobService() {
         parar = false
         Thread {
             try {
+                StoriesDoDia.recuperarAtrasado(applicationContext)
+            } catch (e: Exception) {
+            }
+            try {
                 verificar(this)
             } catch (e: Exception) {
                 // sem internet ou site fora do ar: tenta de novo na próxima rodada
@@ -94,7 +98,8 @@ class VigiaDaLoja : JobService() {
 
         /** Garante que está agendado (chamado ao abrir o app, caso o Android tenha esquecido). */
         fun garantir(c: Context) {
-            if (!ligado(c)) return
+            // também serve de rede de segurança dos stories: a cada 15 minutos confere se algum ficou para trás
+            if (!ligado(c) && !StoriesDoDia.ligado(c)) return
             val agendador = c.getSystemService(JobScheduler::class.java)
             if (agendador.allPendingJobs.none { it.id == JOB_ID }) agendar(c)
         }
