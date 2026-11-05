@@ -42,7 +42,7 @@ import java.util.Locale
 
 open class MainActivity : Activity(), TextToSpeech.OnInitListener {
 
-    private enum class Escuta { NADA, VIGILIA, COMANDO }
+    internal enum class Escuta { NADA, VIGILIA, COMANDO }
 
     protected lateinit var orbe: Orbe
     protected lateinit var titulo: TextView
@@ -54,64 +54,64 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
     protected lateinit var botaoMic: ImageButton
     protected lateinit var botaoEnviar: ImageButton
     protected lateinit var botaoAnexar: ImageButton
-    private lateinit var bandejaAnexos: LinearLayout
-    private lateinit var rolagemAnexos: android.widget.HorizontalScrollView
+    internal lateinit var bandejaAnexos: LinearLayout
+    internal lateinit var rolagemAnexos: android.widget.HorizontalScrollView
 
     /** Um anexo escolhido: carrega em segundo plano (foto reduzida, texto do Word/Excel...). */
-    private class Anexo(val uri: Uri, var nome: String) {
+    internal class Anexo(val uri: Uri, var nome: String) {
         var doc: Arquivos.Documento? = null
         var miniatura: android.graphics.Bitmap? = null
         var erro: String? = null
         var vista: View? = null
     }
 
-    private val anexos = mutableListOf<Anexo>()
-    private var alturaOrbe = 0
-    private var tecladoAberto = false
-    private var animacaoOrbe: android.animation.ValueAnimator? = null
-    private lateinit var ferramentas: Ferramentas
+    internal val anexos = mutableListOf<Anexo>()
+    internal var alturaOrbe = 0
+    internal var tecladoAberto = false
+    internal var animacaoOrbe: android.animation.ValueAnimator? = null
+    internal lateinit var ferramentas: Ferramentas
 
-    private val cerebro = Cerebro()
+    internal val cerebro = Cerebro()
     protected val principal = Handler(Looper.getMainLooper())
 
-    private var gemini: Gemini? = null
-    private var tts: TextToSpeech? = null
+    internal var gemini: Gemini? = null
+    internal var tts: TextToSpeech? = null
     /** Voz neural (Microsoft): o áudio da resposta toca aqui. */
-    private var tocador: android.media.MediaPlayer? = null
+    internal var tocador: android.media.MediaPlayer? = null
     /** Muda a cada fala nova ou interrupção: áudio que chega atrasado de uma fala antiga é descartado. */
-    private var numeroDaFala = 0
-    private var ttsPronto = false
-    private var falando = false
-    private var falaPendente: String? = null
-    private var reconhecedor: SpeechRecognizer? = null
-    private var escuta = Escuta.NADA
-    private var errosSeguidos = 0
-    private var ocupado = false
-    private var pedidoAtual = 0
-    private var ultimaFoiVoz = false
-    private var forcarEscuta = false
-    private var ouvirAposPermissao = false
-    private var naTela = false
-    private var corAtual = Color.parseColor("#36D6FF")
-    private var topicoAtual = "Conversa"
-    private var respostaAtrasada = 0
+    internal var numeroDaFala = 0
+    internal var ttsPronto = false
+    internal var falando = false
+    internal var falaPendente: String? = null
+    internal var reconhecedor: SpeechRecognizer? = null
+    internal var escuta = Escuta.NADA
+    internal var errosSeguidos = 0
+    internal var ocupado = false
+    internal var pedidoAtual = 0
+    internal var ultimaFoiVoz = false
+    internal var forcarEscuta = false
+    internal var ouvirAposPermissao = false
+    internal var naTela = false
+    internal var corAtual = Color.parseColor("#36D6FF")
+    internal var topicoAtual = "Conversa"
+    internal var respostaAtrasada = 0
 
     /** Esperando o endereço de um lugar ("casa", "trabalho"...) depois de perguntar. */
-    private var aguardandoLugar: String? = null
+    internal var aguardandoLugar: String? = null
     @Volatile private var atualizandoConhecimento = false
-    private val memoria by lazy { Memoria(this) }
+    internal val memoria by lazy { Memoria(this) }
 
-    private val prefs by lazy { getSharedPreferences("config", Context.MODE_PRIVATE) }
-    private val tarefaVigilia = Runnable { iniciarVigilia() }
-    private var despertador: Despertador? = null
+    internal val prefs by lazy { getSharedPreferences("config", Context.MODE_PRIVATE) }
+    internal val tarefaVigilia = Runnable { iniciarVigilia() }
+    internal var despertador: Despertador? = null
     /** Ouve "Vênus", "chega", "espera"... enquanto ela fala, para dar para interromper. */
-    private var interruptor: Interruptor? = null
+    internal var interruptor: Interruptor? = null
     /** Até quando continuar tentando ouvir depois que ela fala (o reconhecedor desiste rápido no silêncio). */
-    private var escutaAte = 0L
+    internal var escutaAte = 0L
     /** O último pedido e a ação feita, para anotar quando você diz "não foi isso". */
-    private var ultimoPedido: String? = null
-    private var ultimaAcaoFeita: String? = null
-    private val apagarTela = Runnable { window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) }
+    internal var ultimoPedido: String? = null
+    internal var ultimaAcaoFeita: String? = null
+    internal val apagarTela = Runnable { window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) }
 
     // ------------------------------------------------------------ ciclo de vida
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -246,16 +246,16 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
     }
 
     /** Terminou a conversa: devolve o som para o app de música e segue o que cada tela faz quando fica ociosa. */
-    private fun ficarOcioso() {
+    internal fun ficarOcioso() {
         liberarFoco()
         aoFicarOcioso()
     }
 
     // ------------------------------------------------- foco de áudio (música)
-    private var foco: android.media.AudioFocusRequest? = null
+    internal var foco: android.media.AudioFocusRequest? = null
 
     /** Enquanto a Vênus ouve e responde, a música pausa sozinha (e volta depois). */
-    private fun pedirFoco() {
+    internal fun pedirFoco() {
         if (foco != null) return
         val audio = getSystemService(android.media.AudioManager::class.java) ?: return
         if (!audio.isMusicActive) return
@@ -269,7 +269,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         if (audio.requestAudioFocus(pedido) == android.media.AudioManager.AUDIOFOCUS_REQUEST_GRANTED) foco = pedido
     }
 
-    private fun liberarFoco() {
+    internal fun liberarFoco() {
         val f = foco ?: return
         foco = null
         try {
@@ -280,7 +280,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
 
     protected fun estaOcioso() = !ocupado && !falando && escuta == Escuta.NADA
 
-    private fun tratarIntent(intent: Intent?) {
+    internal fun tratarIntent(intent: Intent?) {
         val acao = intent?.action ?: return
         when (acao) {
             ACAO_OUVIR, Intent.ACTION_ASSIST -> orbe.post {
@@ -483,7 +483,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
     }
 
     /** Teclado aberto: orbe pequeno (e sem o aviso embaixo); fechado: volta ao tamanho normal. */
-    private fun ajustarOrbeAoTeclado(aberto: Boolean) {
+    internal fun ajustarOrbeAoTeclado(aberto: Boolean) {
         val lp = orbe.layoutParams ?: return
         val destino = if (aberto) dp(96) else alturaOrbe
         animacaoOrbe?.cancel()
@@ -501,7 +501,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
     }
 
     /** Menu do "+": foto, galeria ou documento; a Vênus lê e responde sobre o que foi anexado. */
-    private fun abrirAnexos(ancora: View) {
+    internal fun abrirAnexos(ancora: View) {
         val caixa = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(6), dp(8), dp(6), dp(8))
@@ -587,7 +587,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         cornerRadius = dp(raio).toFloat()
     }
 
-    private fun comAlfa(cor: Int, alfa: Int) = Color.argb(alfa, Color.red(cor), Color.green(cor), Color.blue(cor))
+    internal fun comAlfa(cor: Int, alfa: Int) = Color.argb(alfa, Color.red(cor), Color.green(cor), Color.blue(cor))
 
     protected fun dp(valor: Int) = (valor * resources.displayMetrics.density).toInt()
 
@@ -618,7 +618,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
      * Executa várias etapas em ordem: as que só consultam ou anotam rodam juntas e a resposta sai numa fala só;
      * a última (que pode precisar de tela ou de confirmação) vai pelo caminho normal.
      */
-    private fun executarPlano(partes: List<String>) {
+    internal fun executarPlano(partes: List<String>) {
         val decisoes = partes.map { cerebro.responder(it) }
         val ultima = decisoes.last()
         val antes = decisoes.dropLast(1).filterIsInstance<Cerebro.Decisao.Executar>()
@@ -657,7 +657,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
     }
 
     /** Manda o relatório de erros para o GitHub (sozinho a cada 12 horas, ou na hora se o app travou). */
-    private fun enviarRelatorioDeErros(manual: Boolean) {
+    internal fun enviarRelatorioDeErros(manual: Boolean) {
         if (!manual && !Registro.deveEnviar(this)) return
         if (manual && Registro.pendentes(this).isEmpty()) {
             Toast.makeText(this, "Nenhum erro anotado desde o último relatório. 👏", Toast.LENGTH_SHORT).show()
@@ -672,7 +672,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
     }
 
     /** Começa uma conversa nova: tela em branco, a anterior fica arquivada no histórico. */
-    private fun comecarConversaNova() {
+    internal fun comecarConversaNova() {
         memoria.novaConversa()
         gemini = null
         cerebro.esquecerPendencias()
@@ -683,7 +683,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
     }
 
     /** Abre uma conversa antiga na tela e passa a continuar nela. */
-    private fun abrirConversa(id: Long, aviso: Boolean = true) {
+    internal fun abrirConversa(id: Long, aviso: Boolean = true) {
         memoria.continuarConversa(id)
         gemini = null
         cerebro.esquecerPendencias()
@@ -710,7 +710,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
     }
 
     /** "Lembra do que falamos sobre…": acha a conversa, volta para ela e continua dali. */
-    private fun retomarConversa(assunto: String, pedido: String) {
+    internal fun retomarConversa(assunto: String, pedido: String) {
         val atual = memoria.conversaAtual()
         val achadas = try {
             memoria.buscarConversas(assunto, excluir = atual)
@@ -745,7 +745,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
     }
 
     /** Dá título e resumo às conversas encerradas (com a IA), para a busca achar melhor. Roda em segundo plano. */
-    private fun resumirConversasAntigas() {
+    internal fun resumirConversasAntigas() {
         val k = chave()
         if (k.isBlank() || modoIndependente()) return
         val m = modelo()
@@ -801,14 +801,14 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
      * Vai até a última mensagem sem mexer no foco. (O fullScroll "entrega" o foco à última mensagem, que é
      * selecionável, e aí o teclado abria mas o que você digitava não ia para o campo.)
      */
-    private fun rolarParaBaixo() {
+    internal fun rolarParaBaixo() {
         rolagem.post {
             val fim = (rolagem.getChildAt(0)?.height ?: 0) - rolagem.height + rolagem.paddingBottom
             if (fim > 0) rolagem.smoothScrollTo(0, fim)
         }
     }
 
-    private fun mudarEstado(estado: Orbe.Estado, texto: String) {
+    internal fun mudarEstado(estado: Orbe.Estado, texto: String) {
         orbe.estado = estado
         status.text = texto
         // A tela não apaga enquanto ela ouve, pensa ou fala (e por mais 1 minuto depois)
@@ -817,12 +817,12 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         else principal.postDelayed(apagarTela, 60_000)
     }
 
-    private fun mudarEstadoOcioso() {
+    internal fun mudarEstadoOcioso() {
         mudarEstado(Orbe.Estado.OCIOSO, if (vigiliaLigada() && temMicrofone()) STATUS_VIGILIA else STATUS_PADRAO)
     }
 
     // ---------------------------------------------------------------- conversa
-    private fun enviarTexto() {
+    internal fun enviarTexto() {
         val texto = campo.text.toString().trim()
         if (temAnexos()) {
             campo.setText("")
@@ -836,7 +836,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         processar(texto)
     }
 
-    private fun processar(entrada: String) {
+    internal fun processar(entrada: String) {
         if (ocupado) return
         // com anexos esperando, o que você falar é o pedido sobre eles
         if (temAnexos() && Cerebro.restoDepoisDaAtivacao(entrada)?.isBlank() != true) {
@@ -954,7 +954,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
      * As regras não entenderam: primeiro vê se já aprendeu essa frase; senão o Gemini só interpreta qual ação é
      * (a Vênus executa no celular). Se for conversa ou pergunta geral, segue o caminho de sempre.
      */
-    private fun rotearOuPerguntar(pedido: String) {
+    internal fun rotearOuPerguntar(pedido: String) {
         if (documentoAtivo() != null) {
             responderPergunta(pedido)
             return
@@ -1013,7 +1013,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
     }
 
     /** Achou na memória vetorial algo com o mesmo sentido: executa, usa a frase aprendida ou responde. */
-    private fun aplicarSentido(s: Semantica.Decisao, pedido: String) {
+    internal fun aplicarSentido(s: Semantica.Decisao, pedido: String) {
         val parecido = "${(s.nota * 100).toInt()}% parecido"
         when (s) {
             is Semantica.Decisao.Executar -> {
@@ -1033,7 +1033,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         }
     }
 
-    private fun mostrarDecisao(decisao: Cerebro.Decisao, pedido: String, semIA: Boolean = false) {
+    internal fun mostrarDecisao(decisao: Cerebro.Decisao, pedido: String, semIA: Boolean = false) {
         when (decisao) {
             is Cerebro.Decisao.Executar -> when {
                 decisao.nome.also { Contexto.registrar(it, decisao.args); ultimaAcaoFeita = it } == "pesquisar_na_web" ->
@@ -1146,7 +1146,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
     }
 
     // ----------------------------------------------------------- memória
-    private fun tratarMemoria(pedido: ComandosMemoria.Pedido) {
+    internal fun tratarMemoria(pedido: ComandosMemoria.Pedido) {
         when (pedido) {
             is ComandosMemoria.Pedido.Lembrar ->
                 responder(if (memoria.lembrar(pedido.texto, pedido.categoria)) "Anotado! Vou lembrar disso." else "Isso eu já sabia!")
@@ -1190,7 +1190,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         }
     }
 
-    private fun resumoDaMemoria(): String {
+    internal fun resumoDaMemoria(): String {
         val partes = mutableListOf<String>()
         memoria.valor("apelido")?.let { partes += "seu nome é $it" }
         memoria.valor("cidade")?.let { partes += "você mora em $it" }
@@ -1213,7 +1213,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         return "O que eu sei sobre você: " + partes.joinToString("; ") + "."
     }
 
-    private fun confirmarApagarMemorias() {
+    internal fun confirmarApagarMemorias() {
         responder("Tem certeza? Confirme na tela.")
         AlertDialog.Builder(this)
             .setTitle("Apagar todas as memórias?")
@@ -1228,7 +1228,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
             .show()
     }
 
-    private fun tocarFavorita() {
+    internal fun tocarFavorita() {
         val favorita = listOf("musica", "banda", "cantor", "cantora", "artista", "playlist", "estilo")
             .firstNotNullOfOrNull { memoria.valor("favorito:$it") }
             ?: memoria.maisUsados("musica", 1).firstOrNull()
@@ -1240,7 +1240,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
     }
 
     // ----------------------------------------------------------- internet
-    private fun comTempoLimite(estado: String, trabalho: () -> (() -> Unit)) {
+    internal fun comTempoLimite(estado: String, trabalho: () -> (() -> Unit)) {
         ocupado = true
         val id = ++pedidoAtual
         mudarEstado(Orbe.Estado.PENSANDO, estado)
@@ -1270,7 +1270,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         }.start()
     }
 
-    private fun executarNaRede(nome: String, args: Map<String, Any>) {
+    internal fun executarNaRede(nome: String, args: Map<String, Any>) {
         comTempoLimite(if (nome == "loja_confirmar") "SALVANDO…" else "BUSCANDO…") {
             ferramentas.ultimasFontes = emptyList()
             val resultado = ferramentas.executar(nome, args)
@@ -1287,10 +1287,10 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
     }
 
     // ----------------------------------------------------------- confirmação de mudanças na loja
-    private var dialogoLoja: AlertDialog? = null
+    internal var dialogoLoja: AlertDialog? = null
 
     /** Mostra Confirmar/Cancelar na tela; também dá para responder "sim" ou "não" falando. */
-    private fun mostrarConfirmacaoLoja(pergunta: String) {
+    internal fun mostrarConfirmacaoLoja(pergunta: String) {
         fecharConfirmacaoLoja()
         dialogoLoja = AlertDialog.Builder(this)
             .setTitle(if (ferramentas.lojaPendente != null) "Confirmar mudança na loja" else "Confirmar resposta")
@@ -1313,12 +1313,12 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
             .show()
     }
 
-    private fun fecharConfirmacaoLoja() {
+    internal fun fecharConfirmacaoLoja() {
         dialogoLoja?.dismiss()
         dialogoLoja = null
     }
 
-    private fun responderConfirmacaoLoja(sim: Boolean) {
+    internal fun responderConfirmacaoLoja(sim: Boolean) {
         fecharConfirmacaoLoja()
         val eraMensagem = ferramentas.lojaPendente == null && ferramentas.respostaPendente != null
         if (sim) {
@@ -1330,7 +1330,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
     }
 
     /** Pesquisa e responde no chat: Google (pela IA) → pesquisa própria da Vênus → navegador, nessa ordem. */
-    private fun buscaInteligente(termo: String) {
+    internal fun buscaInteligente(termo: String) {
         val assistente = obterGemini()
         val conhecimento = ferramentas.conhecimento
         comTempoLimite("PESQUISANDO…") {
@@ -1363,7 +1363,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
      *  2. a pesquisa própria (Wikipédia, notícias acompanhadas, Google Notícias, DuckDuckGo);
      *  3. só então o Gemini (se houver chave e o modo independente estiver desligado).
      */
-    private fun responderPergunta(pedido: String) {
+    internal fun responderPergunta(pedido: String) {
         if (documentoAtivo() != null) {
             perguntarAoDocumento(pedido)
             return
@@ -1391,7 +1391,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
      * Pesquisa sem o Gemini. [amplo] = também tenta Wikipédia/DuckDuckGo com as palavras-chave
      * (para quando não há outra saída). [depoisIA] = se não achar, pergunta ao Gemini.
      */
-    private fun pesquisarSozinha(pedido: String, amplo: Boolean, depoisIA: Boolean, motivo: String?) {
+    internal fun pesquisarSozinha(pedido: String, amplo: Boolean, depoisIA: Boolean, motivo: String?) {
         val conhecimento = ferramentas.conhecimento
         comTempoLimite("PESQUISANDO…") {
             val r = Pesquisa.responderPergunta(pedido, conhecimento, amplo)
@@ -1416,7 +1416,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         }
     }
 
-    private fun semResposta(motivo: String, pedido: String) {
+    internal fun semResposta(motivo: String, pedido: String) {
         val decisao = cerebro.usarPalpite()
         if (decisao is Cerebro.Decisao.Perguntar) {
             mostrarDecisao(decisao, pedido)
@@ -1428,7 +1428,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
     }
 
     /** Uma linha discreta no chat (ex.: a frase que a Vênus corrigiu). */
-    private fun mostrarNota(texto: String) {
+    internal fun mostrarNota(texto: String) {
         val vista = TextView(this).apply {
             text = texto
             textSize = 12f
@@ -1444,7 +1444,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
     }
 
     /** Depois que o Gemini resolve, a Vênus aprende para resolver sozinha da próxima vez. */
-    private fun aprenderComResposta(pedido: String, resposta: Gemini.RespostaIA) {
+    internal fun aprenderComResposta(pedido: String, resposta: Gemini.RespostaIA) {
         try {
             if (resposta.chamadas.size == 1) {
                 val (nome, args) = resposta.chamadas[0]
@@ -1466,7 +1466,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
     }
 
     /** Atualiza as novidades dos assuntos acompanhados, em segundo plano, a cada 6 horas. */
-    private fun atualizarConhecimentoSePreciso() {
+    internal fun atualizarConhecimentoSePreciso() {
         val conhecimento = ferramentas.conhecimento ?: return
         if (atualizandoConhecimento) return
         atualizandoConhecimento = true
@@ -1480,13 +1480,13 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         }.start()
     }
 
-    private fun modoIndependente() = prefs.getBoolean(PREF_INDEPENDENTE, false)
+    internal fun modoIndependente() = prefs.getBoolean(PREF_INDEPENDENTE, false)
 
     /**
      * Fontes discretas: um selinho "• • • Consultou N fontes" embaixo da resposta.
      * Tocando, abre a lista com todas (cada uma abre no navegador).
      */
-    private fun mostrarFontes(fontes: List<Web.Fonte>, salvar: Boolean = true) {
+    internal fun mostrarFontes(fontes: List<Web.Fonte>, salvar: Boolean = true) {
         if (fontes.isEmpty()) return
         val selo = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -1522,7 +1522,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         if (salvar) memoria.salvarMensagem(false, "Fontes: " + fontes.joinToString("; ") { "${it.titulo} (${it.url})" }, topicoAtual)
     }
 
-    private fun listarFontes(fontes: List<Web.Fonte>) {
+    internal fun listarFontes(fontes: List<Web.Fonte>) {
         val nomes = fontes.map { f ->
             val site = try {
                 Uri.parse(f.url).host.orEmpty().removePrefix("www.")
@@ -1545,7 +1545,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
     }
 
     /** Envia para o Gemini, com tempo limite: se ele travar ou falhar, o cérebro local assume. */
-    private fun consultarIA(pedido: String) {
+    internal fun consultarIA(pedido: String) {
         val assistente = obterGemini()
             ?: return pesquisarSozinha(pedido, amplo = true, depoisIA = false, motivo = null)
         ocupado = true
@@ -1604,12 +1604,12 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         }.start()
     }
 
-    private fun responder(texto: String) {
+    internal fun responder(texto: String) {
         adicionarMensagem(texto, false)
         falar(texto)
     }
 
-    private fun obterGemini(): Gemini? {
+    internal fun obterGemini(): Gemini? {
         if (modoIndependente()) return null
         if (!Licenca.liberada(this)) return null // período de testes encerrado: só os comandos locais
         val k = chave()
@@ -1625,11 +1625,11 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         }
     }
 
-    private fun chave() = Cofre.ler(prefs, PREF_CHAVE)
-    private fun modelo() = prefs.getString(PREF_MODELO, MODELO_PADRAO).orEmpty().ifBlank { MODELO_PADRAO }
+    internal fun chave() = Cofre.ler(prefs, PREF_CHAVE)
+    internal fun modelo() = prefs.getString(PREF_MODELO, MODELO_PADRAO).orEmpty().ifBlank { MODELO_PADRAO }
 
     // ---------------------------------------------------------------- ativação
-    private fun ativar() {
+    internal fun ativar() {
         Som.ativacao()
         orbe.pulsar()
         ultimaFoiVoz = true
@@ -1639,7 +1639,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         principal.postDelayed({ if (!falando && !ocupado) aposFala() }, 450)
     }
 
-    private fun restoDepoisDaAtivacao(texto: String): String? = Cerebro.restoDepoisDaAtivacao(texto)
+    internal fun restoDepoisDaAtivacao(texto: String): String? = Cerebro.restoDepoisDaAtivacao(texto)
 
     // ------------------------------------------------------------ fala (TTS)
     override fun onInit(status: Int) {
@@ -1668,7 +1668,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         }
     }
 
-    private fun falar(texto: String) {
+    internal fun falar(texto: String) {
         pararVigilia()
         if (!ttsPronto && prefs.getBoolean(PREF_FALAR, true) && tts != null) {
             // A voz ainda está carregando (app acabou de abrir): fala assim que ficar pronta.
@@ -1697,7 +1697,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
     }
 
     /** Gera a fala na Microsoft (em segundo plano) e toca; se não vier em poucos segundos, fala com a voz do celular. */
-    private fun falarComVozNeural(limpo: String) {
+    internal fun falarComVozNeural(limpo: String) {
         val numero = ++numeroDaFala
         Thread {
             val arquivo = try {
@@ -1716,7 +1716,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         }.start()
     }
 
-    private fun tocarAudio(arquivo: java.io.File, numero: Int, amostra: Boolean = false) {
+    internal fun tocarAudio(arquivo: java.io.File, numero: Int, amostra: Boolean = false) {
         tocador?.release()
         tocador = try {
             android.media.MediaPlayer().apply {
@@ -1749,7 +1749,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
     }
 
     /** Cala as duas vozes (a do celular e a neural). */
-    private fun pararFala() {
+    internal fun pararFala() {
         numeroDaFala++
         tts?.stop()
         tocador?.let {
@@ -1763,7 +1763,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
     }
 
     /** Ajuste da voz neural: chave, região, voz (com amostra) e jeito de falar. */
-    private fun configurarVozNeural() {
+    internal fun configurarVozNeural() {
         var voz = VozNeural.VOZES.indexOf(VozNeural.voz(this)).coerceAtLeast(0)
         var estilo = VozNeural.ESTILOS.indexOf(VozNeural.estilo(this)).coerceAtLeast(0)
         val caixa = LinearLayout(this).apply {
@@ -1860,7 +1860,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
     }
 
     /** Você falou "Vênus", "chega", "espera"... durante a fala: ela se cala e passa a ouvir. */
-    private fun interromperFala() {
+    internal fun interromperFala() {
         if (!falando) return
         pararFala()
         falando = false
@@ -1872,7 +1872,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
     }
 
     /** Depois de responder: volta a ouvir (conversa) ou volta a esperar "Sexta-feira, ativar". */
-    private fun aposFala() {
+    internal fun aposFala() {
         falando = false
         val estavaOuvindo = interruptor?.ativo == true
         interruptor?.parar()
@@ -1887,7 +1887,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         } else ficarOcioso()
     }
 
-    private fun vozesEmPortugues(): List<Voice> {
+    internal fun vozesEmPortugues(): List<Voice> {
         val vozes = try {
             tts?.voices.orEmpty()
         } catch (e: Exception) {
@@ -1903,7 +1903,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
             )
     }
 
-    private fun aplicarVozSalva() {
+    internal fun aplicarVozSalva() {
         val salva = prefs.getString(PREF_VOZ, null)
         val vozes = vozesEmPortugues()
         val escolhida = vozes.firstOrNull { it.name == salva } ?: vozes.firstOrNull()
@@ -1917,11 +1917,11 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         tts?.setPitch(prefs.getFloat(PREF_TOM, 1.0f))
     }
 
-    private fun amostraDeVoz() {
+    internal fun amostraDeVoz() {
         tts?.speak("Olá! Eu sou a ${Marca.nome}. Gostou desta voz?", TextToSpeech.QUEUE_FLUSH, null, ID_AMOSTRA)
     }
 
-    private fun escolherVoz() {
+    internal fun escolherVoz() {
         if (!ttsPronto) {
             Toast.makeText(this, "A voz ainda está carregando.", Toast.LENGTH_SHORT).show()
             return
@@ -1971,7 +1971,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
             .show()
     }
 
-    private fun baixarVozes() {
+    internal fun baixarVozes() {
         try {
             startActivity(Intent(TextToSpeech.Engine.ACTION_INSTALL_TTS_DATA))
         } catch (e: ActivityNotFoundException) {
@@ -1979,7 +1979,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         }
     }
 
-    private fun ajustarVoz() {
+    internal fun ajustarVoz() {
         val layout = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(24), dp(12), dp(24), dp(4))
@@ -2031,17 +2031,17 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
     // ------------------------------------------------------- escuta (microfone)
     protected open fun vigiliaLigada() = prefs.getBoolean(PREF_VIGILIA, true)
 
-    private fun temMicrofone() =
+    internal fun temMicrofone() =
         checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
 
-    private fun obterReconhecedor(): SpeechRecognizer? {
+    internal fun obterReconhecedor(): SpeechRecognizer? {
         return reconhecedor ?: (Reconhecedor.criar(this) ?: return null).also {
             it.setRecognitionListener(ouvinte)
             reconhecedor = it
         }
     }
 
-    private fun intentDeEscuta() = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
+    internal fun intentDeEscuta() = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
         .putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
         .putExtra(RecognizerIntent.EXTRA_LANGUAGE, "pt-BR")
         .putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
@@ -2051,13 +2051,13 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         .putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 1500L)
         .putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, 1200L)
 
-    private fun agendarVigilia(atraso: Long) {
+    internal fun agendarVigilia(atraso: Long) {
         principal.removeCallbacks(tarefaVigilia)
         principal.postDelayed(tarefaVigilia, atraso)
     }
 
     /** Fica ouvindo em silêncio, esperando "Sexta-feira, ativar". Só com o app aberto na tela. */
-    private fun iniciarVigilia() {
+    internal fun iniciarVigilia() {
         if (!vigiliaLigada() || !naTela || ocupado || falando || escuta != Escuta.NADA || !temMicrofone()) return
         // Voz offline instalada: microfone aberto direto, sem o ícone piscando na barra de status.
         if (ModeloDeVoz.pronto(this)) {
@@ -2096,7 +2096,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         }
     }
 
-    private fun pararVigilia() {
+    internal fun pararVigilia() {
         principal.removeCallbacks(tarefaVigilia)
         despertador?.parar()
         if (escuta == Escuta.VIGILIA) {
@@ -2119,7 +2119,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         }
     }
 
-    private fun ouvirComando() {
+    internal fun ouvirComando() {
         if (ocupado || escuta == Escuta.COMANDO) return
         pararVigilia()
         interruptor?.parar()
@@ -2149,12 +2149,12 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         }
     }
 
-    private fun mostrarParcial(texto: String) {
+    internal fun mostrarParcial(texto: String) {
         parcial.text = texto
         parcial.visibility = if (texto.isBlank()) View.GONE else View.VISIBLE
     }
 
-    private val ouvinte = object : RecognitionListener {
+    internal val ouvinte = object : RecognitionListener {
         override fun onReadyForSpeech(params: Bundle?) {}
         override fun onBeginningOfSpeech() {}
         override fun onBufferReceived(buffer: ByteArray?) {}
@@ -2266,7 +2266,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
     }
 
     /** Plano B: a janela de voz do Google, se o reconhecimento direto não estiver disponível. */
-    private fun ouvirPeloGoogle() {
+    internal fun ouvirPeloGoogle() {
         val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
             .putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
             .putExtra(RecognizerIntent.EXTRA_LANGUAGE, "pt-BR")
@@ -2325,10 +2325,10 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
     }
 
     // ---------------------------------------------------------------- ajustes
-    private var ajustes: TelaDeAjustes? = null
-    private var progressoVozOffline: String? = null
+    internal var ajustes: TelaDeAjustes? = null
+    internal var progressoVozOffline: String? = null
 
-    private fun abrirMenu(@Suppress("UNUSED_PARAMETER") ancora: View) {
+    internal fun abrirMenu(@Suppress("UNUSED_PARAMETER") ancora: View) {
         if (ajustes?.isShowing == true) return
         fun item(titulo: String, descricao: () -> String, id: Int, ligado: (() -> Boolean)? = null) =
             TelaDeAjustes.Ajuste(titulo, descricao, ligado) { tratarMenu(id) }
@@ -2486,87 +2486,19 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         }
     }
 
-    // ---------------------------------------------------------------- publicações
-    /** Tudo de publicação num lugar só: stories do dia, automático, enquete, horários, posts, ideias e contas. */
-    private fun abrirPublicacoes() {
-        if (ajustes?.isShowing == true) return
-        val n = Marca.nome
-        val secoes = listOf(
-            TelaDeAjustes.Secao(
-                "Stories do dia", listOf(
-                    TelaDeAjustes.Ajuste("Ver os stories de hoje", {
-                        "Prévia da manhã e da tarde, Publicar Instagram, Publicar WhatsApp e Gerar outro. Também abre ao dizer: stories do dia."
-                    }) { ajustes?.dismiss(); abrirStoriesDoDia() },
-                    TelaDeAjustes.Ajuste("Stories automáticos (manhã e tarde)", { StoriesDoDia.descricao(this) }, { StoriesDoDia.ligado(this) }) {
-                        StoriesDoDia.definirLigado(this, !StoriesDoDia.ligado(this))
-                        ajustes?.atualizar()
-                    },
-                    TelaDeAjustes.Ajuste("Story da tarde com enquete", {
-                        "A API do Instagram não põe adesivos. À tarde a $n prepara a imagem, copia a pergunta e abre o Instagram: " +
-                            "você toca em Enquete, cola e publica. Desligado: a tarde também sai sozinha, sem enquete."
-                    }, { StoriesDoDia.tardeInterativa(this) }) {
-                        StoriesDoDia.definirTardeInterativa(this, !StoriesDoDia.tardeInterativa(this))
-                        ajustes?.atualizar()
-                    },
-                    TelaDeAjustes.Ajuste("Horários dos stories", {
-                        "Manhã às ${StoriesDoDia.horaTexto(StoriesDoDia.horario(this, "manha"))} e tarde às ${StoriesDoDia.horaTexto(StoriesDoDia.horario(this, "tarde"))}. Toque para mudar."
-                    }) { escolherHorariosDosStories() },
-                )
-            ),
-            TelaDeAjustes.Secao(
-                "Posts no Instagram", listOf(
-                    TelaDeAjustes.Ajuste("Programar um post", { "Feed ou story, com foto, legenda e dia e hora para sair sozinho." }) {
-                        ajustes?.dismiss()
-                        programarPost(emptyMap())
-                    },
-                    TelaDeAjustes.Ajuste("Posts programados", {
-                        val k = Postagens.pendentes(this).size
-                        if (k == 0) "Nenhum post na fila." else "$k ${if (k == 1) "post na fila" else "posts na fila"}. Toque para ver, mudar ou apagar."
-                    }) {
-                        ajustes?.dismiss()
-                        listarPosts()
-                    },
-                    TelaDeAjustes.Ajuste("Ideias de post", { "As ideias que a $n estudou para a semana, prontas para virar post." }) {
-                        ajustes?.dismiss()
-                        mostrarIdeiasDePost()
-                    },
-                )
-            ),
-            TelaDeAjustes.Secao(
-                "Contas e respostas", listOf(
-                    TelaDeAjustes.Ajuste("Instagram da loja", {
-                        Instagram.usuario(this)?.takeIf { Instagram.conectado(this) }?.let {
-                            "Conectado como @$it. Os posts programados e os stories saem sozinhos."
-                        } ?: "Desconectado: os stories chegam no aviso para postar com um toque. Toque para colar o token da Meta."
-                    }) { conectarInstagram() },
-                    TelaDeAjustes.Ajuste("Respostas do Instagram (Vênus Robô)", {
-                        "As respostas prontas para colar nas Perguntas frequentes e Respostas salvas do Instagram."
-                    }) {
-                        val robo = packageManager.getLaunchIntentForPackage(Atualizador.PACOTE_ROBO)
-                        if (robo != null) startActivity(robo) else responder("O Vênus Robô não está instalado neste celular.")
-                    },
-                )
-            ),
-        )
-        ajustes = TelaDeAjustes(this, versaoDoApp(), secoes, "PUBLICAÇÕES").also {
-            it.setOnDismissListener { ajustes = null }
-            it.show()
-        }
-    }
-
-    private fun versaoDoApp(): String = try {
+    internal fun versaoDoApp(): String = try {
         packageManager.getPackageInfo(packageName, 0).versionName.orEmpty()
     } catch (e: Exception) {
         ""
     }
 
-    private fun descricaoVozOffline(): String = progressoVozOffline ?: if (ModeloDeVoz.pronto(this)) {
+    internal fun descricaoVozOffline(): String = progressoVozOffline ?: if (ModeloDeVoz.pronto(this)) {
         "Instalada. O microfone fica aberto direto, só com o pontinho verde, sem o ícone piscando. Toque para remover."
     } else {
         "Toque para baixar (31 MB, uma vez só). Sem ela, o ícone do microfone fica piscando na barra de status enquanto a ${Marca.nome} espera a frase."
     }
 
-    private fun tratarVozOffline() {
+    internal fun tratarVozOffline() {
         if (ModeloDeVoz.baixando) return
         if (ModeloDeVoz.pronto(this)) {
             AlertDialog.Builder(this)
@@ -2588,7 +2520,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         }
     }
 
-    private fun baixarVozOffline() {
+    internal fun baixarVozOffline() {
         if (ModeloDeVoz.baixando || ModeloDeVoz.pronto(this)) return
         progressoVozOffline = "Baixando… 0%"
         ajustes?.atualizar()
@@ -2617,7 +2549,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
     }
 
     /** Uma vez só: oferece a voz offline para quem usa a ativação por voz. */
-    private fun oferecerVozOffline(forcar: Boolean = false) {
+    internal fun oferecerVozOffline(forcar: Boolean = false) {
         if (isFinishing || ModeloDeVoz.pronto(this) || ModeloDeVoz.baixando) return
         if (!forcar && prefs.getBoolean(PREF_OFERECEU_VOZ, false)) return
         if (!vigiliaLigada() && !prefs.getBoolean(PREF_FUNDO, false)) return
@@ -2633,7 +2565,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
             .show()
     }
 
-    private fun tratarMenu(id: Int): Boolean {
+    internal fun tratarMenu(id: Int): Boolean {
         when (id) {
             MENU_VIGILIA -> {
                 val ligado = !vigiliaLigada()
@@ -2695,11 +2627,11 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
     }
 
     // --------------------------------------------------- histórico e memórias
-    private fun mostrarHistorico() {
+    internal fun mostrarHistorico() {
         TelaDeHistorico(this, memoria, corAtual) { id -> abrirConversa(id) }.show()
     }
 
-    private fun mostrarMemorias() {
+    internal fun mostrarMemorias() {
         val fatos = memoria.fatos()
         if (fatos.isEmpty()) {
             Toast.makeText(this, "Ainda não sei nada sobre você. Diga: lembra que eu gosto de rock.", Toast.LENGTH_LONG).show()
@@ -2735,9 +2667,9 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
     }
 
     // ------------------------------------------------ app fechado e pop-up
-    private fun podeSobrepor() = Settings.canDrawOverlays(this)
+    internal fun podeSobrepor() = Settings.canDrawOverlays(this)
 
-    private fun iniciarEscutaDeFundoSePreciso() {
+    internal fun iniciarEscutaDeFundoSePreciso() {
         val escuta = prefs.getBoolean(PREF_FUNDO, false) && temMicrofone()
         val gesto = prefs.getBoolean(VigiliaService.PREF_GESTO, false)
         if ((!escuta && !gesto) || !podeSobrepor()) return
@@ -2748,7 +2680,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         }
     }
 
-    private fun alternarTelaApagada() {
+    internal fun alternarTelaApagada() {
         val ligar = !prefs.getBoolean(VigiliaService.PREF_TELA_APAGADA, false)
         prefs.edit().putBoolean(VigiliaService.PREF_TELA_APAGADA, ligar).apply()
         // O serviço relê os ajustes (liga ou solta a trava do processador)
@@ -2783,7 +2715,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
             .show()
     }
 
-    private fun alternarGesto() {
+    internal fun alternarGesto() {
         val ligar = !prefs.getBoolean(VigiliaService.PREF_GESTO, false)
         prefs.edit().putBoolean(VigiliaService.PREF_GESTO, ligar).apply()
         if (!ligar) {
@@ -2828,7 +2760,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
             .show()
     }
 
-    private fun alternarEscutaDeFundo() {
+    internal fun alternarEscutaDeFundo() {
         val ligar = !prefs.getBoolean(PREF_FUNDO, false)
         prefs.edit().putBoolean(PREF_FUNDO, ligar).apply()
         if (!ligar) {
@@ -2875,7 +2807,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         ).show()
     }
 
-    private fun definirAssistentePadrao() {
+    internal fun definirAssistentePadrao() {
         AlertDialog.Builder(this)
             .setTitle("Assistente padrão")
             .setMessage(
@@ -2900,7 +2832,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
             .show()
     }
 
-    private fun diagnosticar() {
+    internal fun diagnosticar() {
         if (ocupado) return
         if (chave().isBlank()) {
             pedirChave()
@@ -2928,7 +2860,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         }.start()
     }
 
-    private fun alternarAvisosDaLoja() {
+    internal fun alternarAvisosDaLoja() {
         val ligar = !VigiaDaLoja.ligado(this)
         if (ligar && !ferramentas.loja.conectada) {
             Toast.makeText(this, "Conecte a loja primeiro.", Toast.LENGTH_LONG).show()
@@ -2954,11 +2886,11 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
     }
 
     // ----------------------------------------------------------- cadastro de produto
-    private var fotoDaCamera: Uri? = null
-    private var cadastroFoto: ((Uri) -> Unit)? = null
+    internal var fotoDaCamera: Uri? = null
+    internal var cadastroFoto: ((Uri) -> Unit)? = null
 
     /** Formulário de produto novo, já preenchido com o que foi falado. Foto pela câmera ou galeria e descrição pela IA. */
-    private fun pedirFotoCamera() {
+    internal fun pedirFotoCamera() {
         val (_, uri) = FotoProvider.novaFoto(this)
         fotoDaCamera = uri
         val i = Intent(android.provider.MediaStore.ACTION_IMAGE_CAPTURE).putExtra(android.provider.MediaStore.EXTRA_OUTPUT, uri)
@@ -2971,7 +2903,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         }
     }
 
-    private fun pedirFotoGaleria() {
+    internal fun pedirFotoGaleria() {
         try {
             startActivityForResult(Intent(Intent.ACTION_GET_CONTENT).setType("image/*").addCategory(Intent.CATEGORY_OPENABLE), PEDIDO_FOTO_GALERIA)
         } catch (e: Exception) {
@@ -2979,7 +2911,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         }
     }
 
-    private fun abrirCadastro(args: Map<String, Any>, fotoInicial: ByteArray? = null) {
+    internal fun abrirCadastro(args: Map<String, Any>, fotoInicial: ByteArray? = null) {
         val loja = ferramentas.loja
         if (!loja.conectada) {
             responder("A loja ainda não está conectada. Abra os ajustes e toque em Conectar à loja.")
@@ -3159,7 +3091,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
      * Editor de fundo: recorta o produto e coloca no fundo da loja, branco ou rosa; ou pede um fundo livre à IA.
      * [aoUsar]: quando veio do cadastro, devolve a foto pronta; sem ele, oferece salvar na galeria ou compartilhar.
      */
-    private fun editarFundo(fotoInicial: ByteArray?, aoUsar: ((ByteArray) -> Unit)? = null) {
+    internal fun editarFundo(fotoInicial: ByteArray?, aoUsar: ((ByteArray) -> Unit)? = null) {
         var foto: ByteArray? = fotoInicial
         var pronta: ByteArray? = null
         val caixa = LinearLayout(this).apply {
@@ -3293,7 +3225,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         dialogo.show()
     }
 
-    private fun salvarNaGaleria(jpeg: ByteArray): Boolean = try {
+    internal fun salvarNaGaleria(jpeg: ByteArray): Boolean = try {
         if (Build.VERSION.SDK_INT < 29) false else {
             val valores = android.content.ContentValues().apply {
                 put(android.provider.MediaStore.Images.Media.DISPLAY_NAME, "venus_${System.currentTimeMillis()}.jpg")
@@ -3307,7 +3239,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         false
     }
 
-    private fun compartilharFoto(jpeg: ByteArray) {
+    internal fun compartilharFoto(jpeg: ByteArray) {
         val (arquivo, uri) = FotoProvider.novaFoto(this)
         arquivo.writeBytes(jpeg)
         val i = Intent(Intent.ACTION_SEND).setType("image/jpeg").putExtra(Intent.EXTRA_STREAM, uri)
@@ -3317,7 +3249,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
     }
 
     // ----------------------------------------------------------- finanças: gráfico e relatório
-    private fun mostrarGrafico() {
+    internal fun mostrarGrafico() {
         comTempoLimite("MONTANDO O GRÁFICO…") {
             val (pedidos, produtos) = try {
                 ferramentas.dadosDoCaixa()
@@ -3343,7 +3275,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         }
     }
 
-    private fun mostrarImagem(titulo: String, imagem: android.graphics.Bitmap, jpeg: ByteArray) {
+    internal fun mostrarImagem(titulo: String, imagem: android.graphics.Bitmap, jpeg: ByteArray) {
         val vista = android.widget.ImageView(this).apply {
             setImageBitmap(imagem)
             adjustViewBounds = true
@@ -3360,7 +3292,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
             .show()
     }
 
-    private fun gerarRelatorio(periodo: String) {
+    internal fun gerarRelatorio(periodo: String) {
         comTempoLimite("GERANDO O RELATÓRIO…") {
             val (pedidos, produtos) = try {
                 ferramentas.dadosDoCaixa()
@@ -3396,7 +3328,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         }
     }
 
-    private fun oferecerPdf(uri: Uri) {
+    internal fun oferecerPdf(uri: Uri) {
         AlertDialog.Builder(this)
             .setTitle("Relatório financeiro (PDF)")
             .setMessage("O que você quer fazer com o relatório?")
@@ -3419,7 +3351,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
 
     // ----------------------------------------------------------- responder clientes
     /** Texto recebido pelo "Compartilhar" (ex.: mensagem de uma cliente no WhatsApp). */
-    private fun textoCompartilhado(texto: String) {
+    internal fun textoCompartilhado(texto: String) {
         AlertDialog.Builder(this)
             .setTitle("O que fazer com o texto?")
             .setMessage(texto.take(300))
@@ -3433,7 +3365,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
     }
 
     /** Escreve a resposta para a cliente com os preços, o estoque e os links da loja; você confere, copia e cola no WhatsApp. */
-    private fun responderCliente(mensagem: String?) {
+    internal fun responderCliente(mensagem: String?) {
         if (chave().isBlank() || modoIndependente()) {
             responder("Para escrever respostas para clientes eu uso o Gemini. Configure a chave do Gemini nos ajustes.")
             return
@@ -3513,251 +3445,9 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         }
     }
 
-    // ----------------------------------------------------------- posts do Instagram
-    /** Formulário de post programado: foto (com troca de fundo), feed ou story, dia e hora, legenda pela IA. */
-    private fun programarPost(args: Map<String, Any>) {
-        var foto: ByteArray? = null
-        var quando = (args["quando"] as? Long)?.takeIf { it > System.currentTimeMillis() } ?: Postagens.proximoHorario(this)
-        val produtoFalado = args["produto"]?.toString().orEmpty()
-        var contexto = produtoFalado
-        var linkDoProduto = ""
-        val sozinha = Postagens.podePublicarSozinho(this)
-        val f = Formulario(this, "Post no Instagram", if (sozinha) "Na hora marcada eu publico sozinha" else "Na hora marcada eu te aviso com tudo pronto")
-
-        // --- formato
-        f.cartao("Formato")
-        lateinit var legenda: EditText
-        val (escolhaTipo, tipoMarcado) = f.escolha(listOf("Post no feed", "Story"), if (args["tipo"] == "story") 1 else 0) { i ->
-            legenda.hint = if (i == 1) "Texto que vai escrito no story (curto)" else "Legenda do post, com hashtags"
-        }
-        f.adicionar(escolhaTipo, 2)
-        val dicaTipo = f.aviso("No story, a Vênus monta a arte em tela cheia com a foto inteira, o texto e o endereço do produto.")
-        f.adicionar(dicaTipo, 8)
-
-        // --- foto
-        f.cartao("Foto")
-        val previa = f.previa()
-        f.adicionar(previa, 2)
-        val aviso = f.aviso("Escolha a foto do post.")
-        f.adicionar(aviso, 6)
-        fun mostrarFoto(b: ByteArray) {
-            foto = b
-            previa.setImageBitmap(android.graphics.BitmapFactory.decodeByteArray(b, 0, b.size))
-            previa.visibility = View.VISIBLE
-            aviso.text = ""
-            aviso.visibility = View.GONE
-        }
-        f.lado(f.botao("Câmera") { pedirFotoCamera() }, f.botao("Galeria") { pedirFotoGaleria() })
-        f.adicionar(f.botao("Trocar o fundo") {
-            val atual = foto
-            if (atual == null) Toast.makeText(this, "Escolha a foto primeiro.", Toast.LENGTH_SHORT).show()
-            else editarFundo(atual) { nova -> mostrarFoto(nova) }
-        }, 10)
-
-        // --- quando
-        f.cartao("Quando")
-        lateinit var horario: TextView
-        fun mostrarHorario() {
-            horario.text = "🗓  " + Lembretes.quandoFalado(quando).replaceFirstChar { it.uppercase() }
-        }
-        horario = f.botao("") {
-            val c = java.util.Calendar.getInstance().apply { timeInMillis = quando }
-            android.app.DatePickerDialog(this, { _, a, m, d ->
-                android.app.TimePickerDialog(this, { _, h, min ->
-                    quando = java.util.Calendar.getInstance().apply { clear(); set(a, m, d, h, min) }.timeInMillis
-                    mostrarHorario()
-                }, c.get(java.util.Calendar.HOUR_OF_DAY), c.get(java.util.Calendar.MINUTE), true).show()
-            }, c.get(java.util.Calendar.YEAR), c.get(java.util.Calendar.MONTH), c.get(java.util.Calendar.DAY_OF_MONTH)).show()
-        }
-        mostrarHorario()
-        f.adicionar(horario, 2)
-        f.adicionar(f.aviso("Toque para escolher o dia e a hora. Boa hora para a loja: entre 19h e 21h."), 6)
-
-        // --- texto
-        f.cartao("Texto")
-        val (blocoLegenda, campoLegenda) = f.campo("Legenda", "", if (tipoMarcado() == 1) "Texto que vai escrito no story (curto)" else "Legenda do post, com hashtags",
-            InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE or InputType.TYPE_TEXT_FLAG_CAP_SENTENCES, linhas = 4)
-        legenda = campoLegenda
-        legenda.maxLines = 10
-        f.adicionar(blocoLegenda, 2)
-        if (chave().isNotBlank()) {
-            lateinit var ia: TextView
-            ia = f.botao("✦  Escrever com IA") {
-                ia.isEnabled = false
-                ia.text = "Escrevendo…"
-                val k = chave()
-                val m = modelo()
-                val fotoAtual = foto
-                val ehStory = tipoMarcado() == 1
-                val ctx = contexto
-                Thread {
-                    val t = Gemini.legendaInstagram(k, m, fotoAtual, ctx, ehStory)
-                    runOnUiThread {
-                        ia.isEnabled = true
-                        ia.text = "✦  Escrever com IA"
-                        if (t != null) legenda.setText(t) else Toast.makeText(this, "A IA não conseguiu agora. Tente de novo.", Toast.LENGTH_LONG).show()
-                    }
-                }.start()
-            }
-            f.adicionar(ia, 10)
-        }
-
-        val anterior = cadastroFoto
-        cadastroFoto = { uri ->
-            aviso.visibility = View.VISIBLE
-            aviso.text = "Preparando a foto…"
-            Thread {
-                val b = FotoProvider.prepararParaEnviar(this, uri, 1440)
-                runOnUiThread { if (b == null) aviso.text = "Não consegui ler essa foto." else mostrarFoto(b) }
-            }.start()
-        }
-        f.aoFechar { cadastroFoto = anterior }
-
-        // "post do gel": usa a foto e os dados do produto da loja
-        if (produtoFalado.isNotBlank() && ferramentas.loja.conectada) {
-            aviso.text = "Buscando $produtoFalado na loja…"
-            Thread {
-                val achado = try {
-                    Loja.acharProdutos(ferramentas.loja.produtos(), produtoFalado).firstOrNull()
-                } catch (e: Exception) {
-                    null
-                }
-                val url = achado?.bruto?.optString("imageUrl")?.let { Loja.enderecoCompleto(it) }?.takeIf { it.startsWith("http") }
-                val bytes = url?.let {
-                    try {
-                        java.net.URL(it).openStream().use { s -> s.readBytes() }
-                    } catch (e: Exception) {
-                        null
-                    }
-                }
-                runOnUiThread {
-                    if (achado != null) {
-                        linkDoProduto = "${Loja.SITE}/produto/${achado.id}"
-                        contexto = "produto ${achado.nome}" + (achado.precoCentavos?.let { ", por ${Loja.dinheiro(it)}" } ?: "") +
-                            (achado.bruto?.optString("description")?.takeIf { it.isNotBlank() && it != "null" }?.let { ". $it" } ?: "")
-                        if (bytes != null) mostrarFoto(bytes) else aviso.text = "Achei ${achado.nome}, mas sem foto. Escolha uma."
-                        dicaTipo.text = "Produto: ${achado.nome}. No story vai o endereço da página dele no site."
-                    } else aviso.text = "Não achei $produtoFalado na loja. Escolha a foto."
-                }
-            }.start()
-        }
-
-        fun salvar(): Boolean {
-            val fotoFinal = foto ?: run {
-                Toast.makeText(this, "Escolha a foto.", Toast.LENGTH_SHORT).show()
-                return false
-            }
-            if (quando <= System.currentTimeMillis()) {
-                Toast.makeText(this, "Escolha um horário no futuro.", Toast.LENGTH_SHORT).show()
-                return false
-            }
-            val p = Postagens.criar(this, quando, if (tipoMarcado() == 1) "story" else "feed", legenda.text.toString(), fotoFinal, linkDoProduto)
-            focarPost(p.id)
-            if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
-                requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), PEDIDO_NOTIFICACOES)
-            }
-            responder(
-                "Programado: ${if (p.ehStory) "story" else "post"} ${Lembretes.quandoFalado(p.quando)}. " +
-                    if (sozinha) "Na hora eu publico sozinha. Para mudar, diga: muda para hoje às 20h, no feed, ou posta agora."
-                    else "Na hora eu te aviso com tudo pronto."
-            )
-            return true
-        }
-        f.acoes(
-            f.botao("Programar", primario = true) { if (salvar()) f.fechar() },
-            f.botao("+ Outro") {
-                if (salvar()) {
-                    val tipo = if (tipoMarcado() == 1) "story" else "feed"
-                    f.fechar()
-                    programarPost(mapOf("tipo" to tipo))
-                }
-            },
-        )
-        f.mostrar()
-    }
-
-    private fun listarPosts() {
-        val lista = Postagens.pendentes(this)
-        if (lista.isEmpty()) {
-            responder("Nenhum post programado. Diga, por exemplo: programa um post do gel amanhã às 19h.")
-            return
-        }
-        responder("Você tem ${lista.size} ${if (lista.size == 1) "post programado" else "posts programados"}. O próximo é ${Lembretes.quandoFalado(lista[0].quando)}.")
-        val itens = lista.map { p ->
-            "${Lembretes.quandoFalado(p.quando)} · ${if (p.ehStory) "Story" else "Feed"}" + (if (p.legenda.isNotBlank()) "\n" + p.legenda.take(60) else "")
-        }
-        AlertDialog.Builder(this)
-            .setTitle("Posts programados")
-            .setItems(itens.toTypedArray()) { _, i ->
-                val p = lista[i]
-                AlertDialog.Builder(this)
-                    .setTitle(if (p.ehStory) "Story" else "Post")
-                    .setMessage(p.legenda.ifBlank { "(sem legenda)" })
-                    .setPositiveButton("Postar agora") { _, _ -> postarAgora(p.id) }
-                    .setNegativeButton("Cancelar este post") { _, _ ->
-                        Postagens.cancelar(this, p.id)
-                        responder("Post cancelado.")
-                    }
-                    .setNeutralButton("Voltar", null)
-                    .show()
-            }
-            .setNegativeButton("Fechar", null)
-            .show()
-    }
-
-    /** Publica já: pela API, se o Instagram estiver conectado; senão abre o Instagram com a foto e a legenda copiada. */
-    private fun postarAgora(id: Int) {
-        val p = Postagens.achar(this, id) ?: return responder("Esse post não existe mais.")
-        if (!java.io.File(p.foto).exists()) return responder("A foto desse post sumiu. Programe de novo.")
-        if (p.publicado) return responder("Esse post já foi publicado.")
-        if (!Postagens.podePublicarSozinho(this)) return postarPeloApp(p)
-        mudarEstado(Orbe.Estado.PENSANDO, "PUBLICANDO…")
-        Thread {
-            val resultado = try {
-                Result.success(Postagens.publicarPelaApi(this, p))
-            } catch (e: Exception) {
-                Result.failure(e)
-            }
-            runOnUiThread {
-                resultado.onSuccess { link ->
-                    Diario.anotar(this, "instagram", (if (p.ehStory) "Story" else "Post") + " publicado agora" + (if (link.isNotBlank()) " ($link)" else ""), "voz")
-                    responder(if (p.ehStory) "Story publicado no Instagram." else "Post publicado no Instagram.")
-                    if (link.isNotBlank()) mostrarFontes(listOf(Web.Fonte("Ver o post no Instagram", link)))
-                }.onFailure { e ->
-                    responder("Não consegui publicar sozinha: ${e.message} Vou abrir o Instagram para você postar.")
-                    principal.postDelayed({ postarPeloApp(p) }, 2500)
-                }
-            }
-        }.start()
-    }
-
-    /** Copia a legenda e abre o Instagram com a foto (feed ou story, você escolhe lá). */
-    private fun postarPeloApp(p: Postagens.Post) {
-        val id = p.id
-        val arquivo = java.io.File(p.foto)
-        if (!arquivo.exists()) return responder("A foto desse post sumiu. Programe de novo.")
-        if (p.legenda.isNotBlank()) {
-            (getSystemService(CLIPBOARD_SERVICE) as android.content.ClipboardManager)
-                .setPrimaryClip(android.content.ClipData.newPlainText("Legenda", p.legenda))
-        }
-        val (copia, uri) = FotoProvider.novaFoto(this)
-        arquivo.copyTo(copia, overwrite = true)
-        val envio = Intent(Intent.ACTION_SEND).setType("image/jpeg").putExtra(Intent.EXTRA_STREAM, uri)
-            .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-        envio.clipData = android.content.ClipData.newRawUri("foto", uri)
-        val instagram = Intent(envio).setPackage("com.instagram.android")
-        try {
-            startActivity(if (instagram.resolveActivity(packageManager) != null) instagram else Intent.createChooser(envio, "Publicar"))
-            Postagens.marcarPublicado(this, id)
-            responder(if (p.legenda.isNotBlank()) "Abri o Instagram com a foto. A legenda já está copiada: é só colar e publicar." else "Abri o Instagram com a foto.")
-        } catch (e: Exception) {
-            responder("Não consegui abrir o Instagram.")
-        }
-    }
-
     // ----------------------------------------------------------- log de ajustes e erros
     /** Tela com os ajustes feitos (diário) e os erros em aberto, com Enviar relatório e Limpar erros. */
-    private fun mostrarLog() {
+    internal fun mostrarLog() {
         Thread {
             val ajustes = Diario.de(this).ultimos(60)
             val erros = Registro.log(this)
@@ -3805,7 +3495,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         }.start()
     }
 
-    private fun limparLogDeErros() {
+    internal fun limparLogDeErros() {
         val n = Registro.log(this).size
         if (n == 0) return responder("O log de erros já está limpo.")
         AlertDialog.Builder(this)
@@ -3821,9 +3511,9 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
     }
 
     // ----------------------------------------------------------- estudo diário
-    private var estudando = false
+    internal var estudando = false
 
-    private fun estudarAgora() {
+    internal fun estudarAgora() {
         if (chave().isBlank()) return responder("Para estudar eu uso o Gemini. Configure a chave do Gemini nos ajustes.")
         if (estudando || Estudo.ocupado()) return responder("Já estou estudando. Leva uns minutos; eu aviso quando terminar.")
         estudando = true
@@ -3846,176 +3536,11 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         }.start()
     }
 
-    // ----------------------------------------------------------- stories do dia (dica ou curiosidade, manhã e tarde)
-    private fun storiesAutomaticos(ligar: Boolean?) {
-        if (ligar != null) StoriesDoDia.definirLigado(this, ligar)
-        val estado = if (StoriesDoDia.ligado(this)) "ligados" else "desligados"
-        responder(
-            "Os stories automáticos estão $estado. " + StoriesDoDia.descricao(this) +
-                " Diga: mostra o story do dia, para ver o próximo, ou posta a dica agora."
-        )
-    }
-
-    private fun previaDoStory() {
-        responder("Vou montar o próximo story para você ver, só um instante.")
-        Thread {
-            val r = try {
-                Result.success(StoriesDoDia.previa(this))
-            } catch (e: Exception) {
-                Result.failure(e)
-            }
-            runOnUiThread {
-                r.onSuccess { (tema, arquivo) ->
-                    responder("O próximo story é \"${tema.titulo}\". Abri a imagem para você ver; ela não foi publicada.")
-                    try {
-                        startActivity(
-                            Intent(Intent.ACTION_VIEW).setDataAndType(Uri.parse("content://${FotoProvider.AUTORIDADE}/${arquivo.name}"), "image/jpeg")
-                                .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                        )
-                    } catch (e: Exception) {
-                        responder("Não achei um app para abrir a imagem.")
-                    }
-                }.onFailure { responder("Não consegui montar o story: ${it.message}") }
-            }
-        }.start()
-    }
-
-    /** Do aviso do story da tarde: copia a pergunta da enquete e abre o Instagram com a imagem. */
     /** Story em sequência: depois de postar no Instagram e voltar, a Vênus abre o WhatsApp com a mesma imagem para o status. */
-    private var whatsappDepois: java.io.File? = null
-    private var saiuParaOInstagram = false
+    internal var whatsappDepois: java.io.File? = null
+    internal var saiuParaOInstagram = false
 
-    private fun abrirStoryComEnquete(arquivo: String, pergunta: String) {
-        val f = java.io.File(FotoProvider.pasta(this), arquivo)
-        if (!f.exists()) return responder("A imagem desse story não está mais aqui (passou mais de um dia). Diga: prepara o story com enquete.")
-        if (pergunta.isNotBlank()) {
-            (getSystemService(CLIPBOARD_SERVICE) as android.content.ClipboardManager).setPrimaryClip(android.content.ClipData.newPlainText("Enquete", pergunta))
-        }
-        try {
-            whatsappDepois = f
-            saiuParaOInstagram = false
-            startActivity(StoriesDoDia.intencaoInstagram(f))
-            Toast.makeText(
-                this,
-                (if (pergunta.isNotBlank()) "Escolha Story, toque no adesivo Enquete e cole: $pergunta. " else "Escolha Story e publique. ") +
-                    "Ao voltar, eu abro o WhatsApp para o status.",
-                Toast.LENGTH_LONG,
-            ).show()
-        } catch (e: ActivityNotFoundException) {
-            whatsappDepois = null
-            responder("Não achei o Instagram neste celular.")
-        }
-    }
-
-    // ----------------------------------------------------------- página Stories do dia
-    /** Os stories de hoje (manhã e tarde): prévia, Publicar no Instagram, Publicar no WhatsApp e Gerar outro. */
-    private fun abrirStoriesDoDia() {
-        val f = Formulario(this, "Stories do dia", "Veja, publique no Instagram e no status do WhatsApp ou gere outro")
-        for (turno in listOf("manha", "tarde")) {
-            val hora = StoriesDoDia.horaTexto(StoriesDoDia.horario(this, turno))
-            f.cartao("${StoriesDoDia.nomeTurno(turno).replaceFirstChar { it.uppercase() }} · $hora")
-            val r = StoriesDoDia.registroDeHoje(this, turno)
-            if (r == null || !r.arquivo.exists()) {
-                f.adicionar(f.aviso(if (r == null) "Ainda não preparado hoje. Sai sozinho às $hora, ou prepare agora." else "A imagem de hoje não está mais no celular. Gere outra."), 2)
-                f.adicionar(f.botao("Preparar agora", primario = true) { gerarOutroStory(f, turno) })
-                continue
-            }
-            val previa = f.previa().apply {
-                visibility = android.view.View.VISIBLE
-                setImageBitmap(android.graphics.BitmapFactory.decodeFile(r.arquivo.absolutePath, android.graphics.BitmapFactory.Options().apply { inSampleSize = 2 }))
-                setOnClickListener { verFotoGrande(r.arquivo) }
-            }
-            f.adicionar(previa, 2)
-            val situacao = listOf(
-                if (r.automatico) "Instagram: publicado sozinho ✓" else if (r.instagram) "Instagram: aberto para publicar ✓" else "Instagram: falta publicar",
-                if (r.whatsapp) "WhatsApp: aberto para o status ✓" else "WhatsApp: falta pôr no status",
-            ).joinToString(" · ")
-            f.adicionar(f.aviso("\"${r.titulo}\"\n$situacao" + (if (r.pergunta.isNotBlank()) "\nEnquete: ${r.pergunta} (copio ao abrir o Instagram)" else "")), 8)
-            val instagram = f.botao("Publicar Instagram", primario = !r.instagram && !r.automatico) {
-                if (r.pergunta.isNotBlank()) {
-                    (getSystemService(CLIPBOARD_SERVICE) as android.content.ClipboardManager).setPrimaryClip(android.content.ClipData.newPlainText("Enquete", r.pergunta))
-                }
-                try {
-                    startActivity(StoriesDoDia.intencaoInstagram(r.arquivo))
-                    StoriesDoDia.marcarCanal(this, turno, "instagram")
-                    f.fechar()
-                    Toast.makeText(this, if (r.pergunta.isNotBlank()) "Escolha Story, ponha o adesivo Enquete e cole: ${r.pergunta}" else "Escolha Story e publique.", Toast.LENGTH_LONG).show()
-                } catch (e: ActivityNotFoundException) {
-                    Toast.makeText(this, "Não achei o Instagram neste celular.", Toast.LENGTH_SHORT).show()
-                }
-            }
-            val whatsapp = f.botao("Publicar WhatsApp", primario = r.instagram || r.automatico) {
-                try {
-                    startActivity(StoriesDoDia.intencaoWhatsApp(this, r.arquivo))
-                    StoriesDoDia.marcarCanal(this, turno, "whatsapp")
-                    f.fechar()
-                    Toast.makeText(this, "Escolha Meu status e envie.", Toast.LENGTH_LONG).show()
-                } catch (e: Exception) {
-                    Toast.makeText(this, "Não consegui abrir o WhatsApp.", Toast.LENGTH_SHORT).show()
-                }
-            }
-            f.lado(instagram, whatsapp)
-            f.adicionar(f.botao("Não gostei: gerar outro") { gerarOutroStory(f, turno) }, 8)
-        }
-        f.cartao("Automático")
-        f.adicionar(f.aviso(StoriesDoDia.descricao(this)), 2)
-        f.acoes(f.botao("Fechar", primario = true) { f.fechar() }, f.botao("Horários e ajustes") {
-            f.fechar()
-            abrirPublicacoes()
-        })
-        f.mostrar()
-    }
-
-    private fun gerarOutroStory(f: Formulario, turno: String) {
-        f.fechar()
-        responder("Gerando outro story da ${StoriesDoDia.nomeTurno(turno)}…")
-        Thread {
-            val r = try {
-                Result.success(StoriesDoDia.refazer(applicationContext, turno))
-            } catch (e: Exception) {
-                Result.failure(e)
-            }
-            runOnUiThread {
-                r.onSuccess {
-                    responder("Pronto: \"${it.titulo}\".")
-                    abrirStoriesDoDia()
-                }.onFailure { responder("Não consegui gerar outro: ${it.message}") }
-            }
-        }.start()
-    }
-
-    /** Chamado no onResume: se voltou do Instagram com um story pendente, abre o status do WhatsApp. */
-    private fun continuarStoryNoWhatsApp() {
-        val f = whatsappDepois ?: return
-        if (!saiuParaOInstagram) return
-        whatsappDepois = null
-        saiuParaOInstagram = false
-        orbe.postDelayed({
-            try {
-                startActivity(StoriesDoDia.intencaoWhatsApp(this, f))
-                Toast.makeText(this, "Agora o status do WhatsApp: escolha Meu status e envie.", Toast.LENGTH_LONG).show()
-            } catch (e: Exception) {
-                responder("Não consegui abrir o WhatsApp: ${e.message}")
-            }
-        }, 700)
-    }
-
-    private fun storyComEnqueteAgora() {
-        responder("Vou preparar o story com enquete; quando estiver pronto, chega o aviso para abrir no Instagram.")
-        Thread {
-            val r = try {
-                Result.success(StoriesDoDia.prepararComEnquete(this))
-            } catch (e: Exception) {
-                Result.failure(e)
-            }
-            runOnUiThread {
-                r.onSuccess { responder("Pronto: \"${it.titulo}\". Toque no aviso para abrir o Instagram; a pergunta da enquete é: ${it.pergunta}") }
-                    .onFailure { responder("Não consegui preparar: ${it.message}") }
-            }
-        }.start()
-    }
-
-    private fun pedirIAReserva() {
+    internal fun pedirIAReserva() {
         val opcoes = SegundaIA.PROVEDORES
         var escolhido = opcoes.indexOfFirst { it.id == SegundaIA.provedor(this).id }.coerceAtLeast(0)
         val caixa = LinearLayout(this).apply {
@@ -4067,10 +3592,10 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
     }
 
     // ----------------------------------------------------------- período de testes (lojistas convidados)
-    private var licencaAberta = false
+    internal var licencaAberta = false
 
     /** Encerrado: tela que só sai com o código. Faltando 5 dias ou menos: um aviso por dia. */
-    private fun conferirLicenca() {
+    internal fun conferirLicenca() {
         when (val e = Licenca.estado(this)) {
             Licenca.Estado.Encerrada -> if (!licencaAberta) pedirCodigoDeLiberacao(obrigatorio = true)
             is Licenca.Estado.Teste -> if (e.diasRestantes <= 5) {
@@ -4084,7 +3609,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         }
     }
 
-    private fun pedirCodigoDeLiberacao(obrigatorio: Boolean) {
+    internal fun pedirCodigoDeLiberacao(obrigatorio: Boolean) {
         licencaAberta = true
         val id = Licenca.instalacao(this)
         val campo = campoDeDialogo("", "Cole aqui o código (VENUS-…)")
@@ -4126,7 +3651,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
     }
 
     /** Só no celular do dono: cria a chave que assina os códigos e gera códigos de liberação. */
-    private fun administrarLicencas() {
+    internal fun administrarLicencas() {
         val publica = Licenca.chavePublicaAdmin()
         if (publica == null || publica != Licenca.CHAVE_PUBLICA) {
             val msg = if (publica == null) "Primeiro, crie a chave que assina os códigos. Ela fica só no chip de segurança deste celular e nunca sai dele."
@@ -4178,7 +3703,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
     }
 
     /** Lista do que configurar, com ✓ no que já está pronto; cada item abre o seu ajuste. */
-    private fun primeirosPassos() {
+    internal fun primeirosPassos() {
         val perfil = getSharedPreferences("perfil", MODE_PRIVATE)
         val passos = listOf(
             Triple("Seu nome e o da loja", perfil.contains("dono")) { editarPerfil() },
@@ -4198,7 +3723,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
             .show()
     }
 
-    private fun editarPerfil() {
+    internal fun editarPerfil() {
         val caixa = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(20), dp(8), dp(20), 0)
@@ -4226,7 +3751,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
     }
 
     /** Site, ramo e as regras de venda em campos (a fonte única que vai para a memória e para o site). */
-    private fun editarDadosDaLoja() {
+    internal fun editarDadosDaLoja() {
         val r = Perfil.regras
         val caixa = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -4340,7 +3865,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
             .show()
     }
 
-    private fun escolherPlataforma() {
+    internal fun escolherPlataforma() {
         val tipos = Plataformas.TIPOS
         AlertDialog.Builder(this)
             .setTitle("Onde fica a sua loja?")
@@ -4349,7 +3874,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
             .show()
     }
 
-    private fun configurarPlataforma(t: Plataformas.Tipo) {
+    internal fun configurarPlataforma(t: Plataformas.Tipo) {
         if (t.id == "floot") {
             Plataformas.salvar(this, Plataformas.Config("floot", "", "", "", ""))
             ajustes?.atualizar()
@@ -4405,7 +3930,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
             .show()
     }
 
-    private fun pedirCloudflare() {
+    internal fun pedirCloudflare() {
         val caixa = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(20), dp(8), dp(20), 0)
@@ -4449,44 +3974,15 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
             .show()
     }
 
-    private fun storyDoDiaAgora() {
-        responder("Vou montar e publicar o story de dica agora.")
-        Thread {
-            val r = try {
-                Result.success(StoriesDoDia.publicar(this, forcar = true))
-            } catch (e: Exception) {
-                Result.failure(e)
-            }
-            runOnUiThread {
-                r.onSuccess { responder("Publiquei no Instagram o story \"${it.titulo}\". Chegou um aviso para pôr no status do WhatsApp também.") }
-                    .onFailure { responder("Não consegui publicar: ${it.message}") }
-            }
-        }.start()
-    }
-
-    private fun escolherHorariosDosStories() {
-        val manha = StoriesDoDia.horario(this, "manha")
-        android.app.TimePickerDialog(this, { _, h, m ->
-            StoriesDoDia.definirHorario(this, "manha", h * 60 + m)
-            val tarde = StoriesDoDia.horario(this, "tarde")
-            android.app.TimePickerDialog(this, { _, h2, m2 ->
-                StoriesDoDia.definirHorario(this, "tarde", h2 * 60 + m2)
-                ajustes?.atualizar()
-                Toast.makeText(this, "Stories às ${StoriesDoDia.horaTexto(h * 60 + m)} e às ${StoriesDoDia.horaTexto(h2 * 60 + m2)}", Toast.LENGTH_LONG).show()
-            }, tarde / 60, tarde % 60, true).apply { setTitle("Story da tarde") }.show()
-        }, manha / 60, manha % 60, true).apply { setTitle("Story da manhã") }.show()
-    }
-
-    /** As ideias de post que ela preparou no estudo da semana. */
     // ----------------------------------------------------------- "O que eu aprendi": ver e apagar aprendizados
-    private val NOMES_DO_APRENDIZADO = linkedMapOf(
+    internal val NOMES_DO_APRENDIZADO = linkedMapOf(
         "comando" to "Jeitos de pedir", "intencao" to "Frases que entendi", "resposta" to "Respostas guardadas",
         "cliente" to "Respostas para clientes", "objecao" to "Objeções de venda", RegrasDaLoja.TIPO to "Regras da loja",
         "enigma" to "Charadas", "ideia_post" to "Ideias de post", "fato" to "Fatos sobre você", "conversa" to "Resumos de conversas",
         Consciencia.TIPO_LICAO to "Lições dos meus erros", Estudo.TIPO_SABER to "Saberes de outras áreas",
     )
 
-    private fun mostrarAprendizado() {
+    internal fun mostrarAprendizado() {
         Thread {
             val contagem = try {
                 memoria.contarVetores()
@@ -4506,7 +4002,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         }.start()
     }
 
-    private fun listarAprendizado(tipo: String) {
+    internal fun listarAprendizado(tipo: String) {
         Thread {
             val itens = try {
                 memoria.itensDoTipo(tipo, 60)
@@ -4530,7 +4026,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         }.start()
     }
 
-    private fun verAprendizado(item: Memoria.Item) {
+    internal fun verAprendizado(item: Memoria.Item) {
         val texto = item.texto + (item.resposta?.takeIf { it.isNotBlank() }?.let { "\n\nResposta: $it" } ?: "") +
             (item.acao?.takeIf { it.isNotBlank() }?.let { "\n\nAção: $it ${item.args.orEmpty()}" } ?: "") +
             (item.fonte?.takeIf { it.isNotBlank() }?.let { "\n\nDe onde veio: $it" } ?: "")
@@ -4555,298 +4051,24 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
             .show()
     }
 
-    /** Página das ideias de post que a Vênus criou: cada uma com Programar post e Programar story. */
-    private fun mostrarIdeiasDePost() {
-        Thread {
-            val ideias = try {
-                memoria.itensDoTipo("ideia_post", Estudo.IDEIAS_POR_SEMANA * 2).map { IdeiasDePost.ler(it) }
-            } catch (e: Exception) {
-                emptyList()
-            }
-            runOnUiThread {
-                if (ideias.isEmpty()) return@runOnUiThread responder("Ainda não preparei ideias de post. Elas saem no estudo de uma vez por semana; se quiser já, diga: estuda agora.")
-                val f = Formulario(this, "Ideias de post", "Sugestões da ${Marca.nome} para as próximas semanas")
-                val dia = java.text.SimpleDateFormat("dd/MM", Locale("pt", "BR"))
-                for (ideia in ideias) {
-                    f.cartao(ideia.titulo.take(40))
-                    f.adicionar(f.aviso("Sugerido: " + (ideia.data?.let { dia.format(it.time) } ?: "quando quiser") + " · " + ideia.formato), 2)
-                    f.adicionar(TextView(this).apply {
-                        text = ideia.legenda
-                        textSize = 14f
-                        setTextColor(Color.WHITE)
-                        maxLines = 6
-                        ellipsize = android.text.TextUtils.TruncateAt.END
-                        setPadding(dp(4), dp(4), dp(4), 0)
-                    }, 6)
-                    f.lado(
-                        f.botao("Programar post", primario = ideia.formato != "story") { f.fechar(); prepararIdeia(ideia, "feed") },
-                        f.botao("Programar story", primario = ideia.formato == "story") { f.fechar(); prepararIdeia(ideia, "story") },
-                    )
-                }
-                f.acoes(f.botao("Fechar", primario = true) { f.fechar() })
-                f.mostrar()
-            }
-        }.start()
-    }
-
-    /** Monta a arte da ideia (com a foto do produto citado) e abre a tela para conferir e programar. */
-    private fun prepararIdeia(ideia: IdeiasDePost.Ideia, tipo: String, variacao: Int = 0) {
-        responder(if (variacao == 0) "Montando a arte de \"${ideia.titulo}\"…" else "Montando outra arte…")
-        Thread {
-            val r = try {
-                val produto = try {
-                    ferramentas.loja.takeIf { it.conectada }?.produtos()?.let { IdeiasDePost.produtoDaIdeia(ideia, it) }
-                } catch (e: Exception) {
-                    null
-                }
-                val foto = produto?.let { IdeiasDePost.fotoDoProduto(it) }
-                Result.success(IdeiasDePost.arte(ideia, tipo, foto, variacao) to produto)
-            } catch (e: Exception) {
-                Result.failure(e)
-            }
-            runOnUiThread {
-                r.onSuccess { (jpeg, produto) -> conferirIdeia(ideia, tipo, jpeg, produto?.nome, variacao) }
-                    .onFailure { responder("Não consegui montar a arte: ${it.message}") }
-            }
-        }.start()
-    }
-
-    private fun conferirIdeia(ideia: IdeiasDePost.Ideia, tipo: String, jpeg: ByteArray, produto: String?, variacao: Int) {
-        val f = Formulario(this, if (tipo == "story") "Programar story" else "Programar post", ideia.titulo)
-        f.cartao("Arte")
-        val previa = f.previa().apply {
-            visibility = android.view.View.VISIBLE
-            maxHeight = dp(if (tipo == "story") 420 else 340)
-            scaleType = android.widget.ImageView.ScaleType.FIT_CENTER
-            setImageBitmap(android.graphics.BitmapFactory.decodeByteArray(jpeg, 0, jpeg.size))
-        }
-        f.adicionar(previa, 2)
-        f.adicionar(f.aviso(if (produto != null) "Com a foto de: $produto" else "Não achei o produto citado no catálogo: a arte vai só com o título."), 6)
-        f.adicionar(f.botao("Não gostei: outra arte") { f.fechar(); prepararIdeia(ideia, tipo, variacao + 1) }, 8)
-        val (blocoLegenda, legenda) = f.campo(
-            if (tipo == "story") "Texto (o story vai só com a imagem; o texto fica guardado)" else "Legenda", ideia.legenda, "",
-            InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE or InputType.TYPE_TEXT_FLAG_CAP_SENTENCES, 5,
-        )
-        f.cartao("Texto")
-        f.adicionar(blocoLegenda, 2)
-        val quando = Calendar.getInstance().apply { timeInMillis = IdeiasDePost.quandoSugerido(ideia, tipo) }
-        f.cartao("Quando sai")
-        val (blocoData, data) = f.campo("Dia", java.text.SimpleDateFormat("dd/MM/yyyy", Locale("pt", "BR")).format(quando.time), "dd/mm/aaaa", InputType.TYPE_CLASS_DATETIME)
-        val (blocoHora, hora) = f.campo("Hora", java.text.SimpleDateFormat("HH:mm", Locale("pt", "BR")).format(quando.time), "19:00", InputType.TYPE_CLASS_DATETIME)
-        f.lado(blocoData, blocoHora)
-        f.adicionar(f.aviso(if (Instagram.conectado(this)) "Sai sozinho na hora marcada." else "O Instagram está desconectado: na hora, chega o aviso para postar com um toque."), 6)
-        f.acoes(f.botao("Programar", primario = true) {
-            val m = Regex("(\\d{1,2})/(\\d{1,2})/(\\d{4})").find(data.text.toString())
-            val hm = Regex("(\\d{1,2})[:h](\\d{2})?").find(hora.text.toString())
-            if (m == null || hm == null) return@botao Toast.makeText(this, "Confira o dia (dd/mm/aaaa) e a hora (hh:mm).", Toast.LENGTH_SHORT).show()
-            val c = Calendar.getInstance().apply {
-                clear()
-                set(m.groupValues[3].toInt(), m.groupValues[2].toInt() - 1, m.groupValues[1].toInt(), hm.groupValues[1].toInt(), hm.groupValues[2].ifBlank { "0" }.toInt())
-            }
-            if (c.timeInMillis < System.currentTimeMillis()) return@botao Toast.makeText(this, "Esse horário já passou.", Toast.LENGTH_SHORT).show()
-            val p = Postagens.criar(this, c.timeInMillis, tipo, legenda.text.toString(), jpeg)
-            focarPost(p.id)
-            Diario.anotar(this, "instagram", "Ideia programada como ${if (tipo == "story") "story" else "post"}: ${ideia.titulo} (${java.text.SimpleDateFormat("dd/MM HH:mm", Locale("pt", "BR")).format(c.time)})", "tela")
-            f.fechar()
-            responder("Programado: \"${ideia.titulo}\" como ${if (tipo == "story") "story" else "post no feed"} em ${java.text.SimpleDateFormat("dd/MM 'às' HH:mm", Locale("pt", "BR")).format(c.time)}.")
-        }, f.botao("Voltar às ideias") { f.fechar(); mostrarIdeiasDePost() })
-        f.mostrar()
-    }
-
     // ----------------------------------------------------------- post em foco (o último programado)
-    private val atrasosAvisados = mutableSetOf<Int>()
-    private var postFocado: Int? = null
-    private var postFocadoEm = 0L
-
-    private fun focarPost(id: Int) {
-        postFocado = id
-        postFocadoEm = System.currentTimeMillis()
-    }
-
-    /** O post programado há menos de 20 minutos e ainda não publicado. */
-    private fun postEmFoco(): Int? {
-        val id = postFocado ?: return null
-        if (System.currentTimeMillis() - postFocadoEm > 20 * 60_000L) return null
-        return id.takeIf { Postagens.achar(this, it)?.publicado == false }
-    }
-
-    /** "muda para hoje às 19h" / "no feed": ajusta o post em foco. Devolve true se era isso. */
-    private fun ajustarPostEmFoco(id: Int, pedido: String): Boolean {
-        val c = ComandosLocais.normalizar(pedido).replace(Regex("[^a-z0-9: ]"), " ").replace(Regex("\\s+"), " ").trim()
-        ComandosLocais.TIPO_POST.find(c)?.let { m ->
-            if (c.split(" ").size <= 10) {
-                val tipo = if (m.groupValues[1] == "feed") "feed" else "story"
-                val p = Postagens.mudarTipo(this, id, tipo) ?: return false
-                focarPost(id)
-                responder("Combinado: vai ${if (tipo == "feed") "no feed" else "no story"}, ${Lembretes.quandoFalado(p.quando)}.")
-                return true
-            }
-        }
-        val m = ComandosLocais.REPROGRAMAR_POST.matchEntire(c) ?: return false
-        val quando = Lembretes.interpretar("lembrete ${m.groupValues[1]}")?.quando ?: return false
-        if (quando <= System.currentTimeMillis()) {
-            responder("Esse horário já passou. Para publicar já, diga: posta agora.")
-            return true
-        }
-        val p = Postagens.reprogramar(this, id, quando) ?: return false
-        focarPost(id)
-        responder("Mudei: ${if (p.ehStory) "story" else "post"} ${Lembretes.quandoFalado(p.quando)}.")
-        return true
-    }
-
-    // ----------------------------------------------------------- Instagram da loja (API da Meta)
-    /** Cola o token gerado no painel da Meta; mostra o passo a passo e permite desconectar. */
-    private fun conectarInstagram() {
-        val usuario = Instagram.usuario(this)
-        val campo = EditText(this).apply {
-            hint = "Cole aqui o token (começa com IG… ou EAA…)"
-            minLines = 2
-            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS or InputType.TYPE_TEXT_FLAG_MULTI_LINE
-            setPadding(dp(24), dp(16), dp(24), dp(16))
-        }
-        val passos = "1. Toque em Abrir a Meta e entre com o seu Facebook. Abra o app Vênus da loja.\n" +
-            "2. Casos de uso → API do Instagram → Personalizar.\n" +
-            "3. Em Gerar tokens de acesso, toque em Gerar token ao lado da conta da loja (se pedir, dê a ela a função Testador do Instagram e aceite o convite no Instagram).\n" +
-            "4. Entre com o Instagram, escolha o portfólio e a conta da loja, continue, copie o token e cole aqui."
-        val d = AlertDialog.Builder(this)
-            .setTitle(if (usuario != null) "Instagram: @$usuario" else "Conectar o Instagram")
-            .setMessage((if (usuario != null) "Conectado. Para trocar, cole um token novo.\n\n" else "") + passos)
-            .setView(campo)
-            .setPositiveButton("Conectar", null)
-            .setNeutralButton("Abrir a Meta") { _, _ ->
-                try {
-                    startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(Instagram.COMO_CONECTAR)))
-                } catch (e: Exception) {
-                    responder("Não consegui abrir o navegador.")
-                }
-            }
-            .setNegativeButton(if (usuario != null) "Desconectar" else "Cancelar") { _, _ ->
-                if (usuario != null) {
-                    Instagram.desconectar(this)
-                    ajustes?.atualizar()
-                    Diario.anotar(this, "conexao", "Instagram desconectado", "tela")
-                    responder("Desconectei o Instagram. Os posts programados voltam a chegar como aviso para você postar.")
-                }
-            }
-            .create()
-        d.setOnShowListener {
-            d.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
-                val token = campo.text.toString()
-                if (token.isBlank()) {
-                    Toast.makeText(this, "Cole o token primeiro.", Toast.LENGTH_SHORT).show()
-                    return@setOnClickListener
-                }
-                d.getButton(AlertDialog.BUTTON_POSITIVE).isEnabled = false
-                Thread {
-                    val r = try {
-                        Result.success(Instagram.conectar(this, token))
-                    } catch (e: Exception) {
-                        Result.failure(e)
-                    }
-                    runOnUiThread {
-                        d.getButton(AlertDialog.BUTTON_POSITIVE).isEnabled = true
-                        r.onSuccess { conta ->
-                            d.dismiss()
-                            ajustes?.atualizar()
-                            val loja = if (ferramentas.loja.conectada) "" else " Para os posts saírem sozinhos, conecte também a loja nos ajustes (a foto sobe pelo site)."
-                            Diario.anotar(this, "conexao", "Instagram conectado: @${conta.usuario}", "tela")
-                            responder("Instagram conectado: @${conta.usuario}. Agora os posts programados saem sozinhos na hora marcada.$loja Pergunte: como está o Instagram.")
-                        }.onFailure { e -> Toast.makeText(this, e.message ?: "Não deu certo.", Toast.LENGTH_LONG).show() }
-                    }
-                }.start()
-            }
-        }
-        d.show()
-    }
-
-    /** Comentários sem resposta: escolhe um, a IA sugere a resposta, você ajusta e envia. */
-    private fun comentariosInstagram() {
-        if (!Instagram.conectado(this)) return responder(Instagram.SEM_CONTA)
-        comTempoLimite("LENDO COMENTÁRIOS…") {
-            val lista = Instagram.comentariosSemResposta(this)
-            val acao: () -> Unit = {
-                if (lista.isEmpty()) responder("Nenhum comentário esperando resposta nos últimos posts.")
-                else {
-                    responder(if (lista.size == 1) "Tem 1 comentário sem resposta." else "Tem ${lista.size} comentários sem resposta. Escolha um para eu sugerir a resposta.")
-                    escolherComentario(lista)
-                }
-            }
-            acao
-        }
-    }
-
-    private fun escolherComentario(lista: List<Instagram.Comentario>) {
-        val itens = lista.map { c -> "@${c.usuario}: ${c.texto.take(120)}\n· ${Instagram.resumirLegenda(c.legendaDoPost)}" }
-        AlertDialog.Builder(this)
-            .setTitle("Comentários sem resposta")
-            .setItems(itens.toTypedArray()) { _, i -> sugerirRespostaComentario(lista, i) }
-            .setNegativeButton("Fechar", null)
-            .show()
-    }
-
-    private fun sugerirRespostaComentario(lista: List<Instagram.Comentario>, i: Int) {
-        val c = lista[i]
-        val k = chave()
-        val m = modelo()
-        val usarIA = k.isNotBlank() && !modoIndependente()
-        comTempoLimite(if (usarIA) "ESCREVENDO…" else "ABRINDO…") {
-            val sugestao = if (usarIA) {
-                val catalogo = try {
-                    if (ferramentas.loja.conectada) Loja.catalogoParaIA(ferramentas.loja.produtos()) else ""
-                } catch (e: Exception) {
-                    ""
-                }
-                Gemini.respostaComentario(k, m, c.texto, c.usuario, c.legendaDoPost, catalogo)
-            } else null
-            val acao: () -> Unit = {
-                val campo = EditText(this).apply {
-                    setText(sugestao ?: "@${c.usuario} ")
-                    setSelection(text.length)
-                    minLines = 3
-                    inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE or InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
-                    setPadding(dp(24), dp(16), dp(24), dp(16))
-                }
-                responder(if (sugestao != null) "Sugeri uma resposta para @${c.usuario}. Confira e toque em Responder." else "Escreva a resposta para @${c.usuario}.")
-                AlertDialog.Builder(this)
-                    .setTitle("Responder @${c.usuario}")
-                    .setMessage("“${c.texto.take(300)}”")
-                    .setView(campo)
-                    .setPositiveButton("Responder") { _, _ -> enviarRespostaComentario(lista, i, campo.text.toString()) }
-                    .setNegativeButton("Voltar") { _, _ -> escolherComentario(lista) }
-                    .show()
-            }
-            acao
-        }
-    }
-
-    private fun enviarRespostaComentario(lista: List<Instagram.Comentario>, i: Int, texto: String) {
-        if (texto.isBlank()) return
-        val c = lista[i]
-        comTempoLimite("RESPONDENDO…") {
-            Instagram.responderComentario(this, c.id, texto.trim())
-            val resto = lista.filterIndexed { j, _ -> j != i }
-            val acao: () -> Unit = {
-                Diario.anotar(this, "instagram", "Comentário de @${c.usuario} respondido: ${texto.trim().take(120)}", "tela")
-                responder("Respondi @${c.usuario}." + if (resto.isNotEmpty()) " Faltam ${resto.size}." else " Não tem mais comentário esperando.")
-                if (resto.isNotEmpty()) escolherComentario(resto)
-            }
-            acao
-        }
-    }
+    internal val atrasosAvisados = mutableSetOf<Int>()
+    internal var postFocado: Int? = null
+    internal var postFocadoEm = 0L
 
     // ----------------------------------------------------------- arquivos (PDF, Word, Excel, áudio...)
-    private var documentosAbertos: List<Arquivos.Documento> = emptyList()
-    private var documentoQuando = 0L
-    private val conversaDocumento = mutableListOf<Pair<String, String>>()
+    internal var documentosAbertos: List<Arquivos.Documento> = emptyList()
+    internal var documentoQuando = 0L
+    internal val conversaDocumento = mutableListOf<Pair<String, String>>()
 
     /** O arquivo continua "aberto" para perguntas por 30 minutos. */
-    private fun documentoAtivo(): Arquivos.Documento? =
+    internal fun documentoAtivo(): Arquivos.Documento? =
         documentosAtivos().firstOrNull()
 
-    private fun documentosAtivos(): List<Arquivos.Documento> =
+    internal fun documentosAtivos(): List<Arquivos.Documento> =
         if (System.currentTimeMillis() - documentoQuando < 30 * 60_000L) documentosAbertos else emptyList()
 
-    private fun escolherArquivo() {
+    internal fun escolherArquivo() {
         try {
             startActivityForResult(
                 Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("*/*")
@@ -4859,9 +4081,9 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
     }
 
     // ----------------------------------------------------------- anexos (vários, com o seu pedido)
-    private fun temAnexos() = ::bandejaAnexos.isInitialized && anexos.isNotEmpty()
+    internal fun temAnexos() = ::bandejaAnexos.isInitialized && anexos.isNotEmpty()
 
-    private fun escolherFotos() {
+    internal fun escolherFotos() {
         val intencao = if (Build.VERSION.SDK_INT >= 33) {
             Intent(android.provider.MediaStore.ACTION_PICK_IMAGES)
                 .putExtra(android.provider.MediaStore.EXTRA_PICK_IMAGES_MAX, minOf(MAXIMO_ANEXOS, android.provider.MediaStore.getPickImagesMaxLimit()))
@@ -4879,7 +4101,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         }
     }
 
-    private fun nomeDoArquivo(uri: Uri): String = try {
+    internal fun nomeDoArquivo(uri: Uri): String = try {
         contentResolver.query(uri, arrayOf(android.provider.OpenableColumns.DISPLAY_NAME), null, null, null)?.use { c ->
             if (c.moveToFirst()) c.getString(0) else null
         } ?: uri.lastPathSegment ?: "arquivo"
@@ -4888,7 +4110,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
     }
 
     /** Põe fotos e arquivos na bandeja acima do campo; nada é enviado até você tocar em enviar (com ou sem texto). */
-    private fun anexar(uris: List<Uri>) {
+    internal fun anexar(uris: List<Uri>) {
         if (!::bandejaAnexos.isInitialized || uris.isEmpty()) return
         val cabem = MAXIMO_ANEXOS - anexos.size
         if (cabem <= 0) return Toast.makeText(this, "No máximo $MAXIMO_ANEXOS anexos por vez.", Toast.LENGTH_SHORT).show()
@@ -4924,7 +4146,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         campo.requestFocus()
     }
 
-    private fun tirarAnexo(a: Anexo) {
+    internal fun tirarAnexo(a: Anexo) {
         anexos.remove(a)
         a.vista?.let { bandejaAnexos.removeView(it) }
         if (anexos.isEmpty()) {
@@ -4933,7 +4155,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         }
     }
 
-    private fun limparAnexos() {
+    internal fun limparAnexos() {
         anexos.clear()
         if (::bandejaAnexos.isInitialized) {
             bandejaAnexos.removeAllViews()
@@ -4942,7 +4164,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         }
     }
 
-    private fun iconeDoArquivo(nome: String, mime: String) = when {
+    internal fun iconeDoArquivo(nome: String, mime: String) = when {
         mime == "application/pdf" -> "PDF"
         mime.startsWith("audio/") -> "🎧"
         nome.endsWith(".xlsx", true) || nome.endsWith(".csv", true) -> "📊"
@@ -4951,7 +4173,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
     }
 
     /** O quadradinho do anexo: miniatura da foto (ou ícone do arquivo), nome embaixo e um × para tirar. */
-    private fun vistaDoAnexo(a: Anexo): View {
+    internal fun vistaDoAnexo(a: Anexo): View {
         val quadro = android.widget.FrameLayout(this).apply { alpha = 0.55f }
         val cartao = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -5002,7 +4224,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         return quadro
     }
 
-    private fun atualizarVistaDoAnexo(a: Anexo) {
+    internal fun atualizarVistaDoAnexo(a: Anexo) {
         val v = a.vista ?: return
         v.alpha = 1f
         val imagem = v.findViewWithTag<android.widget.ImageView>("imagem")
@@ -5021,15 +4243,15 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
     }
 
     // ----------------------------------------------------------- anexos na conversa (miniaturas)
-    private fun pastaMiniaturas() = java.io.File(filesDir, "miniaturas").apply { mkdirs() }
+    internal fun pastaMiniaturas() = java.io.File(filesDir, "miniaturas").apply { mkdirs() }
 
-    private fun arquivoDaMiniatura(nome: String): java.io.File {
+    internal fun arquivoDaMiniatura(nome: String): java.io.File {
         val h = java.security.MessageDigest.getInstance("SHA-1").digest(nome.toByteArray()).joinToString("") { "%02x".format(it) }
         return java.io.File(pastaMiniaturas(), "$h.jpg")
     }
 
     /** Guarda uma versão pequena da foto (para a conversa e para reabrir depois). */
-    private fun guardarMiniatura(doc: Arquivos.Documento) {
+    internal fun guardarMiniatura(doc: Arquivos.Documento) {
         val bytes = doc.bytes ?: return
         try {
             val op = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
@@ -5045,7 +4267,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
     }
 
     /** O que você enviou: as fotos em miniatura (tocando, abre maior) e o seu pedido embaixo. */
-    private fun mostrarAnexosNaConversa(docs: List<Arquivos.Documento>, texto: String) {
+    internal fun mostrarAnexosNaConversa(docs: List<Arquivos.Documento>, texto: String) {
         docs.filter { it.mime.startsWith("image/") }.forEach { guardarMiniatura(it) }
         try {
             memoria.salvarMensagem(true, "📎 " + docs.joinToString(" | ") { it.nome } + if (texto.isNotBlank()) "\n$texto" else "", topicoAtual)
@@ -5055,14 +4277,14 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
     }
 
     /** Conversa reaberta: monta de novo a partir do que ficou guardado ("📎 nome | nome\npedido"). */
-    private fun mostrarAnexosSalvos(guardado: String) {
+    internal fun mostrarAnexosSalvos(guardado: String) {
         val primeira = guardado.removePrefix("📎 ").substringBefore("\n")
         val texto = guardado.substringAfter("\n", "")
         val nomes = (if (" | " in primeira) primeira.split(" | ") else primeira.split(", ")).map { it.trim() }.filter { it.isNotBlank() }
         desenharAnexos(nomes.map { it to Arquivos.tipo(null, it) }, texto, apagado = true)
     }
 
-    private fun desenharAnexos(itens: List<Pair<String, String>>, texto: String, apagado: Boolean = false) {
+    internal fun desenharAnexos(itens: List<Pair<String, String>>, texto: String, apagado: Boolean = false) {
         val fileira = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.END
@@ -5105,7 +4327,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
     }
 
     /** A foto maior, num pop-up escuro; toque para fechar. */
-    private fun verFotoGrande(arquivo: java.io.File) {
+    internal fun verFotoGrande(arquivo: java.io.File) {
         val janela = android.app.Dialog(this, android.R.style.Theme_Black_NoTitleBar_Fullscreen)
         val foto = android.widget.ImageView(this).apply {
             scaleType = android.widget.ImageView.ScaleType.FIT_CENTER
@@ -5120,7 +4342,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
     }
 
     // ----------------------------------------------------------- pesquisa de produto pela foto (como o Google Lens)
-    private fun pesquisarProdutoDaFoto(foto: Arquivos.Documento, pedido: String) {
+    internal fun pesquisarProdutoDaFoto(foto: Arquivos.Documento, pedido: String) {
         val bytes = foto.bytes ?: return
         val k = chave()
         val m = modelo()
@@ -5163,7 +4385,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         }
     }
 
-    private fun abrirLink(url: String) {
+    internal fun abrirLink(url: String) {
         try {
             startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
         } catch (e: ActivityNotFoundException) {
@@ -5172,7 +4394,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
     }
 
     /** Sobe a foto (endereço público da loja) e abre a busca por imagem do Google Lens. */
-    private fun abrirNoLens(bytes: ByteArray) {
+    internal fun abrirNoLens(bytes: ByteArray) {
         Toast.makeText(this, "Abrindo no Google Lens…", Toast.LENGTH_SHORT).show()
         Thread {
             val url = try {
@@ -5188,7 +4410,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
     }
 
     /** Resposta com endereços clicáveis (fala sem ler os links). */
-    private fun responderComLinks(texto: String) {
+    internal fun responderComLinks(texto: String) {
         val balao = adicionarMensagem(texto, false)
         android.text.util.Linkify.addLinks(balao, android.text.util.Linkify.WEB_URLS)
         balao.setLinkTextColor(corAtual)
@@ -5197,7 +4419,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
     }
 
     /** Botõezinhos de sugestão no chat (no lugar das caixas de pergunta). */
-    private fun mostrarSugestoes(opcoes: List<Pair<String, () -> Unit>>) {
+    internal fun mostrarSugestoes(opcoes: List<Pair<String, () -> Unit>>) {
         if (opcoes.isEmpty()) return
         val linha = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -5225,17 +4447,17 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         rolarParaBaixo()
     }
 
-    private val PEDE_NOTA = Regex("\\b(?:nota (?:de compra|fiscal)|lanca|lancar|lance|compra do fornecedor|soma(?:r)? (?:ao|no) estoque|entrada de estoque)\\b")
-    private val PEDE_PRECO = Regex(
+    internal val PEDE_NOTA = Regex("\\b(?:nota (?:de compra|fiscal)|lanca|lancar|lance|compra do fornecedor|soma(?:r)? (?:ao|no) estoque|entrada de estoque)\\b")
+    internal val PEDE_PRECO = Regex(
         "\\b(?:pesquis\\w*|procur\\w*|encontr\\w*|ach(?:a|e|ar)|quanto (?:custa|sai|vale|ta|esta)|preco|precos|valor(?:es)?|onde (?:compr\\w*|vende\\w*|acho)|compar\\w*|mais barato|lens|link)\\b"
     )
-    private val PEDE_FUNDO = Regex("\\b(?:fundo|tira(?:r)? o fundo|troca(?:r)? o fundo|recort(?:a|ar|e))\\b")
+    internal val PEDE_FUNDO = Regex("\\b(?:fundo|tira(?:r)? o fundo|troca(?:r)? o fundo|recort(?:a|ar|e))\\b")
 
     /**
      * Envia os anexos com o seu pedido (ou sem nada: ela entende sozinha o que é cada arquivo).
      * Pedidos de loja com foto vão direto para a tela certa (cadastro, nota de compra, fundo).
      */
-    private fun enviarComAnexos(texto: String) {
+    internal fun enviarComAnexos(texto: String) {
         if (anexos.any { it.doc == null && it.erro == null }) {
             mudarEstado(Orbe.Estado.PENSANDO, "CARREGANDO OS ANEXOS…")
             principal.postDelayed({ enviarComAnexos(texto) }, 500)
@@ -5260,7 +4482,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         lerAnexos(docs, texto)
     }
 
-    private fun lerAnexos(docs: List<Arquivos.Documento>, texto: String) {
+    internal fun lerAnexos(docs: List<Arquivos.Documento>, texto: String) {
         val k = chave()
         val m = modelo()
         if (docs.any { it.bytes != null } && (k.isBlank() || modoIndependente())) {
@@ -5303,7 +4525,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
     }
 
     /** Abre o arquivo, manda ao Gemini e mostra o resumo; boleto vira lembrete e nota vira compra, se você quiser. */
-    private fun abrirDocumento(uri: Uri, avisado: Boolean = false) {
+    internal fun abrirDocumento(uri: Uri, avisado: Boolean = false) {
         if (chave().isBlank() || modoIndependente()) {
             responder("Para ler arquivos eu uso o Gemini. Configure a chave do Gemini e deixe o modo independente desligado.")
             return
@@ -5348,7 +4570,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         }
     }
 
-    private fun oferecerAcoesDoDocumento(doc: Arquivos.Documento, a: Gemini.Analise) {
+    internal fun oferecerAcoesDoDocumento(doc: Arquivos.Documento, a: Gemini.Analise) {
         when {
             a.tipo == "boleto" && (a.vencimento != null || a.linhaDigitavel != null) -> {
                 val opcoes = mutableListOf<Pair<String, () -> Unit>>()
@@ -5378,7 +4600,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         }
     }
 
-    private fun lerNotaDoDocumento(doc: Arquivos.Documento) {
+    internal fun lerNotaDoDocumento(doc: Arquivos.Documento) {
         val bytes = doc.bytes ?: return
         val k = chave()
         val m = modelo()
@@ -5398,7 +4620,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         }
     }
 
-    private fun perguntarAoDocumento(pergunta: String) {
+    internal fun perguntarAoDocumento(pergunta: String) {
         val docs = documentosAtivos().ifEmpty { return responder("Nenhum arquivo aberto. Toque no + para anexar fotos ou arquivos.") }
         documentoQuando = System.currentTimeMillis()
         val k = chave()
@@ -5419,7 +4641,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
 
     // ----------------------------------------------------------- nota de compra
     /** Lê a nota (foto ou print), mostra cada item ligado a um produto e, com a confirmação, soma ao estoque e salva o custo. */
-    private fun lerNota(uri: Uri?) {
+    internal fun lerNota(uri: Uri?) {
         if (!ferramentas.loja.conectada) {
             responder("A loja ainda não está conectada. Abra os ajustes e toque em Conectar à loja.")
             return
@@ -5464,7 +4686,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         }
     }
 
-    private fun confirmarCompra(itens: List<Loja.ItemDeCompra>, produtos: List<Loja.Produto>) {
+    internal fun confirmarCompra(itens: List<Loja.ItemDeCompra>, produtos: List<Loja.Produto>) {
         val podeCusto = produtos.any { it.bruto?.has(Loja.CAMPO_CUSTO) == true }
         val opcoes = listOf("— ignorar este item —") + produtos.sortedBy { it.nome }.map { it.nome }
         val ordenados = produtos.sortedBy { it.nome }
@@ -5546,7 +4768,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
     }
 
     /** Foto recebida pelo "Compartilhar" de outro app. */
-    private fun fotoCompartilhada(uri: Uri) {
+    internal fun fotoCompartilhada(uri: Uri) {
         AlertDialog.Builder(this)
             .setTitle("O que fazer com a foto?")
             .setItems(arrayOf("Ler nota de compra (custo e estoque)", "Trocar o fundo", "Cadastrar produto com esta foto")) { _, qual ->
@@ -5569,10 +4791,10 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
     }
 
     // ----------------------------------------------------------- atualização automática
-    private val atualizador by lazy { Atualizador(this) }
+    internal val atualizador by lazy { Atualizador(this) }
 
     /** Procura versão nova. Automática (ao abrir, no máximo a cada 6 h e sem incomodar) ou pelo menu. */
-    private fun procurarAtualizacao(manual: Boolean) {
+    internal fun procurarAtualizacao(manual: Boolean) {
         if (!manual && (atualizador.procurouRecentemente() || !atualizador.temToken)) return
         if (manual) Toast.makeText(this, "Procurando atualização…", Toast.LENGTH_SHORT).show()
         Thread {
@@ -5604,7 +4826,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         }.start()
     }
 
-    private fun oferecerAtualizacao(v: Atualizador.Versao) {
+    internal fun oferecerAtualizacao(v: Atualizador.Versao) {
         val novidades = v.notas.ifBlank { "Melhorias e correções." }
         if (v.ehRobo) {
             AlertDialog.Builder(this)
@@ -5623,7 +4845,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
             .show()
     }
 
-    private fun instalarAtualizacao(v: Atualizador.Versao) {
+    internal fun instalarAtualizacao(v: Atualizador.Versao) {
         val aviso = TextView(this).apply {
             text = "Baixando… 0%"
             setPadding(dp(24), dp(16), dp(24), dp(8))
@@ -5650,7 +4872,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
     }
 
     /** O Android avisa como foi a instalação; quando precisa da confirmação, abre a tela dele. */
-    private fun resultadoDaInstalacao(intent: Intent) {
+    internal fun resultadoDaInstalacao(intent: Intent) {
         when (intent.getIntExtra(android.content.pm.PackageInstaller.EXTRA_STATUS, -999)) {
             android.content.pm.PackageInstaller.STATUS_PENDING_USER_ACTION -> {
                 @Suppress("DEPRECATION")
@@ -5678,7 +4900,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         }
     }
 
-    private fun pedirTokenDoGithub(motivo: String?) {
+    internal fun pedirTokenDoGithub(motivo: String?) {
         val campo = campoDeDialogo("", "Cole o token aqui (github_pat_…)")
         AlertDialog.Builder(this)
             .setTitle("Token do GitHub")
@@ -5705,7 +4927,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
             .show()
     }
 
-    private fun conectarLoja() {
+    internal fun conectarLoja() {
         val loja = ferramentas.loja
         if (loja.conectada) {
             AlertDialog.Builder(this)
@@ -5761,7 +4983,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
             .show()
     }
 
-    private fun pedirChave() {
+    internal fun pedirChave() {
         val entrada = campoSecreto(chave(), "Cole aqui sua chave")
         AlertDialog.Builder(this)
             .setTitle("Chave do Gemini")
@@ -5786,7 +5008,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
             .show()
     }
 
-    private fun pedirModelo() {
+    internal fun pedirModelo() {
         val entrada = campoDeDialogo(modelo(), MODELO_PADRAO)
         AlertDialog.Builder(this)
             .setTitle("Modelo do Gemini")
@@ -5805,11 +5027,11 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
     }
 
     /** Campo de chave: aparece em pontinhos (para colar a nova, apague e cole por cima). */
-    private fun campoSecreto(valor: String, dica: String) = campoDeDialogo(valor, dica).apply {
+    internal fun campoSecreto(valor: String, dica: String) = campoDeDialogo(valor, dica).apply {
         inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
     }
 
-    private fun campoDeDialogo(valor: String, dica: String) = EditText(this).apply {
+    internal fun campoDeDialogo(valor: String, dica: String) = EditText(this).apply {
         setText(valor)
         hint = dica
         setSingleLine(true)
@@ -5819,58 +5041,58 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
 
     companion object {
         const val ACAO_OUVIR = "com.tonimarques.sextafeira.OUVIR"
-        private const val PEDIDO_VOZ = 10
-        private const val PEDIDO_MICROFONE = 11
-        private const val PEDIDO_NOTIFICACOES = 12
-        private const val PEDIDO_FOTO_CAMERA = 40
-        private const val PEDIDO_FOTO_GALERIA = 41
-        private const val PEDIDO_ARQUIVO = 42
-        private const val PEDIDO_ANEXO_FOTOS = 43
-        private const val MAXIMO_ANEXOS = 10
-        private const val PREF_AVISO_ARQUIVOS = "aviso_arquivos"
-        private const val LIMITE_IA_MS = 35_000L
-        private const val LIMITE_IA_PROFUNDO_MS = 90_000L
-        private const val ID_AMOSTRA = "amostra"
-        private const val MODELO_PADRAO = "gemini-flash-latest"
-        private const val STATUS_PADRAO = "TOQUE NO ORBE PARA FALAR"
-        private val STATUS_VIGILIA = "DIGA “${Marca.nomeMaiusculo}, ATIVAR”"
+        internal const val PEDIDO_VOZ = 10
+        internal const val PEDIDO_MICROFONE = 11
+        internal const val PEDIDO_NOTIFICACOES = 12
+        internal const val PEDIDO_FOTO_CAMERA = 40
+        internal const val PEDIDO_FOTO_GALERIA = 41
+        internal const val PEDIDO_ARQUIVO = 42
+        internal const val PEDIDO_ANEXO_FOTOS = 43
+        internal const val MAXIMO_ANEXOS = 10
+        internal const val PREF_AVISO_ARQUIVOS = "aviso_arquivos"
+        internal const val LIMITE_IA_MS = 35_000L
+        internal const val LIMITE_IA_PROFUNDO_MS = 90_000L
+        internal const val ID_AMOSTRA = "amostra"
+        internal const val MODELO_PADRAO = "gemini-flash-latest"
+        internal const val STATUS_PADRAO = "TOQUE NO ORBE PARA FALAR"
+        internal val STATUS_VIGILIA = "DIGA “${Marca.nomeMaiusculo}, ATIVAR”"
 
-        private const val PREF_CHAVE = "chave"
-        private const val PREF_MODELO = "modelo"
-        private const val PREF_FALAR = "falar"
-        private const val PREF_CONTINUA = "continua"
-        private const val PREF_INTERROMPER = "interromper"
-        private const val PREF_VIGILIA = "vigilia"
-        private const val PREF_PEDIU_MIC = "pediu_mic"
-        private const val PREF_VOZ = "voz"
-        private const val PREF_VELOCIDADE = "velocidade"
-        private const val PREF_TOM = "tom"
+        internal const val PREF_CHAVE = "chave"
+        internal const val PREF_MODELO = "modelo"
+        internal const val PREF_FALAR = "falar"
+        internal const val PREF_CONTINUA = "continua"
+        internal const val PREF_INTERROMPER = "interromper"
+        internal const val PREF_VIGILIA = "vigilia"
+        internal const val PREF_PEDIU_MIC = "pediu_mic"
+        internal const val PREF_VOZ = "voz"
+        internal const val PREF_VELOCIDADE = "velocidade"
+        internal const val PREF_TOM = "tom"
 
-        private const val MENU_CHAVE = 1
-        private const val MENU_MODELO = 2
-        private const val MENU_FALAR = 3
-        private const val MENU_CONTINUA = 4
-        private const val MENU_INTERROMPER = 40
-        private const val MENU_NOVA = 5
-        private const val MENU_DIAGNOSTICO = 6
-        private const val MENU_VIGILIA = 7
-        private const val MENU_VOZ = 8
-        private const val MENU_AJUSTE_VOZ = 9
-        private const val MENU_HISTORICO = 10
-        private const val MENU_MEMORIAS = 11
-        private const val MENU_FUNDO = 12
-        private const val MENU_ASSISTENTE = 13
-        private const val MENU_INDEPENDENTE = 14
-        private const val MENU_MUSICA = 15
-        private const val MENU_GESTO = 16
-        private const val MENU_TELA_APAGADA = 17
-        private const val PREF_INDEPENDENTE = "modo_independente"
-        private const val PREF_OFERECEU_VOZ = "ofereceu_voz_offline"
-        private const val PREF_FUNDO = "vigilia_fundo"
+        internal const val MENU_CHAVE = 1
+        internal const val MENU_MODELO = 2
+        internal const val MENU_FALAR = 3
+        internal const val MENU_CONTINUA = 4
+        internal const val MENU_INTERROMPER = 40
+        internal const val MENU_NOVA = 5
+        internal const val MENU_DIAGNOSTICO = 6
+        internal const val MENU_VIGILIA = 7
+        internal const val MENU_VOZ = 8
+        internal const val MENU_AJUSTE_VOZ = 9
+        internal const val MENU_HISTORICO = 10
+        internal const val MENU_MEMORIAS = 11
+        internal const val MENU_FUNDO = 12
+        internal const val MENU_ASSISTENTE = 13
+        internal const val MENU_INDEPENDENTE = 14
+        internal const val MENU_MUSICA = 15
+        internal const val MENU_GESTO = 16
+        internal const val MENU_TELA_APAGADA = 17
+        internal const val PREF_INDEPENDENTE = "modo_independente"
+        internal const val PREF_OFERECEU_VOZ = "ofereceu_voz_offline"
+        internal const val PREF_FUNDO = "vigilia_fundo"
         const val ACAO_ATIVAR = "com.tonimarques.sextafeira.ATIVAR"
         const val ACAO_PEDIDO = "com.tonimarques.sextafeira.PEDIDO"
         const val EXTRA_PEDIDO = "pedido"
 
-        private val COR_TEXTO_APAGADO = Color.parseColor("#6B769A")
+        internal val COR_TEXTO_APAGADO = Color.parseColor("#6B769A")
     }
     }
