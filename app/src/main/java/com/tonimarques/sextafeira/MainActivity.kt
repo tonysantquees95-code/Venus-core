@@ -4043,6 +4043,71 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
             .show()
     }
 
+    private fun escolherPlataforma() {
+        val tipos = Plataformas.TIPOS
+        AlertDialog.Builder(this)
+            .setTitle("Onde fica a sua loja?")
+            .setItems(tipos.map { it.nome }.toTypedArray()) { _, i -> configurarPlataforma(tipos[i]) }
+            .setNegativeButton("Cancelar", null)
+            .show()
+    }
+
+    private fun configurarPlataforma(t: Plataformas.Tipo) {
+        if (t.id == "floot") {
+            Plataformas.salvar(this, Plataformas.Config("floot", "", "", "", ""))
+            ajustes?.atualizar()
+            return responder("Loja no Floot. Para conectar, toque em Conectar à loja e entre com o login de administrador do site.")
+        }
+        val atual = Plataformas.config(this).takeIf { it.tipo == t.id }
+        val caixa = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(20), dp(8), dp(20), 0)
+        }
+        val endereco = campoDeDialogo(atual?.endereco?.removePrefix("https://").orEmpty(),
+            if (t.id == "shopify") "Endereço da loja (ex.: minhaloja.myshopify.com)" else "Endereço do site (ex.: minhaloja.com.br)")
+        val chave = campoDeDialogo("", if (atual?.chave.isNullOrBlank()) when (t.id) {
+            "shopify" -> "Token da Admin API (shpat_…)"
+            "woocommerce" -> "Chave (ck_…)"
+            else -> "Token de acesso"
+        } else "Chave salva (deixe vazio para manter)")
+        val segredo = campoDeDialogo("", if (atual?.segredo.isNullOrBlank()) "Segredo (cs_…)" else "Segredo salvo (deixe vazio para manter)")
+        val lojaId = campoDeDialogo(atual?.lojaId.orEmpty(), "Número da loja (user_id)").apply { inputType = InputType.TYPE_CLASS_NUMBER }
+        if (t.id != "nuvemshop") caixa.addView(endereco)
+        caixa.addView(chave)
+        if (t.id == "woocommerce") caixa.addView(segredo)
+        if (t.id == "nuvemshop") caixa.addView(lojaId)
+        AlertDialog.Builder(this)
+            .setTitle(t.nome)
+            .setMessage(t.ajuda)
+            .setView(caixa)
+            .setPositiveButton("Salvar e testar") { _, _ ->
+                val c = Plataformas.Config(
+                    t.id, endereco.text.toString(),
+                    chave.text.toString().ifBlank { atual?.chave.orEmpty() },
+                    segredo.text.toString().ifBlank { atual?.segredo.orEmpty() },
+                    lojaId.text.toString(),
+                )
+                Plataformas.salvar(this, c)
+                ajustes?.atualizar()
+                responder("Testando a ${t.nome}…")
+                Thread {
+                    val r = try {
+                        val l = Loja(this)
+                        Result.success("${l.produtos().size} produtos e ${l.pedidos().size} pedidos recentes")
+                    } catch (e: Exception) {
+                        Result.failure(e)
+                    }
+                    runOnUiThread {
+                        r.onSuccess { responder("Conectei na ${t.nome}: $it. Agora pergunte, por exemplo: como foram as vendas hoje?") }
+                            .onFailure { responder("Não consegui conectar na ${t.nome}: ${it.message}") }
+                        ajustes?.atualizar()
+                    }
+                }.start()
+            }
+            .setNegativeButton("Cancelar", null)
+            .show()
+    }
+
     private fun pedirCloudflare() {
         val caixa = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL

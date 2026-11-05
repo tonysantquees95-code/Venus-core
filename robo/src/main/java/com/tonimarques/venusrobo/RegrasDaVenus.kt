@@ -11,7 +11,7 @@ import org.json.JSONArray
  */
 object RegrasDaVenus {
 
-    private val ENDERECO: Uri = Uri.parse("content://com.tonimarques.sextafeira.regras")
+    private val ENDERECO: Uri by lazy { Uri.parse("content://com.tonimarques.sextafeira.regras") }
 
     data class Regras(val loja: String, val texto: String, val respostas: Map<String, String>, val configuradas: Boolean)
 
