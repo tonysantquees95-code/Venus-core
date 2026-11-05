@@ -56,7 +56,7 @@ object Instagram {
         if (token.length < 40) throw ErroDoInstagram("Isso não parece um token. Ele é um texto comprido que começa com IG ou EAA.")
         val conta = if (ehFacebook(token)) contaPeloFacebook(token) else conta(pedir("GET", "/me", mapOf("fields" to "user_id,username,account_type"), token))
         prefs(ctx).edit()
-            .putString("token", token).putString("id", conta.id).putString("usuario", conta.usuario)
+            .putString("token", Cofre.selar(token)).putString("id", conta.id).putString("usuario", conta.usuario)
             .putLong("token_desde", System.currentTimeMillis())
             .remove("site_token")
             .apply()
@@ -71,7 +71,7 @@ object Instagram {
      */
     fun sincronizarComSite(ctx: Context): Boolean {
         val p = prefs(ctx)
-        val token = p.getString("token", null) ?: return false
+        val token = Cofre.ler(p, "token").ifBlank { null } ?: return false
         val id = p.getString("id", null) ?: return false
         val marca = token.hashCode().toString() + ":" + id
         if (p.getString("site_token", null) == marca) return true
@@ -119,7 +119,7 @@ object Instagram {
     /** Token e id da conta, renovando o token quando passa de 7 dias (vale 60). */
     private fun credenciais(ctx: Context): Pair<String, String> {
         val p = prefs(ctx)
-        var token = p.getString("token", null) ?: throw ErroDoInstagram(SEM_CONTA)
+        var token = Cofre.ler(p, "token").ifBlank { null } ?: throw ErroDoInstagram(SEM_CONTA)
         val id = p.getString("id", null) ?: throw ErroDoInstagram(SEM_CONTA)
         val desde = p.getLong("token_desde", 0)
         if (!ehFacebook(token) && System.currentTimeMillis() - desde > 7 * 24 * 3600_000L) {
@@ -127,7 +127,7 @@ object Instagram {
                 val r = pedir("GET", "/refresh_access_token", mapOf("grant_type" to "ig_refresh_token"), token)
                 r.optString("access_token").takeIf { it.isNotBlank() }?.let {
                     token = it
-                    p.edit().putString("token", it).putLong("token_desde", System.currentTimeMillis()).apply()
+                    p.edit().putString("token", Cofre.selar(it)).putLong("token_desde", System.currentTimeMillis()).apply()
                     sincronizarComSite(ctx)
                 }
             } catch (e: ErroDoInstagram) {

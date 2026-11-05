@@ -11,6 +11,7 @@ import java.net.URL
 class VenusApp : Application() {
     override fun onCreate() {
         super.onCreate()
+        Perfil.carregar(this)
         SegundaIA.iniciar(this)
     }
 }
@@ -75,9 +76,9 @@ object SegundaIA {
         return PROVEDORES.firstOrNull { it.id == id } ?: PROVEDORES.first()
     }
 
-    fun chave(c: Context? = ctx): String = c?.getSharedPreferences(PREFS, Context.MODE_PRIVATE)?.getString("reserva_chave", "").orEmpty()
+    fun chave(c: Context? = ctx): String = c?.getSharedPreferences(PREFS, Context.MODE_PRIVATE)?.let { Cofre.ler(it, "reserva_chave") }.orEmpty()
 
-    fun chaveCloudflare(c: Context? = ctx): String = c?.getSharedPreferences(PREFS, Context.MODE_PRIVATE)?.getString("cloudflare_chave", "").orEmpty()
+    fun chaveCloudflare(c: Context? = ctx): String = c?.getSharedPreferences(PREFS, Context.MODE_PRIVATE)?.let { Cofre.ler(it, "cloudflare_chave") }.orEmpty()
     fun contaCloudflare(c: Context? = ctx): String = c?.getSharedPreferences(PREFS, Context.MODE_PRIVATE)?.getString("cloudflare_conta", "").orEmpty()
 
     /** Aceita o código da conta sozinho ou colado junto com o endereço (…/accounts/CODIGO/ai/…). */
@@ -89,7 +90,7 @@ object SegundaIA {
 
     fun salvarCloudflare(c: Context, conta: String, chave: String) {
         c.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
-            .putString("cloudflare_conta", lerContaCloudflare(conta)).putString("cloudflare_chave", Instagram.limparToken(chave))
+            .putString("cloudflare_conta", lerContaCloudflare(conta)).putString("cloudflare_chave", Cofre.selar(Instagram.limparToken(chave)))
             .remove("cerebras_chave").apply()
         modeloQueFunciona.remove(CLOUDFLARE.id)
         modeloQueFunciona.remove(CLOUDFLARE.id + ":visao")
@@ -120,7 +121,7 @@ object SegundaIA {
     }
 
     fun salvar(c: Context, provedor: String, chave: String) {
-        c.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putString("reserva_provedor", provedor).putString("reserva_chave", chave.trim()).apply()
+        c.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putString("reserva_provedor", provedor).putString("reserva_chave", Cofre.selar(chave.trim())).apply()
         modeloQueFunciona.clear()
         Diario.anotar(c, "conexao", if (chave.isBlank()) "IA reserva desligada" else "IA reserva configurada: ${PROVEDORES.firstOrNull { it.id == provedor }?.nome ?: provedor}", "voz")
     }

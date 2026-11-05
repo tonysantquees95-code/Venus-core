@@ -141,7 +141,7 @@ object Estudo {
     fun estudar(ctx: Context, forcar: Boolean = false, prazo: Long = Long.MAX_VALUE, parar: () -> Boolean = { false }): Resumo? {
         if (!forcar && !ligado(ctx)) return null
         val config = ctx.getSharedPreferences("config", Context.MODE_PRIVATE)
-        val chave = config.getString("chave", "").orEmpty()
+        val chave = Cofre.ler(config, "chave")
         val modelo = config.getString("modelo", "").orEmpty().ifBlank { "gemini-flash-latest" }
         if (chave.isBlank()) return null
         if (!trava.compareAndSet(false, true)) return null
@@ -411,7 +411,7 @@ object Estudo {
 
     // ------------------------------------------------------------------ pedidos ao Gemini
     fun pedidoDeFrases(jaConhecidas: List<String>): String =
-        "Você treina a Vênus, assistente de voz em português do Brasil do Toni, dono da loja online Desejo de Intimidade. " +
+        "Você treina a Vênus, assistente de voz em português do Brasil do ${Perfil.dono}, dono da loja online ${Perfil.loja}. " +
             "Ações que ela executa (nome: para que serve | argumentos):\n" +
             Roteador.ACOES.joinToString("\n") { "- ${it.first}: ${it.second}" + if (it.third.isNotBlank()) " | ${it.third}" else "" } +
             "\n\nEscreva exatamente $FRASES_POR_DIA frases DIFERENTES que um brasileiro falaria de verdade para pedir essas ações: " +
@@ -434,7 +434,7 @@ object Estudo {
             perguntas.mapIndexed { i, p -> "${i + 1}. $p" }.joinToString("\n")
 
     fun pedidoDeVoz(jaConhecidas: List<String>): String =
-        "Você treina a Vênus, assistente de voz do Toni (Porto Alegre, RS). Ações que ela executa:\n" +
+        "Você treina a Vênus, assistente de voz do ${Perfil.dono} (${Perfil.cidade}, ${Perfil.uf}). Ações que ela executa:\n" +
             Roteador.ACOES.joinToString("\n") { "- ${it.first}: ${it.second}" + if (it.third.isNotBlank()) " | ${it.third}" else "" } +
             "\n\nEscreva exatamente $VOZ_POR_DIA pedidos para essas ações do jeito que chegam ERRADOS ou informais: " +
             "erros comuns do reconhecimento de voz em português (palavras trocadas por outras de som parecido, falta de acento, " +
@@ -445,7 +445,7 @@ object Estudo {
             "Responda só com JSON: {\"frases\":[{\"frase\":\"...\",\"acao\":\"nome\",\"args\":{}}]}"
 
     fun pedidoDeClientes(catalogo: String, foco: String, jaConhecidas: List<String>): String =
-        "Você treina a atendente virtual da Desejo de Intimidade, sex shop online de Porto Alegre (site ${Loja.SITE}). " +
+        "Você treina a atendente virtual da ${Perfil.loja}, sex shop online de ${Perfil.cidade} (site ${Loja.SITE}). " +
             "Dados da loja (produto | preço | preço no Pix | estoque | link):\n$catalogo\n" +
             "No Pix há 5% de desconto. Compras pelo site; atendimento também pelo WhatsApp.\n\n" +
             "Escreva exatamente ${CLIENTES_POR_DIA / 2} perguntas DIFERENTES que clientes mandam de verdade no WhatsApp ou no Instagram, $foco. " +
@@ -466,7 +466,7 @@ object Estudo {
             pares.mapIndexed { i, (p, r) -> "${i + 1}. Pergunta: $p\n   Resposta: $r" }.joinToString("\n")
 
     fun pedidoDeObjecoes(jaConhecidas: List<String>): String =
-        "Você treina a atendente virtual de uma sex shop online (Desejo de Intimidade). Escreva exatamente $OBJECOES_POR_DIA objeções " +
+        "Você treina a atendente virtual de uma sex shop online (${Perfil.loja}). Escreva exatamente $OBJECOES_POR_DIA objeções " +
             "DIFERENTES que clientes falam antes de comprar (preço, vergonha, medo de alguém ver a encomenda, dúvida se funciona, " +
             "primeira vez, parceiro(a) não sabe, vou pensar, achei mais barato em outro lugar, e se não gostar) e para cada uma a melhor resposta: " +
             "acolhedora, respeitosa, sem pressão e sem julgamento, em até 3 frases, no máximo 1 emoji. Não invente preços, descontos, " +
@@ -475,7 +475,7 @@ object Estudo {
             "Responda só com JSON: {\"objecoes\":[{\"objecao\":\"...\",\"resposta\":\"...\"}]}"
 
     fun pedidoDeIdeias(datas: String, produtos: String, jaFeitas: List<String>, hoje: String): String =
-        "Hoje é $hoje. Você é social media da Desejo de Intimidade, sex shop online de Porto Alegre (Instagram da loja). " +
+        "Hoje é $hoje. Você é social media da ${Perfil.loja}, sex shop online de ${Perfil.cidade} (Instagram da loja). " +
             "$datas\n" + (if (produtos.isNotBlank()) "Produtos à venda: $produtos\n" else "") +
             "Crie exatamente $IDEIAS_POR_SEMANA ideias de post para as próximas semanas, aproveitando as datas e os produtos: " +
             "variadas (feed, story, reels), elegantes, sem nudez nem linguagem explícita (regras do Instagram). " +
@@ -484,21 +484,21 @@ object Estudo {
             "Responda só com JSON: {\"ideias\":[{\"titulo\":\"...\",\"quando\":\"...\",\"formato\":\"feed|story|reels\",\"legenda\":\"...\"}]}"
 
     fun pedidoDeLicoes(msgs: List<Memoria.Mensagem>, erros: List<String>, jaSabidas: List<String>): String =
-        "Você ajuda a Vênus, a assistente pessoal e comercial do Toni (app Android), a aprender com os próprios erros. " +
+        "Você ajuda a Vênus, a assistente pessoal e comercial do ${Perfil.dono} (app Android), a aprender com os próprios erros. " +
             "Leia as conversas e os erros abaixo e escreva até $LICOES_MAXIMO lições NOVAS para ela seguir daqui para frente.\n" +
-            "Cada lição: uma regra curta e geral, no imperativo, em até 25 palavras (ex.: \"Quando o Toni pedir preço de concorrente, pesquise antes de responder\"), " +
+            "Cada lição: uma regra curta e geral, no imperativo, em até 25 palavras (ex.: \"Quando o ${Perfil.dono} pedir preço de concorrente, pesquise antes de responder\"), " +
             "e o porquê em uma frase, citando o que aconteceu. Só lições que mudam o comportamento dela; nada óbvio, nada sobre um caso único. " +
             "Se nada deu errado, devolva a lista vazia.\n" +
             (if (jaSabidas.isNotEmpty()) "Ela já segue estas (não repita nem contradiga sem motivo):\n" + jaSabidas.joinToString("\n") { "- $it" } + "\n" else "") +
             (if (erros.isNotEmpty()) "\nErros registrados no app:\n" + erros.joinToString("\n") { "- $it" } + "\n" else "") +
-            (if (msgs.isNotEmpty()) "\nConversas:\n" + msgs.joinToString("\n") { (if (it.doUsuario) "Toni: " else "Vênus: ") + it.texto.replace('\n', ' ').take(300) } + "\n" else "") +
+            (if (msgs.isNotEmpty()) "\nConversas:\n" + msgs.joinToString("\n") { (if (it.doUsuario) "${Perfil.dono}: " else "Vênus: ") + it.texto.replace('\n', ' ').take(300) } + "\n" else "") +
             "\nResponda só com JSON: {\"licoes\":[{\"licao\":\"...\",\"resposta\":\"o porquê\"}]}"
 
     fun pedidoDeSaberes(area: String, jaConhecidas: List<String>): String =
-        "Você monta o estudo diário da Vênus, assistente pessoal e comercial do Toni: ele mora em Porto Alegre, trabalha num hotel " +
-            "e tem a Desejo de Intimidade, loja online de produtos para o bem-estar íntimo, e faz tudo pelo celular Android.\n" +
+        "Você monta o estudo diário da Vênus, assistente pessoal e comercial do ${Perfil.dono}: ele mora em ${Perfil.cidade}, trabalha num hotel " +
+            "e tem a ${Perfil.loja}, loja online de produtos para o bem-estar íntimo, e faz tudo pelo celular Android.\n" +
             "Área de hoje: $area.\n" +
-            "Escreva exatamente $SABERES_POR_DIA perguntas DIFERENTES que o Toni poderia fazer sobre essa área, úteis na vida ou no negócio dele, " +
+            "Escreva exatamente $SABERES_POR_DIA perguntas DIFERENTES que o ${Perfil.dono} poderia fazer sobre essa área, úteis na vida ou no negócio dele, " +
             "cada uma com uma resposta correta, prática e curta (até 3 frases), em português do Brasil. " +
             "Só conhecimento que não muda com o tempo: nada de preços, valores de impostos, datas futuras, notícias ou leis recentes. " +
             "Sem orientação médica, jurídica ou financeira individual; em saúde, termine indicando procurar um profissional quando fizer sentido. " +
@@ -514,11 +514,11 @@ object Estudo {
             pares.mapIndexed { i, (p, r) -> "${i + 1}. Pergunta: $p\n   Resposta: $r" }.joinToString("\n")
 
     fun pedidoDeRevisao(msgs: List<Memoria.Mensagem>): String =
-        "Você revisa as conversas do Toni com a Vênus, a assistente de voz dele, para ela aprender com os erros. Ações que ela executa:\n" +
+        "Você revisa as conversas do ${Perfil.dono} com a Vênus, a assistente de voz dele, para ela aprender com os erros. Ações que ela executa:\n" +
             Roteador.ACOES.joinToString("\n") { "- ${it.first}: ${it.second}" + if (it.third.isNotBlank()) " | ${it.third}" else "" } +
-            "\n\nConversas:\n" + msgs.joinToString("\n") { (if (it.doUsuario) "Toni: " else "Vênus: ") + it.texto.replace('\n', ' ').take(300) } +
+            "\n\nConversas:\n" + msgs.joinToString("\n") { (if (it.doUsuario) "${Perfil.dono}: " else "Vênus: ") + it.texto.replace('\n', ' ').take(300) } +
             "\n\nAche até $REVISAO_MAXIMO momentos em que a Vênus entendeu errado, não soube fazer, disse que não conseguiu, " +
-            "ou o Toni teve que repetir ou corrigir. Para cada um: a frase do Toni exatamente como ele disse; se era um pedido de ação, " +
+            "ou o ${Perfil.dono} teve que repetir ou corrigir. Para cada um: a frase do ${Perfil.dono} exatamente como ele disse; se era um pedido de ação, " +
             "a ação certa da lista e os argumentos ditos; se era uma pergunta de conhecimento geral que não muda com o tempo, " +
             "uma resposta certa e curta (senão deixe vazia). Ignore o que ela fez certo e o que nenhuma ação resolve. " +
             "Responda só com JSON: {\"correcoes\":[{\"frase\":\"...\",\"acao\":\"nome ou vazio\",\"args\":{},\"resposta\":\"\"}]}"

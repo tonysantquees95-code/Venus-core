@@ -37,6 +37,8 @@ class Atualizador(private val contexto: Context) {
         val numero: Int, val tag: String, val urlApi: String, val urlPublica: String, val tamanho: Long, val notas: String,
         /** Qual app esta versão atualiza (vazio = a própria Vênus). */
         val pacote: String = "",
+        /** Impressão digital SHA-256 que o GitHub publica para o arquivo (vazio = o GitHub não informou). */
+        val sha256: String = "",
     ) {
         val ehRobo get() = pacote == PACOTE_ROBO
     }
@@ -116,6 +118,7 @@ class Atualizador(private val contexto: Context) {
     /** Baixa o APK e pede ao Android para instalar. [progresso] recebe de 0 a 100. */
     fun baixarEInstalar(v: Versao, progresso: (Int) -> Unit) {
         val conexao = baixar(v)
+        val resumo = java.security.MessageDigest.getInstance("SHA-256")
         val instalador = contexto.packageManager.packageInstaller
         val params = PackageInstaller.SessionParams(PackageInstaller.SessionParams.MODE_FULL_INSTALL).apply {
             setAppPackageName(v.pacote.ifBlank { contexto.packageName })
@@ -133,6 +136,7 @@ class Atualizador(private val contexto: Context) {
                             val n = entrada.read(buffer)
                             if (n < 0) break
                             saida.write(buffer, 0, n)
+                            resumo.update(buffer, 0, n)
                             lidos += n
                             val pct = if (total > 0) ((lidos * 100) / total).toInt().coerceIn(0, 100) else 0
                             if (pct != ultimo) {
@@ -143,6 +147,9 @@ class Atualizador(private val contexto: Context) {
                     }
                     sessao.fsync(saida)
                 }
+                // confere se o arquivo é exatamente o publicado (nada trocado no caminho)
+                val baixado = resumo.digest().joinToString("") { "%02x".format(it) }
+                if (!conferir(v.sha256, baixado)) throw ErroDeAtualizacao("O arquivo baixado não confere com o publicado. Cancelei a instalação por segurança.")
                 // O Android devolve o resultado para a MainActivity, que abre a tela "Instalar?"
                 val volta = Intent(contexto, MainActivity::class.java).setAction(ACAO_INSTALAR)
                     .putExtra(EXTRA_ROBO, v.ehRobo).putExtra(EXTRA_VERSAO, v.numero)
@@ -238,6 +245,13 @@ class Atualizador(private val contexto: Context) {
         /** "1.38", "v1.38" → 38. */
         fun numeroDaVersao(texto: String): Int? = Regex("^v?1\\.(\\d+)").find(texto.trim())?.groupValues?.get(1)?.toIntOrNull()
 
+        /** O GitHub informa "digest": "sha256:…" em cada arquivo publicado. */
+        fun sha256De(asset: JSONObject): String =
+            asset.optString("digest").takeIf { it.startsWith("sha256:", ignoreCase = true) }?.substringAfter(':')?.trim()?.lowercase().orEmpty()
+
+        /** Sem impressão publicada, aceita (o Android ainda confere a assinatura); com ela, tem que ser igual. */
+        fun conferir(esperado: String, baixado: String): Boolean = esperado.isBlank() || esperado.equals(baixado, ignoreCase = true)
+
         /** "robo-1.112" → 112. */
         fun numeroDoRobo(tag: String): Int? = Regex("^robo-1\\.(\\d+)$").find(tag.trim())?.groupValues?.get(1)?.toIntOrNull()
 
@@ -250,7 +264,7 @@ class Atualizador(private val contexto: Context) {
                 val apk = (0 until assets.length()).mapNotNull { assets.optJSONObject(it) }
                     .firstOrNull { it.optString("name").equals("VenusRobo.apk", ignoreCase = true) } ?: return@mapNotNull null
                 Versao(numero, r.optString("tag_name"), apk.optString("url"), apk.optString("browser_download_url"), apk.optLong("size"),
-                    notas(r.optString("body")), PACOTE_ROBO)
+                    notas(r.optString("body")), PACOTE_ROBO, sha256De(apk))
             }
             .maxByOrNull { it.numero }
 
@@ -266,7 +280,7 @@ class Atualizador(private val contexto: Context) {
                 if (!a.optString("name").endsWith(".apk", ignoreCase = true) || a.optString("name").contains("robo", ignoreCase = true)) continue
                 return Versao(
                     numero, tag, a.optString("url"), a.optString("browser_download_url"), a.optLong("size"),
-                    notas(json.optString("body")),
+                    notas(json.optString("body")), sha256 = sha256De(a),
                 )
             }
             return null

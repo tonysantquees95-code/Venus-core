@@ -25,10 +25,13 @@ android {
 
     signingConfigs {
         create("fixa") {
-            storeFile = file("../app/sexta.keystore")
-            storePassword = "sextafeira"
-            keyAlias = "sexta"
-            keyPassword = "sextafeira"
+            // A chave e as senhas vêm dos segredos do GitHub (ASSINATURA_*). Enquanto eles não existirem,
+            // usa a chave antiga do repositório, para as atualizações continuarem instalando por cima.
+            fun segredo(nome: String) = System.getenv(nome)?.takeIf { it.isNotBlank() }
+            storeFile = segredo("ASSINATURA_ARQUIVO")?.let { file(it) } ?: file("../app/sexta.keystore")
+            storePassword = segredo("ASSINATURA_SENHA") ?: "sextafeira"
+            keyAlias = segredo("ASSINATURA_APELIDO") ?: "sexta"
+            keyPassword = segredo("ASSINATURA_SENHA_CHAVE") ?: segredo("ASSINATURA_SENHA") ?: "sextafeira"
         }
     }
 

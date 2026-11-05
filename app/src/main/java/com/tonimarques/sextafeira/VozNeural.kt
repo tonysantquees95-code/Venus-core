@@ -49,14 +49,14 @@ object VozNeural {
 
     private fun prefs(ctx: Context) = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
-    fun chave(ctx: Context) = prefs(ctx).getString("chave", "").orEmpty()
+    fun chave(ctx: Context) = Cofre.ler(prefs(ctx), "chave")
     fun regiao(ctx: Context) = prefs(ctx).getString("regiao", "brazilsouth").orEmpty().ifBlank { "brazilsouth" }
     fun voz(ctx: Context) = VOZES.firstOrNull { it.id == prefs(ctx).getString("voz", null) } ?: VOZES.first()
     fun estilo(ctx: Context) = ESTILOS.firstOrNull { it.id == prefs(ctx).getString("estilo", null) } ?: ESTILOS.first()
     fun ligada(ctx: Context) = prefs(ctx).getBoolean("ligada", true) && chave(ctx).isNotBlank()
 
     fun salvar(ctx: Context, chave: String, regiao: String, voz: String, estilo: String, ligada: Boolean = true) {
-        prefs(ctx).edit().putString("chave", chave.trim()).putString("regiao", regiao.trim().lowercase().replace(" ", ""))
+        prefs(ctx).edit().putString("chave", Cofre.selar(chave.trim())).putString("regiao", regiao.trim().lowercase().replace(" ", ""))
             .putString("voz", voz).putString("estilo", estilo).putBoolean("ligada", ligada).apply()
         Diario.anotar(ctx, "conexao", if (chave.isBlank() || !ligada) "Voz neural desligada" else "Voz neural: ${VOZES.firstOrNull { it.id == voz }?.nome ?: voz}", "voz")
     }
@@ -143,7 +143,7 @@ object VozNeural {
     /** Teste da chave: lança erro com a explicação, para mostrar na tela. */
     fun testar(ctx: Context): File {
         if (chave(ctx).isBlank()) throw IllegalStateException("Falta a chave.")
-        return sintetizar(ctx, "Olá, Toni. Sistemas prontos. No que posso ajudar?", tempo = 10_000)
+        return sintetizar(ctx, "Olá, ${Perfil.dono}. Sistemas prontos. No que posso ajudar?", tempo = 10_000)
             ?: throw IllegalStateException("A Microsoft não respondeu. Confira a chave e a região (ex.: brazilsouth, eastus).")
     }
 
