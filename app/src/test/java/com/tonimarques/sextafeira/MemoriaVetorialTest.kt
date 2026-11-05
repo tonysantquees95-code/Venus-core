@@ -94,6 +94,17 @@ class MemoriaVetorialTest {
         assertEquals("aprendizado", (ComandosLocais.interpretar("abrir a memória vetorial") as? Acao)?.nome)
     }
 
+    @Test fun licoesESaberes() {
+        assertEquals(Estudo.DISCIPLINAS[0], Estudo.disciplinaDoDia(Estudo.DISCIPLINAS.size))
+        assertEquals(Estudo.DISCIPLINAS.size, (1..Estudo.DISCIPLINAS.size).map { Estudo.disciplinaDoDia(it) }.toSet().size)
+        assertTrue("licoes" in Estudo.ETAPAS && "saberes" in Estudo.ETAPAS)
+        val p = Estudo.pedidoDeLicoes(emptyList(), listOf("erro: buscar_na_internet → 429 (3x)"), listOf("Confirme antes de enviar mensagens"))
+        assertTrue(p.contains("buscar_na_internet") && p.contains("Confirme antes de enviar mensagens") && p.contains("\"licoes\""))
+        val pares = Estudo.lerPares("""{"licoes":[{"licao":"Pesquise antes de dar preço de concorrente","resposta":"Ela chutou um preço errado ontem."}]}""", "licoes", "licao")
+        assertEquals("Pesquise antes de dar preço de concorrente", pares.single().first)
+        assertTrue(Estudo.pedidoDeSaberes("finanças", emptyList()).contains("${Estudo.SABERES_POR_DIA} perguntas"))
+    }
+
     @Test fun regrasDaLoja() {
         assertTrue(RegrasDaLoja.REGRAS.all { it.pergunta.isNotBlank() && it.resposta.length in 40..600 })
         assertEquals(RegrasDaLoja.REGRAS.size, RegrasDaLoja.REGRAS.map { it.pergunta }.toSet().size)
