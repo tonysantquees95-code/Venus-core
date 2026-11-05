@@ -42,6 +42,11 @@
         </intent>
     </queries>
 
+    <!-- Só apps assinados com a mesma chave (o Vênus Robô) leem as regras de venda -->
+    <permission
+        android:name="com.tonimarques.sextafeira.permission.LER_REGRAS"
+        android:protectionLevel="signature" />
+
     <application
         android:name=".VenusApp"
         android:allowBackup="true"
@@ -125,6 +130,14 @@
         <meta-data
             android:name="com.google.mlkit.vision.DEPENDENCIES"
             android:value="subject_segment" />
+
+        <!-- As regras de venda para o Vênus Robô (somente leitura, mesma assinatura) -->
+        <provider
+            android:name=".ProvedorDeRegras"
+            android:authorities="com.tonimarques.sextafeira.regras"
+            android:exported="true"
+            android:readPermission="com.tonimarques.sextafeira.permission.LER_REGRAS"
+            android:writePermission="com.tonimarques.sextafeira.permission.LER_REGRAS" />
 
         <!-- Onde a câmera salva a foto do produto novo -->
         <provider

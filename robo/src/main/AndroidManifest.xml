@@ -2,6 +2,12 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Ler as regras de venda da Vênus (só funciona com o mesmo dono da assinatura) -->
+    <uses-permission android:name="com.tonimarques.sextafeira.permission.LER_REGRAS" />
+
+    <queries>
+        <provider android:authorities="com.tonimarques.sextafeira.regras" />
+    </queries>
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
 

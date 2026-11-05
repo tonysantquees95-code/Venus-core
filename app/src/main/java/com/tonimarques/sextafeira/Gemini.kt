@@ -131,6 +131,7 @@ class Gemini(
             "Responda sempre em português do Brasil, de forma curta (até 3 frases) e sem markdown,\nporque a resposta pode ser falada em voz alta."
         return """
             ${Marca.personalidade}
+            ${Perfil.injecao().replace("\n", "\n            ")}
             $formato
             Para informações atuais (clima, notícias, avaliações de lojas, preços, horários, resultados),
             use previsao_do_tempo ou buscar_na_internet e responda com o que encontrou, em vez de abrir o navegador.
@@ -567,7 +568,7 @@ class Gemini(
         fun respostaCliente(chave: String, modelo: String, mensagem: String, catalogo: String): String? {
             if (chave.isBlank()) return null
             val pedido = "Você atende clientes da ${Perfil.loja} (${Perfil.ramo}, ${Perfil.cidade}, site ${Loja.SITE}) pelo WhatsApp. " +
-                "Regras da loja: ${Perfil.regrasDeVenda} " +
+                Perfil.injecao() + "\n" +
                 "Catálogo atual (nome | preço | preço no Pix | estoque | link):\n$catalogo\n\n" +
                 "Escreva a resposta para a mensagem abaixo, como a loja, em português do Brasil: simpática, curta (até 5 frases), discreta, sem palavras vulgares, " +
                 "no máximo 2 emojis. Use só as informações acima; cite preço e link quando falar de produto; se algo não estiver aqui, diga que vai verificar. " +

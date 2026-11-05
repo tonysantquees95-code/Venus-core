@@ -41,4 +41,11 @@ class RespostasTest {
         assertTrue(t.contains("${salva.atalho} →\nOi! Como posso ajudar?"))
         assertTrue(!t.contains(Respostas.MODELOS.last().atalho + " →"))
     }
+
+    @Test fun regrasDaVenus() {
+        val m = RegrasDaVenus.lerRespostas("""[{"id":"frete","pergunta":"Como funciona o frete?","resposta":"Por PAC ou SEDEX."},{"id":"x","resposta":""}]""")
+        assertEquals(mapOf("frete" to "Por PAC ou SEDEX."), m)
+        assertTrue(RegrasDaVenus.lerRespostas("lixo").isEmpty())
+        assertTrue(Respostas.MODELOS.map { it.id }.containsAll(listOf("pagamento", "frete", "retirada", "discreto", "troca", "horario")))
+    }
 }

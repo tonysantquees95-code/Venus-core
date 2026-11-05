@@ -30,8 +30,28 @@ object Perfil {
         private set
     /** Desconto no Pix, em %, usado nos preços que a Vênus passa para as clientes. */
     val pixPorcento: Int get() = regras.pixDescontoPct
+    /** false = loja nova que ainda não preencheu as regras: a Vênus não promete nada sobre venda. */
+    @Volatile var regrasConfiguradas: Boolean = true
+        private set
     /** As regras em texto, para as IAs: o que a Vênus pode prometer às clientes. */
-    val regrasDeVenda: String get() = regras.texto()
+    val regrasDeVenda: String get() = if (regrasConfiguradas) regras.texto() else NAO_CONFIGURADAS
+
+    const val NAO_CONFIGURADAS = "a loja ainda não preencheu as regras de venda. Não prometa formas de pagamento, descontos, parcelas, " +
+        "frete, prazos, retirada nem trocas; diga com gentileza que a equipe confirma esses detalhes."
+
+    /**
+     * O bloco que entra no prompt de sistema das IAs (Groq, Cloudflare, Gemini): quem é a loja, as regras de venda
+     * e o que a loja não informou. Montado na hora de cada pedido, a partir do que o dono preencheu nos ajustes.
+     */
+    fun injecao(): String = buildString {
+        append("Perfil da loja (preenchido pelo dono nos ajustes; sobre a loja, use só isto):\n")
+        append("- Loja: $loja" + (if (ramo.isNotBlank()) " ($ramo)" else "") + (if (cidade.isNotBlank()) ", em $cidade" + (if (uf.isNotBlank()) "/$uf" else "") else "") +
+            (if (site.isNotBlank()) ". Site: $site" else "") + ".\n")
+        append("- Regras de venda: $regrasDeVenda\n")
+        val faltam = if (regrasConfiguradas) regras.faltando() else emptyList()
+        if (faltam.isNotEmpty()) append("- Não informado pela loja: ${faltam.joinToString(", ")}. Se perguntarem, diga que a equipe confirma.\n")
+        append("- Nunca prometa desconto, frete, prazo ou condição que não esteja aqui.")
+    }
 
     /** Uma frase sobre o dono (rotina, trabalho), usada no estudo de saberes. */
     @Volatile var sobre: String = "mora em Porto Alegre e trabalha num hotel"
@@ -39,6 +59,18 @@ object Perfil {
 
     fun carregar(ctx: Context) {
         val p = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        // quem já usava a Vênus (memória ou chave salva) fica com os dados da primeira loja; instalação nova começa neutra
+        val origem = p.getString("origem", null) ?: run {
+            val antigo = ctx.getDatabasePath("sexta.db").exists() ||
+                ctx.getSharedPreferences("config", Context.MODE_PRIVATE).contains("chave") ||
+                ctx.getSharedPreferences("loja", Context.MODE_PRIVATE).contains("email")
+            (if (antigo) "herdado" else "novo").also { p.edit().putString("origem", it).apply() }
+        }
+        if (origem == "novo") {
+            dono = "chefe"; loja = "sua loja"; cidade = ""; uf = ""; site = ""; ramo = ""; sobre = ""
+            regras = RegrasDeVenda.VAZIA
+        }
+        regrasConfiguradas = origem == "herdado" || p.contains("regras_json")
         p.getString("dono", null)?.takeIf { it.isNotBlank() }?.let { dono = it }
         p.getString("loja", null)?.takeIf { it.isNotBlank() }?.let { loja = it }
         p.getString("cidade", null)?.takeIf { it.isNotBlank() }?.let { cidade = it }
@@ -48,6 +80,7 @@ object Perfil {
         p.getString("ramo", null)?.takeIf { it.isNotBlank() }?.let { ramo = it }
         regras = RegrasDeVenda.ler(p.getString("regras_json", null)).let { r ->
             if (p.contains("regras_json")) r
+            else if (origem == "novo") RegrasDeVenda.VAZIA
             // versão 1.133/1.134 guardava texto livre e o Pix à parte: vira observações e o campo do Pix
             else r.copy(
                 pixDescontoPct = if (p.contains("pix")) p.getInt("pix", 5).coerceIn(0, 50) else r.pixDescontoPct,

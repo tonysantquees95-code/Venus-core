@@ -80,22 +80,35 @@ data class RegrasDeVenda(
         observacoes.trim().ifBlank { null },
     ).joinToString("; ") + "."
 
+    /** Os campos que a loja deixou sem informar (a Vênus diz que a equipe confirma, sem inventar). */
+    fun faltando(): List<String> = listOfNotNull(
+        if (freteMetodos.isEmpty()) "formas de envio" else null,
+        if (freteCalculo.isBlank()) "como o frete é calculado" else null,
+        if (freteGratisAcimaDe == null) "frete grátis" else null,
+        if (prazoPostagemDias == null) "prazo de postagem" else null,
+        if (horarioAtendimento == null) "horário de atendimento" else null,
+        if (canais.isEmpty()) "canais de atendimento" else null,
+    )
+
     // ------------------------------------------------------------------ memória (tipo "regra")
     /** Perguntas que as clientes fazem, com a resposta tirada só dos campos preenchidos. */
-    fun perguntas(loja: String): List<Pair<String, String>> = listOfNotNull(
-        "Quais são as formas de pagamento da $loja?" to ("Na $loja dá para pagar " + texto().substringAfter("pagamento: ").substringBefore(";") + "."),
-        "Como funciona o frete e a entrega da $loja?" to ("A $loja faz " + texto().split("; ").first { it.startsWith("entrega") } + "."),
-        freteGratisAcimaDe?.let { "A $loja tem frete grátis?" to "Sim, nas compras acima de ${dinheiro(it)}." },
-        prazoPostagemDias?.let { "Em quanto tempo a $loja posta o pedido?" to "Em até $it ${if (it == 1) "dia útil" else "dias úteis"} depois da confirmação do pagamento." },
-        "Dá para retirar o pedido pessoalmente na $loja?" to (
+    fun perguntas(loja: String): List<Pair<String, String>> = perguntasComId(loja).map { it.second to it.third }
+
+    /** As mesmas perguntas com um nome fixo (pagamento, frete…), para o robô achar a resposta certa. */
+    fun perguntasComId(loja: String): List<Triple<String, String, String>> = listOfNotNull(
+        Triple("pagamento", "Quais são as formas de pagamento da $loja?", "Na $loja dá para pagar " + texto().substringAfter("pagamento: ").substringBefore(";") + "."),
+        Triple("frete", "Como funciona o frete e a entrega da $loja?", "A $loja faz " + texto().split("; ").first { it.startsWith("entrega") } + "."),
+        freteGratisAcimaDe?.let { Triple("frete_gratis", "A $loja tem frete grátis?", "Sim, nas compras acima de ${dinheiro(it)}.") },
+        prazoPostagemDias?.let { Triple("postagem", "Em quanto tempo a $loja posta o pedido?", "Em até $it ${if (it == 1) "dia útil" else "dias úteis"} depois da confirmação do pagamento.") },
+        Triple("retirada", "Dá para retirar o pedido pessoalmente na $loja?",
             if (retiradaDisponivel) "Sim, a retirada é ${if (retiradaCustoCentavos == 0) "grátis" else "por ${dinheiro(retiradaCustoCentavos)}"} em $retiradaCidade" +
                 (if (retiradaComo.isNotBlank()) ", com $retiradaComo" else "") + "."
             else "Não, a $loja trabalha só com envio."
             ),
-        if (embalagemDiscreta) "A embalagem da $loja é discreta?" to "Sim, a embalagem é neutra e sem identificação do conteúdo ou da loja." else null,
-        "Posso trocar ou devolver um produto da $loja?" to "Sim: em até $arrependimentoDias dias do recebimento você pode desistir da compra, e produto com defeito tem garantia $garantia. Fale com a equipe para combinar.",
-        horarioAtendimento?.let { "Qual o horário de atendimento da $loja?" to "O atendimento é ${canais.joinToString(", ")}, $it." },
-        idadeMinima?.let { "Menor de idade pode comprar na $loja?" to "Não, a venda é só para maiores de $it anos." },
+        if (embalagemDiscreta) Triple("discreto", "A embalagem da $loja é discreta?", "Sim, a embalagem é neutra e sem identificação do conteúdo ou da loja.") else null,
+        Triple("troca", "Posso trocar ou devolver um produto da $loja?", "Sim: em até $arrependimentoDias dias do recebimento você pode desistir da compra, e produto com defeito tem garantia $garantia. Fale com a equipe para combinar."),
+        horarioAtendimento?.let { Triple("horario", "Qual o horário de atendimento da $loja?", "O atendimento é ${canais.joinToString(", ")}, $it.") },
+        idadeMinima?.let { Triple("idade", "Menor de idade pode comprar na $loja?", "Não, a venda é só para maiores de $it anos.") },
     )
 
     // ------------------------------------------------------------------ JSON (preferências e site)
@@ -117,6 +130,13 @@ data class RegrasDeVenda(
 
     companion object {
         private val BR = Locale("pt", "BR")
+
+        /** Para quem instala do zero: nada prometido até o dono preencher (sem Pix, parcelas, frete ou retirada). */
+        val VAZIA = RegrasDeVenda(
+            pixDescontoPct = 0, cartaoParcelasMax = 1, parcelasSemJuros = 1, freteMetodos = emptyList(), freteCalculo = "",
+            retiradaDisponivel = false, retiradaCidade = "", retiradaComo = "", embalagemDiscreta = false, abrangencia = "",
+            canais = emptyList(), idadeMinima = null,
+        )
 
         fun dinheiro(centavos: Int): String = "R$ " + String.format(BR, "%,.2f", centavos / 100.0)
 
