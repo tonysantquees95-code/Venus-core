@@ -58,8 +58,33 @@ object Instagram {
         prefs(ctx).edit()
             .putString("token", token).putString("id", conta.id).putString("usuario", conta.usuario)
             .putLong("token_desde", System.currentTimeMillis())
+            .remove("site_token")
             .apply()
+        sincronizarComSite(ctx)
         return conta
+    }
+
+    /**
+     * O Direct automático roda no site, que precisa do token atual (o "IG…" é renovado aqui toda semana).
+     * Manda só quando mudou; se o site ou a loja não estiverem prontos, tenta de novo da próxima vez.
+     * Bloqueante: chame fora da thread principal.
+     */
+    fun sincronizarComSite(ctx: Context): Boolean {
+        val p = prefs(ctx)
+        val token = p.getString("token", null) ?: return false
+        val id = p.getString("id", null) ?: return false
+        val marca = token.hashCode().toString() + ":" + id
+        if (p.getString("site_token", null) == marca) return true
+        return try {
+            val loja = Loja(ctx)
+            if (!loja.conectada) return false
+            loja.enviarTokenDoInstagram(token, id, p.getString("usuario", null).orEmpty())
+            p.edit().putString("site_token", marca).apply()
+            Diario.anotar(ctx, "instagram", "Token do Instagram entregue ao site (Direct automático)", "automatico")
+            true
+        } catch (e: Exception) {
+            false
+        }
     }
 
     /** Com token do login unificado: acha a conta do Instagram ligada (pelas páginas ou pela conta da loja). */
@@ -103,6 +128,7 @@ object Instagram {
                 r.optString("access_token").takeIf { it.isNotBlank() }?.let {
                     token = it
                     p.edit().putString("token", it).putLong("token_desde", System.currentTimeMillis()).apply()
+                    sincronizarComSite(ctx)
                 }
             } catch (e: ErroDoInstagram) {
                 // se não renovou, segue com o atual (ainda vale até 60 dias)

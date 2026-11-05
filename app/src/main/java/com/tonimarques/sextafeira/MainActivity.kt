@@ -132,6 +132,8 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         }
         EstudoDiario.agendar(this)
         StoriesDoDia.agendar(this)
+        // o Direct automático roda no site: ele precisa do token do Instagram em dia
+        if (Instagram.conectado(this)) Thread { Instagram.sincronizarComSite(applicationContext) }.start()
         try {
             if (Calculadora.conversaVazia()) for (m in memoria.mensagens(null, 120)) Calculadora.lembrar(m.texto)
         } catch (e: Exception) {

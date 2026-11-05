@@ -260,6 +260,11 @@ class Loja(private val contexto: Context) {
     /** Marca como publicado (instagram ou whatsapp) em nome da conta da loja. Devolve quem publicou. */
     fun marcarStory(id: Int, onde: String): String = enviar("/_api/admin/stories_marcar", JSONObject().put("id", id).put("onde", onde)).optString("por")
 
+    /** Entrega ao site o token do Instagram (para o Direct automático responder pela API oficial). */
+    fun enviarTokenDoInstagram(token: String, contaId: String, usuario: String) {
+        enviar("/_api/admin/instagram_token", JSONObject().put("token", token).put("contaId", contaId).put("usuario", usuario))
+    }
+
     fun enviarFoto(jpeg: ByteArray): String {
         val r = enviar("/_api/admin/upload", JSONObject().put("contentType", "image/jpeg").put("sizeBytes", jpeg.size))
         val destino = r.optString("presignedUrl").ifBlank { throw ErroDaLoja("O site não aceitou a foto.") }
