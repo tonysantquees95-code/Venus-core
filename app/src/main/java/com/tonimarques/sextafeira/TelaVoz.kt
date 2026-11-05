@@ -1,5 +1,6 @@
 package com.tonimarques.sextafeira
 
+import com.tonimarques.sextafeira.MainActivity.Escuta
 import android.Manifest
 import android.app.Activity
 import android.app.AlertDialog
