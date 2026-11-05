@@ -261,18 +261,25 @@ object StoriesDoDia {
         Diario.anotar(ctx, "instagram", "Story da ${nomeTurno(turno)} preparado para postar com um toque ($motivo): ${tema.titulo}", "automatico", ok = false)
         val gerente = ctx.getSystemService(NotificationManager::class.java)
         gerente.createNotificationChannel(NotificationChannel(CANAL, "Stories do dia", NotificationManager.IMPORTANCE_DEFAULT))
-        val instagram = PendingIntent.getActivity(ctx, 74_220, intencaoInstagram(arquivo), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+        // o toque passa pela Vênus: abre o Instagram e, quando você volta, o status do WhatsApp com a mesma imagem
+        val emSequencia = PendingIntent.getActivity(
+            ctx, 74_220,
+            Intent(ctx, MainActivity::class.java).setAction(ACAO_INTERATIVO).putExtra("arquivo", arquivo.name).putExtra("pergunta", "")
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
         val whatsapp = PendingIntent.getActivity(ctx, 74_221, intencaoWhatsApp(ctx, arquivo), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         val b = Notification.Builder(ctx, CANAL)
             .setSmallIcon(R.drawable.ic_venus_simbolo)
-            .setContentTitle("Story da ${nomeTurno(turno)} pronto para postar")
-            .setContentText("Não publiquei sozinha ($motivo). Toque: abre o Instagram com a imagem, escolha Story e publique.")
-            .setStyle(Notification.BigTextStyle().bigText("\"${tema.titulo}\"\nNão publiquei sozinha ($motivo). Toque para abrir o Instagram com a imagem, escolha Story e publique."))
-            .setContentIntent(instagram)
-            .addAction(Notification.Action.Builder(null, "Status do WhatsApp", whatsapp).build())
+            .setContentTitle("Story da ${nomeTurno(turno)}: Instagram e WhatsApp")
+            .setContentText("Toque: abre o Instagram com a imagem; publique e volte, que eu abro o status do WhatsApp.")
+            .setStyle(Notification.BigTextStyle().bigText("\"${tema.titulo}\"\nToque: abre o Instagram com a imagem (escolha Story e publique). Ao voltar, abro o WhatsApp para o status. ($motivo)"))
+            .setContentIntent(emSequencia)
+            .addAction(Notification.Action.Builder(null, "Story Instagram e WhatsApp", emSequencia).build())
+            .addAction(Notification.Action.Builder(null, "Só WhatsApp", whatsapp).build())
             .setAutoCancel(true)
         BitmapFactory.decodeFile(arquivo.absolutePath, BitmapFactory.Options().apply { inSampleSize = 4 })?.let {
-            b.setLargeIcon(it).setStyle(Notification.BigPictureStyle().bigPicture(it).setSummaryText("Toque para postar no Instagram"))
+            b.setLargeIcon(it).setStyle(Notification.BigPictureStyle().bigPicture(it).setSummaryText("Toque: Instagram e depois o status do WhatsApp"))
         }
         try {
             gerente.notify(74_320, b.build())

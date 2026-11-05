@@ -172,6 +172,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         super.onResume()
         naTela = true
         conferirLicenca()
+        continuarStoryNoWhatsApp()
         try {
             StoriesDoDia.recuperarAtrasado(this)
         } catch (e: Exception) {
@@ -208,6 +209,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
 
     override fun onPause() {
         naTela = false
+        if (whatsappDepois != null) saiuParaOInstagram = true
         interruptor?.parar()
         escutaAte = 0L
         principal.removeCallbacks(apagarTela)
@@ -3821,6 +3823,10 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
     }
 
     /** Do aviso do story da tarde: copia a pergunta da enquete e abre o Instagram com a imagem. */
+    /** Story em sequência: depois de postar no Instagram e voltar, a Vênus abre o WhatsApp com a mesma imagem para o status. */
+    private var whatsappDepois: java.io.File? = null
+    private var saiuParaOInstagram = false
+
     private fun abrirStoryComEnquete(arquivo: String, pergunta: String) {
         val f = java.io.File(FotoProvider.pasta(this), arquivo)
         if (!f.exists()) return responder("A imagem desse story não está mais aqui (passou mais de um dia). Diga: prepara o story com enquete.")
@@ -3828,11 +3834,35 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
             (getSystemService(CLIPBOARD_SERVICE) as android.content.ClipboardManager).setPrimaryClip(android.content.ClipData.newPlainText("Enquete", pergunta))
         }
         try {
+            whatsappDepois = f
+            saiuParaOInstagram = false
             startActivity(StoriesDoDia.intencaoInstagram(f))
-            Toast.makeText(this, "Escolha Story, toque no adesivo Enquete e cole: $pergunta", Toast.LENGTH_LONG).show()
+            Toast.makeText(
+                this,
+                (if (pergunta.isNotBlank()) "Escolha Story, toque no adesivo Enquete e cole: $pergunta. " else "Escolha Story e publique. ") +
+                    "Ao voltar, eu abro o WhatsApp para o status.",
+                Toast.LENGTH_LONG,
+            ).show()
         } catch (e: ActivityNotFoundException) {
+            whatsappDepois = null
             responder("Não achei o Instagram neste celular.")
         }
+    }
+
+    /** Chamado no onResume: se voltou do Instagram com um story pendente, abre o status do WhatsApp. */
+    private fun continuarStoryNoWhatsApp() {
+        val f = whatsappDepois ?: return
+        if (!saiuParaOInstagram) return
+        whatsappDepois = null
+        saiuParaOInstagram = false
+        orbe.postDelayed({
+            try {
+                startActivity(StoriesDoDia.intencaoWhatsApp(this, f))
+                Toast.makeText(this, "Agora o status do WhatsApp: escolha Meu status e envie.", Toast.LENGTH_LONG).show()
+            } catch (e: Exception) {
+                responder("Não consegui abrir o WhatsApp: ${e.message}")
+            }
+        }, 700)
     }
 
     private fun storyComEnqueteAgora() {
