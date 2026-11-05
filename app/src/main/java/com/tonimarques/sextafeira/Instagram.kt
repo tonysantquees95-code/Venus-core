@@ -89,19 +89,44 @@ object Instagram {
     }
 
     /** Com token do login unificado: acha a conta do Instagram ligada (pelas páginas ou pela conta da loja). */
+    /**
+     * Token "EAA…" (login pelo Facebook ou o login unificado novo da Meta): tenta os caminhos conhecidos
+     * para achar a conta do Instagram, do mais comum ao mais novo. O login unificado ainda não tem um caminho
+     * documentado que funcione sempre (erro 100/33 "Unsupported get request"); por isso a lista.
+     */
     private fun contaPeloFacebook(token: String): Conta {
-        try {
-            val r = pedir("GET", "/me/accounts", mapOf("fields" to "instagram_business_account{id,username}"), token)
-            val a = r.optJSONArray("data") ?: JSONArray()
-            for (i in 0 until a.length()) {
-                val ig = a.optJSONObject(i)?.optJSONObject("instagram_business_account") ?: continue
-                if (ig.optString("id").isNotBlank()) return Conta(ig.optString("id"), ig.optString("username"), "BUSINESS")
+        val tentativas = listOf<() -> Conta?>(
+            {
+                val a = pedir("GET", "/me/accounts", mapOf("fields" to "instagram_business_account{id,username}"), token).optJSONArray("data") ?: JSONArray()
+                (0 until a.length()).mapNotNull { a.optJSONObject(it)?.optJSONObject("instagram_business_account") }
+                    .firstOrNull { it.optString("id").isNotBlank() }?.let { Conta(it.optString("id"), it.optString("username"), "BUSINESS") }
+            },
+            { primeiraConta(pedir("GET", "/me/assigned_instagram_accounts", mapOf("fields" to "id,username"), token)) },
+            { primeiraConta(pedir("GET", "/me/instagram_accounts", mapOf("fields" to "id,username"), token)) },
+            {
+                val r = pedir("GET", "/$CONTA_DA_LOJA", mapOf("fields" to "id,username"), token)
+                Conta(r.optString("id").ifBlank { CONTA_DA_LOJA }, r.optString("username"), "BUSINESS")
+            },
+        )
+        var ultimoErro: ErroDoInstagram? = null
+        for (t in tentativas) {
+            try {
+                t()?.let { return it }
+            } catch (e: ErroDoInstagram) {
+                ultimoErro = e
             }
-        } catch (e: ErroDoInstagram) {
-            // usuário do sistema sem páginas: segue para a conta da loja
         }
-        val r = pedir("GET", "/$CONTA_DA_LOJA", mapOf("fields" to "id,username"), token)
-        return Conta(r.optString("id").ifBlank { CONTA_DA_LOJA }, r.optString("username"), "BUSINESS")
+        throw ErroDoInstagram(
+            "Esse token (EAA…) é do login unificado da Meta, e a conta da loja não abriu com ele" +
+                (ultimoErro?.message?.let { " ($it)" } ?: "") + ". Gere o token em Casos de uso → API do Instagram → " +
+                "Configuração da API com login do Instagram (o token começa com IG)."
+        )
+    }
+
+    private fun primeiraConta(r: JSONObject): Conta? {
+        val a = r.optJSONArray("data") ?: return null
+        return (0 until a.length()).mapNotNull { a.optJSONObject(it) }
+            .firstOrNull { it.optString("id").isNotBlank() }?.let { Conta(it.optString("id"), it.optString("username"), "BUSINESS") }
     }
 
     fun desconectar(ctx: Context) {
