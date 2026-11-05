@@ -24,7 +24,7 @@ class ProvedorDeRegras : ContentProvider() {
     override fun query(uri: Uri, projection: Array<out String>?, selection: String?, selectionArgs: Array<out String>?, sortOrder: String?): Cursor {
         context?.let { Perfil.carregar(it) }
         val c = MatrixCursor(COLUNAS)
-        c.addRow(arrayOf<Any?>(Perfil.loja, Perfil.regras.json().toString(), Perfil.regrasDeVenda, perguntas().toString(), if (Perfil.regrasConfiguradas) 1 else 0))
+        c.addRow(arrayOf<Any?>(Perfil.loja, Perfil.regras.json().toString(), Perfil.regrasDeVenda, perguntas().toString(), if (Perfil.regrasConfiguradas) 1 else 0, if (Licenca.liberada(context!!)) 1 else 0))
         return c
     }
 
@@ -42,6 +42,6 @@ class ProvedorDeRegras : ContentProvider() {
 
     companion object {
         const val AUTORIDADE = "com.tonimarques.sextafeira.regras"
-        val COLUNAS = arrayOf("loja", "json", "texto", "perguntas", "configuradas")
+        val COLUNAS = arrayOf("loja", "json", "texto", "perguntas", "configuradas", "liberada")
     }
 }

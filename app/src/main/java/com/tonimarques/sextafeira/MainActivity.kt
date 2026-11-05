@@ -171,6 +171,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
     override fun onResume() {
         super.onResume()
         naTela = true
+        conferirLicenca()
         VigiliaService.pausarPorTela(true)
         VigiliaService.aoGestoNaTela = {
             if (!ocupado && escuta != Escuta.COMANDO) {
@@ -1595,6 +1596,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
 
     private fun obterGemini(): Gemini? {
         if (modoIndependente()) return null
+        if (!Licenca.liberada(this)) return null // período de testes encerrado: só os comandos locais
         val k = chave()
         // sem a chave do Gemini, a conversa ainda funciona se houver IA reserva (Groq, Cloudflare)
         if (k.isBlank() && !SegundaIA.configurada(this)) return null
@@ -2361,6 +2363,12 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
             ),
             TelaDeAjustes.Secao(
                 "Loja ${Perfil.loja}", listOf(
+                    TelaDeAjustes.Ajuste("Licença", { Licenca.descricao(this) }) { pedirCodigoDeLiberacao(obrigatorio = false) },
+                    TelaDeAjustes.Ajuste("Licenças de teste (só o dono)", {
+                        if (!Licenca.isenta(this)) "Só no celular do dono da ${Marca.nome}."
+                        else if (Licenca.ehAdministrador(this)) "Gerar códigos de liberação para lojistas em teste."
+                        else "Criar a chave que assina os códigos (fica só neste celular)."
+                    }) { if (Licenca.isenta(this)) administrarLicencas() else Toast.makeText(this, "Só no celular do dono.", Toast.LENGTH_SHORT).show() },
                     TelaDeAjustes.Ajuste("Primeiros passos", { "A lista do que configurar para a $n funcionar com a sua loja." }) { primeirosPassos() },
                     TelaDeAjustes.Ajuste("Perfil do dono e da loja", { Perfil.resumo() + ". A $n usa esses dados nas respostas, nos avisos e no estudo." }) { editarPerfil() },
                     TelaDeAjustes.Ajuste("Site, ramo e regras de venda", {
@@ -3883,6 +3891,117 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
                     startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(opcoes[escolhido].site)))
                 } catch (e: ActivityNotFoundException) {
                     Toast.makeText(this, "Nenhum navegador encontrado.", Toast.LENGTH_SHORT).show()
+                }
+            }
+            .setNegativeButton("Cancelar", null)
+            .show()
+    }
+
+    // ----------------------------------------------------------- período de testes (lojistas convidados)
+    private var licencaAberta = false
+
+    /** Encerrado: tela que só sai com o código. Faltando 5 dias ou menos: um aviso por dia. */
+    private fun conferirLicenca() {
+        when (val e = Licenca.estado(this)) {
+            Licenca.Estado.Encerrada -> if (!licencaAberta) pedirCodigoDeLiberacao(obrigatorio = true)
+            is Licenca.Estado.Teste -> if (e.diasRestantes <= 5) {
+                val hoje = Licenca.dataDe(System.currentTimeMillis())
+                if (prefs.getString("aviso_licenca", null) != hoje) {
+                    prefs.edit().putString("aviso_licenca", hoje).apply()
+                    responder("Faltam ${e.diasRestantes} ${if (e.diasRestantes == 1) "dia" else "dias"} do período de testes. Para continuar, peça o código de liberação informando a instalação ${Licenca.instalacao(this)}.")
+                }
+            }
+            else -> Unit
+        }
+    }
+
+    private fun pedirCodigoDeLiberacao(obrigatorio: Boolean) {
+        licencaAberta = true
+        val id = Licenca.instalacao(this)
+        val campo = campoDeDialogo("", "Cole aqui o código (VENUS-…)")
+        val d = AlertDialog.Builder(this)
+            .setTitle(if (obrigatorio) "Período de testes encerrado" else "Licença da ${Marca.nome}")
+            .setMessage(
+                (if (obrigatorio) "Os ${Licenca.DIAS_DE_TESTE} dias de teste terminaram. A conversa com IA, o estudo, as publicações e o robô estão pausados; " +
+                    "seus dados e ajustes continuam guardados.\n\n" else Licenca.descricao(this) + "\n\n") +
+                    "Código desta instalação: $id\nMande esse código para quem te passou a ${Marca.nome} e cole aqui o código de liberação."
+            )
+            .setView(campo)
+            .setCancelable(!obrigatorio)
+            .setPositiveButton("Liberar", null)
+            .setNeutralButton("Copiar $id", null)
+            .setNegativeButton(if (obrigatorio) "Fechar o app" else "Fechar") { _, _ ->
+                licencaAberta = false
+                if (obrigatorio) finishAffinity()
+            }
+            .create()
+        d.setOnShowListener {
+            d.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+                val erro = Licenca.aplicarCodigo(this, campo.text.toString())
+                if (erro != null) Toast.makeText(this, erro, Toast.LENGTH_LONG).show()
+                else {
+                    licencaAberta = false
+                    d.dismiss()
+                    ajustes?.atualizar()
+                    responder("Pronto, liberada. ${Licenca.descricao(this)}")
+                }
+            }
+            d.getButton(AlertDialog.BUTTON_NEUTRAL).setOnClickListener {
+                (getSystemService(CLIPBOARD_SERVICE) as android.content.ClipboardManager)
+                    .setPrimaryClip(android.content.ClipData.newPlainText("Instalação", id))
+                Toast.makeText(this, "Copiado: $id", Toast.LENGTH_SHORT).show()
+            }
+        }
+        d.setOnDismissListener { licencaAberta = false }
+        d.show()
+    }
+
+    /** Só no celular do dono: cria a chave que assina os códigos e gera códigos de liberação. */
+    private fun administrarLicencas() {
+        val publica = Licenca.chavePublicaAdmin()
+        if (publica == null || publica != Licenca.CHAVE_PUBLICA) {
+            val msg = if (publica == null) "Primeiro, crie a chave que assina os códigos. Ela fica só no chip de segurança deste celular e nunca sai dele."
+            else "A chave já existe neste celular, mas ainda não está embutida no app. Copie a chave pública (não é segredo) e mande para o Claude embutir na próxima versão."
+            AlertDialog.Builder(this)
+                .setTitle("Licenças de teste")
+                .setMessage(msg + (publica?.let { "\n\nChave pública:\n$it" } ?: ""))
+                .setPositiveButton(if (publica == null) "Criar a chave" else "Copiar a chave pública") { _, _ ->
+                    try {
+                        val p = Licenca.criarChaveAdmin(this)
+                        (getSystemService(CLIPBOARD_SERVICE) as android.content.ClipboardManager)
+                            .setPrimaryClip(android.content.ClipData.newPlainText("Chave pública da Vênus", p))
+                        responder("Chave pública copiada. Mande para o Claude embutir no app; depois disso você já consegue gerar códigos aqui.")
+                    } catch (e: Exception) {
+                        responder("Não consegui criar a chave: ${e.message}")
+                    }
+                }
+                .setNegativeButton("Fechar", null)
+                .show()
+            return
+        }
+        val caixa = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(20), dp(8), dp(20), 0)
+        }
+        val id = campoDeDialogo("", "Código da instalação (8 letras e números)").apply {
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_CHARACTERS
+        }
+        val dias = campoDeDialogo("30", "Liberar por quantos dias (0 = sem prazo)").apply { inputType = InputType.TYPE_CLASS_NUMBER }
+        caixa.addView(id)
+        caixa.addView(dias)
+        AlertDialog.Builder(this)
+            .setTitle("Gerar código de liberação")
+            .setMessage("O lojista vê o código da instalação na tela de teste encerrado (ou em Ajustes → Licença).")
+            .setView(caixa)
+            .setPositiveButton("Gerar e copiar") { _, _ ->
+                try {
+                    val codigo = Licenca.gerarCodigo(this, id.text.toString(), dias.text.toString().toIntOrNull() ?: 30)
+                    (getSystemService(CLIPBOARD_SERVICE) as android.content.ClipboardManager)
+                        .setPrimaryClip(android.content.ClipData.newPlainText("Código de liberação", codigo))
+                    responder("Código copiado. É só colar no WhatsApp do lojista:")
+                    adicionarMensagem(codigo, false)
+                } catch (e: Exception) {
+                    responder(e.message ?: "Não consegui gerar o código.")
                 }
             }
             .setNegativeButton("Cancelar", null)

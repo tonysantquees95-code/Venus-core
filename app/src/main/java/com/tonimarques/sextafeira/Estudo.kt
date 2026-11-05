@@ -140,6 +140,7 @@ object Estudo {
      */
     fun estudar(ctx: Context, forcar: Boolean = false, prazo: Long = Long.MAX_VALUE, parar: () -> Boolean = { false }): Resumo? {
         if (!forcar && !ligado(ctx)) return null
+        if (!Licenca.liberada(ctx)) return null
         val config = ctx.getSharedPreferences("config", Context.MODE_PRIVATE)
         val chave = Cofre.ler(config, "chave")
         val modelo = config.getString("modelo", "").orEmpty().ifBlank { "gemini-flash-latest" }

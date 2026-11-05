@@ -13,13 +13,14 @@ object RegrasDaVenus {
 
     private val ENDERECO: Uri by lazy { Uri.parse("content://com.tonimarques.sextafeira.regras") }
 
-    data class Regras(val loja: String, val texto: String, val respostas: Map<String, String>, val configuradas: Boolean)
+    /** [liberada] = false quando o período de testes da Vênus terminou sem código: o robô para também. */
+    data class Regras(val loja: String, val texto: String, val respostas: Map<String, String>, val configuradas: Boolean, val liberada: Boolean = true)
 
     fun ler(ctx: Context): Regras? = try {
         ctx.contentResolver.query(ENDERECO, null, null, null, null)?.use { c ->
             if (!c.moveToFirst()) return null
             fun col(nome: String) = c.getColumnIndex(nome).takeIf { it >= 0 }?.let { c.getString(it) }.orEmpty()
-            Regras(col("loja"), col("texto"), lerRespostas(col("perguntas")), col("configuradas") == "1")
+            Regras(col("loja"), col("texto"), lerRespostas(col("perguntas")), col("configuradas") == "1", col("liberada") != "0")
         }
     } catch (e: Exception) {
         null // sem permissão (robô instalado antes da Vênus nova) ou Vênus ausente

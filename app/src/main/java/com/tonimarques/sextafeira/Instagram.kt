@@ -143,6 +143,7 @@ object Instagram {
      * Passos da Meta: cria o "contêiner", espera ficar pronto e publica.
      */
     fun publicar(ctx: Context, urlDaFoto: String, legenda: String, story: Boolean): String {
+        if (!Licenca.liberada(ctx)) throw ErroDoInstagram(Licenca.descricao(ctx))
         val (token, id) = credenciais(ctx)
         val campos = mutableMapOf("image_url" to urlDaFoto)
         if (story) campos["media_type"] = "STORIES" else if (legenda.isNotBlank()) campos["caption"] = legenda.take(2200)
