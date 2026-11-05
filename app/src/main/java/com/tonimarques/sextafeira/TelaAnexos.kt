@@ -143,7 +143,7 @@ internal fun MainActivity.escolherArquivo() {
 }
 
 // ----------------------------------------------------------- anexos (vários, com o seu pedido)
-internal fun MainActivity.temAnexos() = ::bandejaAnexos.isInitialized && anexos.isNotEmpty()
+internal fun MainActivity.temAnexos() = bandejaPronta() && anexos.isNotEmpty()
 
 internal fun MainActivity.escolherFotos() {
     val intencao = if (Build.VERSION.SDK_INT >= 33) {
@@ -173,7 +173,7 @@ internal fun MainActivity.nomeDoArquivo(uri: Uri): String = try {
 
 /** Põe fotos e arquivos na bandeja acima do campo; nada é enviado até você tocar em enviar (com ou sem texto). */
 internal fun MainActivity.anexar(uris: List<Uri>) {
-    if (!::bandejaAnexos.isInitialized || uris.isEmpty()) return
+    if (!bandejaPronta() || uris.isEmpty()) return
     val cabem = MAXIMO_ANEXOS - anexos.size
     if (cabem <= 0) return Toast.makeText(this, "No máximo $MAXIMO_ANEXOS anexos por vez.", Toast.LENGTH_SHORT).show()
     if (uris.size > cabem) Toast.makeText(this, "Peguei só $cabem; o máximo é $MAXIMO_ANEXOS por vez.", Toast.LENGTH_SHORT).show()
@@ -219,7 +219,7 @@ internal fun MainActivity.tirarAnexo(a: Anexo) {
 
 internal fun MainActivity.limparAnexos() {
     anexos.clear()
-    if (::bandejaAnexos.isInitialized) {
+    if (bandejaPronta()) {
         bandejaAnexos.removeAllViews()
         rolagemAnexos.visibility = View.GONE
         campo.hint = "Digite ou toque no orbe…"

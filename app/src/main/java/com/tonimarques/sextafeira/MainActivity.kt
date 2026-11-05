@@ -55,6 +55,8 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
     internal lateinit var botaoEnviar: ImageButton
     internal lateinit var botaoAnexar: ImageButton
     internal lateinit var bandejaAnexos: LinearLayout
+    /** Para os arquivos separados (fora da classe não dá para perguntar ::bandejaAnexos.isInitialized). */
+    internal fun bandejaPronta() = ::bandejaAnexos.isInitialized
     internal lateinit var rolagemAnexos: android.widget.HorizontalScrollView
 
     /** Um anexo escolhido: carrega em segundo plano (foto reduzida, texto do Word/Excel...). */
@@ -1702,6 +1704,9 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
             principal.postDelayed({ if (!falando && !ocupado && escuta == Escuta.NADA) ouvirComando() }, if (estavaOuvindo) 300 else 150)
         } else ficarOcioso()
     }
+
+    // ------------------------------------------------------- escuta (microfone)
+    internal open fun vigiliaLigada() = prefs.getBoolean(PREF_VIGILIA, true)
 
     internal fun temMicrofone() =
         checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
