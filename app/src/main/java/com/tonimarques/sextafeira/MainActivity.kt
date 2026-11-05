@@ -37,6 +37,7 @@ import android.widget.ScrollView
 import android.widget.SeekBar
 import android.widget.TextView
 import android.widget.Toast
+import java.util.Calendar
 import java.util.Locale
 
 open class MainActivity : Activity(), TextToSpeech.OnInitListener {
@@ -4554,22 +4555,102 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
             .show()
     }
 
+    /** Página das ideias de post que a Vênus criou: cada uma com Programar post e Programar story. */
     private fun mostrarIdeiasDePost() {
         Thread {
             val ideias = try {
-                memoria.itensDoTipo("ideia_post", Estudo.IDEIAS_POR_SEMANA)
+                memoria.itensDoTipo("ideia_post", Estudo.IDEIAS_POR_SEMANA * 2).map { IdeiasDePost.ler(it) }
             } catch (e: Exception) {
                 emptyList()
             }
             runOnUiThread {
-                if (ideias.isEmpty()) {
-                    responder("Ainda não preparei ideias de post. Elas saem no estudo de uma vez por semana; se quiser já, diga: estuda agora.")
-                } else {
-                    responder("Separei ${ideias.size} ideias de post para as próximas semanas. Estão aqui na conversa.")
-                    adicionarMensagem(ideias.mapIndexed { i, it -> "${i + 1}. ${it.texto}\n${it.resposta.orEmpty()}" }.joinToString("\n\n"), false)
+                if (ideias.isEmpty()) return@runOnUiThread responder("Ainda não preparei ideias de post. Elas saem no estudo de uma vez por semana; se quiser já, diga: estuda agora.")
+                val f = Formulario(this, "Ideias de post", "Sugestões da ${Marca.nome} para as próximas semanas")
+                val dia = java.text.SimpleDateFormat("dd/MM", Locale("pt", "BR"))
+                for (ideia in ideias) {
+                    f.cartao(ideia.titulo.take(40))
+                    f.adicionar(f.aviso("Sugerido: " + (ideia.data?.let { dia.format(it.time) } ?: "quando quiser") + " · " + ideia.formato), 2)
+                    f.adicionar(TextView(this).apply {
+                        text = ideia.legenda
+                        textSize = 14f
+                        setTextColor(Color.WHITE)
+                        maxLines = 6
+                        ellipsize = android.text.TextUtils.TruncateAt.END
+                        setPadding(dp(4), dp(4), dp(4), 0)
+                    }, 6)
+                    f.lado(
+                        f.botao("Programar post", primario = ideia.formato != "story") { f.fechar(); prepararIdeia(ideia, "feed") },
+                        f.botao("Programar story", primario = ideia.formato == "story") { f.fechar(); prepararIdeia(ideia, "story") },
+                    )
                 }
+                f.acoes(f.botao("Fechar", primario = true) { f.fechar() })
+                f.mostrar()
             }
         }.start()
+    }
+
+    /** Monta a arte da ideia (com a foto do produto citado) e abre a tela para conferir e programar. */
+    private fun prepararIdeia(ideia: IdeiasDePost.Ideia, tipo: String, variacao: Int = 0) {
+        responder(if (variacao == 0) "Montando a arte de \"${ideia.titulo}\"…" else "Montando outra arte…")
+        Thread {
+            val r = try {
+                val produto = try {
+                    ferramentas.loja.takeIf { it.conectada }?.produtos()?.let { IdeiasDePost.produtoDaIdeia(ideia, it) }
+                } catch (e: Exception) {
+                    null
+                }
+                val foto = produto?.let { IdeiasDePost.fotoDoProduto(it) }
+                Result.success(IdeiasDePost.arte(ideia, tipo, foto, variacao) to produto)
+            } catch (e: Exception) {
+                Result.failure(e)
+            }
+            runOnUiThread {
+                r.onSuccess { (jpeg, produto) -> conferirIdeia(ideia, tipo, jpeg, produto?.nome, variacao) }
+                    .onFailure { responder("Não consegui montar a arte: ${it.message}") }
+            }
+        }.start()
+    }
+
+    private fun conferirIdeia(ideia: IdeiasDePost.Ideia, tipo: String, jpeg: ByteArray, produto: String?, variacao: Int) {
+        val f = Formulario(this, if (tipo == "story") "Programar story" else "Programar post", ideia.titulo)
+        f.cartao("Arte")
+        val previa = f.previa().apply {
+            visibility = android.view.View.VISIBLE
+            maxHeight = dp(if (tipo == "story") 420 else 340)
+            scaleType = android.widget.ImageView.ScaleType.FIT_CENTER
+            setImageBitmap(android.graphics.BitmapFactory.decodeByteArray(jpeg, 0, jpeg.size))
+        }
+        f.adicionar(previa, 2)
+        f.adicionar(f.aviso(if (produto != null) "Com a foto de: $produto" else "Não achei o produto citado no catálogo: a arte vai só com o título."), 6)
+        f.adicionar(f.botao("Não gostei: outra arte") { f.fechar(); prepararIdeia(ideia, tipo, variacao + 1) }, 8)
+        val (blocoLegenda, legenda) = f.campo(
+            if (tipo == "story") "Texto (o story vai só com a imagem; o texto fica guardado)" else "Legenda", ideia.legenda, "",
+            InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE or InputType.TYPE_TEXT_FLAG_CAP_SENTENCES, 5,
+        )
+        f.cartao("Texto")
+        f.adicionar(blocoLegenda, 2)
+        val quando = Calendar.getInstance().apply { timeInMillis = IdeiasDePost.quandoSugerido(ideia, tipo) }
+        f.cartao("Quando sai")
+        val (blocoData, data) = f.campo("Dia", java.text.SimpleDateFormat("dd/MM/yyyy", Locale("pt", "BR")).format(quando.time), "dd/mm/aaaa", InputType.TYPE_CLASS_DATETIME)
+        val (blocoHora, hora) = f.campo("Hora", java.text.SimpleDateFormat("HH:mm", Locale("pt", "BR")).format(quando.time), "19:00", InputType.TYPE_CLASS_DATETIME)
+        f.lado(blocoData, blocoHora)
+        f.adicionar(f.aviso(if (Instagram.conectado(this)) "Sai sozinho na hora marcada." else "O Instagram está desconectado: na hora, chega o aviso para postar com um toque."), 6)
+        f.acoes(f.botao("Programar", primario = true) {
+            val m = Regex("(\\d{1,2})/(\\d{1,2})/(\\d{4})").find(data.text.toString())
+            val hm = Regex("(\\d{1,2})[:h](\\d{2})?").find(hora.text.toString())
+            if (m == null || hm == null) return@botao Toast.makeText(this, "Confira o dia (dd/mm/aaaa) e a hora (hh:mm).", Toast.LENGTH_SHORT).show()
+            val c = Calendar.getInstance().apply {
+                clear()
+                set(m.groupValues[3].toInt(), m.groupValues[2].toInt() - 1, m.groupValues[1].toInt(), hm.groupValues[1].toInt(), hm.groupValues[2].ifBlank { "0" }.toInt())
+            }
+            if (c.timeInMillis < System.currentTimeMillis()) return@botao Toast.makeText(this, "Esse horário já passou.", Toast.LENGTH_SHORT).show()
+            val p = Postagens.criar(this, c.timeInMillis, tipo, legenda.text.toString(), jpeg)
+            focarPost(p.id)
+            Diario.anotar(this, "instagram", "Ideia programada como ${if (tipo == "story") "story" else "post"}: ${ideia.titulo} (${java.text.SimpleDateFormat("dd/MM HH:mm", Locale("pt", "BR")).format(c.time)})", "tela")
+            f.fechar()
+            responder("Programado: \"${ideia.titulo}\" como ${if (tipo == "story") "story" else "post no feed"} em ${java.text.SimpleDateFormat("dd/MM 'às' HH:mm", Locale("pt", "BR")).format(c.time)}.")
+        }, f.botao("Voltar às ideias") { f.fechar(); mostrarIdeiasDePost() })
+        f.mostrar()
     }
 
     // ----------------------------------------------------------- post em foco (o último programado)
