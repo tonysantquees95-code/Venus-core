@@ -148,16 +148,18 @@ class CatalogoInterno(private val ctx: Context) : Plataformas.Adaptador {
     }
 
     // ------------------------------------------------------------------ arquivo
-    private fun mudar(id: Int, f: (JSONObject) -> Unit) = editar { raiz ->
+    private fun mudar(id: Int, f: (JSONObject) -> Unit): Unit = editar { raiz ->
         val o = acharProduto(raiz, id) ?: throw Loja.ErroDaLoja("Não achei esse produto no catálogo.")
         f(o)
         o.put("atualizado", System.currentTimeMillis())
     }
 
-    private fun editar(f: (JSONObject) -> Unit) = synchronized(TRAVA) {
-        val raiz = ler(ctx)
-        f(raiz)
-        gravar(ctx, raiz)
+    private fun editar(f: (JSONObject) -> Unit) {
+        synchronized(TRAVA) {
+            val raiz = ler(ctx)
+            f(raiz)
+            gravar(ctx, raiz)
+        }
     }
 
     companion object {
@@ -174,11 +176,16 @@ class CatalogoInterno(private val ctx: Context) : Plataformas.Adaptador {
             }
         }
 
-        fun gravar(ctx: Context, raiz: JSONObject) = synchronized(TRAVA) {
-            // grava num temporário e troca: um desligamento no meio não corrompe o catálogo
-            val tmp = File(ctx.filesDir, "catalogo.json.tmp")
-            tmp.writeText(raiz.toString())
-            tmp.renameTo(arquivo(ctx))
+        fun gravar(ctx: Context, raiz: JSONObject) {
+            synchronized(TRAVA) {
+                // grava num temporário e troca: um desligamento no meio não corrompe o catálogo
+                val tmp = File(ctx.filesDir, "catalogo.json.tmp")
+                tmp.writeText(raiz.toString())
+                if (!tmp.renameTo(arquivo(ctx))) {
+                    arquivo(ctx).writeText(raiz.toString())
+                    tmp.delete()
+                }
+            }
         }
 
         fun acharProduto(raiz: JSONObject, id: Int): JSONObject? {
