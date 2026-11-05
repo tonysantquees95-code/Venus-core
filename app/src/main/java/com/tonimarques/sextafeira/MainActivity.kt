@@ -577,6 +577,10 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
                 mostrarFontes(Web.lerFontesSalvas(m.texto), salvar = false)
                 continue
             }
+            if (m.doUsuario && m.texto.startsWith("📎 ")) {
+                mostrarAnexosSalvos(m.texto)
+                continue
+            }
             adicionarMensagem(m.texto, m.doUsuario, salvar = false).alpha = 0.7f
         }
     }
@@ -665,6 +669,10 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         for (m in memoria.mensagensDaConversa(id, 16)) {
             if (m.texto.startsWith("Fontes: ")) {
                 mostrarFontes(Web.lerFontesSalvas(m.texto), salvar = false)
+                continue
+            }
+            if (m.doUsuario && m.texto.startsWith("📎 ")) {
+                mostrarAnexosSalvos(m.texto)
                 continue
             }
             adicionarMensagem(m.texto, m.doUsuario, salvar = false).alpha = 0.7f
@@ -4245,6 +4253,182 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         }
     }
 
+    // ----------------------------------------------------------- anexos na conversa (miniaturas)
+    private fun pastaMiniaturas() = java.io.File(filesDir, "miniaturas").apply { mkdirs() }
+
+    private fun arquivoDaMiniatura(nome: String): java.io.File {
+        val h = java.security.MessageDigest.getInstance("SHA-1").digest(nome.toByteArray()).joinToString("") { "%02x".format(it) }
+        return java.io.File(pastaMiniaturas(), "$h.jpg")
+    }
+
+    /** Guarda uma versão pequena da foto (para a conversa e para reabrir depois). */
+    private fun guardarMiniatura(doc: Arquivos.Documento) {
+        val bytes = doc.bytes ?: return
+        try {
+            val op = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size, op)
+            var amostra = 1
+            while (maxOf(op.outWidth, op.outHeight) / (amostra * 2) >= 900) amostra *= 2
+            val bmp = android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size, android.graphics.BitmapFactory.Options().apply { inSampleSize = amostra }) ?: return
+            arquivoDaMiniatura(doc.nome).outputStream().use { bmp.compress(android.graphics.Bitmap.CompressFormat.JPEG, 82, it) }
+            // não deixa a pasta crescer para sempre
+            pastaMiniaturas().listFiles()?.sortedByDescending { it.lastModified() }?.drop(200)?.forEach { it.delete() }
+        } catch (e: Exception) {
+        }
+    }
+
+    /** O que você enviou: as fotos em miniatura (tocando, abre maior) e o seu pedido embaixo. */
+    private fun mostrarAnexosNaConversa(docs: List<Arquivos.Documento>, texto: String) {
+        docs.filter { it.mime.startsWith("image/") }.forEach { guardarMiniatura(it) }
+        try {
+            memoria.salvarMensagem(true, "📎 " + docs.joinToString(" | ") { it.nome } + if (texto.isNotBlank()) "\n$texto" else "", topicoAtual)
+        } catch (e: Exception) {
+        }
+        desenharAnexos(docs.map { it.nome to it.mime }, texto)
+    }
+
+    /** Conversa reaberta: monta de novo a partir do que ficou guardado ("📎 nome | nome\npedido"). */
+    private fun mostrarAnexosSalvos(guardado: String) {
+        val primeira = guardado.removePrefix("📎 ").substringBefore("\n")
+        val texto = guardado.substringAfter("\n", "")
+        val nomes = (if (" | " in primeira) primeira.split(" | ") else primeira.split(", ")).map { it.trim() }.filter { it.isNotBlank() }
+        desenharAnexos(nomes.map { it to Arquivos.tipo(null, it) }, texto, apagado = true)
+    }
+
+    private fun desenharAnexos(itens: List<Pair<String, String>>, texto: String, apagado: Boolean = false) {
+        val fileira = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.END
+        }
+        for ((nome, mime) in itens) {
+            val miniatura = arquivoDaMiniatura(nome).takeIf { mime.startsWith("image/") && it.exists() }
+            val vista: View = if (miniatura != null) {
+                android.widget.ImageView(this).apply {
+                    scaleType = android.widget.ImageView.ScaleType.CENTER_CROP
+                    setImageBitmap(android.graphics.BitmapFactory.decodeFile(miniatura.absolutePath, android.graphics.BitmapFactory.Options().apply { inSampleSize = 4 }))
+                    background = vidro(Color.TRANSPARENT, comAlfa(corAtual, 110), 12)
+                    clipToOutline = true
+                    contentDescription = "Foto enviada. Toque para ver maior."
+                    setOnClickListener { verFotoGrande(miniatura) }
+                }
+            } else {
+                TextView(this).apply {
+                    text = iconeDoArquivo(nome, mime) + "\n" + nome.substringAfterLast('.', "").uppercase().take(4)
+                    gravity = Gravity.CENTER
+                    textSize = 11f
+                    setTextColor(Color.WHITE)
+                    background = vidro(comAlfa(corAtual, 40), comAlfa(corAtual, 110), 12)
+                    contentDescription = nome
+                }
+            }
+            fileira.addView(vista, LinearLayout.LayoutParams(dp(64), dp(64)).apply { marginStart = dp(6) })
+        }
+        val rolar = android.widget.HorizontalScrollView(this).apply {
+            isHorizontalScrollBarEnabled = false
+            addView(fileira)
+            if (apagado) alpha = 0.7f
+        }
+        mensagens.addView(rolar, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+            gravity = Gravity.END
+            topMargin = dp(8)
+            leftMargin = dp(56)
+        })
+        if (texto.isNotBlank()) adicionarMensagem(texto, true, salvar = false).apply { if (apagado) alpha = 0.7f }
+        rolarParaBaixo()
+    }
+
+    /** A foto maior, num pop-up escuro; toque para fechar. */
+    private fun verFotoGrande(arquivo: java.io.File) {
+        val janela = android.app.Dialog(this, android.R.style.Theme_Black_NoTitleBar_Fullscreen)
+        val foto = android.widget.ImageView(this).apply {
+            scaleType = android.widget.ImageView.ScaleType.FIT_CENTER
+            setImageBitmap(android.graphics.BitmapFactory.decodeFile(arquivo.absolutePath))
+            setBackgroundColor(Color.argb(235, 0, 0, 0))
+            setPadding(dp(16), dp(16), dp(16), dp(16))
+            setOnClickListener { janela.dismiss() }
+            contentDescription = "Foto. Toque para fechar."
+        }
+        janela.setContentView(foto)
+        janela.show()
+    }
+
+    // ----------------------------------------------------------- pesquisa de produto pela foto (como o Google Lens)
+    private fun pesquisarProdutoDaFoto(foto: Arquivos.Documento, pedido: String) {
+        val bytes = foto.bytes ?: return
+        val k = chave()
+        val m = modelo()
+        val assistente = obterGemini()
+        comTempoLimite("PROCURANDO O PRODUTO…") {
+            val produto = Gemini.identificarProduto(k, m, bytes, foto.mime, pedido)
+            val oferta = produto?.let { p ->
+                val instrucao = "Você compara preços para um lojista do Brasil. Pesquise o produto em lojas online brasileiras " +
+                    "(Mercado Livre, Amazon, Shopee, Magazine Luiza, Americanas, lojas especializadas e atacadistas). " +
+                    "Responda em português, sem markdown e sem tabela: até 6 ofertas, uma por linha, no formato " +
+                    "\"Loja — R$ preço — link direto do produto\". Depois, numa linha: \"Menor preço: ...\" e, se fizer sentido, a faixa de preço comum. " +
+                    "Use só preços que você encontrou; se não achar o produto exato, diga e mostre os mais parecidos."
+                val pergunta = "Preço de ${p.termos}" + (if (p.marca.isNotBlank() && !p.termos.contains(p.marca, true)) " ${p.marca}" else "")
+                assistente?.buscarNaInternet(pergunta, instrucao) ?: SegundaIA.pesquisar(pergunta, instrucao)
+            }
+            val acao: () -> Unit = {
+                if (produto == null) {
+                    responder("Não consegui reconhecer o produto dessa foto agora. Abra no Google Lens pelo botão abaixo.")
+                } else {
+                    val inicio = "Parece ser: ${produto.nome}" + (if (produto.descricao.isNotBlank()) ". ${produto.descricao}" else ".")
+                    if (oferta != null) {
+                        responderComLinks("$inicio\n\n${oferta.texto}")
+                        mostrarFontes(oferta.fontes)
+                    } else {
+                        responder("$inicio Não consegui buscar os preços agora; use os atalhos abaixo.")
+                    }
+                }
+                val termos = produto?.termos.orEmpty()
+                val q = java.net.URLEncoder.encode(termos, "UTF-8")
+                val atalhos = mutableListOf<Pair<String, () -> Unit>>()
+                if (termos.isNotBlank()) {
+                    atalhos += "Google Shopping" to { abrirLink("https://www.google.com/search?tbm=shop&q=$q") }
+                    atalhos += "Mercado Livre" to { abrirLink("https://lista.mercadolivre.com.br/" + termos.trim().replace(Regex("\\s+"), "-")) }
+                    atalhos += "Shopee" to { abrirLink("https://shopee.com.br/search?keyword=$q") }
+                }
+                if (ferramentas.loja.conectada) atalhos += "Google Lens" to { abrirNoLens(bytes) }
+                mostrarSugestoes(atalhos)
+            }
+            acao
+        }
+    }
+
+    private fun abrirLink(url: String) {
+        try {
+            startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+        } catch (e: ActivityNotFoundException) {
+            Toast.makeText(this, "Nenhum navegador encontrado.", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    /** Sobe a foto (endereço público da loja) e abre a busca por imagem do Google Lens. */
+    private fun abrirNoLens(bytes: ByteArray) {
+        Toast.makeText(this, "Abrindo no Google Lens…", Toast.LENGTH_SHORT).show()
+        Thread {
+            val url = try {
+                Loja.enderecoCompleto(ferramentas.loja.enviarFoto(bytes))
+            } catch (e: Exception) {
+                null
+            }
+            runOnUiThread {
+                if (url == null) Toast.makeText(this, "Não consegui enviar a foto para o Lens.", Toast.LENGTH_LONG).show()
+                else abrirLink("https://lens.google.com/uploadbyurl?url=" + java.net.URLEncoder.encode(url, "UTF-8"))
+            }
+        }.start()
+    }
+
+    /** Resposta com endereços clicáveis (fala sem ler os links). */
+    private fun responderComLinks(texto: String) {
+        val balao = adicionarMensagem(texto, false)
+        android.text.util.Linkify.addLinks(balao, android.text.util.Linkify.WEB_URLS)
+        balao.setLinkTextColor(corAtual)
+        balao.movementMethod = LinkMovementMethod.getInstance()
+        falar(texto.replace(Regex("https?://\\S+"), "").replace(Regex("\\s+—\\s+(?=\\n|$)"), ""))
+    }
+
     /** Botõezinhos de sugestão no chat (no lugar das caixas de pergunta). */
     private fun mostrarSugestoes(opcoes: List<Pair<String, () -> Unit>>) {
         if (opcoes.isEmpty()) return
@@ -4275,6 +4459,9 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
     }
 
     private val PEDE_NOTA = Regex("\\b(?:nota (?:de compra|fiscal)|lanca|lancar|lance|compra do fornecedor|soma(?:r)? (?:ao|no) estoque|entrada de estoque)\\b")
+    private val PEDE_PRECO = Regex(
+        "\\b(?:pesquis\\w*|procur\\w*|encontr\\w*|ach(?:a|e|ar)|quanto (?:custa|sai|vale|ta|esta)|preco|precos|valor(?:es)?|onde (?:compr\\w*|vende\\w*|acho)|compar\\w*|mais barato|lens|link)\\b"
+    )
     private val PEDE_FUNDO = Regex("\\b(?:fundo|tira(?:r)? o fundo|troca(?:r)? o fundo|recort(?:a|ar|e))\\b")
 
     /**
@@ -4291,7 +4478,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         limparAnexos()
         if (docs.isEmpty()) return
         topicoAtual = "Arquivos"
-        adicionarMensagem("📎 " + docs.joinToString(", ") { it.nome } + if (texto.isNotBlank()) "\n$texto" else "", true)
+        mostrarAnexosNaConversa(docs, texto)
         val chaveTexto = ComandosLocais.normalizar(texto)
         val fotos = docs.filter { it.mime.startsWith("image/") && it.bytes != null }
         val comando = if (texto.isNotBlank()) ComandosLocais.interpretar(texto) else null
@@ -4301,6 +4488,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
             texto.isNotBlank() && PEDE_NOTA.containsMatchIn(chaveTexto) && docs.first().bytes != null && ferramentas.loja.conectada ->
                 return lerNotaDoDocumento(docs.first())
             fotos.isNotEmpty() && PEDE_FUNDO.containsMatchIn(chaveTexto) -> return editarFundo(fotos.first().bytes)
+            fotos.isNotEmpty() && PEDE_PRECO.containsMatchIn(chaveTexto) -> return pesquisarProdutoDaFoto(fotos.first(), texto)
         }
         lerAnexos(docs, texto)
     }
