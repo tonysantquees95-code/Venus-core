@@ -468,7 +468,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
             start()
         }
         status.visibility = if (aberto) View.GONE else View.VISIBLE
-        rolagem.postDelayed({ rolagem.fullScroll(View.FOCUS_DOWN) }, 260)
+        rolagem.postDelayed({ rolarParaBaixo() }, 260)
     }
 
     /** Menu do "+": foto, galeria ou documento; a Vênus lê e responde sobre o que foi anexado. */
@@ -768,8 +768,15 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         return balao
     }
 
+    /**
+     * Vai até a última mensagem sem mexer no foco. (O fullScroll "entrega" o foco à última mensagem, que é
+     * selecionável, e aí o teclado abria mas o que você digitava não ia para o campo.)
+     */
     private fun rolarParaBaixo() {
-        rolagem.post { rolagem.fullScroll(View.FOCUS_DOWN) }
+        rolagem.post {
+            val fim = (rolagem.getChildAt(0)?.height ?: 0) - rolagem.height + rolagem.paddingBottom
+            if (fim > 0) rolagem.smoothScrollTo(0, fim)
+        }
     }
 
     private fun mudarEstado(estado: Orbe.Estado, texto: String) {
