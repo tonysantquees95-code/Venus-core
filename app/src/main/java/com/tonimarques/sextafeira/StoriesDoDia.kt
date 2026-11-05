@@ -383,7 +383,7 @@ object StoriesDoDia {
     }
 
     fun pedidoDeTemas(jaUsados: List<String>): String =
-        "Você é a social media da ${Perfil.loja}, loja online de moda íntima e bem-estar sexual de ${Perfil.cidade}. " +
+        "Você é a social media da ${Perfil.loja}, loja online de ${Perfil.ramo} de ${Perfil.cidade}. " +
             "Crie 14 textos curtos para stories do Instagram, metade \"dica\" e metade \"curiosidade\", sobre: autoestima, amor-próprio, " +
             "autocuidado, bem-estar íntimo, relacionamento e comunicação a dois, conhecer o próprio corpo, sono, estresse e libido, " +
             "romance e datas especiais. Tom acolhedor, elegante, inclusivo e sem julgamento, em português do Brasil. " +

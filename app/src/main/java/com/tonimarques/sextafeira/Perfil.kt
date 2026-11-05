@@ -19,6 +19,20 @@ object Perfil {
         private set
     @Volatile var uf: String = "RS"
         private set
+    /** Endereço do site da loja (o da Desejo de Intimidade é no Floot). */
+    @Volatile var site: String = "https://desejo-de-intimidade.floot.app"
+        private set
+    /** O ramo da loja, como aparece nos textos das IAs. */
+    @Volatile var ramo: String = "moda íntima e sex shop"
+        private set
+    /** Desconto no Pix, em %, usado nos preços que a Vênus passa para as clientes. */
+    @Volatile var pixPorcento: Int = 5
+        private set
+    /** Entrega, pagamento, retirada e embalagem: o que a Vênus pode prometer às clientes. */
+    @Volatile var regrasDeVenda: String = "entrega discreta para todo o Brasil pelos Correios (SEDEX ou PAC), frete calculado pelo CEP no site; " +
+        "pagamento por Pix com 5% de desconto (exceto produtos em promoção) ou cartão em até 3x; retirada grátis em ponto de retirada em Porto Alegre, " +
+        "com dia e horário combinados pelo WhatsApp depois da compra; embalagem neutra e sem identificação; venda só para maiores de 18 anos."
+        private set
     /** Uma frase sobre o dono (rotina, trabalho), usada no estudo de saberes. */
     @Volatile var sobre: String = "mora em Porto Alegre e trabalha num hotel"
         private set
@@ -30,6 +44,27 @@ object Perfil {
         p.getString("cidade", null)?.takeIf { it.isNotBlank() }?.let { cidade = it }
         p.getString("uf", null)?.takeIf { it.isNotBlank() }?.let { uf = it }
         p.getString("sobre", null)?.let { sobre = it }
+        p.getString("site", null)?.takeIf { it.isNotBlank() }?.let { site = normalizarSite(it) }
+        p.getString("ramo", null)?.takeIf { it.isNotBlank() }?.let { ramo = it }
+        p.getString("regras", null)?.takeIf { it.isNotBlank() }?.let { regrasDeVenda = it }
+        if (p.contains("pix")) pixPorcento = p.getInt("pix", 5).coerceIn(0, 50)
+    }
+
+    /** "minhaloja.com.br/" → "https://minhaloja.com.br". */
+    fun normalizarSite(t: String): String {
+        val s = t.trim().removeSuffix("/")
+        return if (s.startsWith("http://") || s.startsWith("https://")) s.replace("http://", "https://") else "https://$s"
+    }
+
+    /** Dados da loja (site, ramo, Pix e regras de venda). */
+    fun salvarLoja(ctx: Context, site: String, ramo: String, pix: Int, regras: String) {
+        ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+            .putString("site", normalizarSite(site)).putString("ramo", ramo.trim()).putInt("pix", pix.coerceIn(0, 50))
+            .putString("regras", regras.trim())
+            .apply()
+        carregar(ctx)
+        Consciencia.esquecerRetrato()
+        Diario.anotar(ctx, "perfil", "Dados da loja atualizados: $site, $ramo, Pix $pixPorcento%", "tela")
     }
 
     /** "Porto Alegre, RS" ou "Porto Alegre RS" → cidade e UF. */

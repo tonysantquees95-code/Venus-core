@@ -2355,6 +2355,14 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
             TelaDeAjustes.Secao(
                 "Loja ${Perfil.loja}", listOf(
                     TelaDeAjustes.Ajuste("Perfil do dono e da loja", { Perfil.resumo() + ". A $n usa esses dados nas respostas, nos avisos e no estudo." }) { editarPerfil() },
+                    TelaDeAjustes.Ajuste("Site, ramo e regras de venda", {
+                        "${Loja.SITE.removePrefix("https://")} · ${Perfil.ramo} · Pix ${Perfil.pixPorcento}%. É o que a $n pode prometer às clientes."
+                    }) { editarDadosDaLoja() },
+                    TelaDeAjustes.Ajuste("Plataforma da loja", {
+                        val t = Plataformas.TIPOS.firstOrNull { it.id == Plataformas.tipo(this) }?.nome ?: "Floot"
+                        if (Plataformas.tipo(this) == "floot") "$t. Também funciona com Shopify, WooCommerce e Nuvemshop."
+                        else "$t" + (if (ferramentas.loja.conectada) ", conectada." else ", falta a chave.")
+                    }) { escolherPlataforma() },
                     TelaDeAjustes.Ajuste("Conectar à loja", {
                         ferramentas.loja.email?.let { "Conectada como $it. Pergunte: como foram as vendas hoje, tem pedido novo, o que está acabando. Toque para desconectar." }
                             ?: "Entre com o login de administrador do site para a $n consultar vendas, pedidos e estoque. A senha fica criptografada só no celular."
@@ -3895,6 +3903,101 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
                 Perfil.salvar(this, dono.text.toString(), loja.text.toString(), cidade.text.toString(), sobre.text.toString())
                 ajustes?.atualizar()
                 responder("Perfil salvo: ${Perfil.resumo()}.")
+            }
+            .setNegativeButton("Cancelar", null)
+            .show()
+    }
+
+    private fun editarDadosDaLoja() {
+        val caixa = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(20), dp(8), dp(20), 0)
+        }
+        val site = campoDeDialogo(Perfil.site.removePrefix("https://"), "Endereço do site (ex.: minhaloja.com.br)")
+        val ramo = campoDeDialogo(Perfil.ramo, "Ramo (ex.: moda íntima e sex shop)")
+        val pix = campoDeDialogo(Perfil.pixPorcento.toString(), "Desconto no Pix (%)").apply { inputType = InputType.TYPE_CLASS_NUMBER }
+        val regras = EditText(this).apply {
+            setText(Perfil.regrasDeVenda)
+            hint = "Entrega, frete, pagamento, parcelas, retirada, trocas"
+            minLines = 4
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE or InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
+            setPadding(dp(24), dp(16), dp(24), dp(16))
+        }
+        listOf(site, ramo, pix, regras).forEach { caixa.addView(it) }
+        AlertDialog.Builder(this)
+            .setTitle("Site, ramo e regras de venda")
+            .setMessage("A ${Marca.nome} só promete às clientes o que estiver nas regras de venda.")
+            .setView(ScrollView(this).apply { addView(caixa) })
+            .setPositiveButton("Salvar") { _, _ ->
+                if (site.text.isBlank() || regras.text.isBlank()) return@setPositiveButton Toast.makeText(this, "Preencha o site e as regras.", Toast.LENGTH_SHORT).show()
+                Perfil.salvarLoja(this, site.text.toString(), ramo.text.toString(), pix.text.toString().toIntOrNull() ?: 0, regras.text.toString())
+                ajustes?.atualizar()
+                responder("Dados da loja salvos.")
+            }
+            .setNegativeButton("Cancelar", null)
+            .show()
+    }
+
+    private fun escolherPlataforma() {
+        val tipos = Plataformas.TIPOS
+        AlertDialog.Builder(this)
+            .setTitle("Onde fica a sua loja?")
+            .setItems(tipos.map { it.nome }.toTypedArray()) { _, i -> configurarPlataforma(tipos[i]) }
+            .setNegativeButton("Cancelar", null)
+            .show()
+    }
+
+    private fun configurarPlataforma(t: Plataformas.Tipo) {
+        if (t.id == "floot") {
+            Plataformas.salvar(this, Plataformas.Config("floot", "", "", "", ""))
+            ajustes?.atualizar()
+            return responder("Loja no Floot. Para conectar, toque em Conectar à loja e entre com o login de administrador do site.")
+        }
+        val atual = Plataformas.config(this).takeIf { it.tipo == t.id }
+        val caixa = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(20), dp(8), dp(20), 0)
+        }
+        val endereco = campoDeDialogo(atual?.endereco?.removePrefix("https://").orEmpty(),
+            if (t.id == "shopify") "Endereço da loja (ex.: minhaloja.myshopify.com)" else "Endereço do site (ex.: minhaloja.com.br)")
+        val chave = campoDeDialogo("", if (atual?.chave.isNullOrBlank()) when (t.id) {
+            "shopify" -> "Token da Admin API (shpat_…)"
+            "woocommerce" -> "Chave (ck_…)"
+            else -> "Token de acesso"
+        } else "Chave salva (deixe vazio para manter)")
+        val segredo = campoDeDialogo("", if (atual?.segredo.isNullOrBlank()) "Segredo (cs_…)" else "Segredo salvo (deixe vazio para manter)")
+        val lojaId = campoDeDialogo(atual?.lojaId.orEmpty(), "Número da loja (user_id)").apply { inputType = InputType.TYPE_CLASS_NUMBER }
+        if (t.id != "nuvemshop") caixa.addView(endereco)
+        caixa.addView(chave)
+        if (t.id == "woocommerce") caixa.addView(segredo)
+        if (t.id == "nuvemshop") caixa.addView(lojaId)
+        AlertDialog.Builder(this)
+            .setTitle(t.nome)
+            .setMessage(t.ajuda)
+            .setView(caixa)
+            .setPositiveButton("Salvar e testar") { _, _ ->
+                val c = Plataformas.Config(
+                    t.id, endereco.text.toString(),
+                    chave.text.toString().ifBlank { atual?.chave.orEmpty() },
+                    segredo.text.toString().ifBlank { atual?.segredo.orEmpty() },
+                    lojaId.text.toString(),
+                )
+                Plataformas.salvar(this, c)
+                ajustes?.atualizar()
+                responder("Testando a ${t.nome}…")
+                Thread {
+                    val r = try {
+                        val l = Loja(this)
+                        Result.success("${l.produtos().size} produtos e ${l.pedidos().size} pedidos recentes")
+                    } catch (e: Exception) {
+                        Result.failure(e)
+                    }
+                    runOnUiThread {
+                        r.onSuccess { responder("Conectei na ${t.nome}: $it. Agora pergunte, por exemplo: como foram as vendas hoje?") }
+                            .onFailure { responder("Não consegui conectar na ${t.nome}: ${it.message}") }
+                        ajustes?.atualizar()
+                    }
+                }.start()
             }
             .setNegativeButton("Cancelar", null)
             .show()
