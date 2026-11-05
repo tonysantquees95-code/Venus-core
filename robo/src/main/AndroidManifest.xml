@@ -21,6 +21,12 @@
             </intent-filter>
         </activity>
 
+        <!-- As respostas prontas para colar no Instagram -->
+        <activity
+            android:name=".TelaRespostas"
+            android:exported="false"
+            android:windowSoftInputMode="adjustResize" />
+
         <!-- Lê as notificações do WhatsApp e do Instagram e responde pela própria notificação -->
         <service
             android:name=".OuvinteRobo"
