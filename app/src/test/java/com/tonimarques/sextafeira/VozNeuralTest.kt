@@ -18,3 +18,12 @@ class VozNeuralTest {
         assertTrue(VozNeural.VOZES.first().nome == "Francisca")
     }
 }
+
+class FontesSalvasTest {
+    @Test fun leFontesGuardadas() {
+        val f = Web.lerFontesSalvas("Fontes: GZH (https://gauchazh.com/a); Pesquisar \"grêmio\" no Google (https://www.google.com/search?q=gremio)")
+        org.junit.Assert.assertEquals(2, f.size)
+        org.junit.Assert.assertEquals("GZH", f[0].titulo)
+        org.junit.Assert.assertEquals("https://www.google.com/search?q=gremio", f[1].url)
+    }
+}

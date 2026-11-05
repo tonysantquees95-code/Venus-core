@@ -17,6 +17,11 @@ object Web {
     data class Fonte(val titulo: String, val url: String)
     data class Resposta(val texto: String, val fontes: List<Fonte> = emptyList())
 
+    /** "Fontes: Título (https://...); Outro (https://...)" (como fica guardado na conversa) → lista. */
+    fun lerFontesSalvas(texto: String): List<Fonte> =
+        Regex("([^;]+?)\\s*\\((https?://[^)\\s]+)\\)").findAll(texto.removePrefix("Fontes: "))
+            .map { Fonte(it.groupValues[1].trim().removePrefix(";").trim(), it.groupValues[2]) }.toList()
+
     private const val AGENTE = "SextaFeira/1.0 (assistente pessoal Android)"
 
     fun texto(
