@@ -37,7 +37,8 @@ object Instagram {
 
     class ErroDoInstagram(mensagem: String) : Exception(mensagem)
 
-    data class Conta(val id: String, val usuario: String, val tipo: String)
+    /** [tokenDaPagina]: no login pelo Facebook, o token da página ligada ao Instagram (não vence se veio de um token estendido). */
+    data class Conta(val id: String, val usuario: String, val tipo: String, val tokenDaPagina: String? = null)
     data class Post(
         val id: String, val legenda: String, val tipo: String, val quando: Long, val curtidas: Int, val comentarios: Int,
         val link: String,
@@ -56,8 +57,10 @@ object Instagram {
         val token = limparToken(tokenColado)
         if (token.length < 40) throw ErroDoInstagram("Isso não parece um token. Ele é um texto comprido que começa com IG ou EAA.")
         val conta = if (ehFacebook(token)) contaPeloFacebook(token) else conta(pedir("GET", "/me", mapOf("fields" to "user_id,username,account_type"), token))
+        // login pelo Facebook (Graph API Explorer): guarda o token da página, que publica no Instagram e não vence
+        val guardar = conta.tokenDaPagina?.takeIf { it.startsWith("EAA") } ?: token
         prefs(ctx).edit()
-            .putString("token", Cofre.selar(token)).putString("id", conta.id).putString("usuario", conta.usuario)
+            .putString("token", Cofre.selar(guardar)).putString("id", conta.id).putString("usuario", conta.usuario)
             .putLong("token_desde", System.currentTimeMillis())
             .remove("site_token")
             .apply()
@@ -97,9 +100,13 @@ object Instagram {
     private fun contaPeloFacebook(token: String): Conta {
         val tentativas = listOf<() -> Conta?>(
             {
-                val a = pedir("GET", "/me/accounts", mapOf("fields" to "instagram_business_account{id,username}"), token).optJSONArray("data") ?: JSONArray()
-                (0 until a.length()).mapNotNull { a.optJSONObject(it)?.optJSONObject("instagram_business_account") }
-                    .firstOrNull { it.optString("id").isNotBlank() }?.let { Conta(it.optString("id"), it.optString("username"), "BUSINESS") }
+                val a = pedir("GET", "/me/accounts", mapOf("fields" to "access_token,instagram_business_account{id,username}"), token).optJSONArray("data") ?: JSONArray()
+                (0 until a.length()).mapNotNull { a.optJSONObject(it) }
+                    .firstOrNull { it.optJSONObject("instagram_business_account")?.optString("id").orEmpty().isNotBlank() }
+                    ?.let { pg ->
+                        val ig = pg.getJSONObject("instagram_business_account")
+                        Conta(ig.optString("id"), ig.optString("username"), "BUSINESS", pg.optString("access_token").takeIf { it.isNotBlank() })
+                    }
             },
             // o próprio token diz a que contas dá acesso (escopos granulares do instagram_basic)
             {
@@ -376,5 +383,5 @@ object Instagram {
     }
 
     const val SEM_CONTA = "O Instagram ainda não está conectado. Diga: conectar o Instagram."
-    const val COMO_CONECTAR = "https://developers.facebook.com/apps/"
+    const val COMO_CONECTAR = "https://developers.facebook.com/tools/explorer/"
 }
