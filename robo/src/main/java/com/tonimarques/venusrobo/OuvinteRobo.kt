@@ -60,6 +60,8 @@ class OuvinteRobo : NotificationListenerService() {
         val eu = extras.getParcelable<android.app.Person>(Notification.EXTRA_MESSAGING_PERSON)?.name?.toString()
             ?: extras.getCharSequence(Notification.EXTRA_SELF_DISPLAY_NAME)?.toString()
         var texto = extras.getCharSequence(Notification.EXTRA_TEXT)?.toString()
+        // a hora em que a cliente mandou (vem em cada mensagem da conversa): separa "1" e "1" de novo de uma notificação repetida
+        var hora = 0L
         val mensagens = extras.getParcelableArray(Notification.EXTRA_MESSAGES)
         if (mensagens != null && mensagens.isNotEmpty()) {
             val ultima = mensagens.last() as? Bundle
@@ -69,6 +71,7 @@ class OuvinteRobo : NotificationListenerService() {
                 if (quem.isNullOrBlank() || (eu != null && quem == eu)) return
                 cliente = quem
                 texto = ultima.getCharSequence("text")?.toString()
+                hora = ultima.getLong("time", 0L)
             }
         }
         val limpo = Robo.textoDaCliente(texto) ?: return
@@ -76,10 +79,12 @@ class OuvinteRobo : NotificationListenerService() {
         val conversa = "$pacote|${chat.ifBlank { cliente }}"
         // o próprio robô mandou isso há pouco (o WhatsApp Business mostra a resposta na notificação com o nome da loja)
         if (ehMinhaResposta(limpo)) return
-        // a mesma mensagem da mesma conversa nos últimos 3 minutos: é a notificação sendo reapresentada
+        // notificação reapresentada (mesma mensagem, mesma hora de envio) não conta de novo. Com a hora, a cliente pode
+        // mandar o mesmo texto outra vez (ex.: "1" no menu e "1" na lista de categorias) e o robô responde.
+        // Sem a hora (app que não manda), só ignora o mesmo texto repetido em até 20 segundos.
         val agora = System.currentTimeMillis()
-        val marca = "$conversa|$limpo"
-        vistasEm[marca]?.let { if (agora - it < 3 * 60_000L) return }
+        val marca = "$conversa|$limpo|$hora"
+        vistasEm[marca]?.let { if (hora > 0L || agora - it < 20_000L) return }
         vistasEm[marca] = agora
         if (vistasEm.size > 300) vistasEm.entries.removeAll { agora - it.value > 10 * 60_000L }
 
