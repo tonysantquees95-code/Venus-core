@@ -122,7 +122,10 @@ class CatalogoInterno(private val ctx: Context) : Plataformas.Adaptador {
      * Registra uma venda feita pelo WhatsApp, Instagram ou pessoalmente: baixa o estoque e entra nos relatórios.
      * [itens] = produto e quantidade; [precoCentavos] opcional por item (padrão: o preço do produto).
      */
-    fun registrarVenda(cliente: String, itens: List<Triple<Loja.Produto, Int, Int?>>, pagamento: String, entrega: String): Loja.Pedido {
+    fun registrarVenda(
+        cliente: String, itens: List<Triple<Loja.Produto, Int, Int?>>, pagamento: String, entrega: String,
+        aguardandoPagamento: Boolean = false,
+    ): Loja.Pedido {
         require(itens.isNotEmpty()) { "Escolha pelo menos um produto." }
         var venda: JSONObject? = null
         editar { raiz ->
@@ -140,11 +143,33 @@ class CatalogoInterno(private val ctx: Context) : Plataformas.Adaptador {
                 }
             }
             venda = JSONObject().put("id", id).put("cliente", cliente.trim().ifBlank { "Cliente" }).put("itens", linhas)
-                .put("totalCents", total).put("status", "paid").put("pagamento", pagamento).put("entrega", entrega)
-                .put("criado", agora).put("pago", agora)
+                .put("totalCents", total).put("status", if (aguardandoPagamento) "awaiting_payment" else "paid").put("pagamento", pagamento).put("entrega", entrega)
+                .put("criado", agora).put("pago", if (aguardandoPagamento) JSONObject.NULL else agora)
             (raiz.optJSONArray("vendas") ?: JSONArray().also { raiz.put("vendas", it) }).put(venda)
         }
         return vendaDe(venda!!)
+    }
+
+    /** Guarda o link de cobrança criado para a venda (a Vênus confere o pagamento por ele). */
+    fun anexarCobranca(id: Int, ref: String, url: String, provedor: String) = editar { raiz ->
+        vendaJson(raiz, id)?.put("cobranca", JSONObject().put("ref", ref).put("url", url).put("provedor", provedor).put("criado", System.currentTimeMillis()))
+    }
+
+    /** O pagamento do link entrou: a venda passa a paga (o estoque já tinha sido baixado ao registrar). Null se não achar ou já estava paga. */
+    fun marcarPaga(id: Int, forma: String): Loja.Pedido? {
+        var paga: JSONObject? = null
+        editar { raiz ->
+            val v = vendaJson(raiz, id) ?: return@editar
+            if (v.optString("status") != "awaiting_payment") return@editar
+            v.put("status", "paid").put("pago", System.currentTimeMillis()).put("pagamento", forma)
+            paga = v
+        }
+        return paga?.let { vendaDe(it) }
+    }
+
+    private fun vendaJson(raiz: JSONObject, id: Int): JSONObject? {
+        val vendas = raiz.optJSONArray("vendas") ?: return null
+        return (0 until vendas.length()).mapNotNull { vendas.optJSONObject(it) }.firstOrNull { it.optInt("id") == id }
     }
 
     // ------------------------------------------------------------------ arquivo

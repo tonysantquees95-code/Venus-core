@@ -40,6 +40,11 @@ class VigiaDaLoja : JobService() {
                 PedidosDoSite.conferir(applicationContext)
             } catch (e: Exception) {
             }
+            try {
+                // rede de segurança das cobranças por link (loja sem site)
+                Cobranca.conferirPendentes(applicationContext)
+            } catch (e: Exception) {
+            }
             if (!parar) jobFinished(params, false)
         }.start()
         return true
@@ -104,7 +109,7 @@ class VigiaDaLoja : JobService() {
         /** Garante que está agendado (chamado ao abrir o app, caso o Android tenha esquecido). */
         fun garantir(c: Context) {
             // também serve de rede de segurança dos stories: a cada 15 minutos confere se algum ficou para trás
-            if (!ligado(c) && !StoriesDoDia.ligado(c) && !PedidosDoSite.ativo(c)) return
+            if (!ligado(c) && !StoriesDoDia.ligado(c) && !PedidosDoSite.ativo(c) && Cobranca.pendentes(c).isEmpty()) return
             val agendador = c.getSystemService(JobScheduler::class.java)
             if (agendador.allPendingJobs.none { it.id == JOB_ID }) agendar(c)
         }
@@ -209,7 +214,7 @@ class VigiaDaLoja : JobService() {
                 if ((p.estoque ?: 0) <= 0) "${p.nome}: esgotado" else "${p.nome}: ${p.estoque} un."
             } + if (produtos.size > 6) " e mais ${produtos.size - 6}." else "."
 
-        private fun avisar(c: Context, id: Int, titulo: String, texto: String) {
+        internal fun avisar(c: Context, id: Int, titulo: String, texto: String) {
             val gerente = c.getSystemService(NotificationManager::class.java)
             gerente.createNotificationChannel(
                 NotificationChannel(CANAL, "Avisos da loja", NotificationManager.IMPORTANCE_HIGH).apply {

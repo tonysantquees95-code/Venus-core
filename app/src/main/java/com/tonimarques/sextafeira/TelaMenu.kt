@@ -180,6 +180,10 @@ internal fun MainActivity.abrirMenu(@Suppress("UNUSED_PARAMETER") ancora: View) 
                     if (Plataformas.tipo(this) == "interno") "Produtos, fotos, estoque, vendas e o catálogo em PDF para mandar às clientes."
                     else "Catálogo em PDF com os produtos do site, para mandar no WhatsApp. Sem site? Escolha \"Sem site\" em Plataforma da loja."
                 }) { abrirCatalogo() },
+                TelaDeAjustes.Ajuste("Cobrança por link", {
+                    if (Cobranca.configurada(this)) "Ligada: ${Cobranca.nomeDoProvedor(this)}. Ao registrar uma venda, a $n cria o link e confere o pagamento."
+                    else "Para loja sem site: a $n cria o link de pagamento (Mercado Pago ou InfinitePay), você manda e ela confere sozinha."
+                }) { configurarCobranca() },
                 TelaDeAjustes.Ajuste("Conectar à loja", {
                     ferramentas.loja.email?.let { "Conectada como $it. Pergunte: como foram as vendas hoje, tem pedido novo, o que está acabando. Toque para desconectar." }
                         ?: "Entre com o login de administrador do site para a $n consultar vendas, pedidos e estoque. A senha fica criptografada só no celular."
