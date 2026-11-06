@@ -50,6 +50,15 @@ object GeradorDeCatalogo {
     fun gerar(ctx: Context, produtos: List<Loja.Produto>, comEsgotados: Boolean = false): File {
         val lista = produtosDoCatalogo(produtos, comEsgotados)
         require(lista.isNotEmpty()) { "Nenhum produto ativo com preço para o catálogo. Cadastre os preços primeiro." }
+        // as fotos do site vêm pela internet: baixa várias ao mesmo tempo, já reduzidas
+        val trabalho = java.util.concurrent.Executors.newFixedThreadPool(6)
+        val fotos = try {
+            lista.map { p -> trabalho.submit<Bitmap?> { try { foto(p) } catch (e: Exception) { null } } }.map {
+                try { it.get(30, java.util.concurrent.TimeUnit.SECONDS) } catch (e: Exception) { null }
+            }
+        } finally {
+            trabalho.shutdownNow()
+        }
         val doc = PdfDocument()
         var numero = 0
         fun novaPagina(): PdfDocument.Page = doc.startPage(PdfDocument.PageInfo.Builder(L.toInt(), A.toInt(), ++numero).create())
@@ -82,14 +91,15 @@ object GeradorDeCatalogo {
             val linha = slot / colunas
             val x = MARGEM + coluna * (largura + 16f)
             val y = topo + linha * (altura + 14f)
-            cartao(ctx, pagina.canvas, p, RectF(x, y, x + largura, y + altura), if (cat != categoriaAtual) cat else null)
+            cartao(pagina.canvas, p, fotos[i], RectF(x, y, x + largura, y + altura), if (cat != categoriaAtual) cat else null)
             categoriaAtual = cat
             slot++
             i++
         }
         doc.finishPage(pagina)
 
-        val nome = "Catalogo-" + Perfil.loja.replace(Regex("[^A-Za-z0-9]+"), "-").trim('-').ifBlank { "loja" } + ".pdf"
+        // o FotoProvider só entrega nomes em minúsculas, sem acento (senão o WhatsApp e o leitor de PDF recebem nada)
+        val nome = "catalogo-" + ComandosLocais.normalizar(Perfil.loja).replace(Regex("[^a-z0-9]+"), "-").trim('-').ifBlank { "loja" } + ".pdf"
         val (arquivo, _) = FotoProvider.novoArquivo(ctx, nome)
         arquivo.outputStream().use { doc.writeTo(it) }
         doc.close()
@@ -158,13 +168,12 @@ object GeradorDeCatalogo {
         c.drawRect(MARGEM, 52f, L - MARGEM, 53f, Paint().apply { color = DESTAQUE })
     }
 
-    private fun cartao(ctx: Context, c: Canvas, p: Loja.Produto, r: RectF, categoria: String?) {
+    private fun cartao(c: Canvas, p: Loja.Produto, bmp: Bitmap?, r: RectF, categoria: String?) {
         c.drawRoundRect(r, 12f, 12f, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = FUNDO_CARTAO })
         val pad = 10f
         // foto quadrada, recortada para preencher
         val lado = minOf(r.width() - 2 * pad, r.height() * 0.55f)
         val foto = RectF(r.centerX() - lado / 2, r.top + pad, r.centerX() + lado / 2, r.top + pad + lado)
-        val bmp = foto(p)
         if (bmp != null) {
             val escala = maxOf(foto.width() / bmp.width, foto.height() / bmp.height)
             val w = bmp.width * escala
@@ -211,14 +220,23 @@ object GeradorDeCatalogo {
     /** A foto do produto, reduzida (para o PDF não ficar pesado). */
     private fun foto(p: Loja.Produto): Bitmap? {
         val url = p.bruto?.optString("imageUrl")?.takeIf { it.isNotBlank() && it != "null" } ?: return null
-        // foto no site (Floot, Shopify…): baixa; no catálogo da Vênus: lê do celular, já reduzida
-        if (!url.startsWith("file://")) return IdeiasDePost.fotoDoProduto(p)
-        val caminho = url.removePrefix("file://")
+        // foto no site (Floot, Shopify…): baixa; no catálogo da Vênus: lê do celular. Nos dois casos, reduzida
+        val bytes = if (url.startsWith("file://")) java.io.File(url.removePrefix("file://")).takeIf { it.exists() }?.readBytes()
+        else {
+            val c = java.net.URL(Loja.enderecoCompleto(url)).openConnection() as java.net.HttpURLConnection
+            c.connectTimeout = 10_000
+            c.readTimeout = 20_000
+            try {
+                if (c.responseCode in 200..299) c.inputStream.use { it.readBytes() } else null
+            } finally {
+                c.disconnect()
+            }
+        } ?: return null
         val so = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-        BitmapFactory.decodeFile(caminho, so)
+        BitmapFactory.decodeByteArray(bytes, 0, bytes.size, so)
         if (so.outWidth <= 0) return null
         var amostra = 1
         while (so.outWidth / (amostra * 2) >= 500) amostra *= 2
-        return BitmapFactory.decodeFile(caminho, BitmapFactory.Options().apply { inSampleSize = amostra })
+        return BitmapFactory.decodeByteArray(bytes, 0, bytes.size, BitmapFactory.Options().apply { inSampleSize = amostra })
     }
 }
