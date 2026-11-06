@@ -73,33 +73,41 @@ object GeradorDeCatalogo {
         capa(ctx, pagina.canvas, lista.size)
         doc.finishPage(pagina)
 
-        // ---- produtos: 2 colunas × 3 linhas por página
+        // ---- produtos: 2 colunas; cada categoria abre com a sua faixa (nome + linha rosa) e começa numa linha nova.
+        // Se a categoria passa para a página seguinte, a faixa se repete lá com "continuação".
         val colunas = 2
-        val linhas = 3
         val topo = 70f
+        val limite = A - 40f
+        val vao = 12f
+        val faixa = 38f
         val largura = (L - 2 * MARGEM - 16f) / colunas
-        val altura = (A - topo - 50f - 2 * 14f) / linhas
-        var i = 0
-        var categoriaAtual = ""
+        val altura = 212f
         pagina = novaPagina()
         cabecalho(pagina.canvas, numero)
-        var slot = 0
-        for (p in lista) {
-            if (slot == colunas * linhas) {
-                doc.finishPage(pagina)
-                pagina = novaPagina()
-                cabecalho(pagina.canvas, numero)
-                slot = 0
+        var y = topo
+        val grupos = lista.withIndex().groupBy { categoria(it.value) } // a lista já vem em ordem de categoria
+        for ((cat, itens) in grupos) {
+            var primeira = true
+            for (fileira in itens.chunked(colunas)) {
+                val comFaixa = primeira || y == topo
+                if (y + (if (comFaixa) faixa else 0f) + altura > limite) {
+                    doc.finishPage(pagina)
+                    pagina = novaPagina()
+                    cabecalho(pagina.canvas, numero)
+                    y = topo
+                }
+                if (primeira || y == topo) {
+                    divisoria(pagina.canvas, nomeDaCategoria(cat), itens.size, y, continuacao = !primeira)
+                    y += faixa
+                }
+                fileira.forEachIndexed { coluna, (i, p) ->
+                    val x = MARGEM + coluna * (largura + 16f)
+                    cartao(pagina.canvas, p, fotos[i], RectF(x, y, x + largura, y + altura))
+                }
+                y += altura + vao
+                primeira = false
             }
-            val cat = categoria(p)
-            val coluna = slot % colunas
-            val linha = slot / colunas
-            val x = MARGEM + coluna * (largura + 16f)
-            val y = topo + linha * (altura + 14f)
-            cartao(pagina.canvas, p, fotos[i], RectF(x, y, x + largura, y + altura), if (cat != categoriaAtual) cat else null)
-            categoriaAtual = cat
-            slot++
-            i++
+            y += 10f // respiro entre uma categoria e a próxima
         }
         doc.finishPage(pagina)
 
@@ -173,11 +181,22 @@ object GeradorDeCatalogo {
         c.drawRect(MARGEM, 52f, L - MARGEM, 53f, Paint().apply { color = DESTAQUE })
     }
 
-    private fun cartao(c: Canvas, p: Loja.Produto, bmp: Bitmap?, r: RectF, categoria: String?) {
+    /** A faixa que abre cada categoria: o nome em rosa, quantos produtos tem, e a linha rosa embaixo (como no topo da página). */
+    private fun divisoria(c: Canvas, nome: String, quantos: Int, y: Float, continuacao: Boolean) {
+        val titulo = texto(14f, DESTAQUE, negrito = true, serifa = true).apply { letterSpacing = 0.04f }
+        val base = y + 18f
+        c.drawText(nome.uppercase(), MARGEM, base, titulo)
+        val detalhe = texto(9.5f, APAGADO).apply { textAlign = Paint.Align.RIGHT }
+        val d = if (continuacao) "continuação" else if (quantos == 1) "1 produto" else "$quantos produtos"
+        c.drawText(d, L - MARGEM, base, detalhe)
+        c.drawRect(MARGEM, base + 7f, L - MARGEM, base + 8.5f, Paint().apply { color = DESTAQUE })
+    }
+
+    private fun cartao(c: Canvas, p: Loja.Produto, bmp: Bitmap?, r: RectF) {
         c.drawRoundRect(r, 12f, 12f, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = FUNDO_CARTAO })
         val pad = 10f
         // foto quadrada, recortada para preencher
-        val lado = minOf(r.width() - 2 * pad, r.height() * 0.48f)
+        val lado = minOf(r.width() - 2 * pad, r.height() - 110f)
         val foto = RectF(r.centerX() - lado / 2, r.top + pad, r.centerX() + lado / 2, r.top + pad + lado)
         if (bmp != null) {
             val escala = maxOf(foto.width() / bmp.width, foto.height() / bmp.height)
@@ -191,13 +210,6 @@ object GeradorDeCatalogo {
         } else {
             c.drawRoundRect(foto, 8f, 8f, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#E9DDE8") })
             escrever(c, Perfil.loja, texto(11f, APAGADO), foto.left, foto.centerY() - 8f, foto.width(), 1, centro = true)
-        }
-        if (categoria != null) {
-            val etiqueta = texto(8.5f, Color.WHITE, negrito = true)
-            val t = nomeDaCategoria(categoria).uppercase()
-            val w = etiqueta.measureText(t) + 14f
-            c.drawRoundRect(RectF(foto.left + 6f, foto.top + 6f, foto.left + 6f + w, foto.top + 22f), 8f, 8f, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = DESTAQUE })
-            c.drawText(t, foto.left + 13f, foto.top + 17.5f, etiqueta)
         }
         var y = foto.bottom + 8f
         val largura = r.width() - 2 * pad
