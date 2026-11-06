@@ -181,7 +181,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         } catch (e: Exception) {
         }
         // pedidos da página Publicações do site (Natália): confere ao abrir e mantém o alarme de 2 minutos
-        PedidosDoSite.conferirEmSegundoPlano(this)
+        PedidosDoSite.conferirEmSegundoPlano(this, forcar = true)
         Cobranca.conferirEmSegundoPlano(this)
         VigiliaService.pausarPorTela(true)
         VigiliaService.aoGestoNaTela = {

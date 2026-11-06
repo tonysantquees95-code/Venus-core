@@ -122,9 +122,24 @@ class Loja(private val contexto: Context) {
                 val erro = dados(resposta).optString("error").ifBlank { dados(resposta).optString("message") }
                 throw ErroDaLoja(if (erro.isNotBlank()) "O site recusou: $erro" else "O site respondeu com erro $codigo. Nada foi mudado.")
             }
+            CacheDoSite.invalidar() // mudou algo no site: a próxima leitura busca de novo
             return dados(resposta)
         }
         throw ErroDaLoja("Não consegui entrar na loja.")
+    }
+
+    /**
+     * GET com cópia local: dentro da [validade] nem vai ao site; se o site falhar (fora do ar, pausado),
+     * devolve a última cópia em vez do erro.
+     */
+    private fun buscarComCopia(nome: String, caminho: String, validade: Long): JSONObject {
+        CacheDoSite.fresca(contexto, nome, validade)?.let { t -> try { return JSONObject(t) } catch (e: Exception) { } }
+        return try {
+            buscar(caminho).also { CacheDoSite.guardar(contexto, nome, it.toString()) }
+        } catch (e: Exception) {
+            val velha = CacheDoSite.velha(contexto, nome) ?: throw e
+            JSONObject(velha)
+        }
     }
 
     private fun reentrar() {
@@ -152,13 +167,13 @@ class Loja(private val contexto: Context) {
     // ------------------------------------------------------------- dados
     fun pedidos(): List<Pedido> {
         if (!ehFloot) return (externa ?: throw ErroDaLoja(SEM_PLATAFORMA)).pedidos()
-        val lista = buscar("/_api/admin/orders").optJSONArray("orders") ?: JSONArray()
+        val lista = buscarComCopia("pedidos", "/_api/admin/orders", VALIDADE_PEDIDOS).optJSONArray("orders") ?: JSONArray()
         return lerPedidos(lista)
     }
 
     fun produtos(): List<Produto> {
         if (!ehFloot) return (externa ?: throw ErroDaLoja(SEM_PLATAFORMA)).produtos()
-        val lista = buscar("/_api/admin/products").optJSONArray("products") ?: JSONArray()
+        val lista = buscarComCopia("produtos", "/_api/admin/products", VALIDADE_PRODUTOS).optJSONArray("products") ?: JSONArray()
         return lerProdutos(lista)
     }
 
@@ -336,7 +351,19 @@ class Loja(private val contexto: Context) {
 
     // ------------------------------------------------------------------ pedidos da página Publicações do site
     /** Pedidos novos da página Publicações (o site já marca como "fazendo"). */
-    fun pedidosDePublicacao(): List<PedidosDoSite.Pedido> = PedidosDoSite.lerPedidos(buscar("/_api/admin/pedidos_publicacao"))
+    fun pedidosDePublicacao(): List<PedidosDoSite.Pedido> {
+        val json = buscar("/_api/admin/pedidos_publicacao")
+        // o site manda junto o canal de aviso (ntfy): com ele, a Vênus só pergunta ao site quando há novidade
+        PedidosDoSite.guardarCanal(contexto, json.optString("aviso").takeIf { it.isNotBlank() && it != "null" })
+        return PedidosDoSite.lerPedidos(json)
+    }
+
+    /** Um pedido pelo número, da cópia local; se não estiver nela (pedido feito agora), busca de novo uma vez. */
+    fun pedidoPorNumero(id: Int): Pedido? {
+        pedidos().firstOrNull { it.id == id }?.let { return it }
+        CacheDoSite.invalidar()
+        return pedidos().firstOrNull { it.id == id }
+    }
 
     fun responderPedidoDePublicacao(id: Int, ok: Boolean, resultado: String, imagemUrl: String?) {
         enviar(
@@ -517,6 +544,10 @@ class Loja(private val contexto: Context) {
     data class Preparo(val texto: String, val alteracao: Alteracao?)
 
     companion object {
+        /** Quanto tempo a cópia local vale antes de ir ao site de novo. */
+        const val VALIDADE_PEDIDOS = 3 * 60_000L
+        const val VALIDADE_PRODUTOS = 20 * 60_000L
+
         /**
          * {ligado, hoje:{atendimentos, clientes, passadas}, esperando:[{canal, ultimaMensagem, quando}]} → frase.
          * Separado para poder ser testado.

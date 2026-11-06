@@ -71,6 +71,7 @@ class VigiaDaLoja : JobService() {
         private const val P_PAGOS = "pagos"
         private const val P_BAIXOS = "baixos"
         private const val P_INICIADO = "iniciado"
+        private const val P_ULTIMA = "ultima_verificacao"
         const val PREF_RESUMO = "resumo_noite"
         const val PREF_SEMANAL = "relatorio_semanal"
         private const val P_SEMANAL_DIA = "semanal_dia"
@@ -123,11 +124,20 @@ class VigiaDaLoja : JobService() {
             c.getSystemService(JobScheduler::class.java).schedule(info)
         }
 
-        fun verificar(c: Context) {
+        /**
+         * Olha pedidos pagos e estoque. Para usar pouco o site: no máximo a cada 30 min de dia e 1 h de noite
+         * (o aviso de pedido pago pelo canal ntfy chama com [forcar]).
+         */
+        fun verificar(c: Context, forcar: Boolean = false) {
             val prefs = c.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
             if (!prefs.getBoolean(PREF_LIGADO, false)) return
             val loja = Loja(c)
             if (!loja.conectada) return
+            val agoraMs = System.currentTimeMillis()
+            val hora = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY)
+            val espera = if (hora in 8..22) 30 * 60_000L else 60 * 60_000L
+            if (!forcar && agoraMs - prefs.getLong(P_ULTIMA, 0L) < espera - 60_000L) return
+            prefs.edit().putLong(P_ULTIMA, agoraMs).apply()
             val pedidos = loja.pedidos()
             val produtos = loja.produtos()
             val primeira = !prefs.getBoolean(P_INICIADO, false)
