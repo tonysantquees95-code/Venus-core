@@ -693,10 +693,12 @@ internal fun MainActivity.conectarInstagram() {
         inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS or InputType.TYPE_TEXT_FLAG_MULTI_LINE
         setPadding(dp(24), dp(16), dp(24), dp(16))
     }
-    val passos = "1. Toque em Abrir a Meta e entre com o seu Facebook. Abra o app Vênus da loja.\n" +
-        "2. Casos de uso → API do Instagram → Personalizar.\n" +
-        "3. Em Gerar tokens de acesso, toque em Gerar token ao lado da conta da loja (se pedir, dê a ela a função Testador do Instagram e aceite o convite no Instagram).\n" +
-        "4. Entre com o Instagram, escolha o portfólio e a conta da loja, continue, copie o token e cole aqui."
+    val passos = "O Instagram precisa estar ligado a uma página do Facebook.\n" +
+        "1. Toque em Abrir a Meta (abre o Explorador da Graph API) e entre com o seu Facebook.\n" +
+        "2. Em Aplicativo da Meta, escolha o seu app. Em Usuário ou página, escolha Token do usuário.\n" +
+        "3. Em Permissões, adicione: instagram_basic, instagram_content_publish, instagram_manage_comments, pages_show_list, pages_read_engagement e business_management.\n" +
+        "4. Toque em Generate Access Token, escolha a página e a conta do Instagram da loja e confirme.\n" +
+        "5. Copie o token, abra developers.facebook.com/tools/debug/accesstoken, cole, toque em Depurar e, embaixo, em Estender token de acesso. Copie o token novo e cole aqui."
     val d = AlertDialog.Builder(this)
         .setTitle(if (usuario != null) "Instagram: @$usuario" else "Conectar o Instagram")
         .setMessage((if (usuario != null) "Conectado. Para trocar, cole um token novo.\n\n" else "") + passos)
@@ -740,7 +742,11 @@ internal fun MainActivity.conectarInstagram() {
                         val loja = if (ferramentas.loja.conectada) "" else " Para os posts saírem sozinhos, conecte também a loja nos ajustes (a foto sobe pelo site)."
                         Diario.anotar(this, "conexao", "Instagram conectado: @${conta.usuario}", "tela")
                         responder("Instagram conectado: @${conta.usuario}. Agora os posts programados saem sozinhos na hora marcada.$loja Pergunte: como está o Instagram.")
-                    }.onFailure { e -> Toast.makeText(this, e.message ?: "Não deu certo.", Toast.LENGTH_LONG).show() }
+                    }.onFailure { e ->
+                        // o erro inteiro vai para a conversa (o aviso curto cortava o motivo)
+                        Toast.makeText(this, "Não conectou. O motivo está na conversa.", Toast.LENGTH_LONG).show()
+                        responder("Não consegui conectar o Instagram: ${e.message ?: "erro desconhecido"}")
+                    }
                 }
             }.start()
         }
