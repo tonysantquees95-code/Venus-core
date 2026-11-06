@@ -22,7 +22,7 @@ object Plataformas {
     data class Tipo(val id: String, val nome: String, val ajuda: String)
 
     val TIPOS = listOf(
-        Tipo("floot", "Floot (site próprio)", "Entre com o e-mail e a senha de administrador do site."),
+        Tipo("floot", "Site próprio", "Entre com o e-mail e a senha de administrador do site."),
         Tipo("shopify", "Shopify", "No painel da Shopify: Configurações → Apps → Desenvolver apps → criar app → dar acesso a produtos, estoque e pedidos → instalar e copiar o token da Admin API (começa com shpat_)."),
         Tipo("woocommerce", "WooCommerce", "No WordPress: WooCommerce → Configurações → Avançado → REST API → Adicionar chave, com permissão de leitura e escrita. Copie a chave (ck_…) e o segredo (cs_…)."),
         Tipo("interno", "Sem site (catálogo na Vênus)", "Para quem vende pelo WhatsApp, Instagram e Facebook: os produtos, fotos, estoque e vendas ficam aqui na Vênus."),

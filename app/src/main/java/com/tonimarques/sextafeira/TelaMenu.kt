@@ -172,7 +172,7 @@ internal fun MainActivity.abrirMenu(@Suppress("UNUSED_PARAMETER") ancora: View) 
                     "${Loja.SITE.removePrefix("https://")} · ${Perfil.ramo} · Pix ${Perfil.pixPorcento}%. É o que a $n pode prometer às clientes."
                 }) { editarDadosDaLoja() },
                 TelaDeAjustes.Ajuste("Plataforma da loja", {
-                    val t = Plataformas.TIPOS.firstOrNull { it.id == Plataformas.tipo(this) }?.nome ?: "Floot"
+                    val t = Plataformas.TIPOS.firstOrNull { it.id == Plataformas.tipo(this) }?.nome ?: "Site próprio"
                     if (Plataformas.tipo(this) == "floot") "$t. Também funciona com Shopify, WooCommerce e Nuvemshop."
                     else "$t" + (if (ferramentas.loja.conectada) ", conectada." else ", falta a chave.")
                 }) { escolherPlataforma() },

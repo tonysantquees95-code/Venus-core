@@ -30,6 +30,7 @@ internal fun MainActivity.cadastroGuiado(etapaInicial: Int = 0) {
         else -> null
     }
     var groqOk = SegundaIA.chave(this).isNotBlank()
+    var aceitouTermos = Termos.aceitos(this)
 
     fun abrir(url: String) = try {
         startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
@@ -59,7 +60,29 @@ internal fun MainActivity.cadastroGuiado(etapaInicial: Int = 0) {
                     "• Monto posts, stories e catálogo em PDF com as fotos dos produtos.", 14.5f)
                 f.fecharCartao()
                 f.paragrafo("São 7 etapas rápidas, uns 10 minutos. O que você não souber agora dá para fazer depois, no menu.", 13.5f, Formulario.COR_APAGADA)
-                f.acoes(f.botao("Começar", primario = true) { mostrar(1) })
+                f.cartao("Termos do teste-piloto")
+                f.paragrafo(Termos.RESUMO, 14f)
+                f.fecharCartao()
+                f.adicionar(f.botao("Ler os termos completos") { mostrar(-1) }, 10)
+                f.opcaoGrande("Li e aceito os termos do teste-piloto", "Toque para marcar.", aceitouTermos) {
+                    aceitouTermos = !aceitouTermos
+                    mostrar(0)
+                }
+                val comecar = f.botao("Começar", primario = true) {
+                    if (!aceitouTermos) return@botao Toast.makeText(this, "Marque que leu e aceita os termos para continuar.", Toast.LENGTH_SHORT).show()
+                    if (!Termos.aceitos(this)) Termos.aceitar(this)
+                    mostrar(1)
+                }
+                habilitar(comecar, aceitouTermos)
+                f.acoes(comecar)
+            }
+
+            // ---------------------------------------------------------------- termos completos
+            -1 -> {
+                f.trocarTitulo("Termos do teste-piloto", "Versão ${Termos.VERSAO}")
+                f.aoTocarVoltar = { mostrar(0) }
+                f.paragrafo(Termos.TEXTO, 14f, android.graphics.Color.WHITE)
+                f.acoes(f.botao("Voltar", primario = true) { mostrar(0) })
             }
 
             // ---------------------------------------------------------------- 2. você e a loja
@@ -92,7 +115,7 @@ internal fun MainActivity.cadastroGuiado(etapaInicial: Int = 0) {
             2 -> {
                 f.trocarTitulo("Como você vende", "Etapa 3 de $ETAPAS")
                 f.paragrafo("A sua loja tem site? Dá para mudar depois, no menu.")
-                f.opcaoGrande("Tenho site", "Eu leio os produtos, o estoque e os pedidos direto do site (Shopify, WooCommerce, Nuvemshop ou Floot).", comSite == true) {
+                f.opcaoGrande("Tenho site", "Eu leio os produtos, o estoque e os pedidos direto do site (Shopify, WooCommerce, Nuvemshop ou site próprio).", comSite == true) {
                     comSite = true
                     if (Plataformas.tipo(this) == "interno") Plataformas.salvar(this, Plataformas.Config("floot", "", "", "", ""))
                     mostrar(2)
