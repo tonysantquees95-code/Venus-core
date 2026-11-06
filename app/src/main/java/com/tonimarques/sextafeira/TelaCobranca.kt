@@ -74,6 +74,14 @@ internal fun MainActivity.configurarCobranca() {
         }
         if (Cobranca.configurada(this) && escolhido == Cobranca.provedor(this)) {
             estado.text = "✓ Ligada: ${Cobranca.nomeDoProvedor(this)}."
+            f.cartao("Teste de R$ 1,00")
+            f.adicionar(f.aviso("Crie um link de R$ 1,00, pague você mesmo (Pix é o mais rápido) e depois toque em Conferir. Não mexe no catálogo nem nas vendas."), 2)
+            val estadoTeste = f.aviso(Cobranca.testeAberto(this)?.let { "Teste aberto: pague o link e toque em Conferir." }.orEmpty())
+            f.lado(
+                f.botao("Criar link de teste") { criarLinkDeTeste(estadoTeste) },
+                f.botao("Conferir pagamento") { conferirLinkDeTeste(estadoTeste) },
+            )
+            f.adicionar(estadoTeste, 6)
             f.fecharCartao()
             f.adicionar(f.botao("Desligar a cobrança por link") {
                 Cobranca.desligar(this)
@@ -127,6 +135,46 @@ internal fun MainActivity.cobrarVenda(venda: Loja.Pedido) {
                 } catch (e: Exception) {
                 }
             }
+        }
+    }.start()
+}
+
+private fun MainActivity.criarLinkDeTeste(estado: TextView) {
+    estado.text = "Criando o link de R$ 1,00…"
+    Thread {
+        val r = try {
+            Result.success(Cobranca.criarTeste(applicationContext))
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+        runOnUiThread {
+            r.onSuccess { link ->
+                estado.text = "Link criado. Pague e volte aqui para tocar em Conferir pagamento.\n${link.url}"
+                try {
+                    startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(link.url)))
+                } catch (e: Exception) {
+                }
+            }.onFailure { estado.text = "✗ ${it.message ?: "Não consegui criar o link."}" }
+        }
+    }.start()
+}
+
+private fun MainActivity.conferirLinkDeTeste(estado: TextView) {
+    estado.text = "Conferindo…"
+    Thread {
+        val r = try {
+            Result.success(Cobranca.conferirTeste(applicationContext))
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+        runOnUiThread {
+            r.onSuccess { s ->
+                estado.text = when {
+                    s == null -> "Crie o link de teste primeiro."
+                    s.pago -> "✓ Pagamento recebido (${s.forma ?: "link"}${s.valorCentavos?.let { ", " + Loja.dinheiro(it) } ?: ""}). A cobrança está funcionando!"
+                    else -> "Ainda não aparece como pago. No Pix leva alguns segundos; tente de novo em 1 minuto."
+                }
+            }.onFailure { estado.text = "✗ Não consegui conferir: ${it.message}" }
         }
     }.start()
 }
