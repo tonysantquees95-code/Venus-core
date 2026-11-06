@@ -92,6 +92,7 @@ object Perfil {
     /** "minhaloja.com.br/" → "https://minhaloja.com.br". */
     fun normalizarSite(t: String): String {
         val s = t.trim().removeSuffix("/")
+        if (s.isEmpty()) return "" // loja sem site
         return if (s.startsWith("http://") || s.startsWith("https://")) s.replace("http://", "https://") else "https://$s"
     }
 

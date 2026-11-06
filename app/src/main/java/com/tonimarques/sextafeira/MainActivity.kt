@@ -136,11 +136,8 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         EstudoDiario.agendar(this)
         StoriesDoDia.agendar(this)
         // o Direct automático roda no site: ele precisa do token do Instagram em dia
-        // quem instala do zero (sem nenhuma chave) vê os primeiros passos uma vez
-        if (!prefs.getBoolean("primeiros_passos_visto", false)) {
-            if (chave().isBlank() && !SegundaIA.configurada(this)) window.decorView.postDelayed({ primeirosPassos() }, 900)
-            prefs.edit().putBoolean("primeiros_passos_visto", true).apply()
-        }
+        // quem instala do zero (sem nenhuma IA) vê o cadastro guiado, até concluir ou configurar uma IA
+        if (javaClass == MainActivity::class.java && precisaDoCadastro()) window.decorView.postDelayed({ if (!isFinishing) cadastroGuiado() }, 900)
         Thread {
             try {
                 RegrasDaLoja.semear(applicationContext, memoria)
