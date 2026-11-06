@@ -56,6 +56,36 @@ object PedidosDoSite {
      */
     fun avisosNovos(ctx: Context): List<String>? {
         val canal = canal(ctx) ?: return null
+        val doServidor = avisosDoServidor(ctx, canal)
+        val doNtfy = avisosDoNtfy(ctx, canal)
+        if (doServidor == null && doNtfy == null) return null
+        return doServidor.orEmpty() + doNtfy.orEmpty()
+    }
+
+    /** O canal de avisos no servidor da Vênus (Cloudflare). Null se não deu para olhar. */
+    private fun avisosDoServidor(ctx: Context, canal: String): List<String>? {
+        if (!Servidor.configurado()) return null
+        val p = prefs(ctx)
+        val desde = p.getLong("servidor_ultimo", 0L)
+        val c = java.net.URL("${Servidor.ENDERECO}/aviso/$canal" + (if (desde > 0) "?desde=$desde" else "")).openConnection() as java.net.HttpURLConnection
+        return try {
+            c.connectTimeout = 10_000
+            c.readTimeout = 15_000
+            if (c.responseCode !in 200..299) return null
+            val o = JSONObject(c.inputStream.bufferedReader().use { it.readText() })
+            val lista = o.optJSONArray("avisos") ?: JSONArray()
+            p.edit().putLong("servidor_ultimo", o.optLong("ultimo", desde)).apply()
+            // na primeira olhada só marca onde está (não refaz avisos antigos)
+            if (desde == 0L) emptyList() else (0 until lista.length()).mapNotNull { lista.optJSONObject(it)?.optString("texto") }
+        } catch (e: Exception) {
+            null
+        } finally {
+            c.disconnect()
+        }
+    }
+
+    /** O mesmo canal no ntfy.sh (enquanto o site ainda avisa por lá). */
+    private fun avisosDoNtfy(ctx: Context, canal: String): List<String>? {
         val p = prefs(ctx)
         val desde = p.getString("canal_ultimo", null) ?: "30m"
         val c = java.net.URL("https://ntfy.sh/$canal/json?poll=1&since=" + java.net.URLEncoder.encode(desde, "UTF-8")).openConnection() as java.net.HttpURLConnection

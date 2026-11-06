@@ -202,13 +202,21 @@ class Atualizador(private val contexto: Context) {
         throw ErroDeAtualizacao("O download não abriu.")
     }
 
-    /** A versão mais nova pelo canal público do site (sem token). */
+    /** A versão mais nova pelo canal público (sem token): primeiro o servidor da Vênus, depois o site da loja. */
     private fun doCanal(robo: Boolean): Versao? {
-        val c = abrir("$CANAL?app=${if (robo) "robo" else "venus"}", null)
-        val codigo = c.responseCode
-        val texto = ler(c)
-        if (codigo !in 200..299) return null
-        return lerCanal(JSONObject(texto), robo)
+        val app = if (robo) "robo" else "venus"
+        val canais = listOfNotNull(if (Servidor.configurado()) "${Servidor.ENDERECO}/atualizacao" else null, CANAL)
+        for (canal in canais) {
+            try {
+                val c = abrir("$canal?app=$app", null)
+                val codigo = c.responseCode
+                val texto = ler(c)
+                if (codigo in 200..299) lerCanal(JSONObject(texto), robo)?.let { return it }
+            } catch (e: Exception) {
+                // fora do ar: tenta o próximo canal
+            }
+        }
+        return null
     }
 
     private fun abrir(url: String, token: String?): HttpURLConnection =
