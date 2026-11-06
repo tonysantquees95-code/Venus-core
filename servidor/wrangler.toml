@@ -1,0 +1,15 @@
+# Servidor da Vênus (Cloudflare Workers + D1). Publicado sozinho pelo GitHub (.github/workflows/servidor.yml).
+name = "venus-servidor"
+main = "src/index.js"
+compatibility_date = "2026-06-01"
+workers_dev = true
+
+[[d1_databases]]
+binding = "DB"
+database_name = "venus"
+database_id = "__D1_ID__" # o workflow troca pelo id real
+migrations_dir = "migrations"
+
+# limpeza diária dos avisos antigos (01:17 em Brasília)
+[triggers]
+crons = ["17 4 * * *"]

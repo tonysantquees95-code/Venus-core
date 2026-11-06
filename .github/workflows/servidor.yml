@@ -1,0 +1,81 @@
+name: Servidor (Cloudflare)
+
+# Publica o servidor da Vênus (pasta servidor/) no Cloudflare Workers, com o banco D1.
+# Precisa dos segredos do repositório: CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID e
+# VENUS_GITHUB_LEITURA (token só de leitura do repositório, para o canal de atualização).
+on:
+  push:
+    branches: [main]
+    paths: ["servidor/**", ".github/workflows/servidor.yml"]
+  workflow_dispatch:
+
+concurrency:
+  group: servidor
+  cancel-in-progress: false
+
+jobs:
+  publicar:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: servidor
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      WRANGLER: npx --yes wrangler@4
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Conferir os segredos
+        run: |
+          falta=""
+          [ -z "$CLOUDFLARE_API_TOKEN" ] && falta="$falta CLOUDFLARE_API_TOKEN"
+          [ -z "$CLOUDFLARE_ACCOUNT_ID" ] && falta="$falta CLOUDFLARE_ACCOUNT_ID"
+          if [ -n "$falta" ]; then
+            echo "::error::Faltam os segredos:$falta (GitHub → Settings → Secrets and variables → Actions)."
+            exit 1
+          fi
+
+      - name: Banco D1 (cria na primeira vez)
+        run: |
+          id=$($WRANGLER d1 list --json | jq -r '.[] | select(.name=="venus") | .uuid' | head -1)
+          if [ -z "$id" ] || [ "$id" = "null" ]; then
+            $WRANGLER d1 create venus
+            id=$($WRANGLER d1 list --json | jq -r '.[] | select(.name=="venus") | .uuid' | head -1)
+          fi
+          if [ -z "$id" ] || [ "$id" = "null" ]; then echo "::error::Não consegui criar ou achar o banco D1 'venus'."; exit 1; fi
+          sed -i "s/__D1_ID__/$id/" wrangler.toml
+          echo "Banco D1: $id"
+
+      - name: Atualizar as tabelas
+        run: $WRANGLER d1 migrations apply venus --remote
+
+      - name: Publicar
+        run: |
+          $WRANGLER deploy | tee deploy.txt
+          url=$(grep -oE 'https://[a-zA-Z0-9.-]+\.workers\.dev' deploy.txt | head -1)
+          echo "ENDERECO=$url" >> "$GITHUB_ENV"
+          echo "### Servidor da Vênus no ar" >> "$GITHUB_STEP_SUMMARY"
+          echo "Endereço: $url" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Token do canal de atualização
+        env:
+          LEITURA: ${{ secrets.VENUS_GITHUB_LEITURA }}
+        run: |
+          if [ -z "$LEITURA" ]; then
+            echo "::warning::Sem o segredo VENUS_GITHUB_LEITURA: o canal de atualização responde 503 até ele existir."
+          else
+            printf '%s' "$LEITURA" | $WRANGLER secret put GITHUB_TOKEN
+          fi
+
+      - name: Conferir se está no ar
+        run: |
+          sleep 5
+          curl -fsS "$ENDERECO/saude"
+          echo
+          curl -sS "$ENDERECO/atualizacao?app=venus" | head -c 300
+          echo
