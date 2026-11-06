@@ -25,6 +25,55 @@ object PedidosDoSite {
     const val ACAO = "com.tonimarques.sextafeira.PEDIDOS_DO_SITE"
     const val INTERVALO_MS = 2 * 60_000L
     private const val PREFS = "pedidos_do_site"
+    /** Sem o canal de aviso: pergunta ao site a cada 10 min de dia (8h às 23h) e a cada 1 h de noite. */
+    private const val SITE_DIA_MS = 10 * 60_000L
+    private const val SITE_NOITE_MS = 60 * 60_000L
+    /** Com o canal de aviso: o site só é consultado quando chega aviso, ou a cada 30 min como rede de segurança. */
+    private const val SITE_SEGURANCA_MS = 30 * 60_000L
+
+    private fun prefs(ctx: Context) = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+
+    /** O canal de aviso (tópico do ntfy.sh) que o site manda junto com os pedidos. */
+    fun canal(ctx: Context): String? = prefs(ctx).getString("canal", null)?.takeIf { it.matches(Regex("[A-Za-z0-9_-]{16,64}")) }
+
+    fun guardarCanal(ctx: Context, canal: String?) {
+        if (canal == null || canal == canal(ctx)) return
+        prefs(ctx).edit().putString("canal", canal).remove("canal_ultimo").apply()
+    }
+
+    private fun deDia(): Boolean = Calendar.getInstance().get(Calendar.HOUR_OF_DAY) in 8..22
+
+    /** De quanto em quanto tempo o alarme toca: com canal, a cada 2 min (só olha o ntfy, que não usa o site); sem, 10 min de dia. */
+    fun intervalo(ctx: Context): Long = when {
+        canal(ctx) != null -> if (deDia()) INTERVALO_MS else 10 * 60_000L
+        deDia() -> SITE_DIA_MS
+        else -> SITE_NOITE_MS
+    }
+
+    /**
+     * Olha o canal de aviso (ntfy.sh, grátis, fora do site). Devolve os avisos novos ("publicacao", "pago"...),
+     * ou null se não deu para olhar (aí vale a regra do tempo).
+     */
+    fun avisosNovos(ctx: Context): List<String>? {
+        val canal = canal(ctx) ?: return null
+        val p = prefs(ctx)
+        val desde = p.getString("canal_ultimo", null) ?: "30m"
+        val c = java.net.URL("https://ntfy.sh/$canal/json?poll=1&since=" + java.net.URLEncoder.encode(desde, "UTF-8")).openConnection() as java.net.HttpURLConnection
+        return try {
+            c.connectTimeout = 10_000
+            c.readTimeout = 15_000
+            if (c.responseCode !in 200..299) return null
+            val linhas = c.inputStream.bufferedReader().use { it.readLines() }
+            val msgs = linhas.mapNotNull { l -> try { JSONObject(l) } catch (e: Exception) { null } }.filter { it.optString("event") == "message" }
+            msgs.lastOrNull()?.optString("id")?.takeIf { it.isNotBlank() }?.let { p.edit().putString("canal_ultimo", it).apply() }
+            if (msgs.isEmpty() && p.getString("canal_ultimo", null) == null) p.edit().putString("canal_ultimo", (System.currentTimeMillis() / 1000).toString()).apply()
+            msgs.map { it.optString("message") }
+        } catch (e: Exception) {
+            null
+        } finally {
+            c.disconnect()
+        }
+    }
 
     data class Pedido(
         val id: Int, val tipo: String, val turno: String?, val ideiaRef: String?, val ideiaTitulo: String?,
@@ -43,7 +92,7 @@ object PedidosDoSite {
         ctx, 74_600, Intent(ctx, AlarmeDosPedidos::class.java).setAction(ACAO), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
     )
 
-    fun agendar(ctx: Context, daqui: Long = INTERVALO_MS) {
+    fun agendar(ctx: Context, daqui: Long = intervalo(ctx)) {
         if (!ativo(ctx)) return
         val am = ctx.getSystemService(AlarmManager::class.java) ?: return
         val quando = System.currentTimeMillis() + daqui
@@ -56,11 +105,11 @@ object PedidosDoSite {
     }
 
     /** Confere agora (fora da thread principal) e garante o próximo alarme. */
-    fun conferirEmSegundoPlano(ctx: Context) {
+    fun conferirEmSegundoPlano(ctx: Context, forcar: Boolean = false) {
         val app = ctx.applicationContext
         Thread {
             try {
-                conferir(app)
+                conferir(app, forcar)
             } catch (e: Exception) {
             }
         }.start()
@@ -68,10 +117,33 @@ object PedidosDoSite {
 
     private val trava = Any()
 
-    /** Bloqueante: busca os pedidos, faz cada um e responde ao site. Também sincroniza as ideias de post. */
-    fun conferir(ctx: Context) {
+    /**
+     * Bloqueante: busca os pedidos, faz cada um e responde ao site. Também sincroniza as ideias de post.
+     * Para usar pouco o site: com o canal de aviso, só vai ao site quando chega aviso (ou a cada 30 min);
+     * sem ele, no máximo a cada 10 min de dia e 1 h de noite. [forcar] = abrir o app.
+     */
+    fun conferir(ctx: Context, forcar: Boolean = false) {
         if (!ativo(ctx)) return
         agendar(ctx)
+        val agora = System.currentTimeMillis()
+        val p = prefs(ctx)
+        val ultimo = p.getLong("ultimo_site", 0L)
+        val avisos = avisosNovos(ctx)
+        // aviso de pedido pago: confere os pedidos da loja na hora (avisos no celular)
+        if (avisos?.any { it.startsWith("pago") } == true) {
+            CacheDoSite.invalidar()
+            try {
+                VigiaDaLoja.verificar(ctx, forcar = true)
+            } catch (e: Exception) {
+            }
+        }
+        // abrir o app conta como pedido de conferência, mas no máximo uma vez a cada 2 minutos
+        val precisa = (forcar && agora - ultimo >= INTERVALO_MS) || when {
+            avisos != null -> avisos.any { it.startsWith("publicacao") } || agora - ultimo >= SITE_SEGURANCA_MS
+            else -> agora - ultimo >= (if (deDia()) SITE_DIA_MS else SITE_NOITE_MS) - 30_000L
+        }
+        if (!precisa) return
+        p.edit().putLong("ultimo_site", agora).apply()
         synchronized(trava) {
             val loja = Loja(ctx)
             try {

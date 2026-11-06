@@ -83,6 +83,52 @@ object AtendenteDoRobo {
         return null
     }
 
+    // ------------------------------------------------------------------ mensagens prontas que o site manda a cliente enviar
+    private val RE_TROCA = Regex("solicitacao de troca/devolucao n\\D{0,3}(\\d+)")
+    private val RE_PEDIDO_FEITO = Regex("fiz o pedido #\\s?(\\d+) no site")
+    private val RE_MOTOBOY = Regex("acabei de fazer um pedido no site e escolhi a entrega via motoboy")
+    const val PRAZO_TROCA = "2 dias úteis"
+
+    /**
+     * A solicitação de troca/devolução e a confirmação de compra que o site prepara (as mesmas que o robô do site reconhece).
+     * [pedido] busca o pedido pelo número (na cópia local da Vênus); [prazoPostagem] em dias úteis. Null = não é uma delas.
+     */
+    fun especial(mensagem: String, pedido: (Int) -> Loja.Pedido?, prazoPostagem: Int): Decisao? {
+        val t = normalizar(mensagem)
+        RE_TROCA.find(t)?.let { m ->
+            return Decisao(
+                "Recebemos sua solicitação nº ${m.groupValues[1]} 💗 Obrigada por avisar! Agora é só mandar aqui as fotos do produto e do problema e, " +
+                    "se tiver, o vídeo da abertura da embalagem. Nossa equipe analisa e te responde em até $PRAZO_TROCA por aqui.", true, null,
+            )
+        }
+        if (RE_MOTOBOY.containsMatchIn(t)) {
+            return Decisao("Recebemos seu pedido com entrega por motoboy ✅ A equipe confere o endereço e já confirma a saída do entregador por aqui 💗", true, null)
+        }
+        val numero = RE_PEDIDO_FEITO.find(t)?.groupValues?.get(1)?.toIntOrNull() ?: return null
+        val p = try {
+            pedido(numero)
+        } catch (e: Exception) {
+            null
+        } ?: return Decisao("Recebi sua mensagem sobre o pedido 💗 Vou pedir para a equipe conferir, e já te respondemos por aqui.", true, null)
+        return when (p.status) {
+            "canceled" -> Decisao("Vi aqui que o pedido #${p.id} está cancelado. Vou chamar a equipe para te ajudar, só um instante 💗", true, null)
+            "awaiting_payment" -> Decisao(
+                "Recebemos seu pedido #${p.id} 💗 Ele ainda está aguardando a confirmação do pagamento. No Pix, ela costuma sair em poucos minutos " +
+                    "e aparece na página do pedido no site. Assim que entrar, a gente separa tudo!", false, null,
+            )
+            "shipped" -> Decisao("Seu pedido #${p.id} já foi postado 📦 O código de rastreio está na página do pedido no site. Qualquer dúvida, é só chamar!", false, null)
+            "delivered" -> Decisao("Vi aqui que o pedido #${p.id} já foi entregue 💗 Em que posso te ajudar?", false, null)
+            else -> when (p.entrega) {
+                "pickup" -> Decisao("Recebemos seu pedido #${p.id} e o pagamento está confirmado ✅ Vou chamar a equipe para combinar com você o dia, o horário e o local da retirada, só um instante 💗", true, null)
+                "motoboy" -> Decisao("Recebemos seu pedido #${p.id} e o pagamento está confirmado ✅ A equipe já vai confirmar a saída do entregador por aqui 💗", true, null)
+                else -> Decisao(
+                    "Oba! Recebemos seu pedido #${p.id} e o pagamento está confirmado ✅ Vamos postar em até $prazoPostagem ${if (prazoPostagem == 1) "dia útil" else "dias úteis"}, " +
+                        "em embalagem discreta, e te mandamos o código de rastreio por aqui. Obrigada pela compra! 💗", false, null,
+                )
+            }
+        }
+    }
+
     /** Os produtos mais ligados à conversa (palavras em comum), para não mandar o catálogo inteiro à IA. */
     fun produtosRelevantes(texto: String, produtos: List<Loja.Produto>, maximo: Int = 20): List<Loja.Produto> {
         val palavras = normalizar(texto).split(' ').filter { it.length >= 4 }.toSet()
@@ -143,7 +189,8 @@ object AtendenteDoRobo {
         if (!teste && conversa != null && conversa.pausadoAte > agora) return Saida(emptyList(), false)
 
         val regras = if (Perfil.regrasConfiguradas) Perfil.regras.perguntasComId(Perfil.loja).associate { it.first to it.third } else emptyMap()
-        val decisao = decidir(mensagem, conversa, regras, Perfil.loja, Marca.nome, Perfil.site, agora, Perfil.regras.retiradaDisponivel)
+        val decisao = especial(mensagem, { n -> Loja(ctx).takeIf { it.conectada }?.pedidoPorNumero(n) }, Perfil.regras.prazoPostagemDias?.takeIf { it > 0 } ?: 2)
+            ?: decidir(mensagem, conversa, regras, Perfil.loja, Marca.nome, Perfil.site, agora, Perfil.regras.retiradaDisponivel)
             ?: comIA(ctx, mensagem, conversa, canal)
         val nova = Conversa(
             (conversa?.mensagens.orEmpty() + Msg(true, mensagem, agora) + Msg(false, decisao.texto, agora)).takeLast(12),

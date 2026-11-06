@@ -551,7 +551,7 @@ internal fun MainActivity.alternarAvisosDaLoja() {
         // primeira olhada já agora: só registra o que existe, para avisar apenas o que for novo
         Thread {
             try {
-                VigiaDaLoja.verificar(this)
+                VigiaDaLoja.verificar(this, forcar = true)
             } catch (e: Exception) {
             }
         }.start()
