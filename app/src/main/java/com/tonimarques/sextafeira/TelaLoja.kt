@@ -122,7 +122,7 @@ internal fun MainActivity.editarDadosDaLoja() {
     fun reais(c: Int?) = c?.let { String.format(java.util.Locale("pt", "BR"), "%.2f", it / 100.0) }.orEmpty()
 
     secao("Loja")
-    val site = texto(Perfil.site.removePrefix("https://"), "Endereço do site (ex.: minhaloja.com.br)")
+    val site = texto(Perfil.site.removePrefix("https://"), if (Plataformas.tipo(this) == "interno") "Endereço do site (vazio = loja sem site)" else "Endereço do site (ex.: minhaloja.com.br)")
     val ramo = texto(Perfil.ramo, "Ramo (ex.: moda íntima e sex shop)")
     secao("Pagamento")
     val pix = numero(r.pixDescontoPct, "Desconto no Pix (%)")
@@ -174,7 +174,7 @@ internal fun MainActivity.editarDadosDaLoja() {
                 LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, (resources.displayMetrics.heightPixels * 0.55).toInt()))
         })
         .setPositiveButton("Salvar") { _, _ ->
-            if (site.text.isBlank()) return@setPositiveButton Toast.makeText(this, "Preencha o endereço do site.", Toast.LENGTH_SHORT).show()
+            if (site.text.isBlank() && Plataformas.tipo(this) != "interno") return@setPositiveButton Toast.makeText(this, "Preencha o endereço do site.", Toast.LENGTH_SHORT).show()
             fun int(e: EditText) = e.text.toString().trim().toIntOrNull()
             val novas = RegrasDeVenda(
                 pixDescontoPct = (int(pix) ?: 0).coerceIn(0, 50),

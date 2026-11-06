@@ -39,6 +39,12 @@ class Formulario(private val activity: Activity, titulo: String, subtitulo: Stri
         background = GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, intArrayOf(Color.argb(0, 4, 3, 12), FUNDO_2))
     }
     private var cartaoAtual: LinearLayout? = null
+    private lateinit var rolagem: ScrollView
+    private lateinit var vTitulo: TextView
+    private lateinit var vSubtitulo: TextView
+
+    /** Se definido, a seta do topo e o botão Voltar do celular chamam isto em vez de fechar (ex.: passo anterior). */
+    var aoTocarVoltar: (() -> Unit)? = null
 
     init {
         val raiz = FrameLayout(activity).apply {
@@ -65,26 +71,28 @@ class Formulario(private val activity: Activity, titulo: String, subtitulo: Stri
             background = null
             contentDescription = "Fechar"
             setPadding(dp(12), dp(12), dp(12), dp(12))
-            setOnClickListener { dialogo.dismiss() }
+            setOnClickListener { aoTocarVoltar?.invoke() ?: dialogo.dismiss() }
         })
         val nomes = LinearLayout(activity).apply { orientation = LinearLayout.VERTICAL }
-        nomes.addView(TextView(activity).apply {
+        vTitulo = TextView(activity).apply {
             text = titulo.uppercase()
             textSize = 15f
             letterSpacing = 0.3f
             typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
             setTextColor(DESTAQUE)
-        })
-        nomes.addView(TextView(activity).apply {
+        }
+        nomes.addView(vTitulo)
+        vSubtitulo = TextView(activity).apply {
             text = subtitulo
             textSize = 12.5f
             setTextColor(COR_APAGADA)
             setPadding(0, dp(2), 0, 0)
-        })
+        }
+        nomes.addView(vSubtitulo)
         topo.addView(nomes, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         tudo.addView(topo)
 
-        val rolagem = ScrollView(activity).apply {
+        rolagem = ScrollView(activity).apply {
             isVerticalScrollBarEnabled = false
             overScrollMode = View.OVER_SCROLL_NEVER
             isFillViewport = true
@@ -101,6 +109,88 @@ class Formulario(private val activity: Activity, titulo: String, subtitulo: Stri
             setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
             setWindowAnimations(android.R.style.Animation_Dialog)
         }
+        dialogo.setOnKeyListener { _, codigo, evento ->
+            val voltar = aoTocarVoltar
+            if (codigo == android.view.KeyEvent.KEYCODE_BACK && voltar != null) {
+                if (evento.action == android.view.KeyEvent.ACTION_UP) voltar()
+                true
+            } else false
+        }
+    }
+
+    /** Apaga o conteúdo (para montar outra etapa na mesma tela) e volta a rolagem para o topo. */
+    fun limpar() {
+        coluna.removeAllViews()
+        cartaoAtual = null
+        rodape.removeAllViews()
+        rolagem.scrollTo(0, 0)
+    }
+
+    /** Os próximos itens voltam a entrar direto na coluna (fora do último cartão). */
+    fun fecharCartao() {
+        cartaoAtual = null
+    }
+
+    fun trocarTitulo(titulo: String, subtitulo: String) {
+        vTitulo.text = titulo.uppercase()
+        vSubtitulo.text = subtitulo
+    }
+
+    /** Barrinha de progresso em segmentos (etapa [atual] de [total], começando em 1). */
+    fun progresso(atual: Int, total: Int) {
+        val barra = LinearLayout(activity).apply {
+            orientation = LinearLayout.HORIZONTAL
+            setPadding(dp(4), dp(6), dp(4), dp(2))
+        }
+        for (i in 1..total) {
+            barra.addView(View(activity).apply {
+                background = GradientDrawable().apply {
+                    cornerRadius = dp(3).toFloat()
+                    setColor(if (i <= atual) DESTAQUE else BORDA)
+                }
+            }, LinearLayout.LayoutParams(0, dp(5), 1f).apply { if (i > 1) marginStart = dp(5) })
+        }
+        coluna.addView(barra)
+    }
+
+    /** Texto solto na coluna (fora de cartão), para explicar a etapa. */
+    fun paragrafo(t: CharSequence, tamanho: Float = 14.5f, cor: Int = COR_ROTULO): TextView = TextView(activity).apply {
+        text = t
+        textSize = tamanho
+        setTextColor(cor)
+        setLineSpacing(0f, 1.15f)
+        setPadding(dp(6), dp(14), dp(6), 0)
+        (cartaoAtual ?: coluna).addView(this)
+    }
+
+    /** Cartão grande que se escolhe com um toque (ex.: Tenho site / Não tenho site). */
+    fun opcaoGrande(titulo: String, texto: String, marcada: Boolean, aoTocar: () -> Unit): View {
+        val c = LinearLayout(activity).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(18), dp(16), dp(18), dp(16))
+            background = GradientDrawable().apply {
+                cornerRadius = dp(22).toFloat()
+                setColor(if (marcada) Color.argb(60, 227, 107, 208) else CARTAO)
+                setStroke(dp(if (marcada) 2 else 1), if (marcada) DESTAQUE else BORDA)
+            }
+            isClickable = true
+            isFocusable = true
+            setOnClickListener { aoTocar() }
+        }
+        c.addView(TextView(activity).apply {
+            text = (if (marcada) "●  " else "○  ") + titulo
+            textSize = 16.5f
+            typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
+            setTextColor(Color.WHITE)
+        })
+        c.addView(TextView(activity).apply {
+            text = texto
+            textSize = 13.5f
+            setTextColor(COR_APAGADA)
+            setPadding(0, dp(6), 0, 0)
+        })
+        coluna.addView(c, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(12) })
+        return c
     }
 
     fun dp(v: Int) = (v * activity.resources.displayMetrics.density).toInt()
