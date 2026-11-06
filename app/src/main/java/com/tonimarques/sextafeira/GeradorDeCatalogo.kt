@@ -46,6 +46,11 @@ object GeradorDeCatalogo {
 
     fun categoria(p: Loja.Produto): String = p.bruto?.optString("category")?.takeIf { it.isNotBlank() && it != "null" } ?: "Produtos"
 
+    /** O nome da categoria para a cliente ler: "acessorios_bdsm" vira "Acessórios BDSM". */
+    fun nomeDaCategoria(c: String): String =
+        Loja.CATEGORIAS.firstOrNull { it.first == c }?.second
+            ?: c.replace(Regex("[_-]+"), " ").trim().replaceFirstChar { it.uppercase() }
+
     /** Monta o PDF e devolve o arquivo (na pasta compartilhável do app). Bloqueante. */
     fun gerar(ctx: Context, produtos: List<Loja.Produto>, comEsgotados: Boolean = false): File {
         val lista = produtosDoCatalogo(produtos, comEsgotados)
@@ -128,7 +133,7 @@ object GeradorDeCatalogo {
         val faixa = Paint().apply { color = ESCURO }
         c.drawRect(0f, 0f, L, A * 0.46f, faixa)
         var y = 90f
-        val logo = arquivoDoLogo(ctx).takeIf { it.exists() }?.let { BitmapFactory.decodeFile(it.absolutePath) }
+        val logo = arquivoDoLogo(ctx).takeIf { it.exists() }?.let { reduzir(it.readBytes(), 450, quadrada = false) }
         if (logo != null) {
             val lado = 150f
             val escala = minOf(lado / logo.width, lado / logo.height)
@@ -172,7 +177,7 @@ object GeradorDeCatalogo {
         c.drawRoundRect(r, 12f, 12f, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = FUNDO_CARTAO })
         val pad = 10f
         // foto quadrada, recortada para preencher
-        val lado = minOf(r.width() - 2 * pad, r.height() * 0.55f)
+        val lado = minOf(r.width() - 2 * pad, r.height() * 0.48f)
         val foto = RectF(r.centerX() - lado / 2, r.top + pad, r.centerX() + lado / 2, r.top + pad + lado)
         if (bmp != null) {
             val escala = maxOf(foto.width() / bmp.width, foto.height() / bmp.height)
@@ -189,7 +194,7 @@ object GeradorDeCatalogo {
         }
         if (categoria != null) {
             val etiqueta = texto(8.5f, Color.WHITE, negrito = true)
-            val t = categoria.uppercase()
+            val t = nomeDaCategoria(categoria).uppercase()
             val w = etiqueta.measureText(t) + 14f
             c.drawRoundRect(RectF(foto.left + 6f, foto.top + 6f, foto.left + 6f + w, foto.top + 22f), 8f, 8f, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = DESTAQUE })
             c.drawText(t, foto.left + 13f, foto.top + 17.5f, etiqueta)
@@ -197,19 +202,24 @@ object GeradorDeCatalogo {
         var y = foto.bottom + 8f
         val largura = r.width() - 2 * pad
         y += escrever(c, p.nome, texto(11.5f, ESCURO, negrito = true), r.left + pad, y, largura, 2) + 3f
-        val desc = p.bruto?.optString("description")?.takeIf { it.isNotBlank() && it != "null" }
-        if (desc != null) y += escrever(c, desc, texto(8.8f, APAGADO), r.left + pad, y, largura, 3) + 4f
-        // preços no pé do cartão
-        val preco = p.precoCentavos ?: return
-        val pix = Perfil.regras.precoNoPix(preco, emPromocao = p.precoAntigo != null)
+        // preços no pé do cartão; a descrição só ocupa o espaço que sobra entre o nome e o preço (não encavala)
+        val preco = p.precoCentavos
+        val pix = preco?.let { Perfil.regras.precoNoPix(it, emPromocao = p.precoAntigo != null) }
+        val comPix = preco != null && pix != null && pix < preco
         val base = r.bottom - pad
+        val topoDoPreco = base - (if (comPix) 13f else 0f) - 16f
+        val desc = p.bruto?.optString("description")?.takeIf { it.isNotBlank() && it != "null" }
+        val miuda = texto(8.8f, APAGADO)
+        val cabem = ((topoDoPreco - y) / miuda.fontSpacing).toInt().coerceAtMost(3)
+        if (desc != null && cabem >= 1) escrever(c, desc, miuda, r.left + pad, y, largura, cabem)
+        if (preco == null) return
         val grande = texto(14f, DESTAQUE, negrito = true)
-        c.drawText(Loja.dinheiro(preco), r.left + pad, base - (if (pix != null && pix < preco) 13f else 0f), grande)
+        c.drawText(Loja.dinheiro(preco), r.left + pad, base - (if (comPix) 13f else 0f), grande)
         p.precoAntigo?.let { antigo ->
             val riscado = texto(9.5f, APAGADO).apply { isStrikeThruText = true }
-            c.drawText(Loja.dinheiro(antigo), r.left + pad + grande.measureText(Loja.dinheiro(preco)) + 6f, base - (if (pix != null && pix < preco) 13f else 0f), riscado)
+            c.drawText(Loja.dinheiro(antigo), r.left + pad + grande.measureText(Loja.dinheiro(preco)) + 6f, base - (if (comPix) 13f else 0f), riscado)
         }
-        if (pix != null && pix < preco) c.drawText("${Loja.dinheiro(pix)} no Pix", r.left + pad, base, texto(9.5f, ESCURO))
+        if (comPix) c.drawText("${Loja.dinheiro(pix)} no Pix", r.left + pad, base, texto(9.5f, ESCURO))
         if (p.estoque != null && p.estoque <= 0) {
             val t = texto(9f, Color.WHITE, negrito = true).apply { textAlign = Paint.Align.RIGHT }
             c.drawRoundRect(RectF(r.right - pad - 62f, base - 12f, r.right - pad, base + 3f), 7f, 7f, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = APAGADO })
@@ -217,7 +227,7 @@ object GeradorDeCatalogo {
         }
     }
 
-    /** A foto do produto, reduzida (para o PDF não ficar pesado). */
+    /** A foto do produto, quadrada e pequena (o PDF guarda a imagem sem compressão JPEG: 768px por foto dava 33 MB). */
     private fun foto(p: Loja.Produto): Bitmap? {
         val url = p.bruto?.optString("imageUrl")?.takeIf { it.isNotBlank() && it != "null" } ?: return null
         // foto no site (Floot, Shopify…): baixa; no catálogo da Vênus: lê do celular. Nos dois casos, reduzida
@@ -232,11 +242,25 @@ object GeradorDeCatalogo {
                 c.disconnect()
             }
         } ?: return null
+        return reduzir(bytes, 320, quadrada = true)
+    }
+
+    /** Decodifica já reduzida: corta no meio para ficar quadrada (se pedido) e deixa o lado maior com até [maximo] px. */
+    internal fun reduzir(bytes: ByteArray, maximo: Int, quadrada: Boolean): Bitmap? {
         val so = BitmapFactory.Options().apply { inJustDecodeBounds = true }
         BitmapFactory.decodeByteArray(bytes, 0, bytes.size, so)
-        if (so.outWidth <= 0) return null
+        if (so.outWidth <= 0 || so.outHeight <= 0) return null
         var amostra = 1
-        while (so.outWidth / (amostra * 2) >= 500) amostra *= 2
-        return BitmapFactory.decodeByteArray(bytes, 0, bytes.size, BitmapFactory.Options().apply { inSampleSize = amostra })
+        while (minOf(so.outWidth, so.outHeight) / (amostra * 2) >= maximo) amostra *= 2
+        val bruta = BitmapFactory.decodeByteArray(bytes, 0, bytes.size, BitmapFactory.Options().apply { inSampleSize = amostra }) ?: return null
+        val corte = if (quadrada && bruta.width != bruta.height) {
+            val lado = minOf(bruta.width, bruta.height)
+            Bitmap.createBitmap(bruta, (bruta.width - lado) / 2, (bruta.height - lado) / 2, lado, lado)
+        } else bruta
+        val escala = maximo.toFloat() / maxOf(corte.width, corte.height)
+        val final = if (escala < 1f) Bitmap.createScaledBitmap(corte, maxOf(1, (corte.width * escala).toInt()), maxOf(1, (corte.height * escala).toInt()), true) else corte
+        if (corte !== final) corte.recycle()
+        if (bruta !== final && bruta !== corte) bruta.recycle()
+        return final
     }
 }
