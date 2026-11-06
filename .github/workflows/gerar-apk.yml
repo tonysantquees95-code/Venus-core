@@ -3,7 +3,15 @@ name: Gerar APK
 on:
   push:
     branches: [main]
-    paths-ignore: [".github/workflows/modelo-voz.yml", ".github/workflows/teste-wikidata.yml"]
+    # só gera APK quando muda o app, o robô ou a compilação (servidor e documentos não gastam minutos do GitHub)
+    paths:
+      - "app/**"
+      - "robo/**"
+      - "build.gradle.kts"
+      - "settings.gradle.kts"
+      - "gradle.properties"
+      - "gradle/**"
+      - ".github/workflows/gerar-apk.yml"
   workflow_dispatch:
 
 permissions:
@@ -23,6 +31,7 @@ jobs:
         with:
           distribution: temurin
           java-version: "17"
+          cache: gradle
 
       - name: Instalar Gradle
         uses: gradle/actions/setup-gradle@v4
