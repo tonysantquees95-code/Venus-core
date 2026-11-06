@@ -6,7 +6,7 @@ package com.tonimarques.sextafeira
  */
 object Servidor {
     /** Preenchido depois da primeira publicação (o endereço *.workers.dev aparece no resumo do workflow). */
-    const val ENDERECO = ""
+    const val ENDERECO = "https://venus-servidor.tonysantquees95.workers.dev"
 
     fun configurado(): Boolean = ENDERECO.startsWith("https://")
 }
