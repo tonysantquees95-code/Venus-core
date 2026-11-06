@@ -51,7 +51,7 @@ internal fun MainActivity.primeirosPassos() {
     val passos = listOf(
         Triple("Seu nome e o da loja", perfil.contains("dono")) { editarPerfil() },
         Triple("Site, ramo e regras de venda", perfil.contains("regras_json")) { editarDadosDaLoja() },
-        Triple("Plataforma da loja (Floot, Shopify, WooCommerce, Nuvemshop)", ferramentas.loja.conectada) { escolherPlataforma() },
+        Triple("Plataforma da loja (Shopify, WooCommerce, Nuvemshop ou site próprio)", ferramentas.loja.conectada) { escolherPlataforma() },
         Triple("IA grátis principal: Groq", SegundaIA.chave(this).isNotBlank()) { pedirIAReserva() },
         Triple("IA grátis reserva: Cloudflare (opcional)", SegundaIA.chaveCloudflare(this).isNotBlank()) { pedirCloudflare() },
         Triple("Gemini grátis: memória, estudo, PDF e áudio", chave().isNotBlank()) { pedirChave() },
@@ -227,7 +227,7 @@ internal fun MainActivity.configurarPlataforma(t: Plataformas.Tipo) {
     if (t.id == "floot") {
         Plataformas.salvar(this, Plataformas.Config("floot", "", "", "", ""))
         ajustes?.atualizar()
-        return responder("Loja no Floot. Para conectar, toque em Conectar à loja e entre com o login de administrador do site.")
+        return responder("Loja em site próprio. Para conectar, toque em Conectar à loja e entre com o login de administrador do site.")
     }
     val atual = Plataformas.config(this).takeIf { it.tipo == t.id }
     val caixa = LinearLayout(this).apply {

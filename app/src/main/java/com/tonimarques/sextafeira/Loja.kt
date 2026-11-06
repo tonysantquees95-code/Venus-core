@@ -270,7 +270,7 @@ class Loja(private val contexto: Context) {
                 return "Pronto: venda registrada (${dinheiro(v.totalCentavos)})." + (p.estoque?.let { " ${p.nome} fica com ${(it - a.valor).coerceAtLeast(0)} no estoque." } ?: "")
             }
             "custo" -> {
-                if (x !is CatalogoInterno) throw ErroDaLoja("O custo do produto só fica guardado no site do Floot ou no catálogo da Vênus por enquanto.")
+                if (x !is CatalogoInterno) throw ErroDaLoja("O custo do produto só fica guardado no site próprio ou no catálogo da Vênus por enquanto.")
                 val p = a.produto!!
                 x.mudarProduto(p, "custo", a.valor)
                 return "Pronto: custo de ${p.nome} cadastrado em ${dinheiro(a.valor!!)}."
@@ -591,7 +591,7 @@ class Loja(private val contexto: Context) {
 
         /** Igual ao site: com 2 unidades ou menos o produto está acabando. */
         const val ESTOQUE_BAIXO = 2
-        const val SO_FLOOT = "Isso só funciona com o site no Floot por enquanto (robô, stories com foto, cadastro e custo de produto)."
+        const val SO_FLOOT = "Isso só funciona com site próprio por enquanto (robô, stories com foto, cadastro e custo de produto)."
         const val SEM_PLATAFORMA = "A loja ainda não está conectada. Nos ajustes, toque em Plataforma da loja."
 
         private val BR = Locale("pt", "BR")
