@@ -327,6 +327,14 @@ internal fun MainActivity.cadastroGuiado(etapaInicial: Int = 0) {
                     }.start()
                 }, 8)
 
+                // cobrança por link (loja sem site)
+                if (comSite == false) {
+                    f.cartao("Cobrança por link")
+                    f.adicionar(f.aviso(if (Cobranca.configurada(this)) "✓ Ligada: ${Cobranca.nomeDoProvedor(this)}."
+                    else "Eu crio o link de pagamento da venda (Pix ou cartão) no Mercado Pago ou na InfinitePay, você manda para a cliente e eu confiro o pagamento sozinha."), 2)
+                    f.adicionar(f.botao("Escolher a plataforma de cobrança") { configurarCobranca() }, 10)
+                }
+
                 // Instagram
                 f.cartao("Instagram da loja")
                 f.adicionar(f.aviso(if (Instagram.conectado(this)) "✓ Instagram conectado (@${Instagram.usuario(this)})."

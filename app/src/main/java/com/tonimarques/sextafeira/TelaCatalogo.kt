@@ -72,6 +72,41 @@ private fun MainActivity.mostrarCatalogo(produtos: List<Loja.Produto>, vendas: L
         f.adicionar(f.botao("Gerar catálogo em PDF", primario = true) { f.fechar(); gerarCatalogoPdf(produtos) }, 8)
     }
     f.adicionar(f.botao(if (GeradorDeCatalogo.arquivoDoLogo(this).exists()) "Trocar o logo da loja" else "Escolher o logo da loja") { escolherLogo() }, 8)
+    if (interno) f.adicionar(f.botao(if (Cobranca.configurada(this)) "Cobrança por link: ${Cobranca.nomeDoProvedor(this)} ✓" else "Ligar a cobrança por link (Pix e cartão)") {
+        f.fechar(); configurarCobranca()
+    }, 8)
+
+    // vendas com link de pagamento ainda não pago: reenviar o link ou cancelar (o estoque volta)
+    val aguardando = if (interno) vendas.filter { it.status == "awaiting_payment" } else emptyList()
+    if (aguardando.isNotEmpty()) {
+        f.cartao("Aguardando pagamento")
+        f.adicionar(f.aviso("Eu confiro a cada 2 minutos e dou baixa sozinha quando o pagamento entrar."), 2)
+        for (v in aguardando.take(10)) {
+            f.adicionar(f.aviso("Nº ${v.id} · ${v.cliente} · ${Loja.dinheiro(v.totalCentavos)} · ${v.itens.joinToString(", ") { "${it.quantidade}x ${it.nome}" }.take(50)}"), 10)
+            f.lado(
+                f.botao("Reenviar link") {
+                    val url = Cobranca.linkDaVenda(this, v.id)
+                    if (url == null) {
+                        f.fechar(); cobrarVenda(v)
+                    } else try {
+                        startActivity(android.content.Intent.createChooser(android.content.Intent(android.content.Intent.ACTION_SEND).setType("text/plain")
+                            .putExtra(android.content.Intent.EXTRA_TEXT, Cobranca.mensagemParaCliente(v.cliente, v.totalCentavos, url)), "Enviar o link para a cliente"))
+                    } catch (e: Exception) {
+                    }
+                },
+                f.botao("Cancelar venda") {
+                    f.fechar()
+                    try {
+                        CatalogoInterno(this).mudarPedido(v, "canceled", null)
+                        Diario.anotar(this, "loja", "Venda nº ${v.id} cancelada (link não pago); estoque devolvido", "tela")
+                        responder("Venda nº ${v.id} cancelada e o estoque voltou. Se a cliente pagar o link depois, me avise que eu registro de novo.")
+                    } catch (e: Exception) {
+                        responder("Não consegui cancelar: ${e.message}")
+                    }
+                },
+            )
+        }
+    }
 
     if (interno) {
         val ordem = produtos.sortedWith(compareBy({ CatalogoInterno.faltando(it).isEmpty() }, { it.nome.lowercase() }))
@@ -108,7 +143,7 @@ private fun MainActivity.mostrarCatalogo(produtos: List<Loja.Produto>, vendas: L
             val dia = java.text.SimpleDateFormat("dd/MM HH:mm", java.util.Locale("pt", "BR"))
             f.adicionar(f.aviso(vendas.take(8).joinToString("\n") { v ->
                 "${dia.format(java.util.Date(v.criado))} · ${v.cliente} · ${v.itens.joinToString(", ") { "${it.quantidade}x ${it.nome}" }.take(60)} · ${Loja.dinheiro(v.totalCentavos)}" +
-                    if (v.status == "canceled") " (cancelada)" else ""
+                    if (v.status == "canceled") " (cancelada)" else if (v.status == "awaiting_payment") " (aguardando pagamento)" else ""
             }), 2)
         }
     }
@@ -236,7 +271,10 @@ internal fun MainActivity.registrarVenda(inicial: Loja.Produto?) {
     f.cartao("Cliente e pagamento")
     val (bCli, cliente) = f.campo("Cliente (opcional)", "", "Ex.: Maria (WhatsApp)")
     f.adicionar(bCli, 2)
-    val pagamentos = listOf("Pix", "Cartão", "Dinheiro", "Outro")
+    // com a cobrança ligada, o link de pagamento vem primeiro (a Vênus confere e dá baixa sozinha)
+    val LINK = "Link de pagamento (Pix ou cartão)"
+    val pagamentos = if (Cobranca.configurada(this)) listOf(LINK, "Pix (já pago)", "Cartão (já pago)", "Dinheiro", "Outro")
+    else listOf("Pix", "Cartão", "Dinheiro", "Outro", "$LINK: configurar")
     f.adicionar(f.rotulo("Pagamento"), 10)
     val pagamento = f.seletor(pagamentos, 0)
     f.adicionar(pagamento, 4)
@@ -253,11 +291,22 @@ internal fun MainActivity.registrarVenda(inicial: Loja.Produto?) {
             Triple(p, q, v)
         }
         if (itens.isEmpty()) return@botao Toast.makeText(this, "Informe a quantidade.", Toast.LENGTH_SHORT).show()
+        val forma = pagamentos[pagamento.selectedItemPosition]
+        if (forma.startsWith(LINK) && !Cobranca.configurada(this)) {
+            Toast.makeText(this, "Primeiro escolha a plataforma de cobrança.", Toast.LENGTH_SHORT).show()
+            return@botao configurarCobranca()
+        }
+        val porLink = forma == LINK
         f.fechar()
         val venda = try {
-            CatalogoInterno(this).registrarVenda(cliente.text.toString(), itens, pagamentos[pagamento.selectedItemPosition], entregas[entrega.selectedItemPosition])
+            CatalogoInterno(this).registrarVenda(cliente.text.toString(), itens, if (porLink) "Link de pagamento" else forma.removeSuffix(" (já pago)"),
+                entregas[entrega.selectedItemPosition], aguardandoPagamento = porLink)
         } catch (e: Exception) {
             return@botao responder("Não consegui registrar: ${e.message}")
+        }
+        if (porLink) {
+            Diario.anotar(this, "loja", "Venda registrada aguardando pagamento por link: ${venda.itens.joinToString(", ") { "${it.quantidade}x ${it.nome}" }} (${Loja.dinheiro(venda.totalCentavos)})", "tela")
+            return@botao cobrarVenda(venda)
         }
         Diario.anotar(this, "loja", "Venda registrada: ${venda.itens.joinToString(", ") { "${it.quantidade}x ${it.nome}" }} (${Loja.dinheiro(venda.totalCentavos)})", "tela")
         val faltando = itens.filter { (p, q, _) -> p.estoque != null && p.estoque - q <= 0 }.map { it.first.nome }
