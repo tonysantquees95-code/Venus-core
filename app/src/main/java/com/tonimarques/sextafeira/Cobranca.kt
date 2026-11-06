@@ -236,6 +236,32 @@ object Cobranca {
             .filter { it.second.isNotBlank() }
     }
 
+    // ------------------------------------------------------------------ teste de R$ 1,00 (fora do catálogo)
+    fun testeAberto(ctx: Context): Pair<String, String>? {
+        val p = prefs(ctx)
+        val ref = p.getString("teste_ref", null) ?: return null
+        return ref to p.getString("teste_provedor", "").orEmpty()
+    }
+
+    /** Cria um link de R$ 1,00 só para conferir a configuração. Bloqueante. */
+    fun criarTeste(ctx: Context): Link {
+        val link = criarLink(ctx, 0, listOf(Loja.Item("Teste de cobrança ${Marca.nome}", 1, 100)), "Teste")
+        prefs(ctx).edit().putString("teste_ref", link.ref).putString("teste_provedor", link.provedor).apply()
+        Diario.anotar(ctx, "conexao", "Link de teste de R$ 1,00 criado (${nomeDoProvedor(ctx)})", "tela")
+        return link
+    }
+
+    /** Null se não houver teste aberto. Bloqueante. */
+    fun conferirTeste(ctx: Context): Situacao? {
+        val (ref, prov) = testeAberto(ctx) ?: return null
+        val s = conferir(ctx, ref, prov)
+        if (s.pago) {
+            prefs(ctx).edit().remove("teste_ref").remove("teste_provedor").apply()
+            Diario.anotar(ctx, "conexao", "Teste de cobrança pago e conferido (${s.forma ?: prov})", "tela")
+        }
+        return s
+    }
+
     /** O link guardado de uma venda (para reenviar). */
     fun linkDaVenda(ctx: Context, id: Int): String? {
         val vendas = CatalogoInterno.ler(ctx).optJSONArray("vendas") ?: return null
