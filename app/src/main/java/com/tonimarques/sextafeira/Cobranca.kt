@@ -31,7 +31,8 @@ object Cobranca {
     const val ACAO = "com.tonimarques.sextafeira.COBRANCAS"
     const val INTERVALO_MS = 2 * 60_000L
     private const val PREFS = "cobranca"
-    private const val SERVIDOR = "https://desejo-de-intimidade.floot.app"
+    /** Quem recebe o aviso de pagamento da InfinitePay: o servidor da Vênus (Cloudflare) ou, sem ele, o site da loja. */
+    private val SERVIDOR_AVISOS get() = if (Servidor.configurado()) Servidor.ENDERECO + "/cobranca" else "https://desejo-de-intimidade.floot.app/_api/venus/cobranca"
     private const val MP = "https://api.mercadopago.com"
     private const val DIAS_ABERTA = 7
 
@@ -155,7 +156,7 @@ object Cobranca {
                     .put("handle", infiniteTag(ctx))
                     .put("order_nsu", ref)
                     .put("items", lista)
-                    .put("webhook_url", "$SERVIDOR/_api/venus/cobranca_aviso")
+                    .put("webhook_url", "${SERVIDOR_AVISOS}${if (Servidor.configurado()) "/aviso" else "_aviso"}")
                 val (codigo, texto) = pedir("POST", "https://api.checkout.infinitepay.io/links", corpo)
                 if (codigo !in 200..299) throw IllegalStateException("A InfinitePay não criou o link ($codigo): ${erroDe(texto)}. Confira a InfiniteTag e se o checkout integrado está ligado.")
                 val url = urlDe(texto) ?: throw IllegalStateException("A InfinitePay não devolveu o link.")
@@ -207,7 +208,7 @@ object Cobranca {
             )
         }
         "infinitepay" -> {
-            val url = "$SERVIDOR/_api/venus/cobranca_status?ref=" + URLEncoder.encode(ref, "UTF-8") + "&handle=" + URLEncoder.encode(infiniteTag(ctx), "UTF-8")
+            val url = "${SERVIDOR_AVISOS}${if (Servidor.configurado()) "/status" else "_status"}?ref=" + URLEncoder.encode(ref, "UTF-8") + "&handle=" + URLEncoder.encode(infiniteTag(ctx), "UTF-8")
             val (codigo, texto) = pedir("GET", url)
             if (codigo !in 200..299) throw IllegalStateException("Servidor $codigo")
             val o = JSONObject(texto)
