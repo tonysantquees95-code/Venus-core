@@ -19,7 +19,7 @@ import java.util.Locale
  */
 object Robo {
 
-    const val ENDERECO_PADRAO = "https://desejo-de-intimidade.floot.app/_api/venus/robo"
+    const val ENDERECO_PADRAO = "https://desejo-de-intimidade.tonysantquees95.workers.dev/_api/venus/robo"
     const val WHATSAPP_BUSINESS = "com.whatsapp.w4b"
     const val WHATSAPP = "com.whatsapp"
     const val INSTAGRAM = "com.instagram.android"
@@ -33,6 +33,7 @@ object Robo {
     fun ligado(ctx: Context) = prefs(ctx).getBoolean("ligado", true)
     fun definirLigado(ctx: Context, v: Boolean) = prefs(ctx).edit().putBoolean("ligado", v).apply()
     fun endereco(ctx: Context) = prefs(ctx).getString("endereco", ENDERECO_PADRAO).orEmpty().ifBlank { ENDERECO_PADRAO }
+        .replace("desejo-de-intimidade.floot.app", "desejo-de-intimidade.tonysantquees95.workers.dev") // a loja saiu do Floot
     /** A chave fica cifrada com o chip de segurança do Android (as antigas, em texto, são cifradas na primeira leitura). */
     /**
      * Mesmo texto, ignorando maiúsculas, acentos de digitação, emojis e espaços; e o WhatsApp às vezes corta o texto

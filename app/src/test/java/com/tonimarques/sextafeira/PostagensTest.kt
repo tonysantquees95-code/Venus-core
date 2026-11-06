@@ -25,6 +25,6 @@ class PostagensTest {
         assertEquals("responder_cliente", acao("responde uma cliente")!!.nome)
         assertEquals("responder_cliente", acao("me ajuda a responder a cliente")!!.nome)
         val catalogo = Loja.catalogoParaIA(listOf(Loja.Produto(7, "Gel KGEL", true, 3, 2990), Loja.Produto(8, "Escondido", false, 1, 100)))
-        assertEquals("Gel KGEL | R$ 29,90 | R$ 28,40 | 3 un. | https://desejo-de-intimidade.floot.app/produto/7", catalogo)
+        assertEquals("Gel KGEL | R$ 29,90 | R$ 28,40 | 3 un. | https://desejo-de-intimidade.tonysantquees95.workers.dev/produto/7", catalogo)
     }
 }

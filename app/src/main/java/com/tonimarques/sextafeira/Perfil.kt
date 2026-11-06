@@ -20,7 +20,7 @@ object Perfil {
     @Volatile var uf: String = "RS"
         private set
     /** Endereço do site da loja (o da Desejo de Intimidade é no Floot). */
-    @Volatile var site: String = "https://desejo-de-intimidade.floot.app"
+    @Volatile var site: String = "https://desejo-de-intimidade.tonysantquees95.workers.dev"
         private set
     /** O ramo da loja, como aparece nos textos das IAs. */
     @Volatile var ramo: String = "moda íntima e sex shop"
@@ -93,7 +93,9 @@ object Perfil {
     fun normalizarSite(t: String): String {
         val s = t.trim().removeSuffix("/")
         if (s.isEmpty()) return "" // loja sem site
-        return if (s.startsWith("http://") || s.startsWith("https://")) s.replace("http://", "https://") else "https://$s"
+        val url = if (s.startsWith("http://") || s.startsWith("https://")) s.replace("http://", "https://") else "https://$s"
+        // a loja saiu do Floot para o Cloudflare: o endereço antigo salvo no celular vira o novo
+        return url.replace("desejo-de-intimidade.floot.app", "desejo-de-intimidade.tonysantquees95.workers.dev")
     }
 
     /** Dados da loja (site, ramo e regras de venda em campos). Leva as regras para a memória e para o site. */

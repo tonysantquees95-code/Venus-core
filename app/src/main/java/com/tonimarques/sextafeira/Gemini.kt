@@ -585,7 +585,7 @@ class Gemini(
         fun legendaInstagram(chave: String, modelo: String, foto: ByteArray?, contexto: String, story: Boolean): String? {
             if (chave.isBlank()) return null
             val pedido = "Você cuida do Instagram da ${Perfil.loja}, loja de ${Perfil.ramo} com entrega discreta em todo o Brasil " +
-                "(site desejo-de-intimidade.floot.app). Tom elegante, provocante na medida e acolhedor, sem palavras explícitas nem vulgares " +
+                "(site desejo-de-intimidade.tonysantquees95.workers.dev). Tom elegante, provocante na medida e acolhedor, sem palavras explícitas nem vulgares " +
                 "(o Instagram remove conteúdo sexual explícito). " +
                 (if (story) "Escreva um texto curto para um story (até 90 caracteres) com uma chamada para ação. "
                 else "Escreva a legenda de um post do feed: 2 a 4 frases curtas, uma chamada para ação (link na bio ou chamar no WhatsApp), " +
@@ -607,7 +607,7 @@ class Gemini(
         fun respostaComentario(chave: String, modelo: String, comentario: String, usuario: String, legendaDoPost: String, catalogo: String): String? {
             if (chave.isBlank()) return null
             val pedido = "Você responde comentários no Instagram da ${Perfil.loja}, loja de ${Perfil.ramo} com entrega discreta " +
-                "em todo o Brasil (site desejo-de-intimidade.floot.app). A resposta é PÚBLICA: seja simpática, curta (1 ou 2 frases), elegante, " +
+                "em todo o Brasil (site desejo-de-intimidade.tonysantquees95.workers.dev). A resposta é PÚBLICA: seja simpática, curta (1 ou 2 frases), elegante, " +
                 "sem palavras explícitas, no máximo 1 emoji, começando com @$usuario. Se perguntarem preço ou detalhes, responda se estiver no catálogo " +
                 "e convide para chamar no direct ou no WhatsApp para atendimento discreto. Elogio: agradeça com carinho. Reclamação: peça desculpas e " +
                 "chame para o direct. Não invente prazos nem produtos.\n" +

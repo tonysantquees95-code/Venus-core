@@ -578,7 +578,7 @@ class Loja(private val contexto: Context) {
             return partes.joinToString(" ")
         }
 
-        /** "/_cdn/…" → "https://desejo-de-intimidade.floot.app/_cdn/…" (o Instagram precisa do endereço completo). */
+        /** "/_cdn/…" → "https://desejo-de-intimidade.tonysantquees95.workers.dev/_cdn/…" (o Instagram precisa do endereço completo). */
         fun enderecoCompleto(url: String): String = if (url.startsWith("/")) SITE + url else url
         /** O site da loja (vem do Perfil; o padrão é o da Desejo de Intimidade). */
         val SITE: String get() = Perfil.site
