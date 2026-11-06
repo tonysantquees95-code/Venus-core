@@ -74,8 +74,10 @@ jobs:
 
       - name: Conferir se está no ar
         run: |
-          sleep 5
-          curl -fsS "$ENDERECO/saude"
-          echo
-          curl -sS "$ENDERECO/atualizacao?app=venus" | head -c 300
-          echo
+          # na primeira publicação o certificado do endereço novo leva alguns minutos
+          for i in $(seq 1 20); do
+            if curl -fsS "$ENDERECO/saude"; then echo; break; fi
+            echo "ainda não respondeu ($i), esperando…"; sleep 15
+          done
+          curl -sS "$ENDERECO/atualizacao?app=venus" | head -c 300; echo
+          curl -sS "$ENDERECO/atualizacao?app=robo" | head -c 300; echo
