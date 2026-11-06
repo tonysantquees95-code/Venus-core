@@ -95,6 +95,9 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
     internal var ouvirAposPermissao = false
     internal var naTela = false
     internal var corAtual = Color.parseColor("#36D6FF")
+    /** Os três pontinhos de "pensando" na conversa (ver BalaoPensando.kt). */
+    internal var balaoPensando: View? = null
+    internal fun conversaPronta() = ::mensagens.isInitialized
     internal var topicoAtual = "Conversa"
     internal var respostaAtrasada = 0
 
@@ -685,6 +688,9 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
             } catch (e: Exception) {
             }
         }
+        // a resposta chegou: tira os pontinhos (e põe de novo embaixo se ela ainda estiver pensando, ex.: aviso de progresso)
+        val pensava = balaoPensando != null
+        esconderPensando()
         val balao = TextView(this).apply {
             text = texto
             textSize = 15f
@@ -707,6 +713,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
             if (doUsuario) leftMargin = dp(56) else rightMargin = dp(40)
         }
         mensagens.addView(balao, params)
+        if (pensava && orbe.estado == Orbe.Estado.PENSANDO) mostrarPensando()
         rolarParaBaixo()
         return balao
     }
@@ -725,6 +732,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
     internal fun mudarEstado(estado: Orbe.Estado, texto: String) {
         orbe.estado = estado
         status.text = texto
+        if (estado == Orbe.Estado.PENSANDO) mostrarPensando() else esconderPensando()
         // A tela não apaga enquanto ela ouve, pensa ou fala (e por mais 1 minuto depois)
         principal.removeCallbacks(apagarTela)
         if (estado != Orbe.Estado.OCIOSO) window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
