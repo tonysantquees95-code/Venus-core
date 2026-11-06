@@ -32,7 +32,7 @@ object Cobranca {
     const val INTERVALO_MS = 2 * 60_000L
     private const val PREFS = "cobranca"
     /** Quem recebe o aviso de pagamento da InfinitePay: o servidor da Vênus (Cloudflare) ou, sem ele, o site da loja. */
-    private val SERVIDOR_AVISOS get() = if (Servidor.configurado()) Servidor.ENDERECO + "/cobranca" else "https://desejo-de-intimidade.floot.app/_api/venus/cobranca"
+    private val SERVIDOR_AVISOS get() = if (Servidor.configurado()) Servidor.ENDERECO + "/cobranca" else "https://desejo-de-intimidade.tonysantquees95.workers.dev/_api/venus/cobranca"
     private const val MP = "https://api.mercadopago.com"
     private const val DIAS_ABERTA = 7
 

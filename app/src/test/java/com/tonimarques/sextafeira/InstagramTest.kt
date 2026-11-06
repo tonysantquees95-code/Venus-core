@@ -42,7 +42,7 @@ class InstagramTest {
         assertEquals("amanha as 10h", ComandosLocais.REPROGRAMAR_POST.matchEntire("muda o post para amanha as 10h")!!.groupValues[1])
         assertEquals("feed", ComandosLocais.TIPO_POST.find("poste no feed se nao consegue no story")!!.groupValues[1])
         assertEquals("story", ComandosLocais.TIPO_POST.find("troca para story")!!.groupValues[1])
-        assertEquals("https://desejo-de-intimidade.floot.app/_cdn/x.jpg", Loja.enderecoCompleto("/_cdn/x.jpg"))
+        assertEquals("https://desejo-de-intimidade.tonysantquees95.workers.dev/_cdn/x.jpg", Loja.enderecoCompleto("/_cdn/x.jpg"))
         assertEquals("https://a.com/x.jpg", Loja.enderecoCompleto("https://a.com/x.jpg"))
     }
 

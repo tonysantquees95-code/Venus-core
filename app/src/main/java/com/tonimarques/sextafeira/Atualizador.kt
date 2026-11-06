@@ -266,7 +266,7 @@ class Atualizador(private val contexto: Context) {
     companion object {
         const val REPO = "tonysantquees95-code/Sexta-feira-"
         /** Canal público de atualização (para lojistas sem token do GitHub). */
-        const val CANAL = "https://desejo-de-intimidade.floot.app/_api/venus/atualizacao"
+        const val CANAL = "https://desejo-de-intimidade.tonysantquees95.workers.dev/_api/venus/atualizacao"
         const val ACAO_INSTALAR = "com.tonimarques.sextafeira.INSTALAR"
         const val PACOTE_ROBO = "com.tonimarques.venusrobo"
         const val EXTRA_ROBO = "robo"
