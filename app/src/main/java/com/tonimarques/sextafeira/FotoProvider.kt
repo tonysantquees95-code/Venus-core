@@ -4,6 +4,8 @@ import android.content.ContentProvider
 import android.content.ContentValues
 import android.content.Context
 import android.database.Cursor
+import android.database.MatrixCursor
+import android.provider.OpenableColumns
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Matrix
@@ -32,7 +34,15 @@ class FotoProvider : ContentProvider() {
         "png" -> "image/png"
         else -> "image/jpeg"
     }
-    override fun query(uri: Uri, p: Array<out String>?, s: String?, a: Array<out String>?, o: String?): Cursor? = null
+    /** Nome e tamanho do arquivo: o WhatsApp e outros apps pedem antes de anexar um documento. */
+    override fun query(uri: Uri, p: Array<out String>?, s: String?, a: Array<out String>?, o: String?): Cursor? {
+        val ctx = context ?: return null
+        val nome = uri.lastPathSegment?.takeIf { Regex("^[a-z0-9_-]+\\.(?:jpg|png|pdf)$").matches(it) } ?: return null
+        val arquivo = File(pasta(ctx), nome)
+        val colunas = p?.filter { it == OpenableColumns.DISPLAY_NAME || it == OpenableColumns.SIZE }?.toTypedArray()
+            ?.takeIf { it.isNotEmpty() } ?: arrayOf(OpenableColumns.DISPLAY_NAME, OpenableColumns.SIZE)
+        return MatrixCursor(colunas).apply { addRow(colunas.map { if (it == OpenableColumns.SIZE) arquivo.length() else nome }.toTypedArray()) }
+    }
     override fun insert(uri: Uri, values: ContentValues?): Uri? = null
     override fun delete(uri: Uri, s: String?, a: Array<out String>?) = 0
     override fun update(uri: Uri, v: ContentValues?, s: String?, a: Array<out String>?) = 0

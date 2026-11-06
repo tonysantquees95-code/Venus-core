@@ -66,10 +66,10 @@ private fun MainActivity.mostrarCatalogo(produtos: List<Loja.Produto>, vendas: L
         f.adicionar(f.aviso("Na nota de compra, a ${Marca.nome} cadastra os itens novos com quantidade e custo; depois você só completa o preço e a foto."), 6)
         f.lado(
             f.botao("Registrar venda") { f.fechar(); registrarVenda(null) },
-            f.botao("Catálogo em PDF") { gerarCatalogoPdf(produtos) },
+            f.botao("Catálogo em PDF") { f.fechar(); gerarCatalogoPdf(produtos) },
         )
     } else {
-        f.adicionar(f.botao("Gerar catálogo em PDF", primario = true) { gerarCatalogoPdf(produtos) }, 8)
+        f.adicionar(f.botao("Gerar catálogo em PDF", primario = true) { f.fechar(); gerarCatalogoPdf(produtos) }, 8)
     }
     f.adicionar(f.botao(if (GeradorDeCatalogo.arquivoDoLogo(this).exists()) "Trocar o logo da loja" else "Escolher o logo da loja") { escolherLogo() }, 8)
 
@@ -269,7 +269,7 @@ internal fun MainActivity.registrarVenda(inicial: Loja.Produto?) {
 
 /** Monta o catálogo em PDF e oferece compartilhar (WhatsApp, Direct, e-mail) ou abrir. */
 internal fun MainActivity.gerarCatalogoPdf(produtos: List<Loja.Produto>) {
-    responder("Montando o catálogo em PDF…")
+    responder("Montando o catálogo em PDF com ${GeradorDeCatalogo.produtosDoCatalogo(produtos, false).size} produtos… (com as fotos do site, leva uns segundos)")
     Thread {
         val r = try {
             Result.success(GeradorDeCatalogo.gerar(this, produtos))
