@@ -7,9 +7,13 @@
  *   GET  /aviso/<canal>?desde=<id>       → avisos depois do id {avisos:[{id,texto,criado}], ultimo}
  *   POST /cobranca/aviso                 → webhook da InfinitePay (cobrança por link dos lojistas)
  *   GET  /cobranca/status?ref=&handle=   → o pagamento foi feito? (confirma com a InfinitePay)
+ *   POST /chat                           → conversa com busca na web (Groq + Tavily, reserva Gemini) — ver chat.js
  *
- * Segredos (wrangler secret): GITHUB_TOKEN (só leitura do repositório, para o canal de atualização).
+ * Segredos (wrangler secret): GITHUB_TOKEN (só leitura do repositório, para o canal de atualização);
+ * GROQ_API_KEY, TAVILY_API_KEY e GEMINI_API_KEY (conversa).
  */
+import { chat, chatPreflight } from "./chat.js";
+
 const REPO = "tonysantquees95-code/Sexta-feira-";
 const CABECALHOS = { "content-type": "application/json; charset=utf-8", "access-control-allow-origin": "*" };
 const json = (o, status = 200) => new Response(JSON.stringify(o), { status, headers: CABECALHOS });
@@ -27,6 +31,8 @@ export default {
       if (canal && req.method === "GET") return await avisosDesde(canal[1], url, env);
       if (caminho === "/cobranca/aviso" && req.method === "POST") return await cobrancaAviso(req, env);
       if (caminho === "/cobranca/status" && req.method === "GET") return await cobrancaStatus(url, env);
+      if (caminho === "/chat" && req.method === "OPTIONS") return chatPreflight();
+      if (caminho === "/chat" && req.method === "POST") return await chat(req, env);
       return json({ error: "não encontrado" }, 404);
     } catch (e) {
       console.error("venus servidor", caminho, e && e.stack ? e.stack : e);
