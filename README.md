@@ -1,4 +1,4 @@
-# Sexta-feira
+# Vênus assistente
 
 Assistente pessoal para Android com o Gemini como cérebro. Conversa por texto ou voz e faz ações no celular.
 
