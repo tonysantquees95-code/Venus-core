@@ -2,7 +2,7 @@
  * Servidor da Vênus (Cloudflare Workers + D1).
  *
  *   GET  /saude                          → está no ar?
- *   GET  /atualizacao?app=venus|windows     → versão mais nova {numero, tag, notas, tamanho, sha256, url}; &baixar=1 redireciona ao APK
+ *   GET  /atualizacao?app=venus|windows|robo|vindex-android|vindex-windows → versão mais nova {numero, tag, notas, tamanho, sha256, url}; &baixar=1 redireciona ao APK
  *   POST /aviso/<canal>                  → guarda um aviso curto (ex.: "publicacao", "pago 12")
  *   GET  /aviso/<canal>?desde=<id>       → avisos depois do id {avisos:[{id,texto,criado}], ultimo}
  *   POST /cobranca/aviso                 → webhook da InfinitePay (cobrança por link dos lojistas)
@@ -26,6 +26,7 @@ import { limpezaDeSessoes } from "./id/conta.js";
 import { ehRotaDev, tratarDev } from "./dev/rotas.js";
 import { limparTrafego, registrarTrafego, registrarUso } from "./dev/uso.js";
 import { publicarVencidos } from "./loja/publicar.js";
+import { appConhecido, escolherVersao } from "./atualizacao.js";
 
 const REPO = "tonysantquees95-code/Venus-core";
 const CABECALHOS = { "content-type": "application/json; charset=utf-8", "access-control-allow-origin": "*" };
@@ -108,13 +109,15 @@ function notas(corpo) {
     .slice(0, 600);
 }
 
-async function publicacoes(env, ctx) {
+async function publicacoes(env, ctx, repo = REPO, publico = false) {
   // guarda a lista por 5 minutos (economiza o limite da API do GitHub)
-  const chave = new Request("https://cache.venus/releases");
+  const chave = new Request(`https://cache.venus/releases/${repo}`);
   const cache = caches.default;
   const guardada = await cache.match(chave);
   if (guardada) return guardada.json();
-  const r = await gh(env, `/repos/${REPO}/releases?per_page=100`);
+  const r = publico
+    ? await fetch(`https://api.github.com/repos/${repo}/releases?per_page=100`, { headers: { "User-Agent": "venus-servidor", Accept: "application/vnd.github+json" } })
+    : await gh(env, `/repos/${repo}/releases?per_page=100`);
   if (!r.ok) throw new Error(`GitHub ${r.status}`);
   const lista = await r.json();
   ctx.waitUntil(cache.put(chave, new Response(JSON.stringify(lista), { headers: { "cache-control": "max-age=300" } })));
@@ -122,24 +125,21 @@ async function publicacoes(env, ctx) {
 }
 
 async function atualizacao(url, env, ctx) {
-  if (!env.GITHUB_TOKEN) return json({ error: "canal sem token do GitHub" }, 503);
-  const app = url.searchParams.get("app");
-  const robo = app === "robo";
-  const windows = app === "windows";
-  const lista = await publicacoes(env, ctx);
-  let melhor = null;
-  for (const r of lista) {
-    if (r.draft) continue;
-    const m = (robo ? /^robo-1\.(\d+)$/ : windows ? /^win-1\.(\d+)$/ : /^v?1\.(\d+)$/).exec(r.tag_name || "");
-    if (!m) continue;
-    const numero = Number(m[1]);
-    const apk = (r.assets || []).find((a) =>
-      robo ? /^venusrobo\.apk$/i.test(a.name) : windows ? /\.exe$/i.test(a.name) : /\.apk$/i.test(a.name) && !/robo/i.test(a.name),
-    );
-    if (!apk) continue;
-    if (!melhor || numero > melhor.numero) melhor = { numero, r, apk };
-  }
+  const app = url.searchParams.get("app") || "venus";
+  const cfg = appConhecido(app);
+  if (!cfg) return json({ error: "app desconhecido" }, 400);
+  if (!cfg.publico && !env.GITHUB_TOKEN) return json({ error: "canal sem token do GitHub" }, 503);
+  let lista;
+  try { lista = await publicacoes(env, ctx, cfg.repo, !!cfg.publico); } catch { return json({ error: "GitHub indisponível" }, 502); }
+  const melhor = escolherVersao(lista, app);
   if (!melhor) return json({ error: "nenhuma versão publicada" }, 404);
+  if (cfg.publico) {
+    // repositório público: o link do arquivo não expira e não precisa de token
+    const link = melhor.apk.browser_download_url;
+    if (url.searchParams.get("baixar") === "1") return Response.redirect(link, 302);
+    const dig = String(melhor.apk.digest || "");
+    return json({ numero: melhor.numero, tag: melhor.r.tag_name, notas: notas(melhor.r.body), tamanho: melhor.apk.size || 0, sha256: dig.toLowerCase().startsWith("sha256:") ? dig.slice(7).toLowerCase() : "", url: link });
+  }
   // link assinado do GitHub (vale poucos minutos): o app pede de novo antes de baixar
   const d = await gh(env, `/repos/${REPO}/releases/assets/${melhor.apk.id}`, {
     headers: { Accept: "application/octet-stream" },

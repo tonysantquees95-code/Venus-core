@@ -51,3 +51,22 @@ test("cobrança recorrente usa o valor do pacote e guarda o pacote no pagamento"
   assert.equal(e.pacotes.length, 4);
   assert.deepEqual(e.apps, { vindex: true, vortex: true });
 });
+
+import { escolherVersao } from "../src/atualizacao.js";
+test("atualização: escolhe a maior versão certa de cada app", () => {
+  const lista = [
+    { tag_name: "1.10", assets: [{ name: "Vindex.apk" }, { name: "VindexSetup.exe" }] },
+    { tag_name: "1.12", assets: [{ name: "Vindex.apk" }, { name: "VindexSetup.exe" }] },
+    { tag_name: "1.13", draft: true, assets: [{ name: "Vindex.apk" }] },
+    { tag_name: "1.11", assets: [{ name: "Vindex.apk" }] },
+    { tag_name: "win-1.7", assets: [{ name: "VenusSetup.exe" }] },
+    { tag_name: "robo-1.3", assets: [{ name: "VenusRobo.apk" }] },
+  ];
+  assert.equal(escolherVersao(lista, "vindex-android").numero, 12);
+  assert.equal(escolherVersao(lista, "vindex-windows").numero, 12);
+  assert.equal(escolherVersao(lista, "windows").numero, 7);
+  assert.equal(escolherVersao(lista, "robo").numero, 3);
+  assert.equal(escolherVersao(lista, "venus").numero, 12); // 1.N sem filtro de arquivo extra: pega o APK
+  assert.equal(escolherVersao(lista, "inexistente"), null);
+  assert.equal(escolherVersao(lista, "__proto__"), null);
+});
