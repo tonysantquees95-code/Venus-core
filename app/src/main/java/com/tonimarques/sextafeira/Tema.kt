@@ -15,8 +15,8 @@ object Tema {
     const val PREF_ICONES = "tema_icones"
     const val PREF_COR = "tema_cor"
 
-    enum class Modelo(val rotulo: String) { LIQUIDO("Líquido"), CRISTAL("Cristal"), PULSO("Pulso") }
-    enum class Icones(val rotulo: String) { VENUS("Vênus"), LINHA("Linha"), SOLIDO("Sólido") }
+    enum class Modelo(val rotulo: String) { LIQUIDO("Líquido"), CRISTAL("Cristal"), PULSO("Pulso"), NEURAL("Neural"), HOLOGRAMA("Holograma") }
+    enum class Icones(val rotulo: String) { VENUS("Vênus"), LINHA("Linha"), SOLIDO("Sólido"), NEON("Neon"), VIDRO("Vidro") }
 
     class Predefinida(val nome: String, val cor: Int)
 

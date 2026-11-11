@@ -31,6 +31,8 @@ class TelaAparencia(
     private lateinit var barras: List<SeekBar>
     private lateinit var campoHex: EditText
     private lateinit var amostra: View
+    private lateinit var previaOrbe: Orbe
+    private lateinit var previaIcones: LinearLayout
 
     init {
         setContentView(montar())
@@ -63,6 +65,9 @@ class TelaAparencia(
             setTextColor(Color.WHITE)
         })
         raiz.addView(topo)
+        raiz.addView(montarPrevia(), LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+            setMargins(a.dp(18), a.dp(4), a.dp(18), a.dp(4))
+        })
         conteudo = LinearLayout(a).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(a.dp(18), a.dp(6), a.dp(18), a.dp(30))
@@ -72,15 +77,54 @@ class TelaAparencia(
         return raiz
     }
 
+    /** Prévia fixa no alto: o orbe e três botões já com o modelo, os ícones e a cor escolhidos. */
+    private fun montarPrevia(): View {
+        val cartao = LinearLayout(a).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER_HORIZONTAL
+            setPadding(a.dp(12), a.dp(6), a.dp(12), a.dp(10))
+            background = GradientDrawable().apply {
+                cornerRadius = a.dp(20).toFloat(); setColor(Color.argb(16, 255, 255, 255)); setStroke(a.dp(1), Color.argb(30, 255, 255, 255))
+            }
+        }
+        previaOrbe = Orbe(a)
+        cartao.addView(previaOrbe, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, a.dp(150)))
+        previaIcones = LinearLayout(a).apply { gravity = Gravity.CENTER }
+        cartao.addView(previaIcones)
+        atualizarPrevia()
+        return cartao
+    }
+
+    private fun atualizarPrevia() {
+        val rgb = Tema.cor(prefs)
+        previaOrbe.aplicarTema(Tema.modelo(prefs), rgb)
+        val cor = if (rgb != 0) 0xFF000000.toInt() or Tema.trio(rgb)[0] else a.corAtual
+        previaIcones.removeAllViews()
+        val pacote = Tema.icones(prefs)
+        listOf(
+            Triple(R.drawable.ic_gaveta, "Menu", true), Triple(R.drawable.ic_microfone, "Microfone", false),
+            Triple(R.drawable.ic_enviar, "Enviar", false), Triple(R.drawable.ic_publicacoes, "Publicações", true),
+        ).forEach { (res, nome, fundo) ->
+            val b = android.widget.ImageButton(a).apply {
+                setImageResource(res)
+                contentDescription = nome
+                setPadding(a.dp(11), a.dp(11), a.dp(11), a.dp(11))
+                isClickable = false
+            }
+            EstiloDeIcone.aplicar(b, pacote, cor, fundo, false, a::dp)
+            previaIcones.addView(b, LinearLayout.LayoutParams(a.dp(48), a.dp(48)).apply { marginStart = a.dp(6); marginEnd = a.dp(6) })
+        }
+    }
+
     private fun desenhar() {
         conteudo.removeAllViews()
         secao("MODELO DO ORBE")
         fichas(Tema.Modelo.values().map { it.rotulo }, Tema.modelo(prefs).ordinal) {
-            Tema.definirModelo(prefs, Tema.Modelo.values()[it]); aoMudar(); desenhar()
+            Tema.definirModelo(prefs, Tema.Modelo.values()[it]); Diario.anotar(a, "Aparência", "Orbe: ${Tema.Modelo.values()[it].rotulo}.", "tela", true); aoMudar(); atualizarPrevia(); desenhar()
         }
         secao("ÍCONES")
         fichas(Tema.Icones.values().map { it.rotulo }, Tema.icones(prefs).ordinal) {
-            Tema.definirIcones(prefs, Tema.Icones.values()[it]); aoMudar(); desenhar()
+            Tema.definirIcones(prefs, Tema.Icones.values()[it]); Diario.anotar(a, "Aparência", "Ícones: ${Tema.Icones.values()[it].rotulo}.", "tela", true); aoMudar(); atualizarPrevia(); desenhar()
         }
         secao("COR")
         val atual = Tema.cor(prefs)
@@ -100,7 +144,7 @@ class TelaAparencia(
                     else setColor(0xFF000000.toInt() or p.cor)
                     setStroke(a.dp(if (escolhida) 3 else 1), if (escolhida) Color.WHITE else Color.argb(80, 255, 255, 255))
                 }
-                setOnClickListener { Tema.definirCor(prefs, p.cor); aoMudar(); desenhar() }
+                setOnClickListener { Tema.definirCor(prefs, p.cor); Diario.anotar(a, "Aparência", "Cor: ${p.nome}.", "tela", true); aoMudar(); atualizarPrevia(); desenhar() }
             }
             grade.addView(bolha, LinearLayout.LayoutParams(a.dp(46), a.dp(46)).apply { marginEnd = a.dp(10) })
         }
@@ -169,6 +213,7 @@ class TelaAparencia(
         barras[0].progress = Tema.vermelho(rgbFinal); barras[1].progress = Tema.verde(rgbFinal); barras[2].progress = Tema.azul(rgbFinal)
         atualizandoBarras = false
         aoMudar()
+        atualizarPrevia()
     }
 
     private fun secao(titulo: String) {
@@ -182,8 +227,11 @@ class TelaAparencia(
     }
 
     private fun fichas(rotulos: List<String>, escolhida: Int, aoEscolher: (Int) -> Unit) {
+        val grade = LinearLayout(a).apply { orientation = LinearLayout.VERTICAL }
+        rotulos.chunked(3).forEachIndexed { bloco, parte ->
         val linha = LinearLayout(a).apply { orientation = LinearLayout.HORIZONTAL }
-        rotulos.forEachIndexed { i, r ->
+        parte.forEachIndexed { k, r ->
+            val i = bloco * 3 + k
             val marcada = i == escolhida
             linha.addView(TextView(a).apply {
                 text = r
@@ -195,8 +243,11 @@ class TelaAparencia(
                     if (marcada) setColor(destaque()) else { setColor(Color.argb(14, 255, 255, 255)); setStroke(a.dp(1), Color.argb(60, 255, 255, 255)) }
                 }
                 setOnClickListener { aoEscolher(i) }
-            }, LinearLayout.LayoutParams(0, a.dp(44), 1f).apply { marginEnd = if (i < rotulos.lastIndex) a.dp(8) else 0 })
+            }, LinearLayout.LayoutParams(0, a.dp(44), 1f).apply { marginEnd = if (k < 2) a.dp(8) else 0 })
         }
-        conteudo.addView(linha)
+        repeat(3 - parte.size) { linha.addView(View(a), LinearLayout.LayoutParams(0, a.dp(44), 1f).apply { marginEnd = a.dp(8) }) }
+        grade.addView(linha, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { bottomMargin = a.dp(8) })
+        }
+        conteudo.addView(grade)
     }
 }

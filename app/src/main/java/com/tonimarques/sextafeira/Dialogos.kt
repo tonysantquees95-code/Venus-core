@@ -55,9 +55,12 @@ internal fun MainActivity.perguntar(
         .setNegativeButton("Cancelar", null).show()
 }
 
-/** Lista de opções; cada uma tem texto e ação. */
+/** Lista de opções no estilo da tela de Ajustes; cada uma tem texto (a 2ª linha vira descrição) e ação. */
 internal fun MainActivity.escolher(titulo: String, opcoes: List<Pair<String, () -> Unit>>) {
-    AlertDialog.Builder(this).setTitle(titulo)
-        .setItems(opcoes.map { it.first }.toTypedArray()) { _, i -> opcoes[i].second() }
-        .setNegativeButton("Fechar", null).show()
+    val itens = opcoes.map { (texto, acao) ->
+        val titulo1 = texto.substringBefore("\n").trim()
+        val desc = texto.substringAfter("\n", "").trim()
+        TelaDeAjustes.Ajuste(titulo1, { desc }) { acao() }
+    }
+    TelaDeAjustes(this, versaoDoApp(), listOf(TelaDeAjustes.Secao(titulo, itens)), titulo.uppercase(), compacto = true).show()
 }
