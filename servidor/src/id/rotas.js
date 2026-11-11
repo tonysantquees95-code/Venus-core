@@ -1,0 +1,89 @@
+// Rotas do Vetorial ID: /id (tela de login) e /id/* (API).
+import { estadoDaAssinatura, iniciarCobranca } from "../loja/assinatura.js";
+import { ErroLoja } from "../loja/lojas.js";
+import { ErroId, cadastrar, encerrarSessao, entrar, gravarSync, lerSync, listarDispositivos, reativar, removerDispositivo, renovarToken, tokenDoPedido, validarSessao } from "./conta.js";
+import { paginaDeLogin } from "./pagina.js";
+
+const CORS = { "access-control-allow-origin": "*", "access-control-allow-headers": "authorization,content-type", "access-control-allow-methods": "GET,POST,PUT,DELETE,OPTIONS" };
+const json = (d, status = 200) => new Response(JSON.stringify(d), { status, headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store", ...CORS } });
+export const ehRotaDoId = (c) => c === "/id" || c.startsWith("/id/");
+
+async function corpo(req) {
+  const t = await req.text();
+  if (t.length > 100_000) throw new ErroId(413, "corpo_grande", "Pedido grande demais.");
+  try {
+    const d = JSON.parse(t || "{}");
+    if (!d || typeof d !== "object" || Array.isArray(d)) throw 0;
+    return d;
+  } catch {
+    throw new ErroId(400, "json_invalido", "O corpo precisa ser um JSON válido.");
+  }
+}
+
+async function licenca(env, usuario, origem, gerar, gateway) {
+  const loja = usuario.loja ? await env.DB.prepare("SELECT * FROM lojas WHERE id = ?").bind(usuario.loja).first() : null;
+  if (!loja) return { acesso: false, plano: "sem_loja" };
+  const e = await estadoDaAssinatura(env, loja);
+  const vencendo = !e.emTeste && e.diasPagosRestantes <= 3 || e.emTeste && e.diasDeTesteRestantes <= 2;
+  const r = { ...e, renovar: vencendo };
+  if (gerar) r.cobranca = await iniciarCobranca(env, loja, gateway || "infinitepay", origem);
+  return r;
+}
+
+export async function tratarId(req, env, url, caminho) {
+  if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: CORS });
+  const origem = url.origin;
+  try {
+    if (caminho === "/id" && req.method === "GET") {
+      const origens = String(env.ORIGENS_PERMITIDAS || "").split(",").map((s) => s.trim()).filter(Boolean);
+      return new Response(paginaDeLogin(origens), { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store", "content-security-policy": "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; base-uri 'none'; form-action 'none'", "referrer-policy": "no-referrer", "x-frame-options": "DENY" } });
+    }
+    if (caminho === "/id/cadastrar" && req.method === "POST") {
+      const d = await corpo(req);
+      let lojaExistente = null;
+      const t = tokenDoPedido(req);
+      if (/^vl_[a-f0-9]{48}$/.test(t)) {
+        const { lojaDoPedido } = await import("../loja/lojas.js");
+        lojaExistente = await lojaDoPedido(env, req); // quem já usa a Vênus liga a loja atual à conta
+      }
+      return json(await cadastrar(env, { ...d, lojaExistente }), 201);
+    }
+    if (caminho === "/id/entrar" && req.method === "POST") return json(await entrar(env, await corpo(req)));
+    if (caminho === "/id/reativar" && req.method === "POST") return json(await reativar(env, tokenDoPedido(req), (await corpo(req)).encerrar));
+
+    const ctx = await validarSessao(env, req, {});
+    if (caminho === "/id/ping" && req.method === "POST") {
+      const l = await licenca(env, ctx.usuario, origem, false);
+      return json({ ok: true, ativa: true, licenca: { acesso: l.acesso, renovar: !!l.renovar } });
+    }
+    if (caminho === "/id/verificar" && req.method === "GET") { // para o Vindex e o Vortex validarem o login
+      return json({ usuario: { id: ctx.usuario.id, email: ctx.usuario.email, nome: ctx.usuario.nome }, sessao: ctx.sessao, licenca: await licenca(env, ctx.usuario, origem, false) });
+    }
+    if (caminho === "/id/eu" && req.method === "GET") return json({ id: ctx.usuario.id, email: ctx.usuario.email, nome: ctx.usuario.nome, loja: ctx.usuario.loja });
+    if (caminho === "/id/renovar" && req.method === "POST") return json({ ...(await renovarToken(env, ctx)), licenca: await licenca(env, ctx.usuario, origem, false) });
+    if (caminho === "/id/sair" && req.method === "POST") { await encerrarSessao(env, ctx.usuario.id, ctx.sessao, "saiu"); return json({ ok: true }); }
+    if (caminho === "/id/dispositivos" && req.method === "GET") return json(await listarDispositivos(env, ctx));
+    let m = /^\/id\/dispositivos\/([a-f0-9]{64})$/.exec(caminho);
+    if (m && req.method === "DELETE") {
+      if (m[1] === ctx.dispositivo) throw new ErroId(400, "dispositivo_atual", "Para sair deste aparelho use Sair.");
+      return json({ ok: await removerDispositivo(env, ctx.usuario.id, m[1]) });
+    }
+    m = /^\/id\/sessoes\/([a-f0-9]{24})\/encerrar$/.exec(caminho);
+    if (m && req.method === "POST") return json({ ok: await encerrarSessao(env, ctx.usuario.id, m[1], "encerrada_remotamente") });
+    if (caminho === "/id/licenca" && req.method === "GET") {
+      const g = url.searchParams.get("gerar") === "1";
+      return json(await licenca(env, ctx.usuario, origem, g, url.searchParams.get("gateway")));
+    }
+    if (caminho === "/id/sync" && req.method === "GET") return json(await lerSync(env, ctx, Number(url.searchParams.get("desde")) || 0));
+    m = /^\/id\/sync\/([a-z]{3,20})$/.exec(caminho);
+    if (m && req.method === "PUT") {
+      const d = await corpo(req);
+      return json(await gravarSync(env, ctx, m[1], d.valor, d.versao ?? 0));
+    }
+    return json({ error: "não encontrado" }, 404);
+  } catch (e) {
+    if (e instanceof ErroLoja) return json({ error: e.message, codigo: e.codigo, ...(e.dados || {}) }, e.status);
+    console.error("id", caminho, e && e.stack ? e.stack : e);
+    return json({ error: "erro interno" }, 500);
+  }
+}

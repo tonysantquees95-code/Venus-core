@@ -1,0 +1,155 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import { bancoDeTeste } from "./d1.mjs";
+import { cadastrar, entrar, validarSessao, reativar, encerrarSessao, listarDispositivos, gravarSync, lerSync, renovarToken, TTL_ATIVA_MS, limpezaDeSessoes } from "../src/id/conta.js";
+import { verificar } from "../src/id/jwt.js";
+import { tratarId } from "../src/id/rotas.js";
+import { lojaDoPedido } from "../src/loja/lojas.js";
+
+process.removeAllListeners("warning");
+const ENV = () => ({ DB: bancoDeTeste(), CHAVE_COFRE: "chave-de-teste-bem-longa-123", ORIGENS_PERMITIDAS: "https://app.exemplo" });
+const disp = (n, plataforma = "android") => ({ id: `aparelho-${n}-xxxxxxxx`, nome: `Aparelho ${n}`, plataforma });
+const req = (token, url = "https://v.test/id/ping", init = {}) => new Request(url, { method: "POST", ...init, headers: { authorization: `Bearer ${token}`, ...(init.headers || {}) } });
+const erro = async (p) => { try { await p; } catch (e) { return e; } assert.fail("era para falhar"); };
+const T0 = 1_800_000_000_000;
+
+async function conta(env) {
+  return cadastrar(env, { email: "Toni@Exemplo.com", senha: "senha-forte-1", nome: "Toni", dispositivo: disp(1) }, T0);
+}
+
+test("cadastra, cria a loja com teste grátis e devolve um JWT válido", async () => {
+  const env = ENV();
+  const r = await conta(env);
+  const d = await verificar(env, r.token, T0);
+  assert.equal(d.sub, r.usuario.id);
+  assert.equal(r.usuario.email, "toni@exemplo.com");
+  const u = await env.DB.prepare("SELECT loja FROM usuarios").first();
+  assert.ok(u.loja);
+  assert.equal((await erro(cadastrar(env, { email: "toni@exemplo.com", senha: "outra-senha-1", dispositivo: disp(2) }, T0))).codigo, "email_em_uso");
+  assert.equal((await erro(cadastrar(env, { email: "x@y.com", senha: "curta", dispositivo: disp(2) }, T0))).codigo, "senha_curta");
+});
+
+test("JWT adulterado ou vencido é recusado; o mesmo token vale como token da loja", async () => {
+  const env = ENV();
+  const r = await conta(env);
+  assert.equal(await verificar(env, r.token + "x", T0), null);
+  assert.equal(await verificar(env, r.token, T0 + 31 * 86_400_000), null);
+  const loja = await lojaDoPedido(env, req(r.token), T0);
+  assert.ok(loja.id);
+});
+
+test("senha errada: erro genérico e limite de tentativas", async () => {
+  const env = ENV();
+  await conta(env);
+  for (let i = 0; i < 8; i++) assert.equal((await erro(entrar(env, { email: "toni@exemplo.com", senha: "errada-errada", dispositivo: disp(1) }, T0 + i))).codigo, "credenciais");
+  assert.equal((await erro(entrar(env, { email: "toni@exemplo.com", senha: "senha-forte-1", dispositivo: disp(1) }, T0 + 10))).codigo, "muitas_tentativas");
+  assert.equal((await erro(entrar(env, { email: "ninguem@exemplo.com", senha: "qualquer-uma-1", dispositivo: disp(1) }, T0))).codigo, "credenciais");
+});
+
+test("no máximo 3 aparelhos vinculados: o 4º precisa remover um", async () => {
+  const env = ENV();
+  await conta(env);
+  const login = (n, extra = {}, t = T0 + n) => entrar(env, { email: "toni@exemplo.com", senha: "senha-forte-1", dispositivo: disp(n), ...extra }, t);
+  await login(2, {}, T0 + 400_000); // o 1º fica inativo, assim a regra de 2 ativas não atrapalha este teste
+  await login(3, {}, T0 + 800_000);
+  const e = await erro(login(4, {}, T0 + 1_200_000));
+  assert.equal(e.codigo, "limite_dispositivos");
+  assert.equal(e.dados.dispositivos.length, 3);
+  const ok = await login(4, { remover: e.dados.dispositivos[2].id }, T0 + 1_200_000);
+  assert.ok(ok.token);
+  const n = await env.DB.prepare("SELECT COUNT(*) AS n FROM dispositivos").first();
+  assert.equal(n.n, 3);
+});
+
+test("no máximo 2 sessões ativas: o 3º aparelho recebe o aviso e pode encerrar uma", async () => {
+  const env = ENV();
+  const a = await conta(env);
+  const login = (n, extra = {}, t = T0 + 1000) => entrar(env, { email: "toni@exemplo.com", senha: "senha-forte-1", dispositivo: disp(n), ...extra }, t);
+  const b = await login(2);
+  const e = await erro(login(3));
+  assert.equal(e.codigo, "limite_simultaneo");
+  assert.deepEqual(e.dados.opcoes, ["encerrar_sessao", "cancelar"]);
+  assert.equal(e.dados.ativas.length, 2);
+  const c = await login(3, { encerrar: b.sessao });
+  assert.ok(c.token);
+  // a sessão encerrada remotamente é recusada em qualquer pedido
+  assert.equal((await erro(validarSessao(env, req(b.token), { agora: T0 + 2000 }))).codigo, "sessao_encerrada");
+  assert.ok(await validarSessao(env, req(a.token), { agora: T0 + 2000 }));
+});
+
+test("sessão sem ping por 5 minutos deixa de contar e libera a vaga", async () => {
+  const env = ENV();
+  const a = await conta(env);
+  await entrar(env, { email: "toni@exemplo.com", senha: "senha-forte-1", dispositivo: disp(2) }, T0 + 1000);
+  const depois = T0 + TTL_ATIVA_MS + 60_000;
+  // o aparelho 2 continua dando ping; o 1 sumiu
+  const b = await env.DB.prepare("SELECT id FROM sessoes WHERE dispositivo != (SELECT dispositivo FROM sessoes WHERE id = ?)").bind(a.sessao).first();
+  await env.DB.prepare("UPDATE sessoes SET ultimo_ping = ? WHERE id = ?").bind(depois - 1000, b.id).run();
+  const c = await entrar(env, { email: "toni@exemplo.com", senha: "senha-forte-1", dispositivo: disp(3) }, depois);
+  assert.ok(c.token);
+  // o aparelho 1, ao acordar, encontra 2 sessões ativas: recebe o aviso (não volta sozinho)
+  const e = await erro(validarSessao(env, req(a.token), { agora: depois + 1000 }));
+  assert.equal(e.codigo, "limite_simultaneo");
+  // aceitando encerrar o aparelho 3, volta
+  await reativar(env, a.token, c.sessao, depois + 2000);
+  assert.ok(await validarSessao(env, req(a.token), { agora: depois + 3000 }));
+});
+
+test("pedido normal faz o batimento (ping) da sessão", async () => {
+  const env = ENV();
+  const a = await conta(env);
+  await validarSessao(env, req(a.token), { agora: T0 + 60_000 });
+  const s = await env.DB.prepare("SELECT ultimo_ping FROM sessoes WHERE id = ?").bind(a.sessao).first();
+  assert.equal(s.ultimo_ping, T0 + 60_000);
+});
+
+test("sair, renovar e listar dispositivos", async () => {
+  const env = ENV();
+  const a = await conta(env);
+  const ctx = await validarSessao(env, req(a.token), { agora: T0 + 1000 });
+  const r = await renovarToken(env, ctx, T0 + 1000);
+  assert.ok(await verificar(env, r.token, T0 + 1000));
+  const lista = await listarDispositivos(env, ctx, T0 + 1000);
+  assert.equal(lista.dispositivos.length, 1);
+  assert.ok(lista.dispositivos[0].atual && lista.dispositivos[0].ativo);
+  await encerrarSessao(env, ctx.usuario.id, ctx.sessao, "saiu");
+  assert.equal((await erro(validarSessao(env, req(a.token), { agora: T0 + 2000 }))).codigo, "sessao_encerrada");
+});
+
+test("sincronização: versão, conflito e leitura incremental", async () => {
+  const env = ENV();
+  const a = await conta(env);
+  const ctx = await validarSessao(env, req(a.token), { agora: T0 + 1000 });
+  const g = await gravarSync(env, ctx, "tema", { modelo: "cristal" }, 0, T0 + 1000);
+  assert.equal(g.versao, 1);
+  assert.equal((await erro(gravarSync(env, ctx, "tema", { modelo: "pulso" }, 0, T0 + 2000))).codigo, "versao_antiga");
+  assert.equal((await gravarSync(env, ctx, "tema", { modelo: "pulso" }, 1, T0 + 3000)).versao, 2);
+  assert.equal((await erro(gravarSync(env, ctx, "senha", "x", 0))).codigo, "chave_invalida");
+  const l = await lerSync(env, ctx, T0 + 2500);
+  assert.equal(l.docs.length, 1);
+  assert.equal(l.docs[0].valor.modelo, "pulso");
+});
+
+test("rotas HTTP: login, aviso 409 com opções, tela de login e CORS", async () => {
+  const env = ENV();
+  const post = (c, corpo, token) => tratarId(new Request(`https://v.test${c}`, { method: "POST", headers: { "content-type": "application/json", ...(token ? { authorization: `Bearer ${token}` } : {}) }, body: JSON.stringify(corpo) }), env, new URL(`https://v.test${c}`), c);
+  const r1 = await post("/id/cadastrar", { email: "a@b.co", senha: "12345678", dispositivo: disp(1) });
+  assert.equal(r1.status, 201);
+  const t = (await r1.json()).token;
+  await post("/id/entrar", { email: "a@b.co", senha: "12345678", dispositivo: disp(2) });
+  const r3 = await post("/id/entrar", { email: "a@b.co", senha: "12345678", dispositivo: disp(3) });
+  assert.equal(r3.status, 409);
+  const j = await r3.json();
+  assert.equal(j.codigo, "limite_simultaneo");
+  assert.equal(j.ativas.length, 2);
+  const eu = await tratarId(req(t, "https://v.test/id/eu", { method: "GET" }), env, new URL("https://v.test/id/eu"), "/id/eu");
+  assert.equal(eu.status, 200);
+  const ping = await post("/id/ping", {}, t);
+  assert.equal((await ping.json()).ok, true);
+  const pg = await tratarId(new Request("https://v.test/id"), env, new URL("https://v.test/id"), "/id");
+  assert.match(await pg.text(), /Vetorial ID/);
+  assert.match(pg.headers.get("content-security-policy"), /default-src 'none'/);
+  const op = await tratarId(new Request("https://v.test/id/entrar", { method: "OPTIONS" }), env, new URL("https://v.test/id/entrar"), "/id/entrar");
+  assert.equal(op.status, 204);
+  await limpezaDeSessoes(env, T0);
+});

@@ -246,7 +246,7 @@ export async function tratarLoja(req, env, ctx, url, caminho) {
     }
     return json({ error: "não encontrado" }, 404);
   } catch (e) {
-    if (e instanceof ErroLoja || e instanceof ErroCanal) return json({ error: e.message, codigo: e.codigo }, e.status);
+    if (e instanceof ErroLoja || e instanceof ErroCanal) return json({ error: e.message, codigo: e.codigo, ...(e.dados || {}) }, e.status);
     console.error("loja", caminho, e && e.stack ? e.stack : e);
     return json({ error: "erro interno" }, 500);
   }

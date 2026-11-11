@@ -35,6 +35,15 @@ export async function registrarLoja(env, { nome, slug, dispositivo }, agora = Da
 }
 
 export async function lojaDoPedido(env, req) {
+  // Vetorial ID: o mesmo login (JWT) vale para a loja, com sessão e batimento conferidos
+  const bruto = (/^Bearer\s+(\S+)$/.exec(req.headers.get("authorization") || "") || [])[1] || "";
+  if (bruto.startsWith("eyJ")) {
+    const { validarSessao } = await import("../id/conta.js");
+    const ctx = await validarSessao(env, req);
+    const l = ctx.usuario.loja ? await env.DB.prepare("SELECT * FROM lojas WHERE id = ?").bind(ctx.usuario.loja).first() : null;
+    if (!l) throw new ErroLoja(404, "sem_loja", "Essa conta ainda não tem loja.");
+    return l;
+  }
   const m = /^Bearer\s+(vl_[a-f0-9]{48})$/.exec(req.headers.get("authorization") || "");
   if (!m) throw new ErroLoja(401, "sem_token", "Faltou o token da loja.");
   const loja = await env.DB.prepare("SELECT * FROM lojas WHERE token_hash = ?").bind(await sha256Hex(m[1])).first();
