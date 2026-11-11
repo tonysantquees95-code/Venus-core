@@ -34,7 +34,23 @@ export async function registrarLoja(env, { nome, slug, dispositivo }, agora = Da
   return { id, token, slug: slugFinal, trialFim, testeGratisUsado: !!jaTeve };
 }
 
+/** O dono (administrador master) nunca perde o acesso: a loja ligada ao e-mail dele vale para sempre. */
+export const emailAdmin = (env) => String(env.ADMIN_EMAIL || "").trim().toLowerCase() || "vetorialtech.dev@gmail.com";
+const SEM_FIM = 4102444800000; // 2100-01-01
+export async function comPrivilegios(env, loja) {
+  if (!loja) return loja;
+  try {
+    const u = await env.DB.prepare("SELECT email FROM usuarios WHERE loja = ?").bind(loja.id).first();
+    if (u && String(u.email || "").trim().toLowerCase() === emailAdmin(env)) return { ...loja, ativo_ate: SEM_FIM, plano: "dono" };
+  } catch { /* sem tabela de contas: segue sem privilégio */ }
+  return loja;
+}
+
 export async function lojaDoPedido(env, req) {
+  return comPrivilegios(env, await lojaDoPedidoBruta(env, req));
+}
+
+async function lojaDoPedidoBruta(env, req) {
   // Vetorial ID: o mesmo login (JWT) vale para a loja, com sessão e batimento conferidos
   const bruto = (/^Bearer\s+(\S+)$/.exec(req.headers.get("authorization") || "") || [])[1] || "";
   if (bruto.startsWith("eyJ")) {

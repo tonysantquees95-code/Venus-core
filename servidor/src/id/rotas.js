@@ -1,6 +1,6 @@
 // Rotas do Vetorial ID: /id (tela de login) e /id/* (API).
 import { estadoDaAssinatura, iniciarCobranca } from "../loja/assinatura.js";
-import { ErroLoja } from "../loja/lojas.js";
+import { ErroLoja, comPrivilegios } from "../loja/lojas.js";
 import { ErroId, cadastrar, perfilPublico, salvarPerfil, tokenDeApp, encerrarSessao, entrar, gravarSync, lerSync, listarDispositivos, reativar, removerDispositivo, renovarToken, tokenDoPedido, validarSessao } from "./conta.js";
 import { paginaDeLogin, paginaSso } from "./pagina.js";
 import { ehAdmin } from "../dev/admin.js";
@@ -22,7 +22,7 @@ async function corpo(req) {
 }
 
 async function licenca(env, usuario, origem, gerar, gateway) {
-  const loja = usuario.loja ? await env.DB.prepare("SELECT * FROM lojas WHERE id = ?").bind(usuario.loja).first() : null;
+  const loja = usuario.loja ? await comPrivilegios(env, await env.DB.prepare("SELECT * FROM lojas WHERE id = ?").bind(usuario.loja).first()) : null;
   if (!loja) return { acesso: false, plano: "sem_loja" };
   const e = await estadoDaAssinatura(env, loja);
   const vencendo = !e.emTeste && e.diasPagosRestantes <= 3 || e.emTeste && e.diasDeTesteRestantes <= 2;

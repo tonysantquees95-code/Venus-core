@@ -90,3 +90,17 @@ test("pequenos validadores", () => {
   assert.equal(visiveis([{ oculto: false, preco_centavos: 1, estoque: 1 }, { oculto: false, preco_centavos: null, estoque: 1 }]).length, 1);
   assert.ok(paginaDaVitrine({ nome: "X", cor: "#fff" }, [], "https://a").includes("Em breve"));
 });
+
+test("vitrine com teste vencido mostra aviso claro; a do dono (admin) nunca sai do ar", async () => {
+  const env = mk();
+  const l = await lojaComProdutos(env);
+  await env.DB.prepare("UPDATE lojas SET trial_fim = 1, ativo_ate = 0 WHERE id = ?").bind(l.id).run();
+  const r = await chamar(env, "GET", `/v/${l.slug}`);
+  assert.equal(r.status, 404);
+  assert.match(await r.text(), /fora do ar/);
+  const antes = await env.DB.prepare("SELECT COUNT(*) AS n FROM usuarios").first();
+  assert.equal(antes.n, 0);
+  await env.DB.prepare("INSERT INTO usuarios (id, email, nome, senha_hash, salt, loja, criado) VALUES ('u1', 'vetorialtech.dev@gmail.com', 'Dono', 'x', 'y', ?, 1)").bind(l.id).run();
+  const ok = await chamar(env, "GET", `/v/${l.slug}`);
+  assert.equal(ok.status, 200);
+});
