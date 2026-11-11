@@ -3,6 +3,8 @@ import { conector } from "../canais/index.js";
 import { ErroCanal } from "../canais/comum.js";
 import { hmacHex, iguais, segredoDoCanal } from "./cripto.js";
 import { acessoLiberado, ErroLoja, lojaDoPedido, registrarLoja } from "./lojas.js";
+import { endereco, esc, html, corValida, paginaDaVitrine, paginaDoProduto, RESERVADAS, urlHttps, validarCodigo, soDigitos } from "./vitrine.js";
+import { aleatorio } from "./cripto.js";
 import { conectarCanal, listarCanais, publico, removerCanal, sincronizarPedidos, sincronizarProdutos, tratarWebhook } from "./sincronia.js";
 
 const json = (d, status = 200) =>
@@ -46,7 +48,34 @@ async function lerEstadoOAuth(env, state, plataforma, agora = Date.now()) {
 
 export const ehRotaDaLoja = (c) =>
   c.startsWith("/loja/") || c === "/canais" || c.startsWith("/canais/") || c === "/produtos" || c === "/pedidos" ||
-  c.startsWith("/oauth/") || c.startsWith("/webhook/") || c === "/estoque/eventos";
+  c.startsWith("/oauth/") || c.startsWith("/webhook/") || c === "/estoque/eventos" || c.startsWith("/v/") || c.startsWith("/l/") ||
+  c === "/links" || c.startsWith("/links/");
+
+/** Páginas públicas: vitrine e link curto (também no domínio curto, onde a primeira parte do caminho é a loja). */
+export async function tratarPublico(req, env, url, caminho) {
+  if (req.method !== "GET") return null;
+  let m = /^\/l\/([a-z0-9-]{3,32})$/.exec(caminho);
+  if (m) {
+    const l = await env.DB.prepare("SELECT destino FROM links WHERE codigo = ?").bind(m[1]).first();
+    if (!l) return html("<!doctype html><meta charset=utf-8><body style='font-family:sans-serif;background:#070a1c;color:#fff;text-align:center;padding:60px'><h2>Link não encontrado</h2>", 404, "no-store");
+    await env.DB.prepare("UPDATE links SET cliques = cliques + 1 WHERE codigo = ?").bind(m[1]).run();
+    return new Response(null, { status: 302, headers: { location: l.destino, "cache-control": "no-store", "referrer-policy": "no-referrer" } });
+  }
+  const curto = env.DOMINIO_CURTO && url.hostname === env.DOMINIO_CURTO;
+  m = curto ? /^\/([a-z0-9-]{3,32})(?:\/([^/]+))?$/.exec(caminho) : /^\/v\/([a-z0-9-]{3,32})(?:\/([^/]+))?$/.exec(caminho);
+  if (!m || (curto && RESERVADAS.has(m[1]))) return null;
+  const loja = await env.DB.prepare("SELECT * FROM lojas WHERE slug = ?").bind(m[1]).first();
+  if (!loja || !acessoLiberado(loja)) return html("<!doctype html><meta charset=utf-8><body style='font-family:sans-serif;background:#070a1c;color:#fff;text-align:center;padding:60px'><h2>Loja não encontrada</h2>", 404, "no-store");
+  const { results } = await env.DB.prepare("SELECT * FROM produtos WHERE loja = ? ORDER BY nome LIMIT 500").bind(loja.id).all();
+  const produtos = results.map((p) => ({ ...p, atributos: JSON.parse(p.atributos || "{}"), oculto: !!p.oculto }));
+  const base = endereco(env, req, loja.slug);
+  if (m[2]) {
+    const sku = decodeURIComponent(m[2]);
+    const p = produtos.find((x) => x.sku === sku && !x.oculto && x.preco_centavos !== null);
+    return p ? html(paginaDoProduto(loja, p, base)) : html("<!doctype html><meta charset=utf-8><body style='font-family:sans-serif;background:#070a1c;color:#fff;text-align:center;padding:60px'><h2>Produto não encontrado</h2>", 404, "no-store");
+  }
+  return html(paginaDaVitrine(loja, produtos, base));
+}
 
 export async function tratarLoja(req, env, ctx, url, caminho) {
   try {
@@ -92,10 +121,58 @@ export async function tratarLoja(req, env, ctx, url, caminho) {
       }
     }
 
+    if (req.method === "GET") {
+      const pub = await tratarPublico(req, env, url, caminho);
+      if (pub) return pub;
+    }
+
     // ---------- do lojista (token da loja)
     const loja = await lojaDoPedido(env, req);
     if (caminho === "/loja/eu" && req.method === "GET") {
       return json({ id: loja.id, nome: loja.nome, slug: loja.slug, plano: loja.plano, trialFim: loja.trial_fim, ativoAte: loja.ativo_ate, acesso: acessoLiberado(loja) });
+    }
+    if (caminho === "/loja/vitrine" && req.method === "PUT") {
+      exigeAcesso(loja);
+      const d = await corpoJson(req);
+      const logo = d.logo ? urlHttps(d.logo) : "";
+      if (d.logo && !logo) throw new ErroLoja(400, "logo_invalida", "O logo precisa ser um endereço https.");
+      await env.DB.prepare("UPDATE lojas SET titulo = ?, descricao = ?, cor = ?, logo = ?, whatsapp = ? WHERE id = ?")
+        .bind(String(d.titulo ?? loja.titulo).slice(0, 80), String(d.descricao ?? loja.descricao).slice(0, 300), corValida(d.cor ?? loja.cor), logo ?? loja.logo, soDigitos(d.whatsapp ?? loja.whatsapp).slice(0, 15), loja.id).run();
+      return json({ ok: true, url: endereco(env, req, loja.slug) });
+    }
+    if (caminho === "/loja/vitrine" && req.method === "GET") {
+      return json({ url: endereco(env, req, loja.slug), titulo: loja.titulo, descricao: loja.descricao, cor: loja.cor, logo: loja.logo, whatsapp: loja.whatsapp });
+    }
+    if (caminho === "/links" && req.method === "GET") {
+      const { results } = await env.DB.prepare("SELECT codigo, destino, rotulo, cliques, criado FROM links WHERE loja = ? ORDER BY criado DESC LIMIT 200").bind(loja.id).all();
+      const base = new URL(endereco(env, req, "x")).origin;
+      return json({ links: results.map((l) => ({ ...l, curto: env.DOMINIO_CURTO ? `https://${env.DOMINIO_CURTO}/l/${l.codigo}` : `${base}/l/${l.codigo}` })) });
+    }
+    if (caminho === "/links" && req.method === "POST") {
+      exigeAcesso(loja);
+      const d = await corpoJson(req);
+      let destino = d.destino ? urlHttps(d.destino) : null;
+      if (!destino && d.sku) {
+        const p = await env.DB.prepare("SELECT sku FROM produtos WHERE loja = ? AND sku = ?").bind(loja.id, String(d.sku)).first();
+        if (!p) throw new ErroLoja(404, "produto_inexistente", "Produto não encontrado.");
+        destino = endereco(env, req, loja.slug, p.sku);
+      } else if (!destino && d.vitrine) destino = endereco(env, req, loja.slug);
+      if (!destino) throw new ErroLoja(400, "destino_invalido", "Informe um endereço https, um sku de produto ou vitrine: true.");
+      const total = await env.DB.prepare("SELECT COUNT(*) AS n FROM links WHERE loja = ?").bind(loja.id).first();
+      if (total.n >= 200) throw new ErroLoja(409, "limite_de_links", "Limite de 200 links por loja.");
+      const codigo = d.codigo ? validarCodigo(d.codigo) : `${aleatorio(3)}`;
+      try {
+        await env.DB.prepare("INSERT INTO links (codigo, loja, destino, rotulo, criado, cliques) VALUES (?, ?, ?, ?, ?, 0)").bind(codigo, loja.id, destino, String(d.rotulo || "").slice(0, 80), Date.now()).run();
+      } catch (e) {
+        throw new ErroLoja(409, "codigo_em_uso", "Esse código já está em uso. Escolha outro.");
+      }
+      const base = new URL(endereco(env, req, "x")).origin;
+      return json({ codigo, destino, curto: env.DOMINIO_CURTO ? `https://${env.DOMINIO_CURTO}/l/${codigo}` : `${base}/l/${codigo}` }, 201);
+    }
+    m = /^\/links\/([a-z0-9-]{3,32})$/.exec(caminho);
+    if (m && req.method === "DELETE") {
+      await env.DB.prepare("DELETE FROM links WHERE codigo = ? AND loja = ?").bind(m[1], loja.id).run();
+      return json({ ok: true });
     }
     if (caminho === "/canais" && req.method === "GET") return json({ canais: (await listarCanais(env, loja)).map(publico) });
     if (caminho === "/canais" && req.method === "POST") {

@@ -33,3 +33,7 @@ MODELO_GEMINI_RESERVA = "gemini-flash-lite-latest"
 MODELO_EMBEDDING = "@cf/baai/bge-m3"
 CACHE_TTL_SEGUNDOS = "86400"
 CACHE_LIMIAR = "0.93"
+
+# Domínio curto da Vetorial Tech (vetorial.tech/sualoja). Quando o domínio estiver ligado a este Worker
+# (Cloudflare → Workers → Domínios e rotas), troque por "vetorial.tech"; vazio = usa /v/sualoja no endereço do Worker.
+# DOMINIO_CURTO = "vetorial.tech"
