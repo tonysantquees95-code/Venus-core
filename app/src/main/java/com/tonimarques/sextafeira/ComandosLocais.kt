@@ -952,6 +952,8 @@ object ComandosLocais {
     val TIPO_POST = Regex("^(?:(?:muda|mudar|mude|troca|trocar|troque|passa|poste|posta|postar|publica|publicar|faz|faca|coloca|bota)(?: (?:ele|ela|isso|o post|a postagem))? )?(?:no|pro|para o|pra|para|pelo|como) (feed|story|stories)\\b")
 
     private val ROBO = "(?:o |a )?(?:robo|robozinho|venus robo|atendimento automatico|resposta automatica)"
+    private val VINDEX_OTIMIZAR = Regex("\\b(?:otimiz\\w*|limp\\w*|acelera\\w*)\\b.*\\bvindex\\b|\\bvindex\\b.*\\b(?:otimiz\\w*|limp\\w*|acelera\\w*)\\b")
+    private val VINDEX_DIAGNOSTICO = Regex("\\bvindex\\b.*\\b(?:como esta|diagnostic\\w*|status|saude)\\b|\\b(?:como esta|diagnostic\\w*|saude)\\b.*\\bvindex\\b")
     private val ROBO_LIGAR = Regex("^(?:pode )?(liga|ligar|ligue|ativa|ativar|ative|volta|voltar|desliga|desligar|desligue|desativa|desativar|desative|pausa|pausar|pause|para|parar|pare)(?: o| a)? $ROBO\\b")
     private val ROBO_RESUMO = Regex(
         "\\b(?:como (?:esta|ta|foi|vai) $ROBO|quantos atendimentos|quantas clientes (?:o robo|a venus) (?:atendeu|respondeu)|" +
@@ -1011,6 +1013,8 @@ object ComandosLocais {
         if (POSTAR_AGORA.matches(t)) return Resultado.Acao("postar_agora", emptyMap())
         if (ESTUDO_AGORA.matches(t)) return Resultado.Acao("estudo_agora", emptyMap())
         if (IDEIAS_POST.containsMatchIn(t)) return Resultado.Acao("estudo_ideias", emptyMap())
+        if (VINDEX_OTIMIZAR.containsMatchIn(t)) return Resultado.Acao("vindex", mapOf("acao" to "otimizar"))
+        if (VINDEX_DIAGNOSTICO.containsMatchIn(t)) return Resultado.Acao("vindex", mapOf("acao" to "diagnostico"))
         ROBO_LIGAR.find(t)?.let { m -> return Resultado.Acao("robo_ligar", mapOf("ligado" to !Regex("^(?:des|pausa|para|pare|parar)").containsMatchIn(m.groupValues[1]))) }
         if (ROBO_RESUMO.containsMatchIn(t)) return Resultado.Acao("robo_resumo", emptyMap())
         if (LIMPAR_ERROS.containsMatchIn(t)) return Resultado.Acao("limpar_erros", emptyMap())
