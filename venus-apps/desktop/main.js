@@ -2,6 +2,7 @@
 // + monitor de conexão com os Workers. A interface é o mesmo app React (Dois em Um) dos outros aparelhos.
 const { app, BrowserWindow, Tray, Menu, Notification, globalShortcut, ipcMain, nativeImage, protocol, net, shell } = require("electron");
 const path = require("node:path");
+const { spawn } = require("node:child_process");
 const { pathToFileURL } = require("node:url");
 
 const SERVIDOR = (process.env.VENUS_SERVIDOR || "https://venus-servidor.tonysantquees95.workers.dev").replace(/\/+$/, "");
@@ -16,6 +17,8 @@ let bandeja = null;
 let saindo = false;
 let ultimoStatus = { online: false, ms: null, quando: 0 };
 let statusModulo = null;
+let computador = null;
+let pendente = null; // ação perigosa esperando o "sim" (vale 30 s)
 
 const trava = app.requestSingleInstanceLock();
 if (!trava) app.quit();
@@ -102,6 +105,7 @@ async function medir(monitor) {
 
 app.whenReady().then(async () => {
   statusModulo = await import(pathToFileURL(path.join(__dirname, "status.mjs")).href);
+  computador = await import(pathToFileURL(path.join(__dirname, "computador.mjs")).href);
   app.setAppUserModelId("tech.vetorial.venus"); // necessário para as notificações do Windows
 
   // app://venus/... serve só a pasta do app (sem sair dela)
@@ -123,6 +127,43 @@ app.whenReady().then(async () => {
   const monitor = statusModulo.criarMonitor();
   void medir(monitor);
   setInterval(() => void medir(monitor), INTERVALO_MS);
+});
+
+/** Executa uma ação já validada pelo computador.mjs (sempre de uma lista fixa, sem shell com texto do usuário). */
+function executar(exec) {
+  if (!exec) return false;
+  if (exec.tipo === "url") { void shell.openExternal(exec.url); return true; }
+  try {
+    const filho = spawn(exec.arquivo, exec.args, { detached: true, stdio: "ignore", windowsHide: true });
+    filho.on("error", () => {});
+    filho.unref();
+    return true;
+  } catch { return false; }
+}
+
+/** "abrir calculadora", "aumentar volume", "desligar"… Devolve { tratado:false } quando é conversa comum. */
+ipcMain.handle("venus:comando", (_e, texto) => {
+  if (!computador || typeof texto !== "string") return { tratado: false };
+  if (pendente && Date.now() > pendente.expira) pendente = null;
+  if (pendente) {
+    const p = pendente;
+    if (computador.ehConfirmacao(texto)) {
+      pendente = null;
+      const ok = executar(computador.montarExecucao(p));
+      return { tratado: true, texto: ok ? computador.respostaDa(p) : "Não consegui fazer isso agora." };
+    }
+    if (computador.ehNegacao(texto)) { pendente = null; return { tratado: true, texto: "Tudo bem, não fiz nada." }; }
+    pendente = null; // falou de outra coisa: a pergunta caduca
+  }
+  const a = computador.interpretar(texto);
+  if (!a) return { tratado: false };
+  if (a.acao === "perigosa") {
+    pendente = { ...a, expira: Date.now() + 30_000 };
+    return { tratado: true, texto: computador.perguntaDeConfirmacao(a.tipo) };
+  }
+  const exec = computador.montarExecucao(a);
+  if (!exec) return { tratado: true, texto: computador.respostaDa(a) };
+  return { tratado: true, texto: executar(exec) ? computador.respostaDa(a) : "Não consegui fazer isso agora." };
 });
 
 ipcMain.on("venus:versao", (e) => { e.returnValue = app.getVersion(); });
