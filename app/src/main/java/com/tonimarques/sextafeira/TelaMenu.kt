@@ -127,6 +127,7 @@ internal fun MainActivity.abrirMenu(@Suppress("UNUSED_PARAMETER") ancora: View) 
                 item("Ouvir com o app fechado", {
                     "Diga \"$n, ativar\" de qualquer tela e o orbe aparece num pop-up, sem abrir o app inteiro."
                 }, MENU_FUNDO) { prefs.getBoolean(PREF_FUNDO, false) },
+                TelaDeAjustes.Ajuste("Guia do primeiro acesso", { "Passo a passo do que ligar nas configurações do celular." }) { Onboarding.mostrar(this) },
                 TelaDeAjustes.Ajuste("Voz offline para a ativação", { descricaoVozOffline() }) { tratarVozOffline() },
                 item("Comandos de música sem chamar", {
                     "Com música tocando, diga só: pausar música, próxima música, música anterior, aumentar volume, diminuir volume. " +
