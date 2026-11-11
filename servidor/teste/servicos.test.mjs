@@ -79,6 +79,7 @@ test("marketing: preenche a fila (IA e modelo de reserva), regenera, agenda e li
   assert.equal((await (await chamar(env, "POST", "/marketing/regenerar", l.token, { todos: true })).json()).regenerados, 2);
   assert.equal((await chamar(env, "PATCH", `/marketing/fila/${id}`, l.token, { agendarPara: Date.now() + 3600000 })).status, 200);
   assert.equal((await chamar(env, "PATCH", `/marketing/fila/${id}`, l.token, { agendarPara: 5 })).status, 400);
+  assert.equal((await chamar(env, "POST", `/marketing/fila/${id}/agendar`, l.token, { agendarPara: Date.now() + 7200000 })).status, 200);
   assert.equal((await (await chamar(env, "POST", "/marketing/limpar", l.token, { status: "agendado" })).json()).removidos, 1);
   fila = (await (await chamar(env, "GET", "/marketing/fila", l.token)).json()).fila;
   assert.equal(fila.length, 1);

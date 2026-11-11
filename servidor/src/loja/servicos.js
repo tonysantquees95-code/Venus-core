@@ -33,8 +33,9 @@ export async function tratarServico(req, env, loja, url, caminho, { corpoJson, e
     if (d.todos) lista = (await env.DB.prepare("SELECT id FROM fila_posts WHERE loja = ? AND status = 'sugerido' LIMIT 20").bind(loja.id).all()).results.map((r) => r.id);
     return json({ regenerados: await regenerar(env, loja, lista, { gerar }) });
   }
-  let m = /^\/marketing\/fila\/(\d+)$/.exec(caminho);
-  if (m && req.method === "PATCH") {
+  let m = /^\/marketing\/fila\/(\d+)(\/agendar)?$/.exec(caminho);
+  // o Android (HttpURLConnection) não faz PATCH: o app usa POST em /agendar
+  if (m && ((req.method === "PATCH" && !m[2]) || (req.method === "POST" && m[2]))) {
     const d = await corpoJson(req);
     const quando = d.agendarPara === null ? null : Number(d.agendarPara);
     if (quando !== null && !(quando > Date.now() - 60_000)) throw new ErroLoja(400, "data_invalida", "Informe uma data futura (milissegundos).");
@@ -47,7 +48,7 @@ export async function tratarServico(req, env, loja, url, caminho, { corpoJson, e
     await env.DB.prepare("DELETE FROM fila_posts WHERE id = ? AND loja = ?").bind(Number(m[1]), loja.id).run();
     return json({ ok: true });
   }
-  if (m && req.method === "POST") {
+  if (m && !m[2] && req.method === "POST") {
     exigeAcesso(loja);
     return json({ regenerados: await regenerar(env, loja, [Number(m[1])], { gerar }) });
   }

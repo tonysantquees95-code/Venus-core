@@ -80,6 +80,8 @@ class Gaveta(private val a: MainActivity) : FrameLayout(a) {
 
         painel.addView(linha(R.drawable.ic_robo, "Vênus Robô", "Respostas automáticas aos clientes") { fechar(); a.abrirRobo() },
             LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = a.dp(14) })
+        painel.addView(linha(R.drawable.ic_publicacoes, "Central da loja", "Canais, marketing, QR Code, painel e plano") { fechar(); a.abrirCentral() },
+            LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = a.dp(8) })
         painel.addView(linha(R.drawable.ic_publicacoes, "Aparência", "Cor, orbe e ícones") { fechar(); a.abrirAparencia() },
             LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = a.dp(8) })
 
