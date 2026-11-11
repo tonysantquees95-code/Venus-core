@@ -59,7 +59,7 @@ jobs:
 
       - name: Testes do servidor (IA, lojistas, canais e estoque)
         working-directory: .
-        run: node --test servidor/teste/ia.test.mjs servidor/teste/loja.test.mjs
+        run: node --test servidor/teste/ia.test.mjs servidor/teste/loja.test.mjs servidor/teste/vitrine.test.mjs
 
       # Cache vetorial e limite por IP: tentam criar o que falta. Se a chave da Cloudflare não tiver
       # permissão (KV, Vectorize), segue sem o cache: o servidor atual nunca deixa de ser publicado.

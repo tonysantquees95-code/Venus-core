@@ -36,7 +36,9 @@ export default {
       if (caminho === "/cobranca/aviso" && req.method === "POST") return await cobrancaAviso(req, env);
       if (caminho === "/cobranca/status" && req.method === "GET") return await cobrancaStatus(url, env);
       if (caminho.startsWith("/v1/")) return await tratarIA(req, env, ctx);
-      if (ehRotaDaLoja(caminho)) return await tratarLoja(req, env, ctx, url, caminho);
+      if (ehRotaDaLoja(caminho) || (env.DOMINIO_CURTO && url.hostname === env.DOMINIO_CURTO && req.method === "GET" && /^\/[a-z0-9-]{3,32}(\/[^/]+)?$/.test(caminho) && !["/saude", "/atualizacao"].includes(caminho))) {
+        return await tratarLoja(req, env, ctx, url, caminho);
+      }
       if (caminho === "/chat" && req.method === "OPTIONS") return chatPreflight();
       if (caminho === "/chat" && req.method === "POST") return await chat(req, env);
       return json({ error: "não encontrado" }, 404);
