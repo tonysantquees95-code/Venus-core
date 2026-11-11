@@ -17,6 +17,7 @@
  * GROQ_API_KEY, TAVILY_API_KEY e GEMINI_API_KEY (conversa); DEEPSEEK_API_KEY e APP_TOKEN (opcional) para o roteador /v1.
  */
 import { ehAtalho, responderAtalho } from "./atalhos.js";
+import { ehRotaVindex, tratarVindex } from "./vindex/rotas.js";
 import { chat, chatPreflight } from "./chat.js";
 import { tratarIA } from "./ia/rotas.js";
 import { ehRotaDaLoja, tratarLoja } from "./loja/rotas.js";
@@ -53,6 +54,7 @@ export default {
       if (caminho === "/cobranca/status" && req.method === "GET") return await cobrancaStatus(url, env);
       if (caminho.startsWith("/v1/")) return await tratarIA(req, env, ctx);
       if (ehRotaDoId(caminho)) return await tratarId(req, env, url, caminho);
+      if (ehRotaVindex(caminho)) return await tratarVindex(req, env, url, caminho);
       if (ehRotaDev(caminho)) return await tratarDev(req, env, url, caminho);
       if (ehRotaDaLoja(caminho) || (env.DOMINIO_CURTO && url.hostname === env.DOMINIO_CURTO && req.method === "GET" && /^\/[a-z0-9-]{3,32}(\/[^/]+)?$/.test(caminho) && !["/saude", "/atualizacao"].includes(caminho))) {
         return await tratarLoja(req, env, ctx, url, caminho);

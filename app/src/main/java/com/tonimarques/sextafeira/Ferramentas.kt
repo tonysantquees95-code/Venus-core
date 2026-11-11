@@ -66,6 +66,15 @@ class Ferramentas(private val activity: Activity, private val memoria: Memoria? 
         )
         .put(
             funcao(
+                "vindex",
+                "Pede ao Vindex (otimizador do computador ou do celular, que precisa estar aberto) para otimizar o sistema com 1 clique " +
+                    "(limpeza segura de temporários e memória) ou para dizer como está o aparelho (CPU, memória, disco).",
+                listOf("acao"),
+                "acao" to opcoes("O que o Vindex deve fazer.", "otimizar", "diagnostico")
+            )
+        )
+        .put(
+            funcao(
                 "instagram_resumo",
                 "Seguidores e desempenho dos últimos posts do Instagram da loja (curtidas, comentários, post que mais engajou).",
                 emptyList(),
@@ -347,6 +356,7 @@ class Ferramentas(private val activity: Activity, private val memoria: Memoria? 
         "abrir_app" -> abrirApp(a.optString("nome"))
         "tocar_musica" -> tocarMusica(a.optString("busca"), a.optString("app"))
         "controlar_midia" -> controlarMidia(a.optString("acao"), a.optString("app"), a.optString("nivel"))
+        "vindex" -> vindexPedir(a.optString("acao"))
         "conta_vetorial" -> contaVetorial(a.optString("acao"))
         "buscar_perto" -> buscarPerto(a.optString("oque"), a.optString("referencia"))
         "salvar_lugar" -> salvarLugar(a.optString("lugar"), a.optString("endereco"))
@@ -850,6 +860,28 @@ class Ferramentas(private val activity: Activity, private val memoria: Memoria? 
     }
 
     /** Conta do Vetorial ID pela conversa (status da assinatura, conectar, dispositivos, sair). Roda fora da tela principal. */
+    /** Pede a ação ao Vindex pela nuvem (Vetorial ID) e espera a resposta dele por até 50 segundos. */
+    private fun vindexPedir(acao: String): String {
+        if (!VetorialId.logado(activity)) return "Entre com o seu Vetorial ID para eu falar com o Vindex."
+        val ac = if (acao == "diagnostico") "diagnostico" else "otimizar"
+        val token = VetorialId.token(activity)
+        val r = Nuvem.bruto(activity, "POST", "/vindex/pedidos", JSONObject().put("comando", ac), token)
+        if (!r.ok) return if (r.json.optString("codigo") == "vindex_fechado") "O Vindex não está aberto no seu aparelho agora. Abra o Vindex e me peça de novo." else "Não consegui falar com o Vindex: ${r.erro()}"
+        val id = r.json.optString("id")
+        val fim = System.currentTimeMillis() + 50_000
+        while (System.currentTimeMillis() < fim) {
+            Thread.sleep(2_000)
+            val s = Nuvem.bruto(activity, "GET", "/vindex/pedidos/$id", null, token)
+            if (!s.ok) return "Não consegui acompanhar o pedido ao Vindex: ${s.erro()}"
+            when (s.json.optString("status")) {
+                "concluido" -> return "Vindex: " + s.json.optString("resumo").ifBlank { "pronto." }
+                "falhou" -> return "O Vindex não conseguiu: " + s.json.optString("resumo").ifBlank { "erro desconhecido." }
+                "expirado" -> return "O Vindex não respondeu a tempo."
+            }
+        }
+        return "Pedi ao Vindex, mas ele ainda não respondeu. Veja a tela dele."
+    }
+
     private fun contaVetorial(acao: String): String {
         val a = activity as? MainActivity ?: return "Abra o app da Vênus para mexer na conta."
         fun naTela(f: MainActivity.() -> Unit) = a.runOnUiThread { if (!a.isFinishing) a.f() }
@@ -1315,7 +1347,7 @@ class Ferramentas(private val activity: Activity, private val memoria: Memoria? 
             "loja_retiradas", "loja_estoque_geral", "loja_alterar", "loja_status", "loja_reposicao", "loja_mais_vendidos", "loja_comparar", "loja_parados", "loja_margem", "loja_margens", "loja_lucro", "loja_previsao", "loja_produto", "loja_entregue", "loja_confirmar", "loja_agendar",
             "caixa_resultado", "caixa_equilibrio", "caixa_previsao",
             "pesquisar_preco", "loja_curva_abc", "loja_compras", "loja_recompra", "loja_chamar_cliente", "loja_promo_parados",
-            "instagram_resumo", "robo_resumo", "robo_ligar",
+            "instagram_resumo", "robo_resumo", "robo_ligar", "vindex",
         )
 
         private const val SPOTIFY = "com.spotify.music"
