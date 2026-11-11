@@ -530,6 +530,16 @@ object ComandosLocais {
             ANTERIOR.matches(c) -> "anterior"
             PAUSAR.matches(c) -> "pausar"
             CONTINUAR.matches(c) -> "tocar"
+            Regex("\\bvolume\\s+(?:no\\s+|em\\s+)?(?:maximo|maxima|total|cem)\\b").containsMatchIn(c) -> "volume_maximo"
+            Regex("\\bvolume\\s+(?:no\\s+|em\\s+)?(?:minimo|minima|zero)\\b").containsMatchIn(c) -> "volume_minimo"
+            Regex("\\bvolume\\s+(?:no\\s+|em\\s+|pela\\s+)?(?:metade|meio)\\b").containsMatchIn(c) -> "volume_metade"
+            Regex("\\bvolume\\s+(?:no\\s+|em\\s+|para\\s+)?\\d{1,3}\\b").containsMatchIn(c) -> {
+                val n = Midia.nivelFalado(c.substringAfter("volume"))
+                    ?: return Resultado.Acao("controlar_midia", mapOf("acao" to "aumentar_volume"))
+                return Resultado.Acao("controlar_midia", mapOf("acao" to "volume_nivel", "nivel" to n.toString()))
+            }
+            Regex("^(?:avanca|avancar)(?:\\s+um\\s+pouco)?$").matches(c) -> "avancar"
+            Regex("^(?:volta|voltar)\\s+um\\s+pouco$").matches(c) -> "voltar"
             Regex("\\b(mudo|silencia\\w*|sem som)\\b").containsMatchIn(c) -> "mudo"
             VOLUME_MAIS.containsMatchIn(c) -> "aumentar_volume"
             VOLUME_MENOS.containsMatchIn(c) -> "diminuir_volume"

@@ -197,6 +197,7 @@ class VigiliaService : Service() {
                 },
                 aoComando = { acao -> Midia.executar(this, acao) },
                 modoMusicaLigado = { prefs.getBoolean(PREF_MUSICA, true) },
+                acionarPeloNome = { prefs.getBoolean(PREF_NOME, true) },
             ).also { despertador = it }
             if (d.iniciar()) return
         }
@@ -308,6 +309,7 @@ class VigiliaService : Service() {
         const val PREF_FUNDO = "vigilia_fundo"
         const val PREF_GESTO = "gesto_torcer"
         const val PREF_MUSICA = "modo_musica"
+        const val PREF_NOME = "acionar_pelo_nome"
         const val PREF_TELA_APAGADA = "tela_apagada"
 
         /** Quando o app está na tela, o gesto chama esta função (ele mesmo começa a ouvir). */
