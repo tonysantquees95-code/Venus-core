@@ -1,4 +1,4 @@
-// Plano Fundadores: R$ 49,90 por mês, 7 dias grátis. Pagamento por InfinitePay ou Mercado Pago, confirmado pelo webhook
+// Plano Fundadores: R$ 49,90 por mês, 7 dias grátis. Cobrança recorrente no Mercado Pago do dono (assinatura mensal) ou InfinitePay, confirmado pelo webhook
 // (e conferido na própria API do gateway). O acesso pago só é liberado depois da verificação em duas etapas (2FA).
 import { aleatorio, cifrar, decifrar, hmacHex, iguais } from "./cripto.js";
 import { ErroLoja } from "./lojas.js";
@@ -7,7 +7,7 @@ import { conferirTotp, novoSegredo, uriOtp } from "./totp.js";
 export const PRECO_CENTAVOS = 4990;
 export const DIAS_DO_PLANO = 30;
 const DIA = 86_400_000;
-const titulo = "Vênus — Plano Fundadores (30 dias)";
+const titulo = "Vênus — Plano Fundadores (mensal)";
 
 async function http(url, op) {
   const r = await fetch(url, { ...op, signal: AbortSignal.timeout(15000) });
@@ -30,10 +30,15 @@ export async function iniciarCobranca(env, loja, gateway, origem, agora = Date.n
     });
     url = d.url || d.checkout_url || d.link;
   } else {
-    if (!env.MERCADOPAGO_ACCESS_TOKEN) throw new ErroLoja(503, "gateway_desligado", "O Mercado Pago ainda não foi configurado neste servidor.");
-    const d = await http("https://api.mercadopago.com/checkout/preferences", {
+    if (!env.MERCADOPAGO_ACCESS_TOKEN) throw new ErroLoja(503, "gateway_desligado", "O Mercado Pago da Vênus ainda não foi ligado neste servidor. O dono precisa enviar o token (veja o aviso nos Ajustes).");
+    // assinatura mensal recorrente: a primeira cobrança só acontece quando os 7 dias grátis acabam
+    const recorrente = { frequency: 1, frequency_type: "months", transaction_amount: PRECO_CENTAVOS / 100, currency_id: "BRL" };
+    if ((loja.trial_fim || 0) > agora + 3_600_000) recorrente.start_date = new Date(loja.trial_fim).toISOString();
+    const corpo = { reason: titulo, external_reference: id, back_url: origem, notification_url: `${origem}/assinatura/webhook/mercadopago`, auto_recurring: recorrente, status: "pending" };
+    if (loja.email) corpo.payer_email = loja.email;
+    const d = await http("https://api.mercadopago.com/preapproval", {
       method: "POST", headers: { "content-type": "application/json", authorization: `Bearer ${env.MERCADOPAGO_ACCESS_TOKEN}` },
-      body: JSON.stringify({ items: [{ title: titulo, quantity: 1, currency_id: "BRL", unit_price: PRECO_CENTAVOS / 100 }], external_reference: id, notification_url: `${origem}/assinatura/webhook/mercadopago` }),
+      body: JSON.stringify(corpo),
     });
     url = d.init_point;
   }
@@ -48,6 +53,13 @@ export async function confirmarPagamento(env, id, valorCentavos, refGateway, ago
   if (!p || valorCentavos < p.valor_centavos) return false;
   const r = await env.DB.prepare("INSERT OR IGNORE INTO avisos_gateway (chave, criado) VALUES (?, ?)").bind(`${p.gateway}:${refGateway || id}`, agora).run();
   if (r.meta.changes !== 1) return true; // já processado
+  // mensalidade seguinte de uma assinatura já liberada: soma mais 30 dias sozinha (o 2FA foi feito na primeira)
+  if (p.status === "liberado") {
+    const loja = await env.DB.prepare("SELECT ativo_ate FROM lojas WHERE id = ?").bind(p.loja).first();
+    const ate = Math.max(agora, (loja && loja.ativo_ate) || 0) + DIAS_DO_PLANO * DIA;
+    await env.DB.prepare("UPDATE lojas SET ativo_ate = ?, plano = 'fundadores' WHERE id = ?").bind(ate, p.loja).run();
+    return true;
+  }
   await env.DB.prepare("UPDATE pagamentos SET status = 'pago', ref_gateway = ?, atualizado = ? WHERE id = ? AND status = 'aguardando'").bind(String(refGateway || ""), agora, id).run();
   return true;
 }
@@ -78,9 +90,19 @@ export async function assinaturaMercadoPagoValida(env, req, dataId) {
 export async function webhookMercadoPago(env, req, corpo, url) {
   const dataId = corpo?.data?.id || url.searchParams.get("data.id") || url.searchParams.get("id");
   const tipo = corpo?.type || corpo?.topic || url.searchParams.get("type") || url.searchParams.get("topic");
-  if (!dataId || tipo !== "payment") return { ignorado: true };
+  if (!dataId || !["payment", "subscription_authorized_payment"].includes(tipo)) return { ignorado: true };
   if (!(await assinaturaMercadoPagoValida(env, req, dataId))) throw new ErroLoja(401, "assinatura", "Assinatura inválida.");
-  const d = await http(`https://api.mercadopago.com/v1/payments/${encodeURIComponent(dataId)}`, { headers: { authorization: `Bearer ${env.MERCADOPAGO_ACCESS_TOKEN}` } });
+  const cab = { headers: { authorization: `Bearer ${env.MERCADOPAGO_ACCESS_TOKEN}` } };
+  if (tipo === "subscription_authorized_payment") {
+    // cobrança de uma assinatura: confere na API do Mercado Pago, não no corpo do aviso
+    const ap = await http(`https://api.mercadopago.com/authorized_payments/${encodeURIComponent(dataId)}`, cab);
+    const aprovado = ap.status === "processed" || (ap.payment && ap.payment.status === "approved");
+    if (!aprovado || !ap.preapproval_id) return { pago: false };
+    const pre = await http(`https://api.mercadopago.com/preapproval/${encodeURIComponent(ap.preapproval_id)}`, cab);
+    if (!pre.external_reference) return { pago: false };
+    return { pago: await confirmarPagamento(env, String(pre.external_reference), Math.round(Number(ap.transaction_amount) * 100), `ap${ap.id || dataId}`) };
+  }
+  const d = await http(`https://api.mercadopago.com/v1/payments/${encodeURIComponent(dataId)}`, cab);
   if (d.status !== "approved" || !d.external_reference) return { pago: false };
   const ok = await confirmarPagamento(env, String(d.external_reference), Math.round(Number(d.transaction_amount) * 100), String(d.id));
   return { pago: ok };
