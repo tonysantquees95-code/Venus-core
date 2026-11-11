@@ -98,7 +98,7 @@ object StoriesDoDia {
      * Story da tarde com enquete: a API do Instagram não coloca adesivos, então a Vênus prepara a imagem
      * (com espaço para a enquete), copia a pergunta e abre o Instagram; você põe o adesivo e publica.
      */
-    fun tardeInterativa(ctx: Context) = prefs(ctx).getBoolean("tarde_interativa", true)
+    fun tardeInterativa(ctx: Context) = prefs(ctx).getBoolean("tarde_interativa", false)
 
     fun definirTardeInterativa(ctx: Context, v: Boolean) = prefs(ctx).edit().putBoolean("tarde_interativa", v).apply()
 
@@ -159,13 +159,59 @@ object StoriesDoDia {
 
     fun cancelar(ctx: Context) = ctx.getSystemService(AlarmManager::class.java).cancel(alarme(ctx))
 
-    /** Na hora: um trabalho em segundo plano que espera a internet publica o story. */
-    internal fun disparou(ctx: Context) {
+    const val ACAO_RECUPERAR = "com.tonimarques.sextafeira.STORY_RECUPERAR"
+
+    /**
+     * Na hora: publica direto (com o celular acordado por um WakeLock), sem esperar o Android liberar um "trabalho em
+     * segundo plano", que em economia de bateria/Doze pode atrasar por horas. Se falhar, o trabalho em segundo plano
+     * e um alarme de segurança (25 min depois) tentam de novo.
+     */
+    internal fun disparou(ctx: Context, pendente: BroadcastReceiver.PendingResult? = null) {
         val turno = prefs(ctx).getString("proximo_turno", null) ?: turnoDeAgora()
         prefs(ctx).edit().putLong("disparou_em", System.currentTimeMillis()).apply()
         Diario.anotar(ctx, "instagram", "Alarme do story da ${nomeTurno(turno)} disparou", "automatico")
         agendar(ctx) // já marca o próximo
-        publicarEmSegundoPlano(ctx, turno)
+        agendarSeguranca(ctx)
+        val trava = try {
+            ctx.getSystemService(android.os.PowerManager::class.java).newWakeLock(android.os.PowerManager.PARTIAL_WAKE_LOCK, "venus:story")
+                .apply { acquire(4 * 60_000L) }
+        } catch (e: Exception) {
+            null
+        }
+        Thread {
+            try {
+                prefs(ctx).edit().putLong("trabalho_em", System.currentTimeMillis()).apply()
+                publicarEAvisar(ctx, turno)
+            } catch (e: Exception) {
+                publicarEmSegundoPlano(ctx, turno) // não deu agora: o Android tenta quando puder
+            } finally {
+                try { trava?.release() } catch (e: Exception) {}
+                try { pendente?.finish() } catch (e: Exception) {}
+            }
+        }.start()
+    }
+
+    /** Publica e, se der erro, anota e avisa (menos o "já foi publicado"). Lança o erro para quem chamou poder tentar de novo. */
+    internal fun publicarEAvisar(ctx: Context, turno: String) {
+        try {
+            publicar(ctx, turno)
+        } catch (e: Exception) {
+            val msg = e.message ?: e.javaClass.simpleName
+            if (msg.contains("já foi publicado")) return
+            Registro.anotar(ctx, "erro", "story do dia → $msg")
+            Diario.anotar(ctx, "instagram", "Story do dia (${nomeTurno(turno)}) não publicado: $msg", "automatico", ok = false)
+            avisar(ctx, null, null, msg)
+            throw e
+        }
+    }
+
+    /** 25 minutos depois do horário confere se o story saiu; se não, publica (recuperarAtrasado). */
+    private fun agendarSeguranca(ctx: Context) {
+        val pi = PendingIntent.getBroadcast(
+            ctx, 74_002, Intent(ctx, AlarmeDoStory::class.java).setAction(ACAO_RECUPERAR),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+        ctx.getSystemService(AlarmManager::class.java).setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, System.currentTimeMillis() + 25 * 60_000L, pi)
     }
 
     /**
@@ -188,7 +234,13 @@ object StoriesDoDia {
             if (tentativas >= 3 || System.currentTimeMillis() - p.getLong("ultima_tentativa", 0) < 30 * 60_000L) continue
             p.edit().putInt(chave, tentativas + 1).putLong("ultima_tentativa", System.currentTimeMillis()).apply()
             Diario.anotar(ctx, "instagram", "Story da ${nomeTurno(turno)} atrasado: publicando agora (tentativa ${tentativas + 1})", "automatico")
-            publicarEmSegundoPlano(ctx, turno)
+            Thread {
+                try {
+                    publicarEAvisar(ctx, turno)
+                } catch (e: Exception) {
+                    publicarEmSegundoPlano(ctx, turno)
+                }
+            }.start()
             return
         }
     }
@@ -228,6 +280,12 @@ object StoriesDoDia {
         try {
             Instagram.publicar(ctx, url, "", story = true)
         } catch (e: Instagram.ErroDoInstagram) {
+            // as duas primeiras falhas do dia são tentadas de novo (rede, token); depois disso prepara para postar com um toque
+            val falhas = prefs(ctx).getInt("falhas_${hoje()}_$turno", 0)
+            if (!forcar && falhas < 2) {
+                prefs(ctx).edit().putInt("falhas_${hoje()}_$turno", falhas + 1).apply()
+                throw IllegalStateException("o Instagram recusou (${e.message ?: "sem detalhe"}); vou tentar de novo")
+            }
             return prepararManual(ctx, marca, turno, e.message ?: "o Instagram recusou", tema, jpeg)
         }
         usar(ctx, tema)
@@ -770,7 +828,13 @@ class AlarmeDoStory : BroadcastReceiver() {
                     }
                 }.start()
             }
-            else -> if (StoriesDoDia.ligado(ctx)) StoriesDoDia.disparou(ctx)
+            StoriesDoDia.ACAO_RECUPERAR -> {
+                val pendente = goAsync()
+                Thread {
+                    try { StoriesDoDia.recuperarAtrasado(ctx) } finally { pendente.finish() }
+                }.start()
+            }
+            else -> if (StoriesDoDia.ligado(ctx)) StoriesDoDia.disparou(ctx, goAsync())
         }
     }
 }
@@ -782,14 +846,8 @@ class PublicadorDeStory : JobService() {
         getSharedPreferences("stories_dia", MODE_PRIVATE).edit().putLong("trabalho_em", System.currentTimeMillis()).apply()
         Thread {
             try {
-                StoriesDoDia.publicar(applicationContext, turno)
+                StoriesDoDia.publicarEAvisar(applicationContext, turno)
             } catch (e: Exception) {
-                val msg = e.message ?: e.javaClass.simpleName
-                if (!msg.contains("já foi publicado")) {
-                    Registro.anotar(applicationContext, "erro", "story do dia → $msg")
-                    Diario.anotar(applicationContext, "instagram", "Story do dia (${StoriesDoDia.nomeTurno(turno)}) não publicado: $msg", "automatico", ok = false)
-                    StoriesDoDia.avisar(applicationContext, null, null, msg)
-                }
             } finally {
                 jobFinished(params, false)
             }
