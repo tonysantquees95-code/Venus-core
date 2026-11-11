@@ -532,7 +532,7 @@ object ComandosLocais {
             CONTINUAR.matches(c) -> "tocar"
             Regex("\\bvolume\\s+(?:no\\s+|em\\s+)?(?:maximo|maxima|total|cem)\\b").containsMatchIn(c) -> "volume_maximo"
             Regex("\\bvolume\\s+(?:no\\s+|em\\s+)?(?:minimo|minima|zero)\\b").containsMatchIn(c) -> "volume_minimo"
-            Regex("\\bvolume\\s+(?:no\\s+|em\\s+|pela\\s+)?(?:metade|meio)\\b").containsMatchIn(c) -> "volume_metade"
+            Regex("\\bvolume\\s+(?:no\\s+|na\\s+|em\\s+|pela\\s+)?(?:metade|meio)\\b").containsMatchIn(c) -> "volume_metade"
             Regex("\\bvolume\\s+(?:no\\s+|em\\s+|para\\s+)?\\d{1,3}\\b").containsMatchIn(c) -> {
                 val n = Midia.nivelFalado(c.substringAfter("volume"))
                     ?: return Resultado.Acao("controlar_midia", mapOf("acao" to "aumentar_volume"))
