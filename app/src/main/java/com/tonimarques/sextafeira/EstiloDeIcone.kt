@@ -17,8 +17,9 @@ object EstiloDeIcone {
         when (pacote) {
             Tema.Icones.VENUS -> if (comFundo) {
                 b.background = GradientDrawable().apply {
-                    setColor(Color.argb(20, 227, 107, 208)); setStroke(dp(1).coerceAtLeast(1), Color.argb(70, 227, 107, 208)); cornerRadius = dp(22).toFloat()
+                    setColor(Color.argb(20, Color.red(cor), Color.green(cor), Color.blue(cor))); setStroke(dp(1).coerceAtLeast(1), Color.argb(70, Color.red(cor), Color.green(cor), Color.blue(cor))); cornerRadius = dp(22).toFloat()
                 }
+                b.setColorFilter(Tema.clarear(cor and 0xFFFFFF, 0.35f) or 0xFF000000.toInt())
             } else b.setColorFilter(if (apagado) MainActivity.COR_TEXTO_APAGADO else cor)
             Tema.Icones.LINHA -> b.setColorFilter(cor)
             Tema.Icones.SOLIDO -> {

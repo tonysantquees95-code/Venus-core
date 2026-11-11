@@ -134,7 +134,7 @@ class VigiliaService : Service() {
         )
         val notificacao = Notification.Builder(this, CANAL)
             .setSmallIcon(R.drawable.ic_venus_simbolo)
-            .setColor(android.graphics.Color.parseColor("#E36BD0"))
+            .setColor(Aparencia.destaque)
             .setContentTitle(if (escutaLigada()) "${Marca.nome} está ouvindo" else "${Marca.nome} está pronta")
             .setContentText(
                 when {
