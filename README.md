@@ -4,7 +4,7 @@ Assistente pessoal para Android com o Gemini como cérebro. Conversa por texto o
 
 ## Instalar
 1. Abra a aba **Releases** deste repositório (ou `…/releases/latest`).
-2. Baixe **SextaFeira.apk** e toque nele.
+2. Baixe **Venus.apk** e toque nele.
 3. Se o Android avisar, permita instalar apps desta fonte (o navegador).
 4. Na primeira vez, cole sua chave grátis do Gemini (criada em aistudio.google.com/apikey).
 
@@ -25,7 +25,7 @@ O APK novo instala por cima do antigo, sem perder a chave.
 - Com **Conversa contínua** ligada (menu ⋮), ela volta a ouvir depois de responder. Fique em silêncio para parar.
 
 ## Limites do Android
-- O Android não deixa apps enviarem mensagens do WhatsApp nem ligarem sozinhos, por segurança. A Sexta-feira deixa tudo pronto e você toca em Enviar ou Ligar.
+- O Android não deixa apps enviarem mensagens do WhatsApp nem ligarem sozinhos, por segurança. A Vênus deixa tudo pronto e você toca em Enviar ou Ligar.
 - Apps não podem ligar ou desligar Wi-Fi e Bluetooth; ela abre o painel para você tocar.
 
 ## Código
