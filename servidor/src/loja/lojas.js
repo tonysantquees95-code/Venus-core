@@ -19,15 +19,19 @@ export function slugDe(texto) {
     .toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 32);
 }
 
-export async function registrarLoja(env, { nome, slug }, agora = Date.now()) {
+/** Um teste grátis por celular: o app manda um identificador do aparelho (só o hash fica guardado). */
+export async function registrarLoja(env, { nome, slug, dispositivo }, agora = Date.now()) {
   const id = aleatorio(8);
   const token = `vl_${aleatorio(24)}`;
   let slugFinal = slugDe(slug || nome) || `loja-${id.slice(0, 6)}`;
   const existe = await env.DB.prepare("SELECT 1 AS x FROM lojas WHERE slug = ?").bind(slugFinal).first();
   if (existe) slugFinal = `${slugFinal.slice(0, 25)}-${id.slice(0, 5)}`;
-  await env.DB.prepare("INSERT INTO lojas (id, token_hash, nome, slug, criado, trial_fim, plano, ativo_ate) VALUES (?, ?, ?, ?, ?, ?, 'trial', 0)")
-    .bind(id, await sha256Hex(token), String(nome || "").slice(0, 80), slugFinal, agora, agora + DIAS_DE_TESTE * DIA).run();
-  return { id, token, slug: slugFinal, trialFim: agora + DIAS_DE_TESTE * DIA };
+  const disp = dispositivo ? await sha256Hex(`dispositivo:${String(dispositivo).slice(0, 200)}`) : "";
+  const jaTeve = disp ? await env.DB.prepare("SELECT 1 AS x FROM lojas WHERE dispositivo = ?").bind(disp).first() : null;
+  const trialFim = jaTeve ? agora : agora + DIAS_DE_TESTE * DIA;
+  await env.DB.prepare("INSERT INTO lojas (id, token_hash, nome, slug, criado, trial_fim, plano, ativo_ate, dispositivo) VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?)")
+    .bind(id, await sha256Hex(token), String(nome || "").slice(0, 80), slugFinal, agora, trialFim, jaTeve ? "sem_teste" : "trial", disp).run();
+  return { id, token, slug: slugFinal, trialFim, testeGratisUsado: !!jaTeve };
 }
 
 export async function lojaDoPedido(env, req) {

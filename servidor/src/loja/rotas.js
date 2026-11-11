@@ -5,6 +5,10 @@ import { hmacHex, iguais, segredoDoCanal } from "./cripto.js";
 import { acessoLiberado, ErroLoja, lojaDoPedido, registrarLoja } from "./lojas.js";
 import { endereco, esc, html, corValida, paginaDaVitrine, paginaDoProduto, RESERVADAS, urlHttps, validarCodigo, soDigitos } from "./vitrine.js";
 import { aleatorio } from "./cripto.js";
+import { ehServico, tratarServico } from "./servicos.js";
+import { PAINEL } from "./painel.js";
+import { webhookInfinitePay, webhookMercadoPago } from "./assinatura.js";
+import { groq } from "../ia/provedores.js";
 import { conectarCanal, listarCanais, publico, removerCanal, sincronizarPedidos, sincronizarProdutos, tratarWebhook } from "./sincronia.js";
 
 const json = (d, status = 200) =>
@@ -49,7 +53,7 @@ async function lerEstadoOAuth(env, state, plataforma, agora = Date.now()) {
 export const ehRotaDaLoja = (c) =>
   c.startsWith("/loja/") || c === "/canais" || c.startsWith("/canais/") || c === "/produtos" || c === "/pedidos" ||
   c.startsWith("/oauth/") || c.startsWith("/webhook/") || c === "/estoque/eventos" || c.startsWith("/v/") || c.startsWith("/l/") ||
-  c === "/links" || c.startsWith("/links/");
+  c === "/links" || c.startsWith("/links/") || ehServico(c);
 
 /** Páginas públicas: vitrine e link curto (também no domínio curto, onde a primeira parte do caminho é a loja). */
 export async function tratarPublico(req, env, url, caminho) {
@@ -87,7 +91,7 @@ export async function tratarLoja(req, env, ctx, url, caminho) {
         const ip = req.headers.get("cf-connecting-ip") || "x";
         if (!(await env.LIMITADOR.limit({ key: `reg:${ip}` })).success) throw new ErroLoja(429, "muitas_tentativas", "Muitas tentativas. Espere um minuto.");
       }
-      return json(await registrarLoja(env, { nome: d.nome, slug: d.slug }), 201);
+      return json(await registrarLoja(env, { nome: d.nome, slug: d.slug, dispositivo: d.dispositivo }), 201);
     }
     let m = /^\/webhook\/([a-z]+)\/([a-f0-9]{16})\/([a-f0-9]{32})$/.exec(caminho);
     if (m && req.method === "POST") {
@@ -121,6 +125,22 @@ export async function tratarLoja(req, env, ctx, url, caminho) {
       }
     }
 
+    if (caminho === "/painel" && req.method === "GET") {
+      return new Response(PAINEL, { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store", "referrer-policy": "no-referrer", "x-content-type-options": "nosniff",
+        "content-security-policy": "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; img-src 'self' data:" } });
+    }
+    m = /^\/assinatura\/webhook\/(infinitepay|mercadopago)$/.exec(caminho);
+    if (m && req.method === "POST") {
+      try {
+        const corpo = JSON.parse((await lerCorpo(req, 100_000)) || "{}");
+        const r = m[1] === "infinitepay" ? await webhookInfinitePay(env, corpo) : await webhookMercadoPago(env, req, corpo, url);
+        return json({ ok: true, ...r });
+      } catch (e) {
+        if (e instanceof ErroLoja) return json({ error: e.message }, e.status);
+        console.error("webhook assinatura", m[1], e && e.stack ? e.stack : e);
+        return json({ ok: false }, 500);
+      }
+    }
     if (req.method === "GET") {
       const pub = await tratarPublico(req, env, url, caminho);
       if (pub) return pub;
@@ -130,6 +150,10 @@ export async function tratarLoja(req, env, ctx, url, caminho) {
     const loja = await lojaDoPedido(env, req);
     if (caminho === "/loja/eu" && req.method === "GET") {
       return json({ id: loja.id, nome: loja.nome, slug: loja.slug, plano: loja.plano, trialFim: loja.trial_fim, ativoAte: loja.ativo_ate, acesso: acessoLiberado(loja) });
+    }
+    if (ehServico(caminho) && caminho !== "/painel") {
+      const r = await tratarServico(req, env, loja, url, caminho, { corpoJson, exigeAcesso, gerar: env.GERADOR_DE_TESTE || groq });
+      if (r) return r;
     }
     if (caminho === "/loja/vitrine" && req.method === "PUT") {
       exigeAcesso(loja);
