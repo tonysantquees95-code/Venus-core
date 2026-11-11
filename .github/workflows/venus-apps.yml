@@ -1,0 +1,74 @@
+name: Apps web e APK (venus-apps)
+
+# Compila os apps React/Capacitor da pasta venus-apps/: verificação (testes, tipos, web e PWA)
+# e o APK de teste (debug) de cada app. Independente do app Kotlin e do servidor.
+on:
+  push:
+    branches: [main]
+    paths: ["venus-apps/**", ".github/workflows/venus-apps.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: venus-apps
+  cancel-in-progress: true
+
+jobs:
+  verificar:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: venus-apps
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: venus-apps/package-lock.json
+      - run: npm ci
+      - run: npm run verificar
+      - name: Guardar o build web/PWA
+        uses: actions/upload-artifact@v4
+        with:
+          name: venus-web-pwa
+          path: venus-apps/apps/*/dist
+
+  apk:
+    needs: verificar
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        app: [assistente, robo, dois-em-um]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: venus-apps/package-lock.json
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Instalar
+        working-directory: venus-apps
+        run: npm ci
+      - name: Preparar o projeto Android
+        working-directory: venus-apps/apps/${{ matrix.app }}
+        run: |
+          npm run android:add
+          npm run build:apk
+      - name: Compilar o APK (teste)
+        working-directory: venus-apps/apps/${{ matrix.app }}/android
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon
+      - uses: actions/upload-artifact@v4
+        with:
+          name: venus-${{ matrix.app }}-apk
+          path: venus-apps/apps/${{ matrix.app }}/android/app/build/outputs/apk/debug/*.apk

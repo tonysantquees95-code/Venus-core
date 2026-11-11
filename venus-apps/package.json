@@ -1,0 +1,34 @@
+{
+  "name": "venus",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Vênus (apps web, PWA e APK): Dois em Um, assistente e Vênus Robô. Isolado da loja e do app Kotlin.",
+  "license": "UNLICENSED",
+  "packageManager": "npm@10.9.0",
+  "engines": {
+    "node": ">=22"
+  },
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:assistente": "npm run dev -w @venus/assistente",
+    "dev:robo": "npm run dev -w @venus/robo",
+    "build": "npm run build:web",
+    "build:web": "npm run build:web -w @venus/assistente -w @venus/robo -w @venus/dois-em-um",
+    "build:pwa": "npm run build:web",
+    "build:apk": "npm run build:apk -w @venus/assistente -w @venus/robo -w @venus/dois-em-um",
+    "apk:debug": "npm run apk:debug -w @venus/assistente -w @venus/robo -w @venus/dois-em-um",
+    "apk:release": "npm run apk:release -w @venus/assistente -w @venus/robo -w @venus/dois-em-um",
+    "android:add": "npm run android:add -w @venus/assistente -w @venus/robo -w @venus/dois-em-um",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "test": "npm run test -w @venus/dois-em-um",
+    "isolamento": "node scripts/verificar-isolamento.mjs",
+    "verificar": "npm run isolamento && npm run test && npm run typecheck && npm run build:web",
+    "dev:dois-em-um": "npm run dev -w @venus/dois-em-um"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.0"
+  }
+}
