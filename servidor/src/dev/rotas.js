@@ -204,6 +204,11 @@ export async function tratarDev(req, env, url, caminho) {
     if (caminho === "/dev/primeiro-acesso" && req.method === "POST") return json(await criarAdmin(env, await corpo(req), agora), 201);
     if (caminho === "/dev/telemetria" && req.method === "POST") return json(await receberTelemetria(env, req, agora));
 
+    // importação de segredos pelo workflow do GitHub: autenticada por um código de uso único gerado no Painel
+    if (caminho === "/dev/cofre/importar" && req.method === "POST") {
+      const d = await corpo(req);
+      return json(await cofre.importar(env, d.codigo, d.segredos, { sobrescrever: d.sobrescrever === true, origem: d.origem }, agora));
+    }
     const ctx = await exigirAdmin(env, req, agora);
     if (caminho === "/dev/eu" && req.method === "GET") return json({ email: ctx.usuario.email, nome: ctx.usuario.nome, papel: "superadmin", sessao: ctx.sessao });
     if (caminho === "/dev/sair" && req.method === "POST") { await encerrarSessao(env, ctx.usuario.id, ctx.sessao, "saiu"); return json({ ok: true }); }
@@ -250,6 +255,7 @@ export async function tratarDev(req, env, url, caminho) {
       await cofre.conferir(env, d.senha, agora);
       if (caminho === "/dev/cofre/listar") return json({ chaves: await cofre.listar(env, agora), historico: await cofre.historico(env, 20) });
       if (caminho === "/dev/cofre/guardar") return json(await cofre.guardar(env, d, agora));
+      if (caminho === "/dev/cofre/codigo") return json(await cofre.gerarCodigo(env, agora));
       if (caminho === "/dev/cofre/apagar") return json(await cofre.apagar(env, d.nome, agora));
       if (caminho === "/dev/cofre/trocar-senha") return json(await cofre.trocarSenha(env, d.nova, agora));
     }
