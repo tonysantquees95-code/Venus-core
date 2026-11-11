@@ -51,6 +51,7 @@ import com.tonimarques.sextafeira.MainActivity.Companion.MENU_INTERROMPER
 import com.tonimarques.sextafeira.MainActivity.Companion.MENU_MEMORIAS
 import com.tonimarques.sextafeira.MainActivity.Companion.MENU_MODELO
 import com.tonimarques.sextafeira.MainActivity.Companion.MENU_MUSICA
+import com.tonimarques.sextafeira.MainActivity.Companion.MENU_NOME
 import com.tonimarques.sextafeira.MainActivity.Companion.MENU_NOVA
 import com.tonimarques.sextafeira.MainActivity.Companion.MENU_TELA_APAGADA
 import com.tonimarques.sextafeira.MainActivity.Companion.MENU_VIGILIA
@@ -120,6 +121,9 @@ internal fun MainActivity.abrirMenu(@Suppress("UNUSED_PARAMETER") ancora: View) 
             "Ativação por voz", listOf(
                 item("Ouvir \"$n, ativar\" com o app aberto", { "Fala a frase e ela já começa a ouvir o seu pedido." },
                     MENU_VIGILIA) { vigiliaLigada() },
+                item("Acionar só dizendo o nome", {
+                    "Dizer apenas \"$n\" já abre o orbe ouvindo, sem precisar falar \"ativar\"."
+                }, MENU_NOME) { prefs.getBoolean(VigiliaService.PREF_NOME, true) },
                 item("Ouvir com o app fechado", {
                     "Diga \"$n, ativar\" de qualquer tela e o orbe aparece num pop-up, sem abrir o app inteiro."
                 }, MENU_FUNDO) { prefs.getBoolean(PREF_FUNDO, false) },
@@ -293,15 +297,29 @@ internal fun MainActivity.tratarMenu(id: Int): Boolean {
     when (id) {
         MENU_VIGILIA -> {
             val ligado = !vigiliaLigada()
-            prefs.edit().putBoolean(PREF_VIGILIA, ligado).apply()
-            if (ligado) {
-                if (temMicrofone()) agendarVigilia(300)
-                else requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO), PEDIDO_MICROFONE)
-            } else {
-                pararVigilia()
+            fun aplicar() {
+                prefs.edit().putBoolean(PREF_VIGILIA, ligado).apply()
+                if (ligado) {
+                    if (temMicrofone()) agendarVigilia(300)
+                    else requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO), PEDIDO_MICROFONE)
+                } else {
+                    pararVigilia()
+                }
+                mudarEstadoOcioso()
             }
-            mudarEstadoOcioso()
+            if (ligado && !prefs.getBoolean("avisou_microfone", false)) {
+                AlertDialog.Builder(this)
+                    .setTitle("Escuta contínua")
+                    .setMessage("Com a escuta ligada, o Android mostra o ícone verde do microfone na barra de status enquanto a ${Marca.nome} espera o seu chamado. " +
+                        "É normal e é uma proteção do sistema. A escuta é feita no próprio celular (voz offline) e gasta um pouco mais de bateria. Você pode desligar aqui quando quiser.")
+                    .setPositiveButton("Entendi, ligar") { _, _ ->
+                        prefs.edit().putBoolean("avisou_microfone", true).apply(); aplicar()
+                    }
+                    .setNegativeButton("Cancelar", null)
+                    .show()
+            } else aplicar()
         }
+        MENU_NOME -> prefs.edit().putBoolean(VigiliaService.PREF_NOME, !prefs.getBoolean(VigiliaService.PREF_NOME, true)).apply()
         MENU_VOZ -> escolherVoz()
         MENU_HISTORICO -> mostrarHistorico()
         MENU_MEMORIAS -> mostrarMemorias()

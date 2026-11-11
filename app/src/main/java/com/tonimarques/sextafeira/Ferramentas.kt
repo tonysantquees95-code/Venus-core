@@ -94,8 +94,10 @@ class Ferramentas(private val activity: Activity, private val memoria: Memoria? 
                 "acao" to opcoes(
                     "O que fazer.",
                     "tocar_pausar", "tocar", "pausar", "proxima", "anterior",
-                    "aumentar_volume", "diminuir_volume", "mudo"
-                )
+                    "aumentar_volume", "diminuir_volume", "mudo",
+                    "volume_maximo", "volume_minimo", "volume_metade", "volume_nivel", "parar", "avancar", "voltar"
+                ),
+                "nivel" to texto("Só para volume_nivel: porcentagem de 0 a 100.")
             )
         )
         .put(
@@ -344,7 +346,7 @@ class Ferramentas(private val activity: Activity, private val memoria: Memoria? 
         "sobre_mim" -> memoria?.let { Consciencia.relatorio(activity, it, this) } ?: "Minha memória não está disponível agora."
         "abrir_app" -> abrirApp(a.optString("nome"))
         "tocar_musica" -> tocarMusica(a.optString("busca"), a.optString("app"))
-        "controlar_midia" -> controlarMidia(a.optString("acao"), a.optString("app"))
+        "controlar_midia" -> controlarMidia(a.optString("acao"), a.optString("app"), a.optString("nivel"))
         "buscar_perto" -> buscarPerto(a.optString("oque"), a.optString("referencia"))
         "salvar_lugar" -> salvarLugar(a.optString("lugar"), a.optString("endereco"))
         "enviar_whatsapp" -> enviarWhatsapp(a.optString("contato"), a.optString("mensagem"))
@@ -626,10 +628,14 @@ class Ferramentas(private val activity: Activity, private val memoria: Memoria? 
             audio.dispatchMediaKeyEvent(KeyEvent(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_MEDIA_PLAY))
         }
         play()
-        val pacote = PACOTES_MUSICA[ComandosLocais.normalizar(app).trim()]
+        val prefs = activity.getSharedPreferences("config", Context.MODE_PRIVATE)
+        val instalados = PLAYERS_ORDEM.filter { activity.packageManager.getLaunchIntentForPackage(it) != null }
+        val pacote = Midia.escolherPlayer(PACOTES_MUSICA[ComandosLocais.normalizar(app).trim()], prefs.getString(PREF_ULTIMO_PLAYER, null), instalados)
         val principal = android.os.Handler(android.os.Looper.getMainLooper())
         principal.postDelayed({
-            if (!audio.isMusicActive && pacote != null) {
+            if (audio.isMusicActive) {
+                pacote?.let { prefs.edit().putString(PREF_ULTIMO_PLAYER, it).apply() }
+            } else if (pacote != null) {
                 activity.packageManager.getLaunchIntentForPackage(pacote)?.let { abrir ->
                     try {
                         activity.startActivity(abrir.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
@@ -842,7 +848,17 @@ class Ferramentas(private val activity: Activity, private val memoria: Memoria? 
         return "Endereço de $nome salvo: $endereco."
     }
 
-    private fun controlarMidia(acao: String, app: String = ""): String {
+    private fun controlarMidia(acao: String, app: String = "", nivel: String = ""): String {
+        if (acao == "volume_nivel") {
+            val pct = nivel.toIntOrNull()?.takeIf { it in 0..100 } ?: return "Qual volume, de 0 a 100?"
+            val audio = activity.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+            val max = audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
+            audio.setStreamVolume(AudioManager.STREAM_MUSIC, Midia.indiceDeVolume(pct, max), AudioManager.FLAG_SHOW_UI)
+            return "Volume em $pct%."
+        }
+        if (acao in setOf("volume_maximo", "volume_minimo", "volume_metade", "parar", "avancar", "voltar")) {
+            return Midia.executar(activity, acao)
+        }
         if (acao == "tocar" || (acao == "tocar_pausar" && app.isNotBlank())) return retomarMusica(app)
         val audio = activity.getSystemService(Context.AUDIO_SERVICE) as AudioManager
         fun tecla(codigo: Int) {
@@ -1285,6 +1301,8 @@ class Ferramentas(private val activity: Activity, private val memoria: Memoria? 
             "aumentar_volume" to "Volume aumentado.", "diminuir_volume" to "Volume diminuído.",
             "mudo" to "Som no mudo (repita para tirar).",
         )
+        private val PLAYERS_ORDEM = listOf(DEEZER, SPOTIFY, YOUTUBE_MUSIC)
+        private const val PREF_ULTIMO_PLAYER = "ultimo_player"
         private val NOMES_CONFIG = mapOf(
             "wifi" to "Wi-Fi", "internet" to "internet", "nao_perturbe" to "Não perturbe",
             "localizacao" to "localização", "aplicativos" to "aplicativos", "geral" to "do celular",

@@ -332,9 +332,10 @@ class Cerebro(
          * Versão tolerante da frase de ativação, para o reconhecimento offline (que às vezes escreve
          * "venus ativa", "vênus ativar", "vem us ativar", "sexta feira ativar"...).
          */
-        fun pareceAtivacao(texto: String): Boolean {
+        fun pareceAtivacao(texto: String, soNome: Boolean = false): Boolean {
             if (texto.isBlank()) return false
             if (restoDepoisDaAtivacao(texto) != null) return true
+            if (soNome && pareceSoONome(texto)) return true
             val ps = Corretor.palavras(texto)
             for (i in ps.indices) {
                 val (ehNome, usadas) = when {
@@ -353,8 +354,30 @@ class Cerebro(
 
         private fun pareceVenus(p: String) = p.length in 4..6 && (p == "venus" || Corretor.distancia(p, "venus") <= 1)
 
+        private val CHAMADAS = setOf("ei", "oi", "ola", "hey", "opa", "ai", "fala", "e", "ok")
+
+        /**
+         * Só o nome, sem "ativar": "Vênus", "ei Vênus", "oi, Vênus". Frases com mais palavras
+         * ("o planeta Vênus é quente") não contam, para não acordar com qualquer conversa.
+         */
+        fun pareceSoONome(texto: String): Boolean {
+            val ps = Corretor.palavras(texto)
+            if (ps.isEmpty() || ps.size > 3) return false
+            val nomes = ps.count { pareceVenus(it) || it == "sextafeira" }
+            return nomes == 1 && ps.all { pareceVenus(it) || it == "sextafeira" || it in CHAMADAS }
+        }
+
         private val COMANDOS_MUSICA = listOf(
-            Regex("^(?:pausar|pausa|pause|parar|para|pare) (?:a )?musica$") to "pausar",
+            Regex("^(?:pausar|pausa|pause|parar|para|pare) (?:a |o )?(?:musica|som|faixa|player)$") to "pausar",
+            Regex("^(?:pausa|para|pare|parar) de tocar$") to "pausar",
+            Regex("^(?:proxima faixa|(?:passa|pula|pular|pule) (?:essa|a faixa|essa faixa))$") to "proxima",
+            Regex("^(?:faixa anterior|(?:volta|voltar|volte) (?:a )?faixa)$") to "anterior",
+            Regex("^(?:volume (?:no )?maximo|volume total)$") to "volume_maximo",
+            Regex("^(?:volume (?:no )?minimo)$") to "volume_minimo",
+            Regex("^volume (?:na|no) metade$") to "volume_metade",
+            Regex("^(?:silenciar|silencia|silencie) (?:a )?(?:musica|som)$") to "mudo",
+            Regex("^mais alto$") to "aumentar_volume",
+            Regex("^mais baixo$") to "diminuir_volume",
             Regex("^(?:continuar|continua|continue|tocar|toca|volta a tocar|voltar a tocar)(?: (?:a )?musica)?$") to "tocar",
             Regex("^(?:proxima(?: musica)?|(?:passa|passar|pula|pular|pule) (?:a )?musica)$") to "proxima",
             Regex("^(?:musica anterior|(?:volta|voltar|volte) (?:a )?musica)$") to "anterior",

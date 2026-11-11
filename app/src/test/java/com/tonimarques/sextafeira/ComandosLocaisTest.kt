@@ -110,4 +110,12 @@ class ComandosLocaisTest {
         assertNull(ComandosLocais.interpretar("manda mensagem pra Maria"))
         assertNull(ComandosLocais.interpretar("sexta-feira"))
     }
+
+    @Test fun volumeEFaixas() {
+        confere("volume máximo", "controlar_midia", "acao" to "volume_maximo")
+        confere("volume mínimo", "controlar_midia", "acao" to "volume_minimo")
+        confere("volume na metade", "controlar_midia", "acao" to "volume_metade")
+        confere("volume 40", "controlar_midia", "acao" to "volume_nivel", "nivel" to "40")
+        confere("avança um pouco", "controlar_midia", "acao" to "avancar")
+    }
 }

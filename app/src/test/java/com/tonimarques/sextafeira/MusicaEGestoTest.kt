@@ -29,7 +29,7 @@ class MusicaEGestoTest {
 
     @Test fun todaFraseDaListaFazAlgo() {
         for (f in Despertador.FRASES_MUSICA) {
-            assertTrue("\"$f\" não leva a nenhum comando", Cerebro.comandoDeMusica(f) != null || Cerebro.pareceAtivacao(f))
+            assertTrue("\"$f\" não leva a nenhum comando", Cerebro.comandoDeMusica(f) != null || Cerebro.pareceAtivacao(f, soNome = true))
         }
     }
 
@@ -67,5 +67,22 @@ class MusicaEGestoTest {
             assertFalse(e.amostra(0f, y, 0f, u))
             u += 800
         }
+    }
+
+    @Test fun volumePorPorcentagemEPlayer() {
+        assertEquals(15, Midia.indiceDeVolume(100, 15))
+        assertEquals(0, Midia.indiceDeVolume(0, 15))
+        assertEquals(8, Midia.indiceDeVolume(50, 15))
+        assertEquals(50, Midia.nivelFalado("50 por cento"))
+        assertEquals(null, Midia.nivelFalado("musica"))
+        assertEquals("b", Midia.escolherPlayer(null, "b", listOf("a", "b")))
+        assertEquals("a", Midia.escolherPlayer(null, "x", listOf("a", "b")))
+        assertEquals("z", Midia.escolherPlayer("z", "b", listOf("a", "b")))
+        assertEquals(null, Midia.escolherPlayer(null, null, emptyList()))
+    }
+
+    @Test fun nomeSozinhoSoComOInterruptorLigado() {
+        assertTrue(Cerebro.pareceAtivacao("vênus", soNome = true))
+        assertFalse(Cerebro.pareceAtivacao("vênus"))
     }
 }

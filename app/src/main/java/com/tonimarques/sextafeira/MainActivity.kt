@@ -1861,6 +1861,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
                 },
                 aoComando = { acao -> mostrarNota("♪ " + Midia.executar(this, acao)) },
                 modoMusicaLigado = { prefs.getBoolean(VigiliaService.PREF_MUSICA, true) },
+                acionarPeloNome = { prefs.getBoolean(VigiliaService.PREF_NOME, true) },
             ).also { despertador = it }
             if (d.iniciar()) {
                 escuta = Escuta.VIGILIA
@@ -2368,6 +2369,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         internal const val MENU_MUSICA = 15
         internal const val MENU_GESTO = 16
         internal const val MENU_TELA_APAGADA = 17
+        internal const val MENU_NOME = 18
         internal const val PREF_INDEPENDENTE = "modo_independente"
         internal const val PREF_OFERECEU_VOZ = "ofereceu_voz_offline"
         internal const val PREF_FUNDO = "vigilia_fundo"

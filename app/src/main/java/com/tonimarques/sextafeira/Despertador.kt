@@ -39,6 +39,8 @@ class Despertador(
     private val aoComando: ((String) -> Unit)? = null,
     /** Lido a cada segundo: o usuário pode ligar e desligar nos ajustes. */
     private val modoMusicaLigado: () -> Boolean = { true },
+    /** Lido a cada fala: com o nome sozinho ("Vênus") o orbe já ativa, sem precisar dizer "ativar". */
+    private val acionarPeloNome: () -> Boolean = { false },
 ) {
     private val principal = Handler(Looper.getMainLooper())
     private val audio = contexto.getSystemService(AudioManager::class.java)
@@ -209,7 +211,7 @@ class Despertador(
                     // Com música o som nunca "para": analisa tudo e confirma o comando por alguns instantes.
                     val terminou = rec.acceptWaveForm(bloco, n)
                     val texto = if (terminou) campo(rec.result, "text") else campo(rec.partialResult, "partial")
-                    if (Cerebro.pareceAtivacao(texto)) {
+                    if (Cerebro.pareceAtivacao(texto, acionarPeloNome())) {
                         ouviu = true
                         break
                     }
@@ -252,7 +254,7 @@ class Despertador(
                     }
                     val terminou = rec.acceptWaveForm(bloco, n)
                     val texto = if (terminou) campo(rec.result, "text") else campo(rec.partialResult, "partial")
-                    if (Cerebro.pareceAtivacao(texto)) {
+                    if (Cerebro.pareceAtivacao(texto, acionarPeloNome())) {
                         ouviu = true
                         break
                     }
@@ -262,7 +264,7 @@ class Despertador(
                     }
                 } else if (analisando) {
                     analisando = false
-                    if (Cerebro.pareceAtivacao(campo(rec.finalResult, "text"))) {
+                    if (Cerebro.pareceAtivacao(campo(rec.finalResult, "text"), acionarPeloNome())) {
                         ouviu = true
                         break
                     }
@@ -313,7 +315,10 @@ class Despertador(
             "música anterior", "volta a música", "voltar música",
             "aumentar volume", "aumenta o volume", "aumentar o volume", "sobe o volume",
             "diminuir volume", "diminui o volume", "diminuir o volume", "abaixa o volume", "abaixar volume", "baixa o volume",
-            "vênus ativar", "venus ativar", "vênus ativa",
+            "vênus ativar", "venus ativar", "vênus ativa", "vênus",
+            "próxima faixa", "passa essa", "pula essa", "faixa anterior", "volta a faixa",
+            "pausa de tocar", "para de tocar", "pausa o som", "para o som",
+            "volume máximo", "volume mínimo", "volume na metade", "mais alto", "mais baixo", "silenciar música",
         )
         private val GRAMATICA_MUSICA = (FRASES_MUSICA + "[unk]").joinToString(",", "[", "]") { "\"$it\"" }
 
