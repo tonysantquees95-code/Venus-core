@@ -57,9 +57,9 @@ jobs:
       - name: Atualizar as tabelas
         run: $WRANGLER d1 migrations apply venus --remote
 
-      - name: Testes do roteador de IA
+      - name: Testes do servidor (IA, lojistas, canais e estoque)
         working-directory: .
-        run: node --test servidor/teste/ia.test.mjs
+        run: node --test servidor/teste/ia.test.mjs servidor/teste/loja.test.mjs
 
       # Cache vetorial e limite por IP: tentam criar o que falta. Se a chave da Cloudflare não tiver
       # permissão (KV, Vectorize), segue sem o cache: o servidor atual nunca deixa de ser publicado.
@@ -137,6 +137,32 @@ jobs:
             fi
           done
 
+      - name: Cofre e chaves das plataformas (Nuvemshop, Mercado Livre)
+        env:
+          CHAVE_COFRE: ${{ secrets.CHAVE_COFRE }}
+          NUVEMSHOP_APP_ID: ${{ secrets.NUVEMSHOP_APP_ID }}
+          NUVEMSHOP_APP_SECRET: ${{ secrets.NUVEMSHOP_APP_SECRET }}
+          ML_APP_ID: ${{ secrets.ML_APP_ID }}
+          ML_APP_SECRET: ${{ secrets.ML_APP_SECRET }}
+          MERCADOPAGO_ACCESS_TOKEN: ${{ secrets.MERCADOPAGO_ACCESS_TOKEN }}
+          MERCADOPAGO_WEBHOOK_SECRET: ${{ secrets.MERCADOPAGO_WEBHOOK_SECRET }}
+          INFINITEPAY_HANDLE: ${{ secrets.INFINITEPAY_HANDLE }}
+        run: |
+          # Sem o segredo CHAVE_COFRE, usa uma chave derivada da chave da Cloudflare (estável enquanto ela não mudar).
+          if [ -z "$CHAVE_COFRE" ]; then
+            CHAVE_COFRE=$(printf 'venus-cofre|%s' "$CLOUDFLARE_API_TOKEN" | sha256sum | cut -d' ' -f1)
+            echo "::notice::Sem o segredo CHAVE_COFRE: usando uma chave derivada. Crie CHAVE_COFRE nos segredos para fixá-la."
+          fi
+          export CHAVE_COFRE
+          for nome in CHAVE_COFRE NUVEMSHOP_APP_ID NUVEMSHOP_APP_SECRET ML_APP_ID ML_APP_SECRET MERCADOPAGO_ACCESS_TOKEN MERCADOPAGO_WEBHOOK_SECRET INFINITEPAY_HANDLE; do
+            valor="${!nome}"
+            if [ -n "$valor" ]; then
+              printf '%s' "$valor" | $WRANGLER secret put "$nome"
+            else
+              echo "::notice::$nome não está nos segredos do repositório; essa plataforma fica desligada até existir."
+            fi
+          done
+
       - name: Conferir se está no ar
         run: |
           # na primeira publicação o certificado do endereço novo leva alguns minutos
@@ -147,4 +173,5 @@ jobs:
           curl -sS "$ENDERECO/atualizacao?app=venus" | head -c 300; echo
           curl -sS "$ENDERECO/atualizacao?app=robo" | head -c 300; echo
           curl -sS "$ENDERECO/v1/rotas"; echo
+          curl -sS "$ENDERECO/canais"; echo
           curl -sS -X POST "$ENDERECO/chat" -H 'content-type: application/json' -d '{"message":"oi"}' | head -c 300; echo
