@@ -31,7 +31,7 @@ object DadosDaLoja {
     /** "@sualoja" (aceita "sualoja", "@sualoja" e o endereço do perfil); vazio se não tiver. */
     fun arroba(usuario: String?): String {
         val u = usuario.orEmpty().trim().removePrefix("https://").removePrefix("http://").removePrefix("www.")
-            .removePrefix("instagram.com/").trimEnd('/').removePrefix("@").substringBefore("?").trim()
+            .removePrefix("instagram.com/").substringBefore("?").trimEnd('/').removePrefix("@").trim()
         return if (u.isBlank()) "" else "@$u"
     }
 
