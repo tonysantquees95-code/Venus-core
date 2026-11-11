@@ -71,11 +71,11 @@ test("painel: projetos, fases e progresso (Vindex/Vortex sem repositório ficam 
   const env = ENV();
   const a = await admin(env);
   const { d } = await chamar(env, a.token, "/dev/painel");
-  assert.deepEqual(d.projetos.map((p) => p.id), ["venus", "vindex", "vortex"]);
+  assert.deepEqual(d.projetos.map((p) => p.id), ["venus", "devcenter", "vindex", "vortex"]);
   const venus = d.projetos[0];
   assert.ok(venus.fases.length >= 8);
   assert.equal(venus.conectado, false); // sem GITHUB_TOKEN no teste
-  assert.equal(d.projetos[1].repo, null);
+  assert.equal(d.projetos[2].repo, null);
   const nova = await chamar(env, a.token, "/dev/fases", "POST", { projeto: "vindex", titulo: "Telemetria de hardware", progresso: 40 });
   assert.equal(nova.status, 201);
   assert.equal(nova.d.status, "em_andamento");
@@ -95,7 +95,7 @@ test("repositório de projeto: aceita dono/repo e URL, recusa lixo", async () =>
   assert.equal(ok.d.valor, "tonysantquees95-code/Vindex");
   assert.equal((await chamar(env, a.token, "/dev/config", "PUT", { chave: "repo:vindex", valor: "../../etc" })).status, 400);
   assert.equal((await chamar(env, a.token, "/dev/config", "PUT", { chave: "repo:venus", valor: "x/y" })).status, 400);
-  assert.equal((await chamar(env, a.token, "/dev/painel")).d.projetos[1].repo, "tonysantquees95-code/Vindex");
+  assert.equal((await chamar(env, a.token, "/dev/painel")).d.projetos[2].repo, "tonysantquees95-code/Vindex");
 });
 
 test("tráfego: normaliza rotas, ignora /dev e /saude e calcula o resumo", async () => {
@@ -225,5 +225,6 @@ test("GitHub: estimativa pela árvore, estado geral dos builds e APK mais novo p
   const apks = apksDoProjeto(PROJETOS[0], lista);
   assert.equal(apks.find((x) => x.app === "venus").versao.numero, 191);
   assert.equal(apks.find((x) => x.app === "robo").versao.numero, 5);
-  assert.equal(apks.find((x) => x.app === "dev").versao.tag, "dev-1.2");
+  const dev = apksDoProjeto(PROJETOS.find((p) => p.id === "devcenter"), lista);
+  assert.equal(dev.find((x) => x.app === "dev").versao.tag, "dev-1.2");
 });

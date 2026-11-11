@@ -6,7 +6,7 @@ Assistente pessoal e comercial, **Vênus Robô** e servidor. Nada de loja ou sit
 apps/assistente   Vênus (web, PWA e APK)
 apps/robo         Vênus Robô (web, PWA e APK)
 apps/dois-em-um  Dois em Um: chat + painel do Robô na mesma interface (React + Tailwind)
-apps/painel-dev   Painel Dev da Vetorial Tech (administrador): projetos, BI, tráfego e diagnóstico; web/PWA e APK Dev
+apps/painel-dev  (mudou para o repositório vetorial-dev-center)
 packages/nucleo   código compartilhado (API, utilitários)
 packages/build-config  Vite compartilhado (modos web, PWA, capacitor)
 scripts           verificação de isolamento

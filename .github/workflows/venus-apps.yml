@@ -42,7 +42,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        app: [assistente, robo, dois-em-um, painel-dev]
+        app: [assistente, robo, dois-em-um]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -68,49 +68,10 @@ jobs:
         run: |
           chmod +x gradlew
           ./gradlew assembleDebug --no-daemon
-      # Painel Dev: se a chave de assinatura do repositório existir, o APK sai com ela (assim cada versão atualiza a anterior).
-      - name: Assinar o APK Dev com a chave do repositório
-        if: matrix.app == 'painel-dev'
-        env:
-          ASSINATURA_BASE64: ${{ secrets.ASSINATURA_BASE64 }}
-          SENHA: ${{ secrets.ASSINATURA_SENHA }}
-        run: |
-          cd venus-apps/apps/painel-dev/android/app/build/outputs/apk/debug
-          cp app-debug.apk VenusDev.apk
-          if [ -n "$ASSINATURA_BASE64" ] && [ -n "$SENHA" ]; then
-            echo "$ASSINATURA_BASE64" | base64 -d > "$RUNNER_TEMP/dev.keystore"
-            BT=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -n 1)
-            "$BT/apksigner" sign --ks "$RUNNER_TEMP/dev.keystore" --ks-key-alias venus --ks-pass env:SENHA --key-pass env:SENHA VenusDev.apk
-            "$BT/apksigner" verify VenusDev.apk && echo "APK Dev assinado com a chave do repositório."
-            shred -u "$RUNNER_TEMP/dev.keystore"
-          else
-            echo "::warning::Sem a chave de assinatura: o APK Dev sai com a chave de teste (para atualizar, desinstale o anterior)."
-          fi
-          rm -f app-debug.apk
-
       - uses: actions/upload-artifact@v4
         with:
           name: venus-${{ matrix.app }}-apk
           path: venus-apps/apps/${{ matrix.app }}/android/app/build/outputs/apk/debug/*.apk
-
-  publicar-dev:
-    # O Painel Dev lista e baixa o APK Dev por esta versão (tag dev-1.N).
-    needs: apk
-    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/download-artifact@v4
-        with:
-          name: venus-painel-dev-apk
-          path: apk
-      - name: Publicar a versão
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          ls apk
-          gh release create "dev-1.${{ github.run_number }}" apk/VenusDev.apk --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --prerelease --title "Vetorial Dev 1.${{ github.run_number }}" --notes "APK do Painel Dev (administrador). Baixe VenusDev.apk e toque nele para instalar."
 
   windows:
     # App Windows (Electron): instalador e versão portátil. Reaproveita o build web do Dois em Um.
