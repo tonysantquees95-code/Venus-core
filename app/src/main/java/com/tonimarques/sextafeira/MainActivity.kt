@@ -181,6 +181,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
             setContentView(tela)
         }
         aplicarTema()
+        tela.post { pedirAcessoDoRoboNaPrimeiraVez() }
         val antes = mensagens.childCount
         // isolamento de sessão: ao abrir o app (processo novo ou depois de fechar) a conversa é sempre nova e limpa;
         // só ao girar a tela (mesma sessão) volta o que já estava
@@ -600,14 +601,25 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         TelaAparencia(this) { aplicarTema() }.show()
     }
 
-    /** O Robô responde os clientes sozinho; daqui a Vênus abre o painel dele. */
+    /** O Robô é parte da Vênus: abre a tela dele (liga/desliga, acesso às notificações, canais e últimas conversas). */
     internal fun abrirRobo() {
-        val robo = packageManager.getLaunchIntentForPackage(Atualizador.PACOTE_ROBO)
-        if (robo != null) startActivity(robo)
-        else AlertDialog.Builder(this)
-            .setTitle("Vênus Robô")
-            .setMessage("O Vênus Robô ainda não está instalado neste celular. Quando estiver, este botão abre o painel dele.")
-            .setPositiveButton("Ok", null).show()
+        startActivity(Intent(this, com.tonimarques.sextafeira.robo.TelaRobo::class.java))
+    }
+
+    /**
+     * Primeira abertura: o Robô precisa do acesso às notificações para responder o WhatsApp. Pergunta uma vez,
+     * de forma clara, e leva direto à tela do Robô (que explica o resto: bateria e "configurações restritas").
+     */
+    internal fun pedirAcessoDoRoboNaPrimeiraVez() {
+        if (prefs.getBoolean("robo_acesso_perguntado", false)) return
+        if (com.tonimarques.sextafeira.robo.OuvinteRobo.temAcesso(this)) return
+        prefs.edit().putBoolean("robo_acesso_perguntado", true).apply()
+        AlertDialog.Builder(this)
+            .setTitle("Ligar o Robô de atendimento")
+            .setMessage("O Robô agora faz parte da ${Marca.nome}: ele responde as clientes no WhatsApp Business com as regras e produtos da sua loja. Para isso preciso do acesso às notificações. Quer liberar agora?")
+            .setPositiveButton("Liberar") { _, _ -> abrirRobo() }
+            .setNegativeButton("Depois", null)
+            .show()
     }
 
     /** "Nova conversa" da gaveta: arquiva a atual (se tiver algo) e abre uma tela limpa. */

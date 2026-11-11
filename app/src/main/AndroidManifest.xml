@@ -144,6 +144,19 @@
             android:value="subject_segment" />
 
         <!-- As regras de venda para o Vênus Robô (somente leitura, mesma assinatura) -->
+        <!-- Vênus Robô (agora parte da Vênus): tela, respostas prontas do Instagram e o ouvido das notificações -->
+        <activity android:name=".robo.TelaRobo" android:exported="false" />
+        <activity android:name=".robo.TelaRespostas" android:exported="false" android:windowSoftInputMode="adjustResize" />
+        <service
+            android:name=".robo.OuvinteRobo"
+            android:exported="true"
+            android:label="Vênus (Robô de atendimento)"
+            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
+            <intent-filter>
+                <action android:name="android.service.notification.NotificationListenerService" />
+            </intent-filter>
+        </service>
+
         <provider
             android:name=".ProvedorDeRegras"
             android:authorities="com.tonimarques.sextafeira.regras"

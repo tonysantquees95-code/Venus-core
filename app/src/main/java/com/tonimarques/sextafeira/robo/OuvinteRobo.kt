@@ -1,4 +1,4 @@
-package com.tonimarques.venusrobo
+package com.tonimarques.sextafeira.robo
 
 import android.app.Notification
 import android.app.NotificationChannel

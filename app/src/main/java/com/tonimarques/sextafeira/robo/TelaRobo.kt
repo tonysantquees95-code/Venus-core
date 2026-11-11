@@ -1,4 +1,4 @@
-package com.tonimarques.venusrobo
+package com.tonimarques.sextafeira.robo
 
 import android.app.Activity
 import android.content.Intent
@@ -44,6 +44,14 @@ class TelaRobo : TelaBase() {
         })
         coluna.addView(texto("Responde as clientes no WhatsApp Business com a Vênus da loja (se ela não souber, passa para você) e prepara as respostas prontas do Instagram.", 13f, apagado))
 
+        // ---- o robô antigo (app separado) responderia em dobro: pede para remover
+        val antigo = try { packageManager.getPackageInfo("com.tonimarques.venusrobo", 0); true } catch (e: Exception) { false }
+        if (antigo) {
+            cartao("Robô antigo instalado")
+            adicionar(texto("O app \"Vênus Robô\" separado ainda está neste celular. Agora o robô é parte da Vênus: desinstale o antigo para as clientes não receberem resposta em dobro.", 13f, Color.parseColor("#FF8A80")))
+            adicionar(botao("Desinstalar o app antigo", true) { startActivity(Intent(Intent.ACTION_DELETE, Uri.parse("package:com.tonimarques.venusrobo"))) })
+        }
+
         // ---- respostas prontas do Instagram
         cartao("Respostas do Instagram")
         val prontas = Respostas.lista(this).count { it.texto.isNotBlank() }
@@ -55,7 +63,7 @@ class TelaRobo : TelaBase() {
         val regras = RegrasDaVenus.ler(this)
         adicionar(texto(
             when {
-                regras == null -> "Regras de venda: não consegui ler da Vênus (atualize a Vênus e o robô). Uso só a Vênus da loja do site."
+                regras == null -> "Regras de venda: não consegui ler agora. Tente de novo em instantes."
                 !regras.configuradas -> "Regras de venda: ainda não preenchidas na Vênus (Ajustes → Site, ramo e regras de venda)."
                 else -> "✓ Regras de venda lidas da Vênus: ${regras.respostas.size} respostas exatas (pagamento, frete, retirada…)."
             },
@@ -78,7 +86,7 @@ class TelaRobo : TelaBase() {
         adicionar(ligado)
         adicionar(texto(if (acesso) "✓ Acesso às notificações liberado." else "✗ Falta liberar o acesso às notificações.", 14f, if (acesso) Color.parseColor("#7CE0A3") else Color.parseColor("#FF8A80")))
         if (!acesso) {
-            adicionar(texto("Se o Android não deixar ligar: Configurações → Apps → Vênus Robô → ⋮ (canto de cima) → Permitir configurações restritas. Depois volte aqui.", 12.5f, apagado))
+            adicionar(texto("Se o Android não deixar ligar: Configurações → Apps → Vênus → ⋮ (canto de cima) → Permitir configurações restritas. Depois volte aqui.", 12.5f, apagado))
             adicionar(botao("Liberar acesso às notificações", true) { startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)) })
         }
         val energia = getSystemService(PowerManager::class.java)

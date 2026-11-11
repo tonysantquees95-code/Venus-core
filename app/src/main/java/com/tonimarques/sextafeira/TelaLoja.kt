@@ -52,6 +52,7 @@ internal fun MainActivity.primeirosPassos() {
         Triple("Seu nome e o da loja", perfil.contains("dono")) { editarPerfil() },
         Triple("Site, ramo e regras de venda", perfil.contains("regras_json")) { editarDadosDaLoja() },
         Triple("Plataforma da loja (Shopify, WooCommerce, Nuvemshop ou site próprio)", ferramentas.loja.conectada) { escolherPlataforma() },
+        Triple("Robô: acesso às notificações (responde o WhatsApp)", com.tonimarques.sextafeira.robo.OuvinteRobo.temAcesso(this)) { abrirRobo() },
         Triple("IA grátis principal: Groq", SegundaIA.chave(this).isNotBlank()) { pedirIAReserva() },
         Triple("IA grátis reserva: Cloudflare (opcional)", SegundaIA.chaveCloudflare(this).isNotBlank()) { pedirCloudflare() },
         Triple("Gemini grátis: memória, estudo, PDF e áudio", chave().isNotBlank()) { pedirChave() },

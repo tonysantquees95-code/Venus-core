@@ -1,4 +1,4 @@
-package com.tonimarques.venusrobo
+package com.tonimarques.sextafeira.robo
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse

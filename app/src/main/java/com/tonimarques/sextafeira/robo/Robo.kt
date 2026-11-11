@@ -1,8 +1,6 @@
-package com.tonimarques.venusrobo
+package com.tonimarques.sextafeira.robo
 
 import android.content.Context
-import android.net.Uri
-import android.os.Bundle
 import org.json.JSONArray
 import org.json.JSONObject
 import java.net.HttpURLConnection
@@ -59,24 +57,14 @@ object Robo {
     fun pelaVenusDoCelular(ctx: Context): Boolean = prefs(ctx).getString("modo", null)?.let { it == "local" } ?: chave(ctx).isBlank()
     fun definirModo(ctx: Context, local: Boolean) = prefs(ctx).edit().putString("modo", if (local) "local" else "site").apply()
 
-    private val VENUS: Uri by lazy { Uri.parse("content://com.tonimarques.sextafeira.regras") }
-
-    /** Pergunta à Vênus deste celular (pelo provedor protegido por assinatura). Bloqueante. */
+    /** Pergunta à Vênus deste celular (o mesmo app: sem provedor, sem permissão extra). Bloqueante. */
     fun perguntarNoCelular(ctx: Context, pacote: String, cliente: String, mensagem: String, teste: Boolean): Resposta {
-        val extras = Bundle().apply {
-            putString("pacote", pacote)
-            putString("cliente", cliente.take(200))
-            putString("mensagem", mensagem.take(4000))
-            putBoolean("teste", teste)
-        }
-        val r = try {
-            ctx.contentResolver.call(VENUS, "atender", null, extras)
-        } catch (e: SecurityException) {
-            throw IllegalStateException("A Vênus deste celular não deixou o robô perguntar. Atualize a Vênus e depois o robô.")
+        val saida = try {
+            com.tonimarques.sextafeira.AtendenteDoRobo.atender(ctx, pacote, cliente.take(200), mensagem.take(4000), teste)
         } catch (e: Exception) {
-            throw IllegalStateException("Não achei a Vênus neste celular (instale ou atualize a Vênus).")
+            throw IllegalStateException("A Vênus não conseguiu responder agora: ${e.message ?: "erro"}")
         }
-        val json = r?.getString("json") ?: throw IllegalStateException("A Vênus deste celular é antiga: atualize para o robô responder por ela.")
+        val json = com.tonimarques.sextafeira.AtendenteDoRobo.json(saida)
         return lerResposta(json) ?: throw IllegalStateException("A Vênus respondeu algo que não entendi.")
     }
     fun salvar(ctx: Context, endereco: String, chave: String) =
@@ -88,7 +76,7 @@ object Robo {
 
     // ------------------------------------------------------------------ pergunta à Vênus da loja
     fun corpo(pacote: String, cliente: String, mensagem: String, teste: Boolean): JSONObject = JSONObject()
-        .put("appPackageName", "com.tonimarques.venusrobo")
+        .put("appPackageName", "com.tonimarques.sextafeira")
         .put("messengerPackageName", pacote)
         .put("query", JSONObject()
             .put("sender", cliente.take(200))

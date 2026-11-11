@@ -1,4 +1,4 @@
-package com.tonimarques.venusrobo
+package com.tonimarques.sextafeira.robo
 
 import android.content.SharedPreferences
 import android.security.keystore.KeyGenParameterSpec
