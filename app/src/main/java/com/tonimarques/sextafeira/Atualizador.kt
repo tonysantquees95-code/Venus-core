@@ -264,7 +264,7 @@ class Atualizador(private val contexto: Context) {
     }
 
     companion object {
-        const val REPO = "tonysantquees95-code/Sexta-feira-"
+        const val REPO = "tonysantquees95-code/Venus-core"
         /** Canal público de atualização (para lojistas sem token do GitHub). */
         const val CANAL = "https://desejo-de-intimidade.tonysantquees95.workers.dev/_api/venus/atualizacao"
         const val ACAO_INSTALAR = "com.tonimarques.sextafeira.INSTALAR"
