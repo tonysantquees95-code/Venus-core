@@ -3,10 +3,9 @@ name: Gerar APK
 on:
   push:
     branches: [main]
-    # só gera APK quando muda o app, o robô ou a compilação (servidor e documentos não gastam minutos do GitHub)
+    # só gera APK quando muda o app ou a compilação (servidor e documentos não gastam minutos do GitHub)
     paths:
       - "app/**"
-      - "robo/**"
       - "build.gradle.kts"
       - "settings.gradle.kts"
       - "gradle.properties"
@@ -79,7 +78,6 @@ jobs:
       - name: Renomear os APKs
         run: |
           cp app/build/outputs/apk/release/app-release.apk Venus.apk
-          cp robo/build/outputs/apk/release/robo-release.apk VenusRobo.apk
 
       # Assinatura v1/v2 com a chave antiga (Android 8) e v3 com a chave nova + linhagem (Android 9 em diante):
       # quem já tem a Vênus instalada recebe a atualização por cima, sem perder nada.
@@ -90,7 +88,7 @@ jobs:
         run: |
           set -e
           BT=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -n 1)
-          for apk in Venus.apk VenusRobo.apk; do
+          for apk in Venus.apk; do
             "$BT/apksigner" sign \
               --ks app/sexta.keystore --ks-pass pass:sextafeira --ks-key-alias sexta --key-pass pass:sextafeira \
               --next-signer --ks "$RUNNER_TEMP/nova.keystore" --ks-pass env:SENHA --ks-key-alias venus --key-pass env:SENHA \
@@ -111,25 +109,3 @@ jobs:
           body_path: notas.txt
           files: Venus.apk
           make_latest: true
-
-      # Só publica robô novo quando o código dele mudou; assim a Vênus não oferece atualização à toa.
-      - name: O robô mudou?
-        id: robo
-        run: |
-          ultima=$(git tag -l 'robo-1.*' --sort=-v:refname | head -n 1)
-          if [ -z "$ultima" ] || ! git diff --quiet "$ultima" HEAD -- robo settings.gradle.kts build.gradle.kts; then
-            echo "mudou=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "mudou=false" >> "$GITHUB_OUTPUT"
-            echo "Robô igual ao $ultima: não publica de novo."
-          fi
-
-      - name: Publicar o Vênus Robô
-        if: steps.robo.outputs.mudou == 'true'
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: robo-1.${{ github.run_number }}
-          name: Vênus Robô 1.${{ github.run_number }}
-          body: "App que responde as clientes no WhatsApp Business e no Instagram com a Vênus da loja. Baixe o VenusRobo.apk e toque nele para instalar (é um app separado da Vênus)."
-          files: VenusRobo.apk
-          make_latest: false

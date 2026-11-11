@@ -99,12 +99,9 @@ internal fun MainActivity.abrirPublicacoes() {
                         "Conectado como @$it. Os posts programados e os stories saem sozinhos."
                     } ?: "Desconectado: os stories chegam no aviso para postar com um toque. Toque para colar o token da Meta."
                 }) { conectarInstagram() },
-                TelaDeAjustes.Ajuste("Respostas do Instagram (Vênus Robô)", {
+                TelaDeAjustes.Ajuste("Respostas do Instagram (Robô)", {
                     "As respostas prontas para colar nas Perguntas frequentes e Respostas salvas do Instagram."
-                }) {
-                    val robo = packageManager.getLaunchIntentForPackage(Atualizador.PACOTE_ROBO)
-                    if (robo != null) startActivity(robo) else responder("O Vênus Robô não está instalado neste celular.")
-                },
+                }) { startActivity(android.content.Intent(this, com.tonimarques.sextafeira.robo.TelaRespostas::class.java)) },
             )
         ),
     )

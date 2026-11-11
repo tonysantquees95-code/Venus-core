@@ -1,4 +1,4 @@
-package com.tonimarques.venusrobo
+package com.tonimarques.sextafeira.robo
 
 import android.app.AlertDialog
 import android.content.ClipData
