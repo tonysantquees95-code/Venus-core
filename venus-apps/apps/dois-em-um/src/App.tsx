@@ -5,6 +5,7 @@ import { useConversas } from "./sessao/ConversasProvider";
 import { ChatPanel } from "./features/chat/ChatPanel";
 import { RoboPanel } from "./features/robo/RoboPanel";
 import { ThemingPanel } from "./theming";
+import { TelaEmpresa } from "./empresa/TelaEmpresa";
 import { Ajustes } from "./ajustes/Ajustes";
 import { AvisoDeConflito } from "./ajustes/Conta";
 import { InstalarIOS } from "./ios/InstalarIOS";
@@ -33,8 +34,9 @@ export function App() {
   // Avatar, comandos de conversa e o Windows pedem telas por este evento
   useEffect(() => {
     const ouvir = (e: Event) => {
-      const { tela: t, alvo } = (e as CustomEvent<{ tela: "ajustes" | "login"; alvo?: string }>).detail;
+      const { tela: t, alvo } = (e as CustomEvent<{ tela: "ajustes" | "empresa" | "login"; alvo?: string }>).detail;
       if (t === "login") return setLoginAberto(true);
+      if (t === "empresa") return setTela("empresa");
       setTela("ajustes");
       if (alvo) setTimeout(() => document.getElementById(`aj-${alvo}`)?.scrollIntoView({ behavior: "smooth", block: "center" }), 250);
     };
@@ -66,7 +68,9 @@ export function App() {
       <SidebarDrawer aberto={menuAberto} aoFechar={() => setMenuAberto(false)} aoNavegar={() => { setTela("chat"); setMenuAberto(false); }} />
       <Navegacao tela={tela} aoMudar={setTela} roboLigado={robo.ligado} />
       <main className="flex min-h-0 min-w-0 flex-1">
-        {tela === "tema" ? (
+        {tela === "empresa" ? (
+          <TelaEmpresa />
+        ) : tela === "tema" ? (
           <ThemingPanel />
         ) : tela === "ajustes" ? (
           <Ajustes aoAbrirTema={() => setTela("tema")} />

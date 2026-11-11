@@ -2,22 +2,25 @@ import { useEffect, useRef } from "react";
 import { ErroId } from "../id/api";
 import { useId } from "../id/IdProvider";
 import { usePreferencias } from "../ajustes/Preferencias";
+import { useEmpresa } from "../empresa/EmpresaProvider";
+import { empresaPreenchida, limparEmpresa } from "../empresa/logica";
 import { useTema } from "../theming";
 import { prefsParaEnviar, prefsRecebidas } from "../ajustes/logica";
 import { decidirRemoto, temaValido, type Versoes } from "./mesclar";
 
 const INTERVALO_MS = 15_000;
 
-/** Mantém tema e preferências iguais em todos os aparelhos da conta (consulta a cada 15 s e ao voltar para o app). */
+/** Mantém tema, preferências e o cadastro da empresa iguais em todos os aparelhos da conta (consulta a cada 15 s e ao voltar para o app). */
 export function Sincronizador() {
   const { api, sessao } = useId();
   const { tema, definirOrbe, definirIcones, aplicarPreset } = useTema();
   const { prefs, definirTodas } = usePreferencias();
+  const { empresa, definirTudo } = useEmpresa();
   const versoes = useRef<Versoes>({});
   const desde = useRef(0);
   const ultimoEnviado = useRef<Record<string, string>>({});
-  const atual = useRef({ tema, prefs });
-  atual.current = { tema, prefs };
+  const atual = useRef({ tema, prefs, empresa });
+  atual.current = { tema, prefs, empresa };
 
   // puxar
   useEffect(() => {
@@ -35,6 +38,10 @@ export function Sincronizador() {
             definirOrbe(doc.valor.orbe as any);
             definirIcones(doc.valor.icones as any);
             aplicarPreset(doc.valor.cores);
+          } else if (doc.chave === "empresa") {
+            const nova = limparEmpresa(doc.valor);
+            ultimoEnviado.current.empresa = JSON.stringify(nova);
+            definirTudo(nova);
           } else if (doc.chave === "preferencias") {
             const nova = prefsRecebidas(atual.current.prefs, doc.valor);
             ultimoEnviado.current.preferencias = JSON.stringify(prefsParaEnviar(nova));
@@ -62,6 +69,7 @@ export function Sincronizador() {
     if (!sessao) return;
     const espera = setTimeout(async () => {
       const itens: [string, unknown][] = [["tema", atual.current.tema], ["preferencias", prefsParaEnviar(atual.current.prefs)]];
+      if (empresaPreenchida(atual.current.empresa)) itens.push(["empresa", atual.current.empresa]);
       for (const [chave, valor] of itens) {
         const texto = JSON.stringify(valor);
         if (ultimoEnviado.current[chave] === texto) continue;
@@ -75,7 +83,7 @@ export function Sincronizador() {
       }
     }, 1500);
     return () => clearTimeout(espera);
-  }, [api, sessao?.token, tema, prefs]);
+  }, [api, sessao?.token, tema, prefs, empresa]);
 
   return null;
 }

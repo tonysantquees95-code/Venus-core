@@ -107,6 +107,15 @@ export function IconeLixeira(props: SVGProps<SVGSVGElement>) {
   );
 }
 
+/** Lojinha (Minha empresa). */
+export function IconeEmpresa(props: SVGProps<SVGSVGElement>) {
+  return (
+    <Svg {...props}>
+      <path d="M4 9l1.5-5h13L20 9M4 9v11h16V9M4 9h16M9 20v-6h6v6" {...semMiolo} />
+    </Svg>
+  );
+}
+
 /** Engrenagem (Ajustes). */
 export function IconeAjustes(props: SVGProps<SVGSVGElement>) {
   return (
