@@ -59,7 +59,7 @@ jobs:
 
       - name: Testes do servidor (IA, lojistas, canais e estoque)
         working-directory: .
-        run: node --test servidor/teste/ia.test.mjs servidor/teste/loja.test.mjs servidor/teste/vitrine.test.mjs servidor/teste/qr.test.mjs servidor/teste/servicos.test.mjs servidor/teste/id.test.mjs servidor/teste/publicar.test.mjs
+        run: node --test servidor/teste/ia.test.mjs servidor/teste/loja.test.mjs servidor/teste/vitrine.test.mjs servidor/teste/qr.test.mjs servidor/teste/servicos.test.mjs servidor/teste/id.test.mjs servidor/teste/publicar.test.mjs servidor/teste/dev.test.mjs
 
       # Cache vetorial e limite por IP: tentam criar o que falta. Se a chave da Cloudflare não tiver
       # permissão (KV, Vectorize), segue sem o cache: o servidor atual nunca deixa de ser publicado.
@@ -162,6 +162,23 @@ jobs:
               echo "::notice::$nome não está nos segredos do repositório; essa plataforma fica desligada até existir."
             fi
           done
+
+      # Painel Dev da Vetorial Tech: o convite do primeiro acesso do administrador. Use o segredo DEV_CONVITE do
+      # repositório; sem ele, sai um código derivado (estável), mostrado no resumo desta execução (só quem tem acesso ao repositório vê).
+      - name: Convite do Painel Dev
+        env:
+          DEV_CONVITE: ${{ secrets.DEV_CONVITE }}
+        run: |
+          derivado=no
+          if [ -z "$DEV_CONVITE" ]; then
+            DEV_CONVITE=$(printf 'venus-dev-convite|%s' "$CLOUDFLARE_API_TOKEN" | sha256sum | cut -c1-16)
+            derivado=sim
+          fi
+          printf '%s' "$DEV_CONVITE" | $WRANGLER secret put DEV_CONVITE
+          if [ "$derivado" = "sim" ]; then
+            echo "### Painel Dev: convite do primeiro acesso" >> "$GITHUB_STEP_SUMMARY"
+            echo "Código: \`$DEV_CONVITE\` (só é usado uma vez, para criar a senha do administrador; para trocar, crie o segredo DEV_CONVITE no repositório)." >> "$GITHUB_STEP_SUMMARY"
+          fi
 
       - name: Conferir se está no ar
         run: |

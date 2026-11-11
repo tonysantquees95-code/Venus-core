@@ -1,0 +1,31 @@
+name: Métricas do código
+
+# Conta arquivos e linhas do repositório a cada alteração e guarda o resultado na versão "metricas" (arquivo metricas.json).
+# O Painel Dev lê esse arquivo para mostrar o contador de linhas de código.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: metricas
+  cancel-in-progress: true
+
+jobs:
+  contar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node .github/scripts/metricas.mjs
+      - name: Guardar na versão "metricas"
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view metricas >/dev/null 2>&1 || gh release create metricas --prerelease --title "Métricas do código" --notes "Atualizado pelo CI. Lido pelo Painel Dev." --target "$GITHUB_SHA"
+          gh release upload metricas metricas.json --clobber

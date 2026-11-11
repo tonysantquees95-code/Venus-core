@@ -3,6 +3,7 @@ import { estadoDaAssinatura, iniciarCobranca } from "../loja/assinatura.js";
 import { ErroLoja } from "../loja/lojas.js";
 import { ErroId, cadastrar, perfilPublico, salvarPerfil, tokenDeApp, encerrarSessao, entrar, gravarSync, lerSync, listarDispositivos, reativar, removerDispositivo, renovarToken, tokenDoPedido, validarSessao } from "./conta.js";
 import { paginaDeLogin, paginaSso } from "./pagina.js";
+import { ehAdmin } from "../dev/admin.js";
 
 const CORS = { "access-control-allow-origin": "*", "access-control-allow-headers": "authorization,content-type", "access-control-allow-methods": "GET,POST,PUT,DELETE,OPTIONS" };
 const json = (d, status = 200) => new Response(JSON.stringify(d), { status, headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store", ...CORS } });
@@ -43,6 +44,7 @@ export async function tratarId(req, env, url, caminho) {
     }
     if (caminho === "/id/cadastrar" && req.method === "POST") {
       const d = await corpo(req);
+      if (ehAdmin(env, d.email)) throw new ErroId(403, "email_reservado", "Esse e-mail é reservado à administração da Vetorial Tech.");
       let lojaExistente = null;
       const t = tokenDoPedido(req);
       if (/^vl_[a-f0-9]{48}$/.test(t)) {
