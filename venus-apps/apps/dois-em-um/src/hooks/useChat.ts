@@ -4,6 +4,8 @@ import type { Mensagem } from "../tipos";
 import { useConversas } from "../sessao/ConversasProvider";
 import { useId } from "../id/IdProvider";
 import { responderComandoDeConta } from "../ajustes/executarConta";
+import { useEmpresa } from "../empresa/EmpresaProvider";
+import { contextoDaEmpresa } from "../empresa/logica";
 import { abrirNoApp } from "../id/Avatar";
 
 const novoId = () => crypto.randomUUID();
@@ -13,6 +15,7 @@ export function useChat() {
   const { ativa, anexar, estaEnviando, marcarEnviando } = useConversas();
   const enviando = estaEnviando(ativa.id);
   const conta = useId();
+  const { empresa } = useEmpresa();
 
   const enviar = useCallback(
     async (texto: string) => {
@@ -36,6 +39,7 @@ export function useChat() {
           method: "POST",
           headers: { "content-type": "application/json" },
           body: JSON.stringify({
+            sistema: contextoDaEmpresa(empresa) || undefined,
             mensagens: historico.slice(-20).map((m) => ({ papel: m.autor === "eu" ? "user" : "assistant", texto: m.texto }))
           })
         });
@@ -48,7 +52,7 @@ export function useChat() {
         marcarEnviando(id, false);
       }
     },
-    [ativa, anexar, estaEnviando, marcarEnviando, conta]
+    [ativa, anexar, estaEnviando, marcarEnviando, conta, empresa]
   );
 
   return { mensagens: ativa.mensagens, enviando, enviar };

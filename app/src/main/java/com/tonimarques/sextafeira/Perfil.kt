@@ -127,5 +127,24 @@ object Perfil {
         Diario.anotar(ctx, "perfil", "Perfil atualizado: ${this.dono}, ${this.loja}, ${this.cidade}${if (this.uf.isNotBlank()) "/${this.uf}" else ""}", "tela")
     }
 
+    /** O cadastro da empresa que viaja com o Vetorial ID (celular, computador, outro celular). Sem chaves de IA nem senhas. */
+    fun paraSincronia(ctx: Context): org.json.JSONObject? {
+        val p = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        // instalação nova que ainda não preencheu nada não manda um cadastro vazio por cima do que já existe na conta
+        if (p.getString("origem", "novo") == "novo" && !p.contains("loja") && !p.contains("regras_json")) return null
+        return org.json.JSONObject().put("dono", dono).put("loja", loja).put("cidade", cidade).put("uf", uf).put("sobre", sobre)
+            .put("site", site).put("ramo", ramo).put("regras", regras.json(ramo)).put("regrasConfiguradas", regrasConfiguradas)
+    }
+
+    fun aplicarSincronia(ctx: Context, v: org.json.JSONObject) {
+        val e = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+        for (campo in listOf("dono", "loja", "cidade", "uf", "sobre", "ramo")) if (v.has(campo)) e.putString(campo, v.optString(campo))
+        if (v.has("site")) e.putString("site", normalizarSite(v.optString("site")))
+        v.optJSONObject("regras")?.let { e.putString("regras_json", it.toString()).remove("regras").remove("pix") }
+        e.apply()
+        carregar(ctx)
+        Consciencia.esquecerRetrato()
+    }
+
     fun resumo(): String = "$dono · $loja · $cidade${if (uf.isNotBlank()) "/$uf" else ""}"
 }
