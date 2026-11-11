@@ -42,7 +42,10 @@ object Paleta {
             caixas.remove(maior)
             val canal = amplitude(maior).second
             val ordenada = maior.sortedBy { canalDe(it, canal) }
-            val meio = ordenada.size / 2
+            // corta na mudança de valor mais perto da mediana, para não misturar tons que já estão separados
+            val mediana = ordenada.size / 2
+            val corte = (1 until ordenada.size).filter { canalDe(ordenada[it], canal) != canalDe(ordenada[it - 1], canal) }
+            val meio = corte.minByOrNull { kotlin.math.abs(it - mediana) } ?: mediana
             caixas.add(ordenada.subList(0, meio))
             caixas.add(ordenada.subList(meio, ordenada.size))
         }
