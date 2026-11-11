@@ -42,7 +42,7 @@ class TelaRobo : TelaBase() {
             typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
             setTextColor(destaque)
         })
-        coluna.addView(texto("Responde as clientes no WhatsApp Business com a Vênus da loja (se ela não souber, passa para você) e prepara as respostas prontas do Instagram.", 13f, apagado))
+        coluna.addView(texto("Responde as clientes no WhatsApp Business com a Vênus da loja (se ela não souber, passa para você). No Instagram não há resposta automática: a Vênus escreve as respostas prontas e você copia e cola nas respostas rápidas do Instagram.", 13f, apagado))
 
         // ---- o robô antigo (app separado) responderia em dobro: pede para remover
         val antigo = try { packageManager.getPackageInfo("com.tonimarques.venusrobo", 0); true } catch (e: Exception) { false }
@@ -106,7 +106,7 @@ class TelaRobo : TelaBase() {
 
         // ---- onde responder
         cartao("Responder em")
-        for ((pacote, nome) in Robo.NOMES) {
+        for ((pacote, nome) in Robo.NOMES.filterKeys { it != Robo.INSTAGRAM }) {
             adicionar(Switch(this).apply {
                 text = nome
                 isChecked = Robo.canalLigado(this@TelaRobo, pacote)

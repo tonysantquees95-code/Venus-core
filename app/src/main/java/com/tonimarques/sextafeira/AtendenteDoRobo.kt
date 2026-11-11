@@ -205,7 +205,7 @@ object AtendenteDoRobo {
 
     private fun comIA(ctx: Context, mensagem: String, conversa: Conversa?, canal: String): Decisao {
         val config = ctx.getSharedPreferences("config", Context.MODE_PRIVATE)
-        val chaveGemini = Cofre.ler(config, "chave")
+        val chaveGemini = GeminiRota.efetiva(ctx, Cofre.ler(config, "chave"))
         val modelo = config.getString("modelo", "gemini-flash-latest").orEmpty().ifBlank { "gemini-flash-latest" }
         val anterior = conversa?.mensagens?.lastOrNull { it.cliente }?.texto.orEmpty()
         val catalogo = Loja.catalogoParaIA(produtosRelevantes("$anterior $mensagem", produtos(ctx)))

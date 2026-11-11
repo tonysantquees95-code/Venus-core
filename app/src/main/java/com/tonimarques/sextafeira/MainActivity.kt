@@ -1653,7 +1653,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         }
     }
 
-    internal fun chave() = Cofre.ler(prefs, PREF_CHAVE)
+    internal fun chave() = GeminiRota.efetiva(this, Cofre.ler(prefs, PREF_CHAVE))
     internal fun modelo() = prefs.getString(PREF_MODELO, MODELO_PADRAO).orEmpty().ifBlank { MODELO_PADRAO }
 
     // ---------------------------------------------------------------- ativação

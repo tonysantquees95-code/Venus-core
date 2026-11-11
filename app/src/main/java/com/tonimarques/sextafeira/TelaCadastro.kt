@@ -56,7 +56,11 @@ internal fun MainActivity.cadastroGuiado(etapaInicial: Int = 0) {
                 f.cartao("O que eu faço")
                 f.paragrafo("• Respondo as clientes no WhatsApp com o robô, com os preços, o frete e as regras da sua loja.\n" +
                     "• Cuido do estoque, das vendas e do catálogo (com site ou sem site).\n" +
-                    "• Monto posts, stories e catálogo em PDF com as fotos dos produtos.", 14.5f)
+                    "• Monto posts, stories e catálogo em PDF com as fotos dos produtos.\n" +
+                    "• No Android sou assistente pessoal e comercial: controlo o celular e posso ser a sua assistente principal (no iPhone, pelo navegador, só atendo como assistente comercial).", 14.5f)
+                f.fecharCartao()
+                f.cartao("Sem chaves de IA")
+                f.paragrafo("Toda a minha inteligência (conversa, PDF, áudio, fotos e imagens) vem do servidor da $n. Você não cria chave de IA nenhuma: só configura a loja e, se quiser o Instagram, a conexão com a Meta (o passo a passo está mais adiante).", 14f)
                 f.fecharCartao()
                 f.paragrafo("São 7 etapas rápidas, uns 10 minutos. O que você não souber agora dá para fazer depois, no menu.", 13.5f, Formulario.COR_APAGADA)
                 f.cartao("Termos do teste-piloto")
@@ -254,7 +258,7 @@ internal fun MainActivity.cadastroGuiado(etapaInicial: Int = 0) {
                 // Instagram
                 f.cartao("Instagram da loja")
                 f.adicionar(f.aviso(if (Instagram.conectado(this)) "✓ Instagram conectado (@${Instagram.usuario(this)})."
-                else "Para eu postar no feed e nos stories sozinha. Precisa de uma conta comercial ou de criador no Instagram e da API da Meta (o passo a passo aparece ao tocar em Conectar)."), 2)
+                else "Para eu postar no feed e nos stories sozinha, acompanhar seguidores e criar imagens. Precisa de uma conta comercial ou de criador no Instagram e da API da Meta (o passo a passo aparece ao tocar em Conectar). O Instagram não tem resposta automática: eu escrevo e você copia e cola nas respostas rápidas. Quem responde sozinho é o WhatsApp."), 2)
                 f.adicionar(f.botao("Conectar o Instagram") { conectarInstagram() }, 10)
 
                 f.acoes(f.botao("Continuar", primario = true) { mostrar(6) }, voltar)

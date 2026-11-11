@@ -579,7 +579,7 @@ object StoriesDoDia {
 
     private fun gerarTemas(ctx: Context): List<Tema> {
         val config = ctx.getSharedPreferences("config", Context.MODE_PRIVATE)
-        val chave = Cofre.ler(config, "chave")
+        val chave = GeminiRota.efetiva(ctx, Cofre.ler(config, "chave"))
         if (chave.isBlank()) return emptyList()
         val modelo = config.getString("modelo", "").orEmpty().ifBlank { "gemini-flash-latest" }
         val json = Gemini.gerarJson(chave, modelo, pedidoDeTemas(usados(ctx).takeLast(60)), temperatura = 0.9) ?: return emptyList()

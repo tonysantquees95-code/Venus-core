@@ -8,11 +8,16 @@ export function ehAtalho(caminho) {
 }
 
 const pagina = (origem) => `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Vênus · Vetorial Tech</title>
-<style>body{margin:0;min-height:100vh;display:grid;place-items:center;background:#070B14;color:#e8ecf4;font:16px system-ui,sans-serif}main{max-width:420px;padding:24px;text-align:center}h1{margin:0 0 6px}p{color:#9aa6bd}a{display:block;margin:12px 0;padding:14px;border-radius:14px;background:#7c3aed;color:#fff;text-decoration:none;font-weight:600}a.s{background:#1b2436}</style></head>
+<style>body{margin:0;min-height:100vh;display:grid;place-items:center;background:#070B14;color:#e8ecf4;font:16px system-ui,sans-serif}main{max-width:420px;padding:24px;text-align:center}h1{margin:0 0 6px}p{color:#9aa6bd}a{display:block;margin:12px 0;padding:14px;border-radius:14px;background:#7c3aed;color:#fff;text-decoration:none;font-weight:600}a.s{background:#1b2436}.q{text-align:left;background:#0f1626;border:1px solid #1e2a44;border-radius:14px;padding:12px 14px;margin:12px 0;font-size:14px;color:#c4cde0}.q b{color:#fff}.q ul{margin:6px 0 0;padding-left:18px}</style></head>
 <body><main><h1>Vênus</h1><p>Assistente e central da sua loja. Baixe o app:</p>
-<a href="${origem}/venus/android">Baixar para Android</a><a href="${origem}/venus/windows">Baixar para Windows</a><a href="${origem}/app/">Usar no navegador / iPhone</a><a class="s" href="${PAINEL_DEV}">Painel Dev (administrador)</a></main></body></html>`;
+<div class="q"><b>Android:</b> assistente pessoal e comercial. Controla o celular e pode ser a sua assistente principal.</div>
+<a href="${origem}/venus/android">Baixar para Android</a><a href="${origem}/venus/windows">Baixar para Windows</a>
+<div class="q"><b>iPhone (pelo navegador):</b> só assistente comercial. Não funciona como assistente pessoal nem controla o aparelho. Abra o link, toque em Compartilhar e em "Adicionar à Tela de Início".</div>
+<a href="${origem}/app/">Usar no navegador / iPhone</a>
+<div class="q"><b>Como a Vênus funciona:</b> a inteligência (conversa, PDF, áudio, fotos, imagens) já vem do nosso servidor, sem você criar chave nenhuma. Você só configura a loja e, se quiser publicar no Instagram, a conexão com a Meta.<ul><li>WhatsApp: respostas automáticas.</li><li>Instagram: posts e stories automáticos, acompanhamento de seguidores e criação de imagens. Sem resposta automática no direct: a Vênus escreve e você copia e cola nas respostas rápidas.</li></ul></div>
+<a class="s" href="${PAINEL_DEV}">Painel Dev (administrador)</a></main></body></html>`;
 
-const paginaVindex = (origem) => pagina(origem).replace("<h1>Vênus</h1><p>Assistente e central da sua loja. Baixe o app:</p>", "<h1>Vindex</h1><p>Otimizador e organizador de arquivos. Baixe o app:</p>").replace(`${origem}/venus/android`, `${origem}/vindex/android`).replace(`${origem}/venus/windows`, `${origem}/vindex/windows`).replace("<title>Vênus", "<title>Vindex");
+const paginaVindex = (origem) => pagina(origem).replace("<h1>Vênus</h1><p>Assistente e central da sua loja. Baixe o app:</p>", "<h1>Vindex</h1><p>Otimizador e organizador de arquivos. Baixe o app:</p>").replace(`${origem}/venus/android`, `${origem}/vindex/android`).replace(`${origem}/venus/windows`, `${origem}/vindex/windows`).replace("<title>Vênus", "<title>Vindex").replace(/<div class="q">[\s\S]*?<\/div>\n?/g, "").replace(/<a href="[^"]*\/app\/">[^<]*<\/a>/, "");
 
 /** Resposta do atalho: a página /venus, ou um redirecionamento para o download / painel. */
 export function responderAtalho(url, caminho) {

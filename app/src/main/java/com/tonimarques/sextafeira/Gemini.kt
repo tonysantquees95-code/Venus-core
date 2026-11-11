@@ -312,8 +312,7 @@ class Gemini(
         modelosReserva ?: listarModelosFlash(chave).ifEmpty { RESERVA_FIXA }.also { modelosReserva = it }
 
     private fun enviarRequisicao(modeloUsado: String, bytes: ByteArray): Pair<Int, JSONObject> {
-        val url = URL("https://generativelanguage.googleapis.com/v1beta/models/$modeloUsado:generateContent")
-        val conexao = url.openConnection() as HttpURLConnection
+        val conexao = GeminiRota.abrir("models/$modeloUsado:generateContent", chave)
         try {
             conexao.requestMethod = "POST"
             conexao.connectTimeout = 8_000
@@ -324,7 +323,6 @@ class Gemini(
             conexao.setRequestProperty("Content-Type", "application/json; charset=utf-8")
             // Não reaproveita conexões antigas, que o Android às vezes já fechou.
             conexao.setRequestProperty("Connection", "close")
-            conexao.setRequestProperty("x-goog-api-key", chave)
             conexao.outputStream.use { it.write(bytes) }
 
             val codigo = conexao.responseCode
@@ -387,12 +385,10 @@ class Gemini(
         fun listarModelosFlash(chave: String): List<String> {
             var conexao: HttpURLConnection? = null
             return try {
-                conexao = URL("https://generativelanguage.googleapis.com/v1beta/models?pageSize=200")
-                    .openConnection() as HttpURLConnection
+                conexao = GeminiRota.abrir("models", chave)
                 conexao.connectTimeout = 15_000
                 conexao.readTimeout = 20_000
                 conexao.setRequestProperty("Connection", "close")
-                conexao.setRequestProperty("x-goog-api-key", chave)
                 if (conexao.responseCode !in 200..299) return emptyList()
                 val texto = conexao.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
                 val lista = JSONObject(texto).optJSONArray("models") ?: return emptyList()
@@ -442,14 +438,13 @@ class Gemini(
             for (m in listOf(modelo.trim().removePrefix("models/"), "gemini-3.8-flash", "gemini-flash-lite-latest").distinct()) {
                 var conexao: HttpURLConnection? = null
                 try {
-                    conexao = URL("https://generativelanguage.googleapis.com/v1beta/models/$m:generateContent").openConnection() as HttpURLConnection
+                    conexao = GeminiRota.abrir("models/$m:generateContent", chave)
                     conexao.requestMethod = "POST"
                     conexao.connectTimeout = 10_000
                     conexao.readTimeout = 40_000
                     conexao.doOutput = true
                     conexao.setRequestProperty("Content-Type", "application/json; charset=utf-8")
                     conexao.setRequestProperty("Connection", "close")
-                    conexao.setRequestProperty("x-goog-api-key", chave)
                     conexao.outputStream.use { it.write(corpo) }
                     if (conexao.responseCode !in 200..299) continue
                     val json = JSONObject(conexao.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() })
@@ -469,14 +464,13 @@ class Gemini(
             for (m in modelos.map { it.trim().removePrefix("models/") }.filter { it.isNotBlank() }.distinct()) {
                 var conexao: HttpURLConnection? = null
                 try {
-                    conexao = URL("https://generativelanguage.googleapis.com/v1beta/models/$m:generateContent").openConnection() as HttpURLConnection
+                    conexao = GeminiRota.abrir("models/$m:generateContent", chave)
                     conexao.requestMethod = "POST"
                     conexao.connectTimeout = 10_000
                     conexao.readTimeout = tempo
                     conexao.doOutput = true
                     conexao.setRequestProperty("Content-Type", "application/json; charset=utf-8")
                     conexao.setRequestProperty("Connection", "close")
-                    conexao.setRequestProperty("x-goog-api-key", chave)
                     conexao.outputStream.use { it.write(corpo) }
                     if (conexao.responseCode !in 200..299) continue
                     return JSONObject(conexao.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() })
