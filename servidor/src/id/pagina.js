@@ -46,9 +46,10 @@ const plataforma=q.get("plataforma")||(ios?"ios":and?"android":win?"windows":"we
 return{id,plataforma,nome:q.get("nome")||(ios?"iPhone":and?"Android":win?"Windows":"Navegador")};}
 function msg(t,ok){$("msg").textContent=t||"";$("msg").className=ok?"ok":"";}
 function destinoOk(u){try{const x=new URL(u);return x.origin===location.origin||CFG.origens.includes(x.origin)||x.hostname==="vetorial.tech"||x.hostname.endsWith(".vetorial.tech");}catch(e){return false;}}
-function pronto(r){try{localStorage.setItem("vid_token",r.token);}catch(e){}
-const v=q.get("voltar");
-if(v&&destinoOk(v)){location.href=v+(v.includes("#")?"&":"#")+"vid="+encodeURIComponent(r.token);return;}
+async function pronto(r){try{localStorage.setItem("vid_token",r.token);}catch(e){}
+const v=q.get("voltar");let t=r.token;const app=q.get("app");
+if(app){try{const a=await fetch("/id/app-token",{method:"POST",headers:{"content-type":"application/json",authorization:"Bearer "+r.token},body:JSON.stringify({app})});if(a.ok)t=(await a.json()).token;}catch(e){}}
+if(v&&destinoOk(v)){location.href=v+(v.includes("#")?"&":"#")+"vid="+encodeURIComponent(t);return;}
 if(window.opener){try{window.opener.postMessage({vetorialId:r.token},"*");}catch(e){}}
 msg("Pronto! Você já pode voltar ao app.",true);}
 function listaAviso(titulo,itens,rotulo,acao){const e=$("extra");e.textContent="";const d=document.createElement("div");d.className="aviso";
@@ -67,4 +68,22 @@ else msg(d.error||"Não deu certo. Tente de novo.");
 $("ok").disabled=false;}
 $("f").onsubmit=(e)=>{e.preventDefault();enviar({});};
 </script></body></html>`;
+}
+
+/** Entrada única: se este aparelho já tem login, entrega o token do app sem pedir a senha; senão manda para o login. */
+export function paginaSso(origens) {
+  const cfg = esc(JSON.stringify({ origens }));
+  return `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Vetorial ID</title>
+<body style="font-family:system-ui;background:#08080F;color:#f4f4fb;display:grid;place-items:center;min-height:100dvh;margin:0"><p id="m">Entrando com o Vetorial ID…</p>
+<script>
+const CFG=${cfg};const q=new URLSearchParams(location.search);const v=q.get("voltar")||"";const app=q.get("app")||"";
+function ok(u){try{const x=new URL(u);return x.origin===location.origin||CFG.origens.includes(x.origin)||x.hostname==="vetorial.tech"||x.hostname.endsWith(".vetorial.tech");}catch(e){return false;}}
+(async()=>{
+let t="";try{t=localStorage.getItem("vid_token")||"";}catch(e){}
+const login=()=>{location.replace("/id?"+q.toString());};
+if(!t||!app||!ok(v))return login();
+try{const a=await fetch("/id/app-token",{method:"POST",headers:{"content-type":"application/json",authorization:"Bearer "+t},body:JSON.stringify({app})});
+if(!a.ok)return login();const d=await a.json();location.replace(v+(v.includes("#")?"&":"#")+"vid="+encodeURIComponent(d.token));}catch(e){document.getElementById("m").textContent="Sem conexão. Tente de novo.";}
+})();
+</script>`;
 }

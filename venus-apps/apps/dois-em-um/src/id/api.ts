@@ -47,6 +47,13 @@ export interface DocSync {
   atualizado: number;
   deEsteAparelho: boolean;
 }
+export interface Perfil {
+  id: string;
+  email: string;
+  nome: string;
+  foto: string;
+  atualizado: number;
+}
 export interface Licenca {
   acesso: boolean;
   plano?: string;
@@ -78,7 +85,10 @@ export function criarApi(base: string = URL_API, f: typeof fetch = (...a) => fet
       chamar<Sessao>("POST", "/id/entrar", { email, senha, dispositivo, ...extra }),
     cadastrar: (email: string, senha: string, nome: string, dispositivo: Aparelho) =>
       chamar<Sessao>("POST", "/id/cadastrar", { email, senha, nome, dispositivo }),
-    ping: (t: string) => chamar<{ ok: boolean; licenca: { acesso: boolean; renovar: boolean } }>("POST", "/id/ping", {}, t),
+    ping: (t: string) => chamar<{ ok: boolean; perfil: number; licenca: { acesso: boolean; renovar: boolean } }>("POST", "/id/ping", {}, t),
+    conta: (t: string) => chamar<{ usuario: Perfil; licenca: Licenca; sessao: string; dispositivo: string }>("GET", "/id/conta", undefined, t),
+    salvarPerfil: (t: string, p: { nome?: string; foto?: string }) => chamar<{ usuario: Perfil }>("PUT", "/id/perfil", p, t),
+    tokenDeApp: (t: string, app: string) => chamar<{ app: string; token: string }>("POST", "/id/app-token", { app }, t),
     renovar: (t: string) => chamar<{ token: string }>("POST", "/id/renovar", {}, t),
     reativar: (t: string, encerrar: string) => chamar<{ ok: boolean }>("POST", "/id/reativar", { encerrar }, t),
     sair: (t: string) => chamar<{ ok: boolean }>("POST", "/id/sair", {}, t),
@@ -92,3 +102,8 @@ export function criarApi(base: string = URL_API, f: typeof fetch = (...a) => fet
   };
 }
 export type ApiId = ReturnType<typeof criarApi>;
+
+/** Endereço do login/entrada única do Vetorial ID para outro app da suíte (Vindex, Vortex, portais). */
+export function enderecoDoLogin(app: string, voltar: string, base: string = URL_API, silencioso = true): string {
+  return `${base}/id${silencioso ? "/sso" : ""}?app=${encodeURIComponent(app)}&voltar=${encodeURIComponent(voltar)}`;
+}

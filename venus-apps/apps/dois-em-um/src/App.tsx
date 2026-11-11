@@ -10,6 +10,8 @@ import { AvisoDeConflito } from "./ajustes/Conta";
 import { InstalarIOS } from "./ios/InstalarIOS";
 import { Sincronizador } from "./sync/Sincronizador";
 import { useAtalhoGlobal } from "./desktop/useAtalhoGlobal";
+import { useId } from "./id/IdProvider";
+import { TelaLogin } from "./id/TelaLogin";
 import { useRobo } from "./hooks/useRobo";
 import type { Tela } from "./tipos";
 
@@ -24,6 +26,21 @@ export function App() {
   const { ativa } = useConversas();
   const [menuAberto, setMenuAberto] = useState(false);
   useAtalhoGlobal(() => setTela("chat"));
+  const { sessao } = useId();
+  const [loginAberto, setLoginAberto] = useState(() => {
+    try { return !localStorage.getItem("venus:id:dispensado"); } catch { return true; }
+  });
+  // Avatar, comandos de conversa e o Windows pedem telas por este evento
+  useEffect(() => {
+    const ouvir = (e: Event) => {
+      const { tela: t, alvo } = (e as CustomEvent<{ tela: "ajustes" | "login"; alvo?: string }>).detail;
+      if (t === "login") return setLoginAberto(true);
+      setTela("ajustes");
+      if (alvo) setTimeout(() => document.getElementById(`aj-${alvo}`)?.scrollIntoView({ behavior: "smooth", block: "center" }), 250);
+    };
+    window.addEventListener("venus:abrir", ouvir);
+    return () => window.removeEventListener("venus:abrir", ouvir);
+  }, []);
   const inicioToque = useRef<{ x: number; y: number } | null>(null);
 
   // Trocou, abriu ou criou conversa (inclui reabrir o app): volta para o chat e recolhe a gaveta.
@@ -70,6 +87,9 @@ export function App() {
       <Sincronizador />
       <AvisoDeConflito />
       <InstalarIOS />
+      {!sessao && loginAberto && (
+        <TelaLogin aoContinuarSemConta={() => { setLoginAberto(false); try { localStorage.setItem("venus:id:dispensado", "1"); } catch { /* ok */ } }} />
+      )}
     </div>
   );
 }

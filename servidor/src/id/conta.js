@@ -117,6 +117,31 @@ export async function removerDispositivo(env, usuario, dispositivo) {
   return r.meta.changes > 0;
 }
 
+// ------------------------------------------------------------------ perfil e tokens por aplicativo
+export const APPS_DA_SUITE = new Set(["venus", "venus-windows", "venus-ios", "vindex", "vortex", "portal"]);
+const FOTO_MAX = 70_000;
+export const fotoValida = (f) =>
+  f === "" || (typeof f === "string" && f.length <= FOTO_MAX && (/^https:\/\/[^\s"'<>]{4,400}$/.test(f) || /^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/.test(f)));
+
+export const perfilPublico = (u) => ({ id: u.id, email: u.email, nome: u.nome, foto: u.foto || "", atualizado: u.atualizado || 0 });
+
+export async function salvarPerfil(env, ctx, { nome, foto }, agora = Date.now()) {
+  const n = nome === undefined ? ctx.usuario.nome : String(nome).trim().slice(0, 80);
+  if (foto !== undefined && !fotoValida(foto)) throw new ErroId(400, "foto_invalida", "A foto precisa ser https ou uma imagem png/jpeg/webp pequena (até ~50 KB).");
+  const f = foto === undefined ? ctx.usuario.foto || "" : foto;
+  await env.DB.prepare("UPDATE usuarios SET nome = ?, foto = ?, atualizado = ? WHERE id = ?").bind(n, f, agora, ctx.usuario.id).run();
+  return perfilPublico({ ...ctx.usuario, nome: n, foto: f, atualizado: agora });
+}
+
+/**
+ * Token de um aplicativo da suíte (Vindex, Vortex…) no MESMO aparelho: usa a mesma sessão do aparelho,
+ * então não ocupa outra vaga das 2 ativas, e sair da Vênus derruba todos.
+ */
+export async function tokenDeApp(env, ctx, app, agora = Date.now()) {
+  if (!APPS_DA_SUITE.has(app)) throw new ErroId(400, "app_invalido", "Aplicativo desconhecido.");
+  return { app, token: await assinar(env, { sub: ctx.usuario.id, sid: ctx.sessao, dev: ctx.dispositivo, app }, { agora, validadeMs: 7 * 86_400_000 }) };
+}
+
 export const ehJwt = (t) => /^eyJ[\w-]+\.[\w-]+\.[\w-]+$/.test(t || "");
 export const tokenDoPedido = (req) => (/^Bearer\s+(\S+)$/.exec(req.headers.get("authorization") || "") || [])[1] || "";
 

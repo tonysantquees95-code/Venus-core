@@ -20,7 +20,7 @@ internal fun MainActivity.abrirConta() {
     escolher("Vetorial ID · ${VetorialId.email(this)}", listOf(
         "Meus dispositivos" to { abrirDispositivos() },
         "Licença e renovação" to { abrirLicenca() },
-        "Sair deste aparelho" to { emFundo({ VetorialId.sair(this) }) { aviso("Você saiu do Vetorial ID neste aparelho."); ajustes?.atualizar() } },
+        "Sair deste aparelho" to { emFundo({ VetorialId.sair(this) }) { aviso("Você saiu do Vetorial ID neste aparelho."); ajustes?.atualizar(); gaveta?.atualizarPerfil() } },
     ))
 }
 
@@ -126,6 +126,18 @@ internal fun MainActivity.abrirLicenca() {
     }
 }
 
+/** Menu rápido da conta (avatar): e-mail, assinatura e atalhos. */
+internal fun MainActivity.abrirMenuDaConta() {
+    if (!VetorialId.logado(this)) return abrirConta()
+    val nome = VetorialId.nomeDaConta(this).ifBlank { "Minha conta" }
+    escolher("$nome\n${VetorialId.email(this)}\n${VetorialId.assinatura(this).ifBlank { "Carregando assinatura…" }}", listOf(
+        "Gerenciar conta" to { abrirConta() },
+        "Meus dispositivos conectados" to { abrirDispositivos() },
+        "Configurações" to { abrirMenu(window.decorView) },
+        "Sair" to { emFundo({ VetorialId.sair(this) }) { aviso("Você saiu do Vetorial ID neste aparelho."); gaveta?.atualizarPerfil() } },
+    ))
+}
+
 /** Aviso inteligente: já há 2 aparelhos ativos; encerrar um deles ou sair deste. */
 internal fun MainActivity.mostrarConflitoDeSessao(ativas: List<JSONObject>) {
     if (isFinishing || BatimentoId.conflitoAberto) return
@@ -173,7 +185,10 @@ object BatimentoId {
                         VetorialId.limpar(a, "Esta sessão foi encerrada em outro aparelho. Entre de novo.")
                         h.post { if (!a.isFinishing) { a.aviso("Sua sessão foi encerrada em outro aparelho."); a.ajustes?.atualizar() } }
                     }
-                    r.ok -> SincroniaId.rodar(a)
+                    r.ok -> {
+                        if (r.json.optLong("perfil") != VetorialId.perfilVersao(a) && VetorialId.atualizarPerfil(a)) h.post { a.gaveta?.atualizarPerfil() }
+                        SincroniaId.rodar(a)
+                    }
                 }
             } catch (e: Exception) {
                 // sem conexão: tenta de novo no próximo minuto

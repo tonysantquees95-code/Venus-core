@@ -40,6 +40,7 @@ object ComandosLocais {
         // Contas, conversões, datas, tradução, CEP...: antes do clima ("30 graus em fahrenheit" é conversão).
         // Mudanças na loja ("muda o preço do gel para 29,90") antes das contas, para o número não virar cálculo.
         if (RELATORIO_ERROS.matches(c.trimEnd('.', '!', '?'))) return Resultado.Acao("enviar_relatorio_erros", emptyMap())
+        conta(c)?.let { return it }
         instagram(c)?.let { return it }
         palavraExiste(f)?.let { return it }
         conversaAntiga(f)?.let { return it }
@@ -522,6 +523,24 @@ object ComandosLocais {
             return Resultado.Acao("buscar_perto", mapOf("oque" to oque, "referencia" to referencia))
         }
         return null
+    }
+
+    /** Conta do Vetorial ID pela conversa: status da assinatura, conectar este aparelho, ver dispositivos e sair. */
+    internal fun conta(c0: String): Resultado? {
+        val c = c0.replace(Regex("^(?:venus|vênus)\\s+"), "").trim()
+        val acao = when {
+            Regex("\\b(?:sair|deslogar|desconectar|encerrar|fazer logout|logout)\\b.*\\b(?:conta|login|sessao)\\b").containsMatchIn(c) || Regex("^(?:sair|logout|deslogar)$").matches(c) -> "sair"
+            Regex("\\b(?:conectar|entrar|logar|vincular|fazer login|login)\\b.*\\b(?:conta|vetorial id)\\b").containsMatchIn(c) ||
+                Regex("\\bconta\\b.*\\b(?:novo dispositivo|novo aparelho|outro aparelho|outro celular)\\b").containsMatchIn(c) -> "conectar"
+            Regex("\\b(?:dispositivos|aparelhos)\\b.*\\bconta\\b|\\bonde (?:minha )?conta\\b.*\\bconectada\\b|\\bmeus dispositivos\\b").containsMatchIn(c) -> "dispositivos"
+            Regex("\\b(?:status|situacao|como esta)\\b.*\\b(?:conta|assinatura|plano|licenca)\\b").containsMatchIn(c) ||
+                Regex("\\bquantos dias\\b.*\\b(?:teste|trial|plano|assinatura|licenca|restam|faltam|sobram)\\b").containsMatchIn(c) ||
+                Regex("\\b(?:vence|vencimento|expira|validade)\\b.*\\b(?:conta|assinatura|plano|licenca)\\b").containsMatchIn(c) ||
+                Regex("\\b(?:conta|assinatura|plano|licenca)\\b.*\\b(?:vence|vencimento|valida|expira)\\b").containsMatchIn(c) ||
+                Regex("\\bdias restantes\\b").containsMatchIn(c) -> "status"
+            else -> return null
+        }
+        return Resultado.Acao("conta_vetorial", mapOf("acao" to acao))
     }
 
     private fun midia(c: String): Resultado? {

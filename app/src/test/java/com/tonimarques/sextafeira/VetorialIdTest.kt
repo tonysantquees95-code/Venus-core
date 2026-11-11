@@ -78,3 +78,44 @@ class VetorialIdTest {
         assertTrue(estadoDaPostagem("erro", 0, "token vencido", 0).contains("token vencido"))
     }
 }
+
+class ContaPelaConversaTest {
+    private fun acao(frase: String): String? =
+        (ComandosLocais.interpretar(frase) as? ComandosLocais.Resultado.Acao)?.takeIf { it.nome == "conta_vetorial" }?.args?.get("acao") as? String
+
+    @Test
+    fun comandosDeConta() {
+        assertEquals("status", acao("Vênus, qual é o status da minha conta?"))
+        assertEquals("status", acao("quantos dias de teste ainda tenho"))
+        assertEquals("status", acao("quando vence minha assinatura"))
+        assertEquals("conectar", acao("Vênus, conectar minha conta no novo dispositivo"))
+        assertEquals("sair", acao("Vênus, sair da minha conta aqui"))
+        assertEquals("dispositivos", acao("quais dispositivos estão na minha conta"))
+        assertEquals("dispositivos", acao("meus dispositivos"))
+    }
+
+    @Test
+    fun outrasFrasesNaoViramComandoDeConta() {
+        assertNull(acao("qual a previsão do tempo"))
+        assertNull(acao("tocar uma música"))
+        assertNull(acao("status do pedido 123"))
+        assertNull(acao("desliga a lanterna"))
+    }
+
+    @Test
+    fun avatarEAssinatura() {
+        assertEquals("TM", iniciaisDoNome("Toni Marques"))
+        assertEquals("TO", iniciaisDoNome("toni"))
+        assertEquals("Z", iniciaisDoNome("", "zettel@x.com"))
+        assertEquals("Plano Fundadores · teste grátis, 5 dias restantes", textoDaAssinatura(JSONObject("""{"acesso":true,"emTeste":true,"diasDeTesteRestantes":5}""")))
+        assertEquals("Plano Fundadores · 1 dia restante", textoDaAssinatura(JSONObject("""{"acesso":true,"emTeste":false,"diasPagosRestantes":1}""")))
+        assertTrue(textoDaAssinatura(JSONObject("""{"acesso":false}""")).contains("vencido"))
+    }
+
+    @Test
+    fun soAppsDaSuitePedemAConta() {
+        assertEquals("vindex", appDaSuite("tech.vetorial.vindex"))
+        assertNull(appDaSuite("com.malware.app"))
+        assertNull(appDaSuite(null))
+    }
+}

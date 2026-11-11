@@ -18,6 +18,10 @@ object VetorialId {
     const val PREF_ENVIADO = "vid_enviado"
     const val PREF_DOC_PREFS = "vid_doc_preferencias"
     const val PREF_MODO = "modo_uso"
+    const val PREF_NOME_CONTA = "vid_nome"
+    const val PREF_FOTO = "vid_foto"
+    const val PREF_PERFIL_V = "vid_perfil_v"
+    const val PREF_ASSINATURA = "vid_assinatura"
 
     val MODOS = listOf("conversacional", "orbe", "bolha", "silencioso")
     val ROTULOS_MODO = mapOf(
@@ -27,6 +31,21 @@ object VetorialId {
 
     private fun prefs(ctx: Context) = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
     fun token(ctx: Context): String = prefs(ctx).getString(PREF_TOKEN, "").orEmpty()
+    fun nomeDaConta(ctx: Context): String = prefs(ctx).getString(PREF_NOME_CONTA, "").orEmpty()
+    fun foto(ctx: Context): String = prefs(ctx).getString(PREF_FOTO, "").orEmpty()
+    fun assinatura(ctx: Context): String = prefs(ctx).getString(PREF_ASSINATURA, "").orEmpty()
+    fun perfilVersao(ctx: Context): Long = prefs(ctx).getLong(PREF_PERFIL_V, -1L)
+
+    /** Puxa nome, foto e assinatura do servidor (o avatar do menu lê daqui). Chamar fora da tela principal. */
+    fun atualizarPerfil(ctx: Context): Boolean {
+        val r = Nuvem.bruto(ctx, "GET", "/id/conta", null, token(ctx))
+        if (!r.ok) return false
+        val u = r.json.optJSONObject("usuario") ?: return false
+        prefs(ctx).edit().putString(PREF_NOME_CONTA, u.optString("nome")).putString(PREF_FOTO, u.optString("foto"))
+            .putLong(PREF_PERFIL_V, u.optLong("atualizado")).putString(PREF_ASSINATURA, textoDaAssinatura(r.json.optJSONObject("licenca"))).apply()
+        return true
+    }
+
     fun logado(ctx: Context) = token(ctx).isNotBlank()
     fun email(ctx: Context): String = prefs(ctx).getString(PREF_EMAIL, "").orEmpty()
     fun sessao(ctx: Context): String = prefs(ctx).getString(PREF_SESSAO, "").orEmpty()
@@ -40,7 +59,7 @@ object VetorialId {
     }
 
     fun limpar(ctx: Context, aviso: String = "") {
-        prefs(ctx).edit().remove(PREF_TOKEN).remove(PREF_SESSAO).remove(PREF_EMAIL).remove(PREF_VERSOES).remove(PREF_ENVIADO).remove(PREF_DOC_PREFS)
+        prefs(ctx).edit().remove(PREF_TOKEN).remove(PREF_SESSAO).remove(PREF_EMAIL).remove(PREF_NOME_CONTA).remove(PREF_FOTO).remove(PREF_PERFIL_V).remove(PREF_ASSINATURA).remove(PREF_VERSOES).remove(PREF_ENVIADO).remove(PREF_DOC_PREFS)
             .apply { if (aviso.isNotBlank()) putString(PREF_AVISO, aviso) }.apply()
     }
 
@@ -135,3 +154,31 @@ fun haQuantoTempo(quando: Long, agora: Long = System.currentTimeMillis()): Strin
         else -> "há ${(s + 43_200) / 86_400} d"
     }
 }
+
+/** "TM" para Toni Marques; sem nome, a primeira letra do e-mail. */
+fun iniciaisDoNome(nome: String, email: String = ""): String {
+    val p = nome.trim().split(Regex("\\s+")).filter { it.isNotEmpty() }
+    return when {
+        p.size >= 2 -> "${p.first().first()}${p.last().first()}".uppercase()
+        p.size == 1 -> p[0].take(2).uppercase()
+        else -> (email.trim().firstOrNull() ?: '?').uppercase()
+    }
+}
+
+/** Texto do status da assinatura (o mesmo do app web). [l] é o objeto "licenca" devolvido por /id/conta. */
+fun textoDaAssinatura(l: JSONObject?): String {
+    if (l == null) return "Assinatura indisponível"
+    fun dias(n: Int) = "$n dia${if (n == 1) "" else "s"} restante${if (n == 1) "" else "s"}"
+    return when {
+        !l.optBoolean("acesso") -> "Acesso vencido · renove o Plano Fundadores"
+        l.optBoolean("emTeste") -> "Plano Fundadores · teste grátis, ${dias(l.optInt("diasDeTesteRestantes"))}"
+        else -> "Plano Fundadores · ${dias(l.optInt("diasPagosRestantes"))}"
+    }
+}
+
+/** Qual app da suíte está pedindo para entrar com a conta do aparelho (pelo pacote que chamou); null = não autorizado. */
+fun appDaSuite(pacote: String?): String? = mapOf(
+    "tech.vetorial.vindex" to "vindex", "tech.vetorial.vortex" to "vortex",
+    "com.vetorialtech.venus.doisemum" to "venus", "com.vetorialtech.venus.assistente" to "venus",
+    "tech.vetorial.portal" to "portal",
+)[pacote]

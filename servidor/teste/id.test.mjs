@@ -166,3 +166,42 @@ test("loja ligada à conta: o token antigo (vl_) deixa de valer, só o login do 
   assert.equal((await lojaDoPedido(env, req(s.token))).id, r.id);
   assert.equal((await erro(cadastrar(env, { email: "outro@loja.com", senha: "senha-forte-1", dispositivo: disp(2), lojaExistente: loja }, T0))).codigo, "loja_ja_vinculada");
 });
+
+test("perfil: nome e foto editáveis, versão sobe e valida a foto", async () => {
+  const env = ENV();
+  const a = await conta(env);
+  const ctx = await validarSessao(env, req(a.token), { agora: T0 + 1000 });
+  const { salvarPerfil, fotoValida } = await import("../src/id/conta.js");
+  const p = await salvarPerfil(env, ctx, { nome: "Toni Marques", foto: "https://img.exemplo/t.jpg" }, T0 + 5000);
+  assert.deepEqual([p.nome, p.foto, p.atualizado], ["Toni Marques", "https://img.exemplo/t.jpg", T0 + 5000]);
+  assert.equal((await erro(salvarPerfil(env, ctx, { foto: "javascript:alert(1)" }))).codigo, "foto_invalida");
+  assert.equal(fotoValida("data:image/png;base64,iVBORw0KGgo="), true);
+  assert.equal(fotoValida("data:text/html;base64,AAAA"), false);
+  assert.equal(fotoValida("http://inseguro.com/a.png"), false);
+  // o ping avisa os outros apps de que o perfil mudou
+  const r = await tratarId(req(a.token, "https://v.test/id/ping"), env, new URL("https://v.test/id/ping"), "/id/ping");
+  assert.equal((await r.json()).perfil, T0 + 5000);
+  const c = await tratarId(req(a.token, "https://v.test/id/conta", { method: "GET" }), env, new URL("https://v.test/id/conta"), "/id/conta");
+  const j = await c.json();
+  assert.equal(j.usuario.nome, "Toni Marques");
+  assert.ok("acesso" in j.licenca);
+});
+
+test("token de app da suíte: mesma sessão do aparelho, não ocupa outra vaga; sair derruba todos", async () => {
+  const env = ENV();
+  const a = await conta(env);
+  const ctx = await validarSessao(env, req(a.token), { agora: T0 + 1000 });
+  const { tokenDeApp } = await import("../src/id/conta.js");
+  const t = await tokenDeApp(env, ctx, "vindex", T0 + 1000);
+  const d = await verificar(env, t.token, T0 + 1000);
+  assert.deepEqual([d.app, d.sid], ["vindex", a.sessao]);
+  assert.equal((await erro(tokenDeApp(env, ctx, "malware"))).codigo, "app_invalido");
+  const ok = await validarSessao(env, req(t.token), { agora: T0 + 2000 });
+  assert.equal(ok.sessao, a.sessao);
+  const n = await env.DB.prepare("SELECT COUNT(*) AS n FROM sessoes").first();
+  assert.equal(n.n, 1);
+  await encerrarSessao(env, ctx.usuario.id, ctx.sessao, "saiu");
+  assert.equal((await erro(validarSessao(env, req(t.token), { agora: T0 + 3000 }))).codigo, "sessao_encerrada");
+  const r = await tratarId(new Request("https://v.test/id/sso?app=vindex&voltar=https://vindex.vetorial.tech/"), env, new URL("https://v.test/id/sso"), "/id/sso");
+  assert.match(await r.text(), /app-token/);
+});

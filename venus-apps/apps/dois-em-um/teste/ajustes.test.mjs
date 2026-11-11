@@ -69,3 +69,33 @@ test("tutorial do iPhone: só no iOS, fora do app instalado e uma vez por semana
   assert.equal(PASSOS_IOS("safari").length, 3);
   assert.match(PASSOS_IOS("safari")[1].titulo, /Adicionar à Tela de Início/);
 });
+
+import { iniciais, corDoAvatar, textoDaAssinatura, interpretarComandoConta } from "../src/id/perfil.ts";
+
+test("avatar: iniciais, cor estável e texto da assinatura", () => {
+  assert.equal(iniciais("Toni Marques"), "TM");
+  assert.equal(iniciais("toni"), "TO");
+  assert.equal(iniciais("", "zettel@x.com"), "Z");
+  assert.equal(iniciais("  ", ""), "?");
+  assert.equal(corDoAvatar("a@b.com"), corDoAvatar("a@b.com"));
+  assert.notEqual(corDoAvatar("a@b.com"), corDoAvatar("c@d.com"));
+  assert.equal(textoDaAssinatura({ acesso: true, emTeste: true, diasDeTesteRestantes: 5 }), "Plano Fundadores · teste grátis, 5 dias restantes");
+  assert.equal(textoDaAssinatura({ acesso: true, emTeste: true, diasDeTesteRestantes: 1 }), "Plano Fundadores · teste grátis, 1 dia restante");
+  assert.equal(textoDaAssinatura({ acesso: true, emTeste: false, diasPagosRestantes: 20 }), "Plano Fundadores · 20 dias restantes");
+  assert.match(textoDaAssinatura({ acesso: false }), /vencido/);
+});
+
+test("comandos de conta pela conversa", () => {
+  const c = interpretarComandoConta;
+  assert.equal(c("Vênus, qual é o status da minha conta?"), "status");
+  assert.equal(c("quantos dias de teste ainda tenho?"), "status");
+  assert.equal(c("quando vence minha assinatura"), "status");
+  assert.equal(c("Vênus, conectar minha conta no novo dispositivo"), "conectar");
+  assert.equal(c("fazer login na minha conta"), "conectar");
+  assert.equal(c("Vênus, sair da minha conta aqui"), "sair");
+  assert.equal(c("deslogar da conta"), "sair");
+  assert.equal(c("quais são meus dispositivos conectados"), "dispositivos");
+  assert.equal(c("qual a previsão do tempo"), null);
+  assert.equal(c("estou conectado na internet?"), null);
+  assert.equal(c("status do pedido 123"), null);
+});
