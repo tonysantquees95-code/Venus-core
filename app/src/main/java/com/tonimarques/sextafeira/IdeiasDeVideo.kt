@@ -48,6 +48,19 @@ object IdeiasDeVideo {
         }
     }
 
+    /** Links de busca para ver como outras pessoas e marcas fazem vídeos parecidos (abrem a busca pronta, sem precisar de chave nenhuma). */
+    fun inspiracao(produto: String): List<Pair<String, String>> {
+        val termo = produto.replace(Regex("\\s+"), " ").trim().take(60)
+        val q = java.net.URLEncoder.encode(termo, "UTF-8")
+        val qIA = java.net.URLEncoder.encode("$termo vídeo feito com IA", "UTF-8")
+        return listOf(
+            "Pinterest" to "https://br.pinterest.com/search/videos/?q=$q",
+            "YouTube Shorts" to "https://www.youtube.com/results?search_query=$q+shorts",
+            "Vídeos feitos por IA" to "https://www.youtube.com/results?search_query=$qIA",
+            "Na internet" to "https://www.google.com/search?tbm=vid&q=$q"
+        )
+    }
+
     fun descrever(ideias: List<Ideia>): String = buildString {
         append("Ideias de vídeo com os produtos da loja:\n")
         ideias.forEachIndexed { i, v ->
@@ -55,6 +68,8 @@ object IdeiasDeVideo {
             v.roteiro.forEachIndexed { n, c -> append("   Cena ${n + 1}: $c\n") }
             append("   Para o gerador de vídeo por IA: ${v.pedidoParaIA}\n")
             append("   Legenda: ${v.legenda} ${v.hashtags}\n")
+            append("   Buscar inspiração:\n")
+            inspiracao(v.produto).forEach { (nome, url) -> append("     • $nome: $url\n") }
         }
         append("\nPara gerar: cole o pedido em um gerador de vídeo por IA (Veo no Gemini, Kling, Runway, Pika ou Sora) e, se puder, anexe a foto do produto como referência. Depois é só postar como Reels.")
     }
