@@ -323,3 +323,36 @@ test("cofre de chaves: senha forte, valores nunca voltam, trava por tentativas e
   assert.equal(h.includes("gsk_"), false);
   assert.ok(h.includes("senha_errada"));
 });
+
+test("cofre: importação dos segredos do GitHub com código de uso único", async () => {
+  const env = ENV();
+  const adm = await admin(env);
+  const SENHA = "CofreSeguro2026Vindex";
+  await chamar(env, adm.token, "/dev/cofre/iniciar", "POST", { senha: SENHA });
+  await chamar(env, adm.token, "/dev/cofre/guardar", "POST", { senha: SENHA, nome: "GROQ_API_KEY", valor: "gsk_JA_ESTAVA_1234" });
+  // sem senha do cofre não gera código
+  assert.equal((await chamar(env, adm.token, "/dev/cofre/codigo", "POST", { senha: "Errada123456789" })).status, 403);
+  const { codigo } = (await chamar(env, adm.token, "/dev/cofre/codigo", "POST", { senha: SENHA })).d;
+  assert.match(codigo, /^vcx-/);
+  // o workflow não tem login: só o código
+  const segredos = { GROQ_API_KEY: "gsk_DO_GITHUB_9999", GEMINI_API_KEY: "AIza_gemini_chave_1", GITHUB_TOKEN: "ghs_nao_entra_1", "nome-ruim": "valor_qualquer_1", CURTA_KEY: "abc" };
+  const r = await chamar(env, null, "/dev/cofre/importar", "POST", { codigo, segredos, origem: "Venus-core" });
+  assert.equal(r.status, 200);
+  assert.deepEqual(r.d.guardados, ["GEMINI_API_KEY"]);
+  assert.deepEqual(r.d.existentes, ["GROQ_API_KEY"]);
+  assert.deepEqual(r.d.pulados.sort(), ["CURTA_KEY", "GITHUB_TOKEN", "nome-ruim"]);
+  assert.equal(JSON.stringify(r.d).includes("gsk_"), false);
+  const { lerSegredo } = await import("../src/dev/cofre.js");
+  assert.equal(await lerSegredo(env, "GROQ_API_KEY"), "gsk_JA_ESTAVA_1234"); // não sobrescreveu
+  assert.equal(await lerSegredo(env, "GEMINI_API_KEY"), "AIza_gemini_chave_1");
+  // o código só vale uma vez
+  assert.equal((await chamar(env, null, "/dev/cofre/importar", "POST", { codigo, segredos })).d.codigo, "codigo_invalido");
+  assert.equal((await chamar(env, null, "/dev/cofre/importar", "POST", { codigo: "vcx-chutando", segredos })).status, 403);
+  // com sobrescrever, troca
+  const c2 = (await chamar(env, adm.token, "/dev/cofre/codigo", "POST", { senha: SENHA })).d.codigo;
+  assert.deepEqual((await chamar(env, null, "/dev/cofre/importar", "POST", { codigo: c2, segredos: { GROQ_API_KEY: "gsk_DO_GITHUB_9999" }, sobrescrever: true })).d.guardados, ["GROQ_API_KEY"]);
+  // código vencido
+  const c3 = (await chamar(env, adm.token, "/dev/cofre/codigo", "POST", { senha: SENHA })).d.codigo;
+  env.DB._db.prepare("UPDATE cofre_codigos SET expira = 1").run();
+  assert.equal((await chamar(env, null, "/dev/cofre/importar", "POST", { codigo: c3, segredos })).d.codigo, "codigo_invalido");
+});

@@ -22,3 +22,9 @@ CREATE TABLE IF NOT EXISTS cofre_log (
   nome TEXT NOT NULL DEFAULT '',
   ok INTEGER NOT NULL DEFAULT 1     -- nunca guarda valores de chave
 );
+-- Códigos de importação: o Painel gera um código de uso único (vale 15 min) que o workflow do GitHub usa para mandar os segredos do repositório para o cofre.
+CREATE TABLE IF NOT EXISTS cofre_codigos (
+  hash TEXT PRIMARY KEY,
+  expira INTEGER NOT NULL,
+  usado INTEGER NOT NULL DEFAULT 0
+);

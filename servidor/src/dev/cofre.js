@@ -133,3 +133,39 @@ export async function historico(env, limite = 30) {
   const { results } = await env.DB.prepare("SELECT quando, acao, nome, ok FROM cofre_log ORDER BY id DESC LIMIT ?").bind(Math.min(100, limite)).all();
   return results;
 }
+
+// ------------------------------------------------------------------ importação dos segredos do GitHub
+const IGNORAR = new Set(["GITHUB_TOKEN", "CHAVE_COFRE"]);
+const sha = async (t) => [...new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(t)))].map((b) => b.toString(16).padStart(2, "0")).join("");
+
+/** Gera um código de uso único (15 min) para o workflow de importação. Só o hash fica guardado. */
+export async function gerarCodigo(env, agora = Date.now()) {
+  const codigo = `vcx-${aleatorio(24)}`;
+  await env.DB.prepare("DELETE FROM cofre_codigos WHERE expira < ? OR usado = 1").bind(agora).run();
+  await env.DB.prepare("INSERT INTO cofre_codigos (hash, expira) VALUES (?, ?)").bind(await sha(codigo), agora + 15 * 60_000).run();
+  await registrar(env, "codigo_importacao", "", true, agora);
+  return { codigo, expira: agora + 15 * 60_000 };
+}
+
+/**
+ * Recebe os segredos de um repositório (o workflow manda toJSON(secrets)). O código só vale uma vez.
+ * Chaves que já estão no cofre NÃO são sobrescritas (a menos que `sobrescrever` venha true).
+ */
+export async function importar(env, codigo, segredos, { sobrescrever = false, origem = "" } = {}, agora = Date.now()) {
+  const h = await sha(String(codigo ?? ""));
+  const c = await env.DB.prepare("SELECT expira, usado FROM cofre_codigos WHERE hash = ?").bind(h).first();
+  if (!c || c.usado || c.expira < agora) throw new ErroLoja(403, "codigo_invalido", "Código de importação inválido ou vencido. Gere outro no Painel.");
+  // queima o código antes de qualquer coisa: se algo falhar, gera-se outro
+  await env.DB.prepare("UPDATE cofre_codigos SET usado = 1 WHERE hash = ?").bind(h).run();
+  if (!segredos || typeof segredos !== "object" || Array.isArray(segredos)) throw new ErroLoja(400, "corpo_invalido", "Faltou a lista de segredos.");
+  const guardados = [], pulados = [], existentes = [];
+  const ja = new Set((await env.DB.prepare("SELECT nome FROM cofre_chaves").all()).results.map((r) => r.nome));
+  for (const [nome, valor] of Object.entries(segredos)) {
+    if (IGNORAR.has(nome) || !NOME_VALIDO.test(nome) || typeof valor !== "string" || valor.length < 8 || valor.length > 4096 || /\s/.test(valor)) { pulados.push(nome); continue; }
+    if (ja.has(nome) && !sobrescrever) { existentes.push(nome); continue; }
+    await guardar(env, { nome, valor, rotulo: origem ? `importada de ${String(origem).slice(0, 60)}` : "" }, agora);
+    guardados.push(nome);
+  }
+  await registrar(env, "importar", String(origem).slice(0, 60), true, agora);
+  return { ok: true, guardados, existentes, pulados }; // só nomes, nunca valores
+}
