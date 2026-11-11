@@ -80,22 +80,24 @@ class Atualizador(private val contexto: Context) {
      */
     fun procurarRobo(): Versao? {
         val instalada = versaoDoRobo() ?: return null
-        if (token() == null) return try {
-            doCanal(robo = true)?.takeIf { it.numero > instalada }
-        } catch (e: Exception) {
-            null
+        val doCanalPublico = {
+            try {
+                doCanal(robo = true)?.takeIf { it.numero > instalada }
+            } catch (e: Exception) {
+                null
+            }
         }
+        if (token() == null) return doCanalPublico()
         return try {
-            val c = abrir("https://api.github.com/repos/$REPO/releases?per_page=100", token())
-            c.setRequestProperty("Accept", "application/vnd.github+json")
+            val c = apiGet("https://api.github.com/repos/$REPO/releases?per_page=100", token())
             if (c.responseCode !in 200..299) {
                 c.disconnect()
-                return null
+                return doCanalPublico() // token sem acesso ou GitHub com problema: o canal do servidor resolve
             }
             val v = ultimoRobo(JSONArray(ler(c))) ?: return null
             if (v.numero > instalada) v else null
         } catch (e: Exception) {
-            null
+            doCanalPublico()
         }
     }
 
@@ -110,17 +112,27 @@ class Atualizador(private val contexto: Context) {
             val v = doCanal(robo = false) ?: throw ErroDeAtualizacao("Não consegui consultar as versões agora. Tente mais tarde.")
             return if (v.numero > versaoInstalada()) v else null
         }
-        val c = abrir("https://api.github.com/repos/$REPO/releases/latest", token())
-        c.setRequestProperty("Accept", "application/vnd.github+json")
+        // Com token: consulta o GitHub direto. Se der qualquer problema (repositório renomeado, token sem acesso,
+        // GitHub fora do ar), o canal do servidor da Vênus assume, para a atualização pelo app nunca parar.
+        val erro: ErroDeAtualizacao = try {
+            return procurarComToken()
+        } catch (e: ErroDeAtualizacao) {
+            e
+        } catch (e: Exception) {
+            ErroDeAtualizacao("Não consegui consultar as versões agora. Tente mais tarde.")
+        }
+        val v = doCanal(robo = false) ?: throw erro
+        return if (v.numero > versaoInstalada()) v else null
+    }
+
+    private fun procurarComToken(): Versao? {
+        val c = apiGet("https://api.github.com/repos/$REPO/releases/latest", token())
         val codigo = c.responseCode
         val texto = ler(c)
         when (codigo) {
             in 200..299 -> {}
             401 -> throw ErroDeAtualizacao("O token do GitHub não vale mais. Cadastre um novo.", precisaToken = true)
-            403, 404 -> throw ErroDeAtualizacao(
-                if (token() == null) "Para procurar atualizações, cadastre o token do GitHub." else "O token não tem acesso às versões da Vênus.",
-                precisaToken = true,
-            )
+            403, 404 -> throw ErroDeAtualizacao("O token não tem acesso às versões da Vênus.", precisaToken = true)
             else -> throw ErroDeAtualizacao("O GitHub respondeu com erro $codigo.")
         }
         val v = lerVersao(JSONObject(texto)) ?: throw ErroDeAtualizacao("A última publicação não tem o Venus.apk.")
@@ -219,6 +231,24 @@ class Atualizador(private val contexto: Context) {
         return null
     }
 
+    /**
+     * GET na API do GitHub que acompanha o redirecionamento (repositório renomeado responde 301), mas só
+     * dentro de api.github.com: o token nunca vai para outro endereço.
+     */
+    private fun apiGet(url: String, token: String?): HttpURLConnection {
+        var atual = url
+        var c = abrir(atual, token)
+        c.setRequestProperty("Accept", "application/vnd.github+json")
+        repeat(3) {
+            val destino = destinoSeguro(atual, c.responseCode, c.getHeaderField("Location")) ?: return c
+            c.disconnect()
+            atual = destino
+            c = abrir(atual, token)
+            c.setRequestProperty("Accept", "application/vnd.github+json")
+        }
+        return c
+    }
+
     private fun abrir(url: String, token: String?): HttpURLConnection =
         (URL(url).openConnection() as HttpURLConnection).apply {
             connectTimeout = 15_000
@@ -284,6 +314,17 @@ class Atualizador(private val contexto: Context) {
 
         /** Sem impressão publicada, aceita (o Android ainda confere a assinatura); com ela, tem que ser igual. */
         fun conferir(esperado: String, baixado: String): Boolean = esperado.isBlank() || esperado.equals(baixado, ignoreCase = true)
+
+        /** Para onde seguir num redirecionamento da API: só se for 301/302/307/308 e continuar em api.github.com. */
+        fun destinoSeguro(urlAtual: String, codigo: Int, location: String?): String? {
+            if (codigo !in intArrayOf(301, 302, 307, 308) || location.isNullOrBlank()) return null
+            return try {
+                val novo = URL(URL(urlAtual), location)
+                if (novo.protocol == "https" && novo.host == "api.github.com") novo.toString() else null
+            } catch (e: Exception) {
+                null
+            }
+        }
 
         /** "robo-1.112" → 112. */
         fun numeroDoRobo(tag: String): Int? = Regex("^robo-1\\.(\\d+)$").find(tag.trim())?.groupValues?.get(1)?.toIntOrNull()

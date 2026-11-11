@@ -42,4 +42,20 @@ class AtualizadorTest {
         assertEquals("Ícone novo", r.notas)
         assertNull(Atualizador.ultimoRobo(JSONArray("""[{"tag_name":"v1.1","assets":[]}]""")))
     }
+
+    @Test fun redirecionamentoDaApiSoDentroDoGithub() {
+        val atual = "https://api.github.com/repos/dono/Antigo/releases/latest"
+        // repositório renomeado: 301 para o endereço por id, ainda em api.github.com
+        assertEquals(
+            "https://api.github.com/repositories/123/releases/latest",
+            Atualizador.destinoSeguro(atual, 301, "https://api.github.com/repositories/123/releases/latest"),
+        )
+        assertEquals("https://api.github.com/repositories/9/x", Atualizador.destinoSeguro(atual, 307, "/repositories/9/x"))
+        // nunca segue para outro site (o token iria junto) nem para http
+        assertNull(Atualizador.destinoSeguro(atual, 302, "https://objects.githubusercontent.com/apk"))
+        assertNull(Atualizador.destinoSeguro(atual, 301, "http://api.github.com/repositories/1"))
+        // sem redirecionamento
+        assertNull(Atualizador.destinoSeguro(atual, 200, "https://api.github.com/x"))
+        assertNull(Atualizador.destinoSeguro(atual, 301, null))
+    }
 }
