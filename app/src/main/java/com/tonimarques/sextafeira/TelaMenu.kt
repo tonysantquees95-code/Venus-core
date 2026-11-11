@@ -250,6 +250,13 @@ internal fun MainActivity.abrirMenu(@Suppress("UNUSED_PARAMETER") ancora: View) 
             )
         ),
         TelaDeAjustes.Secao(
+            "Aparência", listOf(
+                TelaDeAjustes.Ajuste("Cor, orbe e ícones", {
+                    "Modelo do orbe: ${Tema.modelo(prefs).rotulo}. Ícones: ${Tema.icones(prefs).rotulo}. Escolha cores prontas ou monte a sua."
+                }) { abrirAparencia() },
+            )
+        ),
+        TelaDeAjustes.Secao(
             "Memória e conversas", listOf(
                 item("O que a $n sabe sobre mim", { "Seus gostos, favoritos e o que ela aprendeu. Dá para apagar." }, MENU_MEMORIAS),
                 item("Nova conversa", { "Abre uma conversa em branco; a atual fica guardada no histórico. Para voltar a um assunto, diga: lembra do que falamos sobre, e o assunto." }, MENU_NOVA),
