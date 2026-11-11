@@ -8,7 +8,7 @@
   "main": "main.js",
   "scripts": {
     "copiar": "node copiar.mjs",
-    "teste": "node --test teste/status.test.mjs teste/computador.test.mjs",
+    "teste": "node --test teste/status.test.mjs teste/computador.test.mjs teste/atualizador.test.mjs",
     "start": "npm run copiar && electron .",
     "build:win": "npm run copiar && electron-builder --win nsis portable --publish never"
   },
@@ -20,7 +20,7 @@
     "appId": "tech.vetorial.venus",
     "productName": "Vênus",
     "directories": { "output": "dist", "buildResources": "build" },
-    "files": ["main.js", "preload.js", "status.mjs", "computador.mjs", "app/**", "build/tray.png"],
+    "files": ["main.js", "preload.js", "status.mjs", "computador.mjs", "atualizador.mjs", "app/**", "build/tray.png"],
     "win": { "icon": "build/icon.ico", "target": ["nsis", "portable"], "artifactName": "Venus-Windows-${version}.${ext}" },
     "nsis": { "oneClick": false, "perMachine": false, "allowToChangeInstallationDirectory": true, "shortcutName": "Vênus" }
   }

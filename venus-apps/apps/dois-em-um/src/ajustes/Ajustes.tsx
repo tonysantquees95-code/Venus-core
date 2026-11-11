@@ -31,6 +31,37 @@ function Servidor() {
   );
 }
 
+/** Só no Windows: versão instalada, botão "Verificar atualizações" e instalação com um toque. */
+function Atualizacoes() {
+  const ponte = ponteDesktop();
+  const [estado, setEstado] = useState<{ texto: string; nova?: string; ocupado: boolean }>({ texto: "", ocupado: false });
+  useEffect(() => ponte?.aoProgressoDaAtualizacao(({ baixado, total }) => {
+    const pct = total > 0 ? Math.min(100, Math.round((baixado / total) * 100)) : 0;
+    setEstado((e) => ({ ...e, ocupado: true, texto: total > 0 ? `Baixando… ${pct}%` : "Baixando…" }));
+  }), [ponte]);
+  if (!ponte) return null;
+  const verificar = async () => {
+    setEstado({ texto: "Consultando…", ocupado: true });
+    const r = await ponte.verificarAtualizacao();
+    setEstado(r.erro ? { texto: r.erro, ocupado: false } : r.disponivel ? { texto: `Tem uma versão nova: ${r.nova}.`, nova: r.nova, ocupado: false } : { texto: `A Vênus já está na versão mais nova (${r.atual}).`, ocupado: false });
+  };
+  const instalar = async () => {
+    setEstado((e) => ({ ...e, texto: "Baixando…", ocupado: true }));
+    const r = await ponte.instalarAtualizacao();
+    setEstado((e) => ({ ...e, ocupado: false, texto: r.ok ? "Atualizando… a Vênus abre de novo em instantes." : r.erro ?? "Não consegui atualizar." }));
+  };
+  return (
+    <div className="space-y-3">
+      <p className="text-sm text-slate-300">Versão instalada: {ponte.versao}. A Vênus confere sozinha a cada poucas horas e pergunta antes de atualizar.</p>
+      <div className="flex flex-wrap gap-2">
+        <button className={botaoSuave} disabled={estado.ocupado} onClick={() => void verificar()}>Verificar atualizações</button>
+        {estado.nova && <button className={botaoSuave} disabled={estado.ocupado} onClick={() => void instalar()}>Atualizar agora</button>}
+      </div>
+      {estado.texto && <p className="text-sm" role="status">{estado.texto}</p>}
+    </div>
+  );
+}
+
 /** Ajustes: categorias, cartões de vidro, alternâncias grandes e busca rápida. */
 export function Ajustes({ aoAbrirTema }: { aoAbrirTema: () => void }) {
   const { prefs, definir } = usePreferencias();
@@ -122,6 +153,8 @@ export function Ajustes({ aoAbrirTema }: { aoAbrirTema: () => void }) {
           }} />}
           {mostra("alertasDaLoja", "comportamento") && <Chave id="alertasDaLoja" titulo="Alertas da loja" descricao="Pedido novo, estoque baixo e pagamentos." ligado={prefs.alertasDaLoja} aoMudar={(v) => definir("alertasDaLoja", v)} />}
           {mostra("iniciarComOSistema", "comportamento") && noDesktop() && <Chave id="iniciarComOSistema" titulo="Iniciar com o sistema" descricao="Abre junto com o Windows, escondida na bandeja. Vale só neste computador." ligado={prefs.iniciarComOSistema} aoMudar={(v) => definir("iniciarComOSistema", v)} />}
+
+          {mostra("atualizacoes", "comportamento") && noDesktop() && <Cartao id="atualizacoes" titulo="Atualizações"><Atualizacoes /></Cartao>}
 
           <Titulo cat="conexoes" />
           {mostra("servidor", "conexoes") && <Cartao id="servidor" titulo="Conexão com o servidor"><Servidor /></Cartao>}
