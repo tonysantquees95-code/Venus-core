@@ -1,7 +1,8 @@
 // Rotas de marketing, QR/Pix, BI, assinatura e 2FA (depois da autenticação da loja).
 import { ErroLoja, acessoLiberado } from "./lojas.js";
 import { auditar, financeiro } from "./bi.js";
-import { darForma, preencherFila, regenerar } from "./marketing.js";
+import { darForma, limparHashtags, preencherFila, regenerar } from "./marketing.js";
+import { destinos, guardarDestino, logDaLoja, publicarAgora } from "./publicar.js";
 import { matrizQr, pixCopiaECola, svgQr } from "./qr.js";
 import { confirmar2fa, estadoDaAssinatura, iniciar2fa, iniciarCobranca, liberarAcesso } from "./assinatura.js";
 
@@ -37,6 +38,19 @@ export async function tratarServico(req, env, loja, url, caminho, { corpoJson, e
   // o Android (HttpURLConnection) não faz PATCH: o app usa POST em /agendar
   if (m && ((req.method === "PATCH" && !m[2]) || (req.method === "POST" && m[2]))) {
     const d = await corpoJson(req);
+    if (d.agendarPara === undefined) { // só edição do texto/hashtags/canal/imagem: não mexe no agendamento
+      const canal = d.canal === undefined ? null : ["instagram", "webhook"].includes(d.canal) ? d.canal : null;
+      let imagem = null;
+      if (d.imagem !== undefined) {
+        if (d.imagem && !/^https:\/\//.test(String(d.imagem))) throw new ErroLoja(400, "imagem_invalida", "A imagem precisa ser um endereço https.");
+        imagem = String(d.imagem || "").slice(0, 500);
+      }
+      const r = await env.DB.prepare("UPDATE fila_posts SET legenda = COALESCE(?, legenda), copy = COALESCE(?, copy), hashtags = COALESCE(?, hashtags), canal = COALESCE(?, canal), imagem = COALESCE(?, imagem), atualizado = ? WHERE id = ? AND loja = ? AND status NOT IN ('publicado','publicando')")
+        .bind(d.legenda === undefined ? null : String(d.legenda).slice(0, 600), d.copy === undefined ? null : String(d.copy).slice(0, 200),
+          Array.isArray(d.hashtags) ? JSON.stringify(limparHashtags(d.hashtags)) : null, canal, imagem, Date.now(), Number(m[1]), loja.id).run();
+      if (!r.meta.changes) throw new ErroLoja(404, "post_inexistente", "Postagem não encontrada ou já publicada.");
+      return json({ ok: true });
+    }
     const quando = d.agendarPara === null ? null : Number(d.agendarPara);
     if (quando !== null && !(quando > Date.now() - 60_000)) throw new ErroLoja(400, "data_invalida", "Informe uma data futura (milissegundos).");
     const r = await env.DB.prepare("UPDATE fila_posts SET status = ?, agendado_para = ?, legenda = COALESCE(?, legenda), copy = COALESCE(?, copy), atualizado = ? WHERE id = ? AND loja = ?")
@@ -52,6 +66,22 @@ export async function tratarServico(req, env, loja, url, caminho, { corpoJson, e
     exigeAcesso(loja);
     return json({ regenerados: await regenerar(env, loja, [Number(m[1])], { gerar }) });
   }
+  if (caminho === "/marketing/excluir" && req.method === "POST") { // exclusão em lote
+    const lista = ids(await corpoJson(req));
+    if (!lista.length) return json({ removidos: 0 });
+    const r = await env.DB.prepare(`DELETE FROM fila_posts WHERE loja = ? AND status != 'publicando' AND id IN (${lista.map(() => "?").join(",")})`).bind(loja.id, ...lista).run();
+    return json({ removidos: r.meta.changes });
+  }
+  if (caminho === "/marketing/destinos" && req.method === "GET") return json({ destinos: await destinos(env, loja) });
+  m = /^\/marketing\/destinos\/(instagram|webhook)$/.exec(caminho);
+  if (m && req.method === "PUT") { exigeAcesso(loja); return json(await guardarDestino(env, loja, m[1], await corpoJson(req))); }
+  if (m && req.method === "DELETE") {
+    await env.DB.prepare("DELETE FROM publicacao_destinos WHERE loja = ? AND tipo = ?").bind(loja.id, m[1]).run();
+    return json({ ok: true });
+  }
+  m = /^\/marketing\/fila\/(\d+)\/publicar$/.exec(caminho);
+  if (m && req.method === "POST") { exigeAcesso(loja); return json(await publicarAgora(env, loja, Number(m[1]))); }
+  if (caminho === "/marketing/log" && req.method === "GET") return json({ log: await logDaLoja(env, loja) });
   if (caminho === "/marketing/limpar" && req.method === "POST") {
     const d = await corpoJson(req);
     const alvo = ["agendado", "sugerido", "todos"].includes(d.status) ? d.status : "agendado";

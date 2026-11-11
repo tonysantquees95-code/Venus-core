@@ -1,0 +1,199 @@
+// Vetorial ID: contas, dispositivos (até 3 vinculados), sessões (até 2 ativas ao mesmo tempo) e batimento (ping).
+import { aleatorio, iguais, sha256Hex } from "../loja/cripto.js";
+import { ErroLoja, registrarLoja } from "../loja/lojas.js";
+import { assinar, hashSenha, verificar } from "./jwt.js";
+
+export const MAX_DISPOSITIVOS = 3;
+export const MAX_ATIVAS = 2;
+export const TTL_ATIVA_MS = 5 * 60_000; // sem ping por 5 minutos = sessão inativa
+const PLATAFORMAS = new Set(["android", "ios", "windows", "web"]);
+const EMAIL = /^[^\s@]{1,64}@[^\s@]{1,190}\.[^\s@]{2,}$/;
+
+export class ErroId extends ErroLoja {
+  constructor(status, codigo, mensagem, dados = {}) {
+    super(status, codigo, mensagem);
+    this.dados = dados;
+  }
+}
+
+const emailLimpo = (e) => String(e || "").trim().toLowerCase();
+
+function lerDispositivo(d) {
+  const id = String((d && d.id) || "").slice(0, 200);
+  if (id.length < 8) throw new ErroId(400, "dispositivo_invalido", "Faltou o identificador do aparelho.");
+  const plataforma = PLATAFORMAS.has(d.plataforma) ? d.plataforma : "web";
+  return { bruto: id, nome: String(d.nome || plataforma).trim().slice(0, 60) || plataforma, plataforma };
+}
+
+async function limitarTentativas(env, chave, agora) {
+  await env.DB.prepare("DELETE FROM id_tentativas WHERE quando < ?").bind(agora - 15 * 60_000).run();
+  const n = await env.DB.prepare("SELECT COUNT(*) AS n FROM id_tentativas WHERE chave = ? AND quando > ?").bind(chave, agora - 15 * 60_000).first();
+  if (n.n >= 8) throw new ErroId(429, "muitas_tentativas", "Muitas tentativas. Espere alguns minutos e tente de novo.");
+}
+
+export async function cadastrar(env, { email, senha, nome, dispositivo, lojaExistente }, agora = Date.now()) {
+  email = emailLimpo(email);
+  if (!EMAIL.test(email)) throw new ErroId(400, "email_invalido", "Esse e-mail não parece certo.");
+  if (String(senha || "").length < 8) throw new ErroId(400, "senha_curta", "A senha precisa ter pelo menos 8 caracteres.");
+  const d = lerDispositivo(dispositivo);
+  if (await env.DB.prepare("SELECT 1 AS x FROM usuarios WHERE email = ?").bind(email).first()) {
+    throw new ErroId(409, "email_em_uso", "Já existe uma conta com esse e-mail. Entre com a senha.");
+  }
+  const id = aleatorio(8);
+  const salt = aleatorio(16);
+  let lojaId = lojaExistente ? lojaExistente.id : null;
+  if (lojaId && (await env.DB.prepare("SELECT 1 AS x FROM usuarios WHERE loja = ?").bind(lojaId).first())) {
+    throw new ErroId(409, "loja_ja_vinculada", "Essa loja já está ligada a outra conta.");
+  }
+  if (!lojaId) lojaId = (await registrarLoja(env, { nome: nome || email.split("@")[0], dispositivo: d.bruto }, agora)).id;
+  await env.DB.prepare("INSERT INTO usuarios (id, email, nome, senha_hash, salt, loja, criado) VALUES (?, ?, ?, ?, ?, ?, ?)")
+    .bind(id, email, String(nome || "").trim().slice(0, 80), await hashSenha(senha, salt), salt, lojaId, agora).run();
+  return entrar(env, { email, senha, dispositivo }, agora);
+}
+
+export async function sessoesAtivas(env, usuario, agora = Date.now()) {
+  const { results } = await env.DB.prepare(
+    `SELECT s.id AS sessao, s.dispositivo, s.criado, s.ultimo_ping AS ultimoPing, d.nome, d.plataforma
+       FROM sessoes s JOIN dispositivos d ON d.id = s.dispositivo
+      WHERE s.usuario = ? AND s.encerrada = 0 AND s.ultimo_ping > ? ORDER BY s.ultimo_ping DESC`,
+  ).bind(usuario, agora - TTL_ATIVA_MS).all();
+  return results;
+}
+
+const AVISO_LIMITE = "Já há 2 aparelhos usando a conta agora. Encerre um deles para entrar aqui, ou cancele.";
+
+/** Garante uma vaga entre as 2 sessões ativas; sem vaga, devolve o aviso com as opções. */
+async function abrirVaga(env, usuario, dispositivo, encerrar, agora) {
+  let ativas = (await sessoesAtivas(env, usuario, agora)).filter((s) => s.dispositivo !== dispositivo);
+  if (ativas.length >= MAX_ATIVAS) {
+    const alvo = encerrar && ativas.find((s) => s.sessao === encerrar);
+    if (!alvo) {
+      throw new ErroId(409, "limite_simultaneo", AVISO_LIMITE, { ativas, opcoes: ["encerrar_sessao", "cancelar"], maxAtivas: MAX_ATIVAS });
+    }
+    await encerrarSessao(env, usuario, alvo.sessao, "encerrada_por_outro_aparelho");
+  }
+}
+
+export async function encerrarSessao(env, usuario, sessao, motivo = "encerrada") {
+  const r = await env.DB.prepare("UPDATE sessoes SET encerrada = 1, motivo = ? WHERE id = ? AND usuario = ? AND encerrada = 0").bind(motivo, sessao, usuario).run();
+  return r.meta.changes > 0;
+}
+
+export async function entrar(env, { email, senha, dispositivo, encerrar, remover }, agora = Date.now()) {
+  email = emailLimpo(email);
+  const d = lerDispositivo(dispositivo);
+  await limitarTentativas(env, `login:${email}`, agora);
+  const u = await env.DB.prepare("SELECT * FROM usuarios WHERE email = ?").bind(email).first();
+  const hash = await hashSenha(String(senha || ""), u ? u.salt : "00".repeat(16)); // tempo parecido com ou sem conta
+  if (!u || !iguais(hash, u.senha_hash)) {
+    await env.DB.prepare("INSERT INTO id_tentativas (chave, quando) VALUES (?, ?)").bind(`login:${email}`, agora).run();
+    throw new ErroId(401, "credenciais", "E-mail ou senha incorretos.");
+  }
+  const devId = await sha256Hex(`vid:${u.id}:${d.bruto}`);
+  const jaTem = await env.DB.prepare("SELECT 1 AS x FROM dispositivos WHERE id = ? AND usuario = ?").bind(devId, u.id).first();
+  if (!jaTem) {
+    const { results } = await env.DB.prepare("SELECT id, nome, plataforma, ultimo FROM dispositivos WHERE usuario = ? ORDER BY ultimo DESC").bind(u.id).all();
+    if (results.length >= MAX_DISPOSITIVOS) {
+      if (!remover || !results.some((x) => x.id === remover)) {
+        throw new ErroId(409, "limite_dispositivos", "Você já tem 3 aparelhos vinculados. Remova um para vincular este, ou cancele.", { dispositivos: results, opcoes: ["remover_dispositivo", "cancelar"], maxDispositivos: MAX_DISPOSITIVOS });
+      }
+      await removerDispositivo(env, u.id, remover);
+    }
+    await env.DB.prepare("INSERT INTO dispositivos (id, usuario, nome, plataforma, criado, ultimo) VALUES (?, ?, ?, ?, ?, ?)").bind(devId, u.id, d.nome, d.plataforma, agora, agora).run();
+  } else {
+    await env.DB.prepare("UPDATE dispositivos SET nome = ?, plataforma = ?, ultimo = ? WHERE id = ?").bind(d.nome, d.plataforma, agora, devId).run();
+  }
+  await env.DB.prepare("UPDATE sessoes SET encerrada = 1, motivo = 'novo_login' WHERE usuario = ? AND dispositivo = ? AND encerrada = 0").bind(u.id, devId).run();
+  await abrirVaga(env, u.id, devId, encerrar, agora);
+  const sid = aleatorio(12);
+  await env.DB.prepare("INSERT INTO sessoes (id, usuario, dispositivo, criado, ultimo_ping) VALUES (?, ?, ?, ?, ?)").bind(sid, u.id, devId, agora, agora).run();
+  const token = await assinar(env, { sub: u.id, sid, dev: devId }, { agora });
+  return { token, sessao: sid, dispositivo: devId, usuario: { id: u.id, email: u.email, nome: u.nome } };
+}
+
+export async function removerDispositivo(env, usuario, dispositivo) {
+  await env.DB.prepare("UPDATE sessoes SET encerrada = 1, motivo = 'dispositivo_removido' WHERE usuario = ? AND dispositivo = ?").bind(usuario, dispositivo).run();
+  const r = await env.DB.prepare("DELETE FROM dispositivos WHERE id = ? AND usuario = ?").bind(dispositivo, usuario).run();
+  return r.meta.changes > 0;
+}
+
+export const ehJwt = (t) => /^eyJ[\w-]+\.[\w-]+\.[\w-]+$/.test(t || "");
+export const tokenDoPedido = (req) => (/^Bearer\s+(\S+)$/.exec(req.headers.get("authorization") || "") || [])[1] || "";
+
+/**
+ * Middleware: confere o JWT, a sessão (não encerrada) e o batimento. Sessão parada há mais de 5 minutos
+ * só volta se ainda houver vaga entre as 2 ativas; senão 409 com o aviso e as opções.
+ */
+export async function validarSessao(env, req, { agora = Date.now(), ping = true } = {}) {
+  const dados = await verificar(env, tokenDoPedido(req), agora);
+  if (!dados) throw new ErroId(401, "token_invalido", "Entre de novo com o seu Vetorial ID.");
+  const s = await env.DB.prepare("SELECT * FROM sessoes WHERE id = ? AND usuario = ?").bind(dados.sid, dados.sub).first();
+  if (!s) throw new ErroId(401, "sessao_inexistente", "Entre de novo com o seu Vetorial ID.");
+  if (s.encerrada) throw new ErroId(401, "sessao_encerrada", "Esta sessão foi encerrada. Entre de novo.", { motivo: s.motivo });
+  const u = await env.DB.prepare("SELECT * FROM usuarios WHERE id = ?").bind(dados.sub).first();
+  if (!u) throw new ErroId(401, "sessao_inexistente", "Conta não encontrada.");
+  if (agora - s.ultimo_ping > TTL_ATIVA_MS) {
+    const ativas = (await sessoesAtivas(env, u.id, agora)).filter((x) => x.sessao !== s.id);
+    if (ativas.length >= MAX_ATIVAS) throw new ErroId(409, "limite_simultaneo", AVISO_LIMITE, { ativas, opcoes: ["encerrar_sessao", "cancelar"], maxAtivas: MAX_ATIVAS, sessaoAtual: s.id });
+  }
+  if (ping && agora - s.ultimo_ping > 15_000) {
+    await env.DB.prepare("UPDATE sessoes SET ultimo_ping = ? WHERE id = ?").bind(agora, s.id).run();
+    await env.DB.prepare("UPDATE dispositivos SET ultimo = ? WHERE id = ?").bind(agora, s.dispositivo).run();
+  }
+  return { usuario: u, sessao: s.id, dispositivo: s.dispositivo };
+}
+
+/** Reativa uma sessão parada, encerrando a escolhida para abrir vaga (resposta ao aviso 409). */
+export async function reativar(env, ctxToken, encerrar, agora = Date.now()) {
+  const dados = await verificar(env, ctxToken, agora);
+  if (!dados) throw new ErroId(401, "token_invalido", "Entre de novo com o seu Vetorial ID.");
+  const s = await env.DB.prepare("SELECT * FROM sessoes WHERE id = ? AND usuario = ? AND encerrada = 0").bind(dados.sid, dados.sub).first();
+  if (!s) throw new ErroId(401, "sessao_encerrada", "Esta sessão foi encerrada. Entre de novo.");
+  await abrirVaga(env, dados.sub, s.dispositivo, encerrar, agora);
+  await env.DB.prepare("UPDATE sessoes SET ultimo_ping = ? WHERE id = ?").bind(agora, s.id).run();
+  return { ok: true };
+}
+
+export async function renovarToken(env, ctx, agora = Date.now()) {
+  return { token: await assinar(env, { sub: ctx.usuario.id, sid: ctx.sessao, dev: ctx.dispositivo }, { agora }) };
+}
+
+export async function listarDispositivos(env, ctx, agora = Date.now()) {
+  const { results } = await env.DB.prepare("SELECT id, nome, plataforma, criado, ultimo FROM dispositivos WHERE usuario = ? ORDER BY ultimo DESC").bind(ctx.usuario.id).all();
+  const ativas = await sessoesAtivas(env, ctx.usuario.id, agora);
+  return {
+    maxDispositivos: MAX_DISPOSITIVOS, maxAtivas: MAX_ATIVAS,
+    dispositivos: results.map((d) => {
+      const s = ativas.find((x) => x.dispositivo === d.id);
+      return { ...d, atual: d.id === ctx.dispositivo, ativo: !!s, sessao: s ? s.sessao : null };
+    }),
+  };
+}
+
+// ------------------------------------------------------------------ sincronização (última escrita vence, com versão)
+export const CHAVES_SYNC = new Set(["tema", "preferencias", "modo", "sessoes", "catalogo", "marketing"]);
+const MAX_DOC = 64_000;
+
+export async function lerSync(env, ctx, desde = 0) {
+  const { results } = await env.DB.prepare("SELECT chave, valor, versao, atualizado, dispositivo FROM sync_docs WHERE usuario = ? AND atualizado > ?").bind(ctx.usuario.id, desde).all();
+  return { agora: Date.now(), docs: results.map((r) => ({ ...r, valor: JSON.parse(r.valor), deEsteAparelho: r.dispositivo === ctx.dispositivo })) };
+}
+
+export async function gravarSync(env, ctx, chave, valor, versaoBase, agora = Date.now()) {
+  if (!CHAVES_SYNC.has(chave)) throw new ErroId(400, "chave_invalida", "Esse dado não é sincronizado.");
+  const texto = JSON.stringify(valor ?? null);
+  if (texto.length > MAX_DOC) throw new ErroId(413, "doc_grande", "Esse dado é grande demais para sincronizar.");
+  const atual = await env.DB.prepare("SELECT versao, valor FROM sync_docs WHERE usuario = ? AND chave = ?").bind(ctx.usuario.id, chave).first();
+  if (atual && Number(versaoBase) !== atual.versao) {
+    throw new ErroId(409, "versao_antiga", "Outro aparelho mudou isso antes. Atualize e tente de novo.", { versao: atual.versao, valor: JSON.parse(atual.valor) });
+  }
+  const versao = (atual ? atual.versao : 0) + 1;
+  await env.DB.prepare(
+    "INSERT INTO sync_docs (usuario, chave, valor, versao, atualizado, dispositivo) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(usuario, chave) DO UPDATE SET valor = excluded.valor, versao = excluded.versao, atualizado = excluded.atualizado, dispositivo = excluded.dispositivo",
+  ).bind(ctx.usuario.id, chave, texto, versao, agora, ctx.dispositivo).run();
+  return { versao, atualizado: agora };
+}
+
+export async function limpezaDeSessoes(env, agora = Date.now()) {
+  await env.DB.prepare("DELETE FROM sessoes WHERE (encerrada = 1 AND ultimo_ping < ?) OR ultimo_ping < ?").bind(agora - 7 * 86_400_000, agora - 40 * 86_400_000).run();
+}

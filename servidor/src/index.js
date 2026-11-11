@@ -9,6 +9,7 @@
  *   GET  /cobranca/status?ref=&handle=   → o pagamento foi feito? (confirma com a InfinitePay)
  *   POST /chat                           → conversa com busca na web (Groq + Tavily, reserva Gemini) — ver chat.js
  *   POST /v1/chat, POST /v1/ocr, GET /v1/rotas → roteador de IA por função (Groq / DeepSeek / Gemini só multimodal), CORS e cache vetorial — ver ia/
+ *  /id, /id/*                           → Vetorial ID: login único (JWT), dispositivos (3) e sessões (2 ativas), sincronização — ver id/
  *  /loja/*, /canais*, /produtos, /pedidos, /webhook/*, /oauth/* → lojistas, canais de venda (Nuvemshop, Mercado Livre, site próprio) e estoque central — ver loja/
  *
  * Segredos (wrangler secret): GITHUB_TOKEN (só leitura do repositório, para o canal de atualização);
@@ -17,6 +18,9 @@
 import { chat, chatPreflight } from "./chat.js";
 import { tratarIA } from "./ia/rotas.js";
 import { ehRotaDaLoja, tratarLoja } from "./loja/rotas.js";
+import { ehRotaDoId, tratarId } from "./id/rotas.js";
+import { limpezaDeSessoes } from "./id/conta.js";
+import { publicarVencidos } from "./loja/publicar.js";
 
 const REPO = "tonysantquees95-code/Venus-core";
 const CABECALHOS = { "content-type": "application/json; charset=utf-8", "access-control-allow-origin": "*" };
@@ -36,6 +40,7 @@ export default {
       if (caminho === "/cobranca/aviso" && req.method === "POST") return await cobrancaAviso(req, env);
       if (caminho === "/cobranca/status" && req.method === "GET") return await cobrancaStatus(url, env);
       if (caminho.startsWith("/v1/")) return await tratarIA(req, env, ctx);
+      if (ehRotaDoId(caminho)) return await tratarId(req, env, url, caminho);
       if (ehRotaDaLoja(caminho) || (env.DOMINIO_CURTO && url.hostname === env.DOMINIO_CURTO && req.method === "GET" && /^\/[a-z0-9-]{3,32}(\/[^/]+)?$/.test(caminho) && !["/saude", "/atualizacao"].includes(caminho))) {
         return await tratarLoja(req, env, ctx, url, caminho);
       }
@@ -50,7 +55,12 @@ export default {
 
   // limpeza diária
   async scheduled(evento, env) {
+    if (evento.cron === "*/10 * * * *") { // posts agendados da Central de Marketing
+      await publicarVencidos(env);
+      return;
+    }
     await env.DB.prepare("DELETE FROM avisos WHERE criado < ?").bind(Date.now() - 7 * 86400000).run();
+    await limpezaDeSessoes(env);
     await env.DB.prepare("DELETE FROM cobranca_avisos WHERE criado < ?").bind(Date.now() - 30 * 86400000).run();
   },
 };
