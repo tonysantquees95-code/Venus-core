@@ -90,7 +90,7 @@ test("rotas: editar texto sem mexer no agendamento, excluir em lote, destinos", 
   const { env, loja, r, novo } = await cenario();
   const a = await novo(), b = await novo(), c = await novo({ status: "sugerido", quando: null });
   const chama = (metodo, caminho, corpo) => tratarLoja(new Request(`https://v.test${caminho}`, { method: metodo, headers: { authorization: `Bearer ${r.token}`, "content-type": "application/json" }, body: corpo ? JSON.stringify(corpo) : undefined }), env, { waitUntil() {} }, new URL(`https://v.test${caminho}`), caminho);
-  let res = await chama("PATCH", `/marketing/fila/${a}`, { legenda: "Nova", hashtags: ["Oferta", "#Vela", "oferta"] });
+  let res = await chama("POST", `/marketing/fila/${a}/editar`, { legenda: "Nova", hashtags: ["Oferta", "#Vela", "oferta"] });
   assert.equal(res.status, 200);
   const p = await env.DB.prepare("SELECT * FROM fila_posts WHERE id = ?").bind(a).first();
   assert.equal(p.legenda, "Nova");

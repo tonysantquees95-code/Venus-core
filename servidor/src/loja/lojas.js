@@ -48,6 +48,10 @@ export async function lojaDoPedido(env, req) {
   if (!m) throw new ErroLoja(401, "sem_token", "Faltou o token da loja.");
   const loja = await env.DB.prepare("SELECT * FROM lojas WHERE token_hash = ?").bind(await sha256Hex(m[1])).first();
   if (!loja) throw new ErroLoja(401, "token_invalido", "Token da loja inválido.");
+  // loja ligada a uma conta Vetorial ID: só o login da conta vale (assim 3 aparelhos / 2 ativos também vale para a loja)
+  if (await env.DB.prepare("SELECT 1 AS x FROM usuarios WHERE loja = ?").bind(loja.id).first()) {
+    throw new ErroLoja(403, "exige_vetorial_id", "Entre com o seu Vetorial ID (Menu › Conta) para acessar a loja.");
+  }
   return loja;
 }
 

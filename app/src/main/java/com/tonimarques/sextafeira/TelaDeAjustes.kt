@@ -47,6 +47,9 @@ class TelaDeAjustes(
     private val atualizadores = mutableListOf<() -> Unit>()
     private val interruptores = mutableListOf<Interruptor>()
     private lateinit var tituloTela: TextView
+    /** Uma linha da lista, com o que a busca precisa para escondê-la. */
+    private class Entrada(val cabecalho: TextView, val cartao: LinearLayout, val linhas: List<Pair<View?, View>>, val textos: List<() -> String>)
+    private val entradas = mutableListOf<Entrada>()
     private lateinit var orbe: Orbe
 
     init {
@@ -122,6 +125,26 @@ class TelaDeAjustes(
         }
         coluna.addView(orbe, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(120)))
 
+        // Busca rápida: digite "escuta contínua", "tema"… e só ficam os ajustes que combinam
+        val busca = android.widget.EditText(context).apply {
+            hint = "Buscar ajuste (ex.: escuta contínua, tema, notificações)"
+            setHintTextColor(COR_APAGADA)
+            setTextColor(Color.WHITE)
+            textSize = 14.5f
+            setSingleLine()
+            imeOptions = android.view.inputmethod.EditorInfo.IME_ACTION_SEARCH
+            setPadding(dp(18), dp(12), dp(18), dp(12))
+            background = GradientDrawable().apply {
+                setColor(Color.argb(22, 255, 255, 255)); setStroke(dp(1).coerceAtLeast(1), Color.argb(40, 255, 255, 255)); cornerRadius = dpf(18f)
+            }
+            addTextChangedListener(object : android.text.TextWatcher {
+                override fun afterTextChanged(s: android.text.Editable?) = filtrar(s?.toString().orEmpty())
+                override fun beforeTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
+                override fun onTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
+            })
+        }
+        coluna.addView(busca, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(6) })
+
         for (secao in secoes) {
             val cab = TextView(context).apply {
                 text = secao.titulo.uppercase()
@@ -143,17 +166,23 @@ class TelaDeAjustes(
                 }
                 clipToOutline = true
             }
+            val linhasDaSecao = mutableListOf<Pair<View?, View>>()
             secao.itens.forEachIndexed { i, ajuste ->
+                var separador: View? = null
                 if (i > 0) {
-                    cartao.addView(View(context).apply { setBackgroundColor(Color.argb(20, 255, 255, 255)) },
+                    separador = View(context).apply { setBackgroundColor(Color.argb(20, 255, 255, 255)) }
+                    cartao.addView(separador,
                         LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 1).apply {
                             leftMargin = dp(18)
                             rightMargin = dp(18)
                         })
                 }
-                cartao.addView(linha(ajuste))
+                val l = linha(ajuste)
+                cartao.addView(l)
+                linhasDaSecao += separador to l
             }
             coluna.addView(cartao)
+            entradas += Entrada(cab, cartao, linhasDaSecao, secao.itens.map { { it.titulo + " " + it.descricao() + " " + secao.titulo } })
         }
 
         coluna.addView(TextView(context).apply {
@@ -167,6 +196,24 @@ class TelaDeAjustes(
         rolagem.addView(coluna)
         raiz.addView(rolagem, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
         return raiz
+    }
+
+    /** Esconde o que não combina com [termo] (sem acento e sem maiúsculas; todas as palavras precisam aparecer). */
+    private fun filtrar(termo: String) {
+        val palavras = ComandosLocais.normalizar(termo).split(" ").filter { it.isNotBlank() }
+        for (e in entradas) {
+            var primeiro = true
+            var algum = false
+            e.linhas.forEachIndexed { i, (sep, linha) ->
+                val texto = ComandosLocais.normalizar(e.textos[i]())
+                val ok = palavras.all { texto.contains(it) }
+                linha.visibility = if (ok) View.VISIBLE else View.GONE
+                sep?.visibility = if (ok && !primeiro) View.VISIBLE else View.GONE
+                if (ok) { primeiro = false; algum = true }
+            }
+            e.cabecalho.visibility = if (algum) View.VISIBLE else View.GONE
+            e.cartao.visibility = if (algum) View.VISIBLE else View.GONE
+        }
     }
 
     private fun linha(ajuste: Ajuste): View {
