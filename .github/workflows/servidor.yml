@@ -9,7 +9,7 @@ name: Servidor (Cloudflare)
 on:
   push:
     branches: [main]
-    paths: ["servidor/**", ".github/workflows/servidor.yml"]
+    paths: ["servidor/**", "site/**", ".github/workflows/servidor.yml"]
   workflow_dispatch:
 
 concurrency:
@@ -42,6 +42,12 @@ jobs:
             echo "::error::Faltam os segredos:$falta (GitHub → Settings → Secrets and variables → Actions)."
             exit 1
           fi
+
+      - name: Conferir o site (scripts e segredos)
+        working-directory: .
+        run: |
+          for f in site/*.js; do node --check "$f"; done
+          if grep -rEn "(APP_USR-|TEST-[0-9a-f]{8}|AIza[0-9A-Za-z_-]{20}|sk-[A-Za-z0-9]{20}|gsk_)" site; then echo "::error::Achei algo que parece chave no site."; exit 1; fi
 
       - name: Banco D1 (cria na primeira vez)
         run: |
