@@ -1,0 +1,76 @@
+@import "tailwindcss";
+
+@theme {
+  --color-fundo: #08080f;
+  --color-painel: #12121f;
+  --color-borda: #2a2840;
+  --color-texto: #f4f2fa;
+  --color-suave: #b4b0c8;
+  --color-venus: #ec6fd6;
+  --color-robo: #b98cff;
+  --color-sobre-venus: #14061a;
+}
+
+html, body, #app { height: 100%; }
+body {
+  margin: 0;
+  background: var(--color-fundo);
+  color: var(--color-texto);
+  font-family: Inter, system-ui, sans-serif;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Valores iniciais; o ThemingEngine sobrescreve em <html> em tempo real. */
+:root {
+  --venus-rgb: 236 111 214;
+  --robo-rgb: 185 140 255;
+  --icone-traco: 1.6;
+  --icone-ponta: round;
+  --icone-junta: round;
+  --icone-preench: 0;
+}
+
+/* ---------- Orbe holográfico ---------- */
+.orbe { position: relative; display: inline-block; flex: none; isolation: isolate; }
+.orbe > * { position: absolute; border-radius: 50%; pointer-events: none; }
+.orbe-nucleo {
+  inset: 20%;
+  background: radial-gradient(circle at 35% 30%, #fff 0%, var(--color-venus) 42%, var(--color-robo) 100%);
+  box-shadow: 0 0 calc(var(--orbe-tam) * .4) rgb(var(--venus-rgb) / .65);
+  animation: orbe-pulsa 3.2s ease-in-out infinite;
+}
+.orbe-brilho {
+  inset: 20%;
+  background: radial-gradient(circle at 30% 25%, rgb(255 255 255 / .85), transparent 38%);
+  mix-blend-mode: screen;
+}
+/* Aurora */
+.orbe-nevoa {
+  inset: 2%;
+  background: conic-gradient(from 0deg, var(--color-venus), var(--color-robo), transparent 55%, var(--color-venus));
+  filter: blur(calc(var(--orbe-tam) * .09));
+  opacity: .85;
+  animation: orbe-gira 9s linear infinite;
+}
+/* Anéis */
+.orbe-aneis { perspective: calc(var(--orbe-tam) * 4); }
+.orbe-anel { inset: 2%; border: max(1.5px, calc(var(--orbe-tam) * .035)) solid rgb(var(--venus-rgb) / .85); box-shadow: 0 0 calc(var(--orbe-tam) * .15) rgb(var(--robo-rgb) / .8); }
+.orbe-anel-a { animation: anel-a 7s linear infinite; }
+.orbe-anel-b { border-color: rgb(var(--robo-rgb) / .85); animation: anel-b 5s linear infinite reverse; }
+/* Prisma */
+.orbe-faces {
+  inset: 6%;
+  background: conic-gradient(from 0deg, var(--color-venus), #fff, var(--color-robo), var(--color-venus), #fff, var(--color-robo), var(--color-venus));
+  opacity: .9;
+  animation: orbe-gira 6s linear infinite;
+}
+.orbe-prisma .orbe-nucleo { inset: 12%; mix-blend-mode: overlay; }
+
+@keyframes orbe-gira { to { transform: rotate(360deg); } }
+@keyframes orbe-pulsa { 50% { transform: scale(1.08); filter: brightness(1.15); } }
+@keyframes anel-a { from { transform: rotateX(72deg) rotateZ(0); } to { transform: rotateX(72deg) rotateZ(360deg); } }
+@keyframes anel-b { from { transform: rotateY(72deg) rotateZ(0); } to { transform: rotateY(72deg) rotateZ(360deg); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .orbe, .orbe * { animation: none !important; }
+}

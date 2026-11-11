@@ -1,0 +1,18 @@
+node_modules/
+dist/
+.wrangler/
+.vite/
+*.log
+.env
+.env.*
+!.env.example
+.dev.vars
+# Capacitor: a pasta android/ é gerada por "npm run android:add" e NÃO vai para o Git
+apps/*/android/
+apps/*/ios/
+*.apk
+*.aab
+*.jks
+*.keystore
+*.p12
+.DS_Store
