@@ -15,7 +15,8 @@ import android.widget.TextView
 /** As peças visuais das telas do robô (fundo escuro, cartões, textos, campos e botões). */
 abstract class TelaBase : Activity() {
 
-    protected val destaque = Color.parseColor("#E36BD0")
+    /** A cor de destaque escolhida na Aparência da Vênus (o robô segue o mesmo tema). */
+    protected val destaque: Int get() = Aparencia.destaque
     protected val apagado = Color.parseColor("#8E87A8")
     protected lateinit var coluna: LinearLayout
 
@@ -88,7 +89,7 @@ abstract class TelaBase : Activity() {
         gravity = Gravity.CENTER
         setPadding(dp(14), dp(13), dp(14), dp(13))
         setTextColor(if (primario) Color.WHITE else destaque)
-        background = if (primario) GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT, intArrayOf(destaque, Color.parseColor("#9B5CF6"))).apply { cornerRadius = dp(26).toFloat() }
+        background = if (primario) GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT, intArrayOf(destaque, Aparencia.par())).apply { cornerRadius = dp(26).toFloat() }
         else GradientDrawable().apply {
             cornerRadius = dp(26).toFloat()
             setStroke(dp(1), destaque)

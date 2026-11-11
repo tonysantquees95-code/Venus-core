@@ -9,12 +9,6 @@
     <path
         android:pathData="M4,7h16M4,12h11M4,17h16"
         android:strokeWidth="2"
-        android:strokeLineCap="round">
-        <aapt:attr name="android:strokeColor">
-            <gradient android:startX="4" android:startY="4" android:endX="20" android:endY="20" android:type="linear">
-                <item android:color="#FFE36BD0" android:offset="0" />
-                <item android:color="#FF9B5CF6" android:offset="1" />
-            </gradient>
-        </aapt:attr>
-    </path>
+        android:strokeLineCap="round"
+        android:strokeColor="#FFFFFFFF" />
 </vector>
