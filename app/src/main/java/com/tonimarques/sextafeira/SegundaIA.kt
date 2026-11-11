@@ -103,10 +103,30 @@ object SegundaIA {
         return CLOUDFLARE.copy(endereco = CLOUDFLARE.endereco.replace("{conta}", conta)) to chave
     }
 
-    /** As IAs reserva na ordem em que são tentadas: a escolhida (Groq ou Grok) e depois a Cloudflare. */
+    /**
+     * A IA da Vênus no servidor: o app não precisa de chave nenhuma, só de estar logado no Vetorial ID.
+     * O servidor guarda a chave e responde no mesmo formato da OpenAI/Groq (rota /ia/v1).
+     */
+    val DO_SERVIDOR = Provedor(
+        "venus", "IA da Vênus (servidor)", "",
+        listOf("openai/gpt-oss-120b", "llama-3.3-70b-versatile", "openai/gpt-oss-20b"),
+        Regex("gpt-oss|llama-3\\.3"), "",
+    )
+
+    private fun doServidor(c: Context?): Pair<Provedor, String>? {
+        if (c == null || !Servidor.configurado()) return null
+        val token = VetorialId.token(c).takeIf { it.isNotBlank() } ?: return null
+        return DO_SERVIDOR.copy(endereco = "${Servidor.ENDERECO}/ia/v1") to token
+    }
+
+    /** Tem a IA do servidor (Vetorial ID logado)? É o caminho de quem não usa chave própria. */
+    fun doServidorDisponivel(c: Context? = ctx): Boolean = doServidor(c) != null
+
+    /** As IAs na ordem em que são tentadas: chave própria (se o dono tiver), Cloudflare própria e, por fim, a IA da Vênus no servidor. */
     fun cadeia(c: Context? = ctx): List<Pair<Provedor, String>> = listOfNotNull(
         chave(c).takeIf { it.isNotBlank() }?.let { provedor(c) to it },
         cloudflare(c),
+        doServidor(c),
     )
 
     fun configurada(c: Context? = ctx) = cadeia(c).isNotEmpty()
@@ -177,6 +197,7 @@ object SegundaIA {
         "groq" to listOf("meta-llama/llama-4-scout-17b-16e-instruct", "meta-llama/llama-4-maverick-17b-128e-instruct"),
         "xai" to listOf("grok-4-fast-non-reasoning", "grok-2-vision-1212"),
         "cloudflare" to listOf("@cf/meta/llama-4-scout-17b-16e-instruct"),
+        "venus" to listOf("meta-llama/llama-4-scout-17b-16e-instruct", "meta-llama/llama-4-maverick-17b-128e-instruct"),
     )
 
     fun temFoto(pedido: JSONObject): Boolean {

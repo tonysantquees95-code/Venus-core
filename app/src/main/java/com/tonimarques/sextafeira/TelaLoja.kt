@@ -53,10 +53,8 @@ internal fun MainActivity.primeirosPassos() {
         Triple("Site, ramo e regras de venda", perfil.contains("regras_json")) { editarDadosDaLoja() },
         Triple("Plataforma da loja (Shopify, WooCommerce, Nuvemshop ou site próprio)", ferramentas.loja.conectada) { escolherPlataforma() },
         Triple("Robô: acesso às notificações (responde o WhatsApp)", com.tonimarques.sextafeira.robo.OuvinteRobo.temAcesso(this)) { abrirRobo() },
-        Triple("IA grátis principal: Groq", SegundaIA.chave(this).isNotBlank()) { pedirIAReserva() },
-        Triple("IA grátis reserva: Cloudflare (opcional)", SegundaIA.chaveCloudflare(this).isNotBlank()) { pedirCloudflare() },
-        Triple("Gemini grátis: memória, estudo, PDF e áudio", chave().isNotBlank()) { pedirChave() },
-        Triple("Instagram da loja (opcional)", Instagram.conectado(this)) { conectarInstagram() },
+        Triple("Entrar no Vetorial ID (a IA da ${Marca.nome} vem do servidor, sem chave nenhuma)", SegundaIA.doServidorDisponivel(this)) { abrirConta() },
+        Triple("Instagram da loja (opcional, precisa da API da Meta)", Instagram.conectado(this)) { conectarInstagram() },
         Triple("Voz neural da Microsoft (opcional)", VozNeural.chave(this).isNotBlank()) { configurarVozNeural() },
     )
     val feitos = passos.count { it.second }

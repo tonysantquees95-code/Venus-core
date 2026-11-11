@@ -11,8 +11,8 @@ import java.net.URL
 
 /*
  * Cadastro guiado da primeira abertura: uma etapa por tela, com Voltar/Continuar e barrinha de progresso.
- * 1 boas-vindas · 2 você e a loja · 3 com site ou sem site · 4 regras de venda · 5 IA grátis (Groq, obrigatória)
- * · 6 opcionais (Gemini, Cloudflare, Instagram) · 7 pronto. Cada etapa salva o que foi preenchido ao continuar,
+ * 1 boas-vindas · 2 você e a loja · 3 com site ou sem site · 4 regras de venda · 5 inteligência (vem do servidor, com o Vetorial ID)
+ * · 6 opcionais (cobrança por link, Instagram) · 7 pronto. Cada etapa salva o que foi preenchido ao continuar,
  * então dá para fechar no meio e retomar depois pelo menu (Cadastro guiado). A lista "Primeiros passos" continua no menu.
  */
 
@@ -29,7 +29,6 @@ internal fun MainActivity.cadastroGuiado(etapaInicial: Int = 0) {
         Perfil.site.isNotBlank() || ferramentas.loja.conectada || cfg.chave.isNotBlank() -> true
         else -> null
     }
-    var groqOk = SegundaIA.chave(this).isNotBlank()
     var aceitouTermos = Termos.aceitos(this)
 
     fun abrir(url: String) = try {
@@ -225,130 +224,24 @@ internal fun MainActivity.cadastroGuiado(etapaInicial: Int = 0) {
                 }, voltar)
             }
 
-            // ---------------------------------------------------------------- 5. IA grátis (Groq)
+            // ---------------------------------------------------------------- 5. inteligência (vem do servidor)
             4 -> {
                 f.trocarTitulo("Minha inteligência", "Etapa 5 de $ETAPAS")
-                f.paragrafo("Para conversar e responder as clientes eu uso a Groq, uma IA grátis (cerca de 1.000 perguntas por dia, sem cartão). " +
-                    "Você só precisa criar uma chave, que é como uma senha de acesso.")
-                f.cartao("Passo a passo")
-                f.paragrafo("1. Toque em Abrir a Groq, aqui embaixo.\n" +
-                    "2. Entre com a sua conta do Google (Continue with Google).\n" +
-                    "3. Toque em Create API Key, escreva um nome (ex.: Vênus) e toque em Submit.\n" +
-                    "4. Toque em Copy para copiar a chave (começa com gsk_). Ela só aparece uma vez!\n" +
-                    "5. Volte para cá, cole a chave no campo e toque em Conferir a chave.", 14.5f, android.graphics.Color.WHITE)
-                f.adicionar(f.botao("Abrir a Groq") { abrir(SegundaIA.PROVEDORES.first { it.id == "groq" }.site) }, 12)
-                f.cartao("Sua chave")
-                val (bChave, campo) = f.campo("Chave da Groq", "", if (groqOk) "Chave salva ✓ (cole outra só para trocar)" else "gsk_…",
-                    InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD)
-                f.adicionar(bChave)
-                val estado = f.aviso(if (groqOk) "✓ A Groq está funcionando." else "")
-                f.adicionar(estado)
-                val continuar = f.botao("Continuar", primario = true) { mostrar(5) }
-                habilitar(continuar, groqOk)
-                lateinit var conferir: TextView
-                conferir = f.botao("Conferir a chave") {
-                    val k = Instagram.limparToken(campo.text.toString())
-                    if (k.isBlank()) return@botao Toast.makeText(this, "Cole a chave no campo primeiro.", Toast.LENGTH_SHORT).show()
-                    habilitar(conferir, false)
-                    estado.text = "Conferindo com a Groq…"
-                    val antes = SegundaIA.chave(this)
-                    val provedorAntes = SegundaIA.provedor(this).id
-                    SegundaIA.salvar(this, "groq", k)
-                    Thread {
-                        val r = try { Result.success(SegundaIA.testar(applicationContext)) } catch (e: Exception) { Result.failure(e) }
-                        runOnUiThread {
-                            habilitar(conferir, true)
-                            r.onSuccess {
-                                groqOk = true
-                                estado.text = "✓ Funcionou! A Groq respondeu. Pode continuar."
-                                habilitar(continuar, true)
-                                ajustes?.atualizar()
-                            }.onFailure {
-                                // chave ruim: volta a anterior (se tinha) para não deixar a Vênus sem IA
-                                SegundaIA.salvar(this, provedorAntes, antes)
-                                estado.text = "✗ Não funcionou: ${it.message ?: "confira se copiou a chave inteira"}. Copie de novo e confira."
-                            }
-                        }
-                    }.start()
-                }
-                f.adicionar(conferir, 10)
-                f.acoes(continuar, voltar)
+                val logado = SegundaIA.doServidorDisponivel(this)
+                f.paragrafo("Para conversar e responder as clientes eu uso a inteligência do servidor da $n. Você não precisa criar chave nenhuma: " +
+                    "basta estar com o seu Vetorial ID ligado neste celular.")
+                f.cartao("Seu Vetorial ID")
+                f.adicionar(f.aviso(if (logado) "✓ Ligado. Já posso conversar e responder as clientes."
+                else "Ainda não entrou no Vetorial ID. Sem ele eu só consigo responder o básico, sem inteligência."), 2)
+                if (!logado) f.adicionar(f.botao("Entrar no Vetorial ID") { f.fechar(); abrirConta() }, 10)
+                f.fecharCartao()
+                f.acoes(f.botao("Continuar", primario = true) { mostrar(5) }, voltar)
             }
 
             // ---------------------------------------------------------------- 6. opcionais
             5 -> {
                 f.trocarTitulo("Extras (opcionais)", "Etapa 6 de $ETAPAS")
                 f.paragrafo("Dá para pular tudo aqui e fazer depois no menu. Cada um deixa a $n mais completa.")
-
-                // Gemini
-                f.cartao("Gemini do Google (grátis)")
-                f.adicionar(f.aviso("Para eu ler PDF, notas fiscais e áudios, guardar memória e estudar. Também é grátis."), 2)
-                f.paragrafo("1. Toque em Abrir o Google AI Studio.\n" +
-                    "2. Entre com a sua conta do Google e aceite os termos.\n" +
-                    "3. Toque em Create API key (Criar chave de API) e escolha o projeto que aparecer.\n" +
-                    "4. Copie a chave (começa com AIza), volte aqui, cole e toque em Conferir.", 14f, android.graphics.Color.WHITE)
-                f.adicionar(f.botao("Abrir o Google AI Studio") { abrir("https://aistudio.google.com/apikey") }, 12)
-                val temGemini = chave().isNotBlank()
-                val (bGem, gem) = f.campo("Chave do Gemini", "", if (temGemini) "Chave salva ✓ (cole outra só para trocar)" else "AIza…",
-                    InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD)
-                f.adicionar(bGem, 12)
-                val estadoGem = f.aviso(if (temGemini) "✓ Gemini configurado." else "")
-                f.adicionar(estadoGem)
-                f.adicionar(f.botao("Conferir a chave do Gemini") {
-                    val k = gem.text.toString().trim()
-                    if (k.isBlank()) return@botao Toast.makeText(this, "Cole a chave no campo primeiro.", Toast.LENGTH_SHORT).show()
-                    estadoGem.text = "Conferindo com o Google…"
-                    Thread {
-                        val erro = conferirChaveGemini(k)
-                        runOnUiThread {
-                            if (erro == null) {
-                                Cofre.guardar(prefs, MainActivity.PREF_CHAVE, k)
-                                gemini = null
-                                Diario.anotar(this, "conexao", "Chave do Gemini configurada no cadastro guiado", "tela")
-                                estadoGem.text = "✓ Funcionou! Gemini configurado."
-                                ajustes?.atualizar()
-                            } else estadoGem.text = "✗ $erro"
-                        }
-                    }.start()
-                }, 8)
-
-                // Cloudflare
-                f.cartao("Cloudflare (reserva grátis)")
-                f.adicionar(f.aviso("Se a Groq chegar no limite do dia, eu pergunto para a Cloudflare. Bom para lojas com muitas conversas."), 2)
-                f.paragrafo("1. Toque em Abrir a Cloudflare e crie uma conta grátis (só e-mail e senha).\n" +
-                    "2. No menu, entre em AI → Workers AI → Use REST API.\n" +
-                    "3. Copie o Account ID (32 letras e números) e cole no primeiro campo.\n" +
-                    "4. Toque em Create a Workers AI API Token, depois em Create API Token, copie e cole no segundo campo.\n" +
-                    "5. Toque em Conferir.", 14f, android.graphics.Color.WHITE)
-                f.adicionar(f.botao("Abrir a Cloudflare") { abrir(SegundaIA.CLOUDFLARE.site) }, 12)
-                val temCf = SegundaIA.chaveCloudflare(this).isNotBlank()
-                val (bConta, conta) = f.campo("Account ID", SegundaIA.contaCloudflare(this), "32 letras e números")
-                val (bCf, cf) = f.campo("API Token", "", if (temCf) "Chave salva ✓ (cole outra só para trocar)" else "Token do Workers AI",
-                    InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD)
-                f.adicionar(bConta, 12)
-                f.adicionar(bCf, 12)
-                val estadoCf = f.aviso(if (temCf) "✓ Cloudflare configurada." else "")
-                f.adicionar(estadoCf)
-                f.adicionar(f.botao("Conferir a Cloudflare") {
-                    val k = cf.text.toString().ifBlank { SegundaIA.chaveCloudflare(this) }
-                    if (k.isBlank() || conta.text.isBlank()) return@botao Toast.makeText(this, "Cole o Account ID e o token.", Toast.LENGTH_SHORT).show()
-                    val contaAntes = SegundaIA.contaCloudflare(this)
-                    val chaveAntes = SegundaIA.chaveCloudflare(this)
-                    SegundaIA.salvarCloudflare(this, conta.text.toString(), k)
-                    estadoCf.text = "Conferindo com a Cloudflare…"
-                    Thread {
-                        val r = try { Result.success(SegundaIA.testar(applicationContext, segunda = true)) } catch (e: Exception) { Result.failure(e) }
-                        runOnUiThread {
-                            r.onSuccess {
-                                estadoCf.text = "✓ Funcionou! Cloudflare configurada."
-                                ajustes?.atualizar()
-                            }.onFailure {
-                                SegundaIA.salvarCloudflare(this, contaAntes, chaveAntes)
-                                estadoCf.text = "✗ Não funcionou: ${it.message ?: "confira o Account ID e o token"}."
-                            }
-                        }
-                    }.start()
-                }, 8)
 
                 // cobrança por link (loja sem site)
                 if (comSite == false) {
@@ -361,7 +254,7 @@ internal fun MainActivity.cadastroGuiado(etapaInicial: Int = 0) {
                 // Instagram
                 f.cartao("Instagram da loja")
                 f.adicionar(f.aviso(if (Instagram.conectado(this)) "✓ Instagram conectado (@${Instagram.usuario(this)})."
-                else "Para eu postar no feed e nos stories sozinha. Precisa de uma conta comercial ou de criador no Instagram."), 2)
+                else "Para eu postar no feed e nos stories sozinha. Precisa de uma conta comercial ou de criador no Instagram e da API da Meta (o passo a passo aparece ao tocar em Conectar)."), 2)
                 f.adicionar(f.botao("Conectar o Instagram") { conectarInstagram() }, 10)
 
                 f.acoes(f.botao("Continuar", primario = true) { mostrar(6) }, voltar)
@@ -379,9 +272,7 @@ internal fun MainActivity.cadastroGuiado(etapaInicial: Int = 0) {
                     (if (semSite) "Sem site: catálogo aqui na $n" else "Site: " + (Perfil.site.removePrefix("https://").ifBlank { "conectar depois" })) to
                         (semSite || ferramentas.loja.conectada),
                     "Regras de venda" to Perfil.regrasConfiguradas,
-                    "IA grátis (Groq)" to SegundaIA.chave(this).isNotBlank(),
-                    "Gemini (PDF, notas, áudio, memória)" to chave().isNotBlank(),
-                    "Reserva Cloudflare" to SegundaIA.chaveCloudflare(this).isNotBlank(),
+                    "Inteligência da $n (servidor)" to SegundaIA.doServidorDisponivel(this),
                     "Instagram" to Instagram.conectado(this),
                 )
                 for ((t, ok) in itens) f.adicionar(TextView(this).apply {
