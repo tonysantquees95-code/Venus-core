@@ -107,6 +107,16 @@ export function IconeLixeira(props: SVGProps<SVGSVGElement>) {
   );
 }
 
+/** Microfone. */
+export function IconeMicrofone(props: SVGProps<SVGSVGElement>) {
+  return (
+    <Svg {...props}>
+      <rect x="9" y="3" width="6" height="11" rx="3" {...semMiolo} />
+      <path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21M9 21h6" {...semMiolo} />
+    </Svg>
+  );
+}
+
 /** Lojinha (Minha empresa). */
 export function IconeEmpresa(props: SVGProps<SVGSVGElement>) {
   return (
