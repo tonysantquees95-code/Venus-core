@@ -4,6 +4,11 @@ main = "src/index.js"
 compatibility_date = "2026-06-01"
 workers_dev = true
 
+# Site de vendas da Vênus (pasta site/ na raiz do repositório), servido pelo próprio Worker.
+# Os arquivos têm prioridade; qualquer outro endereço (/id, /v/loja, /saude…) continua indo para o código.
+[assets]
+directory = "../site"
+
 [[d1_databases]]
 binding = "DB"
 database_name = "venus"
@@ -22,7 +27,7 @@ crons = ["17 4 * * *", "*/10 * * * *"]
 # ---------------------------------------------------------------------------
 [vars]
 # Origens do app web/PWA/Capacitor. Acrescente aqui o endereço do PWA quando publicado.
-ORIGENS_PERMITIDAS = "https://tonysantquees95-code.github.io,app://venus,https://localhost,capacitor://localhost,http://localhost,http://localhost:5173,http://localhost:5174,http://localhost:5175"
+ORIGENS_PERMITIDAS = "app://venus,https://localhost,capacitor://localhost,http://localhost,http://localhost:5173,http://localhost:5174,http://localhost:5175"
 MODELO_GROQ = "llama-3.3-70b-versatile"
 MODELO_GROQ_RAPIDO = "llama-3.1-8b-instant"
 MODELO_DEEPSEEK = "deepseek-chat"
