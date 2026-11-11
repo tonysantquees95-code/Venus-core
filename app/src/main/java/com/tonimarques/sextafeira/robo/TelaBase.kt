@@ -1,6 +1,7 @@
 package com.tonimarques.sextafeira.robo
 
 import android.app.Activity
+import com.tonimarques.sextafeira.Aparencia
 import android.graphics.Color
 import android.graphics.drawable.GradientDrawable
 import android.text.InputType
