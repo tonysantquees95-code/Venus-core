@@ -33,7 +33,24 @@ internal fun MainActivity.pedirNuvem(metodo: String, caminho: String, corpo: JSO
 }
 
 internal fun MainActivity.abrirCentral() {
+    val insta = Instagram.usuario(this).takeIf { Instagram.conectado(this) }
+    val pref = prefs.getString(DadosDaLoja.PREF_LINK, "site").orEmpty()
+    val whats = DadosDaLoja.guardado(prefs, DadosDaLoja.PREF_WHATSAPP)
+    val usa = "Usa: " + listOfNotNull(
+        DadosDaLoja.nomeDoLink(pref, Perfil.site).lowercase(), Perfil.site.takeIf { it.isNotBlank() && pref != "vitrine" },
+        DadosDaLoja.arroba(insta).takeIf { it.isNotBlank() }, DadosDaLoja.telefoneBonito(whats).takeIf { whats.isNotBlank() },
+    ).joinToString(" · ") + "."
     val s = listOf(
+        TelaDeAjustes.Secao(
+            "Atalhos prontos", listOf(
+                TelaDeAjustes.Ajuste("QR Code da minha loja", { usa }) { qrDaLoja() },
+                TelaDeAjustes.Ajuste("Panfleto da minha loja", { "Ofertas do catálogo, contato e QR Code, já preenchidos." }) { criarPanfleto() },
+                TelaDeAjustes.Ajuste("Cartão de visita", { "Nome, WhatsApp, Instagram e QR Code da loja já preenchidos." }) { criarCartao() },
+                TelaDeAjustes.Ajuste("Criar link curto da loja", { "Cria o link curto do endereço da loja, ou reaproveita o que já existe, e já oferece QR, panfleto e cartão." }) { criarLinkCurtoDaLoja() },
+                TelaDeAjustes.Ajuste("Meus links curtos", { "Os links que você já criou, cada um com QR Code, panfleto e cartão em um toque." }) { abrirLinksCurtos() },
+            ) + (if (insta != null) listOf(TelaDeAjustes.Ajuste("QR Code do Instagram ${DadosDaLoja.arroba(insta)}", { "Já conectado: abre o perfil de quem ler." }) { qrDoInstagram(insta) }) else emptyList()) +
+                listOf(TelaDeAjustes.Ajuste("QR Code do Pix", { if (DadosDaLoja.guardado(prefs, DadosDaLoja.PREF_PIX).isBlank()) "Informe a chave Pix uma vez; depois ela fica guardada." else "Usa a chave Pix que você já informou." }) { qrPix() })
+        ),
         TelaDeAjustes.Secao(
             "Loja online", listOf(
                 TelaDeAjustes.Ajuste("Canais de venda", { "Nuvemshop, Mercado Livre e site próprio (até 3) com um estoque só: vendeu em um, baixa em todos; cancelou, devolveu ou reembolsou, o estoque volta sozinho." }) { abrirCanais() },
@@ -57,7 +74,7 @@ internal fun MainActivity.abrirCentral() {
         ),
         TelaDeAjustes.Secao(
             "Plano", listOf(
-                TelaDeAjustes.Ajuste("Assinatura Plano Fundadores", { "R\$ 49,90 por mês, com 7 dias grátis. Pagamento por InfinitePay ou Mercado Pago." }) { abrirAssinatura() },
+                TelaDeAjustes.Ajuste("Assinatura Plano Fundadores", { "R\$ 49,90 por mês, com 7 dias grátis. Cobrança mensal automática pelo Mercado Pago da Vênus: você não precisa informar nenhuma chave." }) { abrirAssinatura() },
             )
         ),
     )
@@ -194,9 +211,7 @@ internal fun MainActivity.abrirVitrine(anterior: TelaDeAjustes? = null) {
             var tela: TelaDeAjustes? = null
             val links = l.optJSONArray("links").lista().map { k ->
                 TelaDeAjustes.Ajuste(k.optString("rotulo").ifBlank { k.optString("curto") }, { "${k.optString("curto")} · ${k.optInt("cliques")} cliques" }) {
-                    escolher(k.optString("curto"), listOf(
-                        "Copiar link" to { copiar("Link", k.optString("curto")) },
-                        "Compartilhar" to { compartilharTexto(k.optString("curto")) },
+                    acoesDoLink(k.optString("curto"), k.optString("curto"), listOf(
                         "Apagar" to { pedirNuvem("DELETE", "/links/${k.optString("codigo")}") { abrirVitrine(tela) } },
                     ))
                 }
@@ -258,7 +273,7 @@ internal fun MainActivity.abrirAssinatura(anterior: TelaDeAjustes? = null) {
         }
         val itens = mutableListOf<TelaDeAjustes.Ajuste>()
         itens += TelaDeAjustes.Ajuste("Situação", { estado }) { }
-        itens += TelaDeAjustes.Ajuste("Pagar o Plano Fundadores", { "R\$ 49,90 por 30 dias. Pague e depois libere com o código de duas etapas." }) { escolherGateway(tela) }
+        itens += TelaDeAjustes.Ajuste("Pagar o Plano Fundadores", { "Assinatura mensal de R\$ 49,90, renovada sozinha. O link já abre com o valor preenchido; não precisa de chave nem de conta sua." }) { cobrar("mercadopago") }
         itens += TelaDeAjustes.Ajuste("Verificação em duas etapas", {
             if (a.optBoolean("doisFatores")) "Ativa. O app autenticador gera o código que libera o acesso." else "Ainda não ativada: necessária para liberar o plano pago."
         }) { if (a.optBoolean("doisFatores")) aviso("A verificação em duas etapas já está ativa.") else ativar2fa(tela) }
@@ -269,17 +284,10 @@ internal fun MainActivity.abrirAssinatura(anterior: TelaDeAjustes? = null) {
     }
 }
 
-private fun MainActivity.escolherGateway(tela: TelaDeAjustes?) {
-    escolher("Pagar com…", listOf(
-        "Mercado Pago" to { cobrar("mercadopago") },
-        "InfinitePay" to { cobrar("infinitepay") },
-    ))
-}
-
 private fun MainActivity.cobrar(gateway: String) {
     pedirNuvem("POST", "/assinatura/cobrar", JSONObject().put("gateway", gateway), "Gerando o link…") { j ->
         val url = j.optString("url")
-        aviso("Pague no navegador e volte para a ${Marca.nome}: o acesso é liberado com o código de duas etapas.")
+        aviso("Confirme a assinatura no Mercado Pago e volte para a ${Marca.nome}: o acesso é liberado com o código de duas etapas.")
         try { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) } catch (e: Exception) { copiar("Link de pagamento", url) }
     }
 }

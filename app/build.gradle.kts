@@ -69,6 +69,8 @@ dependencies {
     implementation("com.alphacephei:vosk-android:0.3.47@aar")
     // Recorte do produto na foto (trocar o fundo), feito no próprio celular.
     implementation("com.google.android.gms:play-services-mlkit-subject-segmentation:16.0.0-beta1")
+    // QR Code gerado no próprio celular (cartão, panfleto e QR da Central da loja não dependem mais do servidor).
+    implementation("com.google.zxing:core:3.5.3")
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.json:json:20240303")
 }

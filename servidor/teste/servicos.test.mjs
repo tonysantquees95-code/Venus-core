@@ -144,7 +144,7 @@ test("assinatura: webhook confirma, mas o acesso só sai com 2FA; pagamento repe
   globalThis.fetch = async (url, op = {}) => {
     url = String(url);
     const r = (d) => new Response(JSON.stringify(d));
-    if (url.endsWith("/checkout/preferences")) { env.__ref = JSON.parse(op.body).external_reference; return r({ init_point: "https://mp.test/pagar" }); }
+    if (url.endsWith("/preapproval")) { env.__ref = JSON.parse(op.body).external_reference; return r({ init_point: "https://mp.test/pagar" }); }
     if (url.includes("/v1/payments/")) return r({ id: 555, status: pagoMP ? "approved" : "pending", external_reference: env.__ref, transaction_amount: 49.9 });
     if (url.endsWith("/links")) { env.__ref = JSON.parse(op.body).order_nsu; return r({ url: "https://ip.test/pagar" }); }
     if (url.endsWith("/payment_check")) return r({ paid: true, paid_amount: 4990 });
@@ -198,7 +198,7 @@ test("pagamento com valor menor que o plano não vale", async () => {
   const orig = globalThis.fetch;
   globalThis.fetch = async (url, op = {}) => {
     url = String(url);
-    if (url.endsWith("/checkout/preferences")) { env.__ref = JSON.parse(op.body).external_reference; return new Response(JSON.stringify({ init_point: "https://mp.test" })); }
+    if (url.endsWith("/preapproval")) { env.__ref = JSON.parse(op.body).external_reference; return new Response(JSON.stringify({ init_point: "https://mp.test" })); }
     return new Response(JSON.stringify({ id: 9, status: "approved", external_reference: env.__ref, transaction_amount: 1 }));
   };
   try {
