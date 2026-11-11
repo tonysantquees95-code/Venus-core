@@ -259,3 +259,67 @@ test("atalhos do Vindex e projeto Vindex ligado ao repositório", async () => {
   const apks = apksDoProjeto(p, [{ tag_name: "1.7", html_url: "u", assets: [{ id: 1, name: "Vindex.apk", size: 1 }, { id: 2, name: "VindexSetup.exe", size: 2 }] }]);
   assert.equal(apks.find((a) => a.app === "vindex-windows").versao.numero, 7);
 });
+
+test("cofre de chaves: senha forte, valores nunca voltam, trava por tentativas e só o admin entra", async () => {
+  const env = ENV();
+  const adm = await admin(env);
+  const outro = await cadastrar(env, { email: "lojista@x.com", senha: "senha-forte-1", dispositivo: disp(3) });
+  const SENHA = "CofreSeguro2026Vindex";
+
+  // quem não é admin não passa
+  assert.equal((await chamar(env, outro.token, "/dev/cofre/estado")).status, 401);
+  assert.equal((await chamar(env, adm.token, "/dev/cofre/estado")).d.configurado, false);
+
+  // senha fraca é recusada; forte é aceita uma vez só
+  assert.equal((await chamar(env, adm.token, "/dev/cofre/iniciar", "POST", { senha: "curta1" })).d.codigo, "senha_fraca");
+  assert.equal((await chamar(env, adm.token, "/dev/cofre/iniciar", "POST", { senha: "somenteletrasaqui" })).d.codigo, "senha_fraca");
+  assert.equal((await chamar(env, adm.token, "/dev/cofre/iniciar", "POST", { senha: SENHA })).status, 201);
+  assert.equal((await chamar(env, adm.token, "/dev/cofre/iniciar", "POST", { senha: SENHA })).d.codigo, "cofre_existe");
+  assert.equal(env.DB._db.prepare("SELECT hash FROM cofre_acesso").get().hash.includes(SENHA), false);
+
+  // guardar e listar: o valor nunca aparece
+  const CHAVE = "gsk_ABCDEFGHIJKLMNOP12345678";
+  assert.equal((await chamar(env, adm.token, "/dev/cofre/guardar", "POST", { senha: SENHA, nome: "groq_api_key", valor: CHAVE })).d.previa, "••••5678");
+  assert.equal((await chamar(env, adm.token, "/dev/cofre/guardar", "POST", { senha: SENHA, nome: "x", valor: CHAVE })).d.codigo, "nome_invalido");
+  assert.equal((await chamar(env, adm.token, "/dev/cofre/guardar", "POST", { senha: SENHA, nome: "ABC_KEY", valor: "com espaço dentro" })).d.codigo, "valor_invalido");
+  const lista = await chamar(env, adm.token, "/dev/cofre/listar", "POST", { senha: SENHA });
+  assert.equal(lista.status, 200);
+  assert.equal(JSON.stringify(lista.d).includes(CHAVE), false);
+  const g = lista.d.chaves.find((c) => c.nome === "GROQ_API_KEY");
+  assert.deepEqual([g.noCofre, g.previa], [true, "••••5678"]);
+  assert.equal(lista.d.chaves.find((c) => c.nome === "GEMINI_API_KEY").noCofre, false);
+  assert.equal(env.DB._db.prepare("SELECT valor FROM cofre_chaves").get().valor.includes(CHAVE), false); // cifrado
+
+  // o caminho de leitura do servidor devolve a chave do cofre, ou a do ambiente
+  const { lerSegredo } = await import("../src/dev/cofre.js");
+  assert.equal(await lerSegredo(env, "GROQ_API_KEY"), CHAVE);
+  assert.equal(await lerSegredo({ ...env, GEMINI_API_KEY: "do-ambiente-123" }, "GEMINI_API_KEY"), "do-ambiente-123");
+
+  // trocar a chave e apagar
+  await chamar(env, adm.token, "/dev/cofre/guardar", "POST", { senha: SENHA, nome: "GROQ_API_KEY", valor: "gsk_NOVA_CHAVE_9999" });
+  assert.equal(await lerSegredo(env, "GROQ_API_KEY"), "gsk_NOVA_CHAVE_9999");
+  assert.equal((await chamar(env, adm.token, "/dev/cofre/apagar", "POST", { senha: SENHA, nome: "GROQ_API_KEY" })).d.ok, true);
+
+  // senha errada: avisa quantas faltam e depois tranca, até com a senha certa
+  for (let i = 0; i < 4; i++) assert.equal((await chamar(env, adm.token, "/dev/cofre/listar", "POST", { senha: "Errada123456789" })).d.codigo, "cofre_senha");
+  const quinta = await chamar(env, adm.token, "/dev/cofre/listar", "POST", { senha: "Errada123456789" });
+  assert.equal(quinta.status, 403);
+  const trancado = await chamar(env, adm.token, "/dev/cofre/listar", "POST", { senha: SENHA });
+  assert.equal(trancado.status, 429);
+  assert.equal(trancado.d.codigo, "cofre_bloqueado");
+  assert.ok((await chamar(env, adm.token, "/dev/cofre/estado")).d.bloqueadoAte > Date.now());
+  // depois do prazo, a senha certa volta a abrir
+  env.DB._db.prepare("UPDATE cofre_acesso SET bloqueado_ate = 1").run();
+  assert.equal((await chamar(env, adm.token, "/dev/cofre/listar", "POST", { senha: SENHA })).status, 200);
+
+  // trocar a senha
+  assert.equal((await chamar(env, adm.token, "/dev/cofre/trocar-senha", "POST", { senha: SENHA, nova: "fraca" })).d.codigo, "senha_fraca");
+  assert.equal((await chamar(env, adm.token, "/dev/cofre/trocar-senha", "POST", { senha: SENHA, nova: "NovaSenhaDoCofre77" })).d.ok, true);
+  assert.equal((await chamar(env, adm.token, "/dev/cofre/listar", "POST", { senha: SENHA })).d.codigo, "cofre_senha");
+  assert.equal((await chamar(env, adm.token, "/dev/cofre/listar", "POST", { senha: "NovaSenhaDoCofre77" })).status, 200);
+
+  // o histórico não tem valores de chave
+  const h = JSON.stringify((await chamar(env, adm.token, "/dev/cofre/listar", "POST", { senha: "NovaSenhaDoCofre77" })).d.historico);
+  assert.equal(h.includes("gsk_"), false);
+  assert.ok(h.includes("senha_errada"));
+});

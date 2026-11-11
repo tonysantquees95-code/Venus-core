@@ -6,6 +6,7 @@ import { TABELA } from "../ia/roteador.js";
 import { criarAdmin, emailAdmin, entrarAdmin, exigirAdmin } from "./admin.js";
 import { PROJETOS, REPO_VALIDO, apksDoProjeto, buildsDoRepo, estadoGeral, linkDoApk, listaDeVersoes, metricasDoRepo } from "./github.js";
 import { bi, esquecerProvedores, listarTrafego } from "./uso.js";
+import * as cofre from "./cofre.js";
 
 const CORS = { "access-control-allow-origin": "*", "access-control-allow-headers": "authorization,content-type", "access-control-allow-methods": "GET,POST,PUT,DELETE,OPTIONS" };
 const json = (d, status = 200) => new Response(JSON.stringify(d), { status, headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store", ...CORS } });
@@ -240,6 +241,17 @@ export async function tratarDev(req, env, url, caminho) {
       await env.DB.prepare("INSERT INTO dev_config (chave, valor, atualizado) VALUES (?, ?, ?) ON CONFLICT(chave) DO UPDATE SET valor = excluded.valor, atualizado = excluded.atualizado").bind(d.chave, v, agora).run();
       esquecerProvedores();
       return json({ ok: true, chave: d.chave, valor: v });
+    }
+    // cofre de chaves: além do JWT de superadmin, toda operação pede a senha do cofre (menos ver se ela já existe)
+    if (caminho === "/dev/cofre/estado" && req.method === "GET") return json({ ...(await cofre.estado(env, agora)), sugeridas: cofre.CHAVES_SUGERIDAS });
+    if (caminho === "/dev/cofre/iniciar" && req.method === "POST") return json(await cofre.iniciar(env, (await corpo(req)).senha, agora), 201);
+    if (caminho.startsWith("/dev/cofre/") && req.method === "POST") {
+      const d = await corpo(req);
+      await cofre.conferir(env, d.senha, agora);
+      if (caminho === "/dev/cofre/listar") return json({ chaves: await cofre.listar(env, agora), historico: await cofre.historico(env, 20) });
+      if (caminho === "/dev/cofre/guardar") return json(await cofre.guardar(env, d, agora));
+      if (caminho === "/dev/cofre/apagar") return json(await cofre.apagar(env, d.nome, agora));
+      if (caminho === "/dev/cofre/trocar-senha") return json(await cofre.trocarSenha(env, d.nova, agora));
     }
     if (caminho === "/dev/fases" && req.method === "POST") return json(await salvarFase(env, null, await corpo(req), agora), 201);
     m = /^\/dev\/fases\/([a-z0-9-]{3,40})$/.exec(caminho);
