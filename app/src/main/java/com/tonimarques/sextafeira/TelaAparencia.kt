@@ -118,35 +118,57 @@ class TelaAparencia(
 
     private fun desenhar() {
         conteudo.removeAllViews()
-        secao("MODELO DO ORBE")
-        fichas(Tema.Modelo.values().map { it.rotulo }, Tema.modelo(prefs).ordinal) {
-            Tema.definirModelo(prefs, Tema.Modelo.values()[it]); Diario.anotar(a, "Aparência", "Orbe: ${Tema.Modelo.values()[it].rotulo}.", "tela", true); aoMudar(); atualizarPrevia(); desenhar()
+        val destaqueAtual = destaque()
+        secao("ORBE HOLOGRÁFICO")
+        grade(Tema.Modelo.values().size) { i ->
+            val m = Tema.Modelo.values()[i]
+            val mini = Orbe(a).apply { aplicarTema(m, Tema.cor(prefs)) }
+            cartaoDeOpcao(mini, a.dp(78), m.rotulo, m.descricao, Tema.modelo(prefs) == m, destaqueAtual) {
+                Tema.definirModelo(prefs, m); Diario.anotar(a, "Aparência", "Orbe: ${m.rotulo}.", "tela", true); aoMudar(); atualizarPrevia(); desenhar()
+            }
         }
-        secao("ÍCONES")
-        fichas(Tema.Icones.values().map { it.rotulo }, Tema.icones(prefs).ordinal) {
-            Tema.definirIcones(prefs, Tema.Icones.values()[it]); Diario.anotar(a, "Aparência", "Ícones: ${Tema.Icones.values()[it].rotulo}.", "tela", true); aoMudar(); atualizarPrevia(); desenhar()
+        secao("PACOTE DE ÍCONES")
+        val corIcone = if (Tema.cor(prefs) != 0) 0xFF000000.toInt() or Tema.cor(prefs) else a.corAtual
+        grade(Tema.Icones.values().size) { i ->
+            val p = Tema.Icones.values()[i]
+            val linha = LinearLayout(a).apply { gravity = Gravity.CENTER }
+            listOf(R.drawable.ic_conversas, R.drawable.ic_robo, R.drawable.ic_seta).forEach { res ->
+                val b = android.widget.ImageButton(a).apply { setImageResource(res); setPadding(a.dp(6), a.dp(6), a.dp(6), a.dp(6)); isClickable = false }
+                EstiloDeIcone.aplicar(b, p, corIcone, true, false, a::dp)
+                linha.addView(b, LinearLayout.LayoutParams(a.dp(30), a.dp(30)).apply { marginStart = a.dp(2); marginEnd = a.dp(2) })
+            }
+            cartaoDeOpcao(linha, a.dp(40), p.rotulo, p.descricao, Tema.icones(prefs) == p, destaqueAtual) {
+                Tema.definirIcones(prefs, p); Diario.anotar(a, "Aparência", "Ícones: ${p.rotulo}.", "tela", true); aoMudar(); atualizarPrevia(); desenhar()
+            }
         }
-        secao("COR")
+
+        secao("PALETA DE CORES")
         val atual = Tema.cor(prefs)
-        val grade = LinearLayout(a).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
-        val rolagem = android.widget.HorizontalScrollView(a).apply { isHorizontalScrollBarEnabled = false; addView(grade) }
+        val pilulas = LinearLayout(a).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
+        val rolagem = android.widget.HorizontalScrollView(a).apply { isHorizontalScrollBarEnabled = false; addView(pilulas) }
         for (p in Tema.PREDEFINIDAS) {
             val escolhida = p.cor == atual
-            val bolha = TextView(a).apply {
-                gravity = Gravity.CENTER
-                textSize = 11f
-                setTextColor(Color.WHITE)
-                text = if (p.cor == 0) "A" else ""
+            val pilula = LinearLayout(a).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                setPadding(a.dp(12), 0, a.dp(16), 0)
+                background = GradientDrawable().apply {
+                    cornerRadius = a.dp(22).toFloat()
+                    setColor(Color.argb(if (escolhida) 34 else 14, 255, 255, 255))
+                    setStroke(a.dp(if (escolhida) 2 else 1), if (escolhida) destaqueAtual else Color.argb(60, 255, 255, 255))
+                }
                 contentDescription = p.nome
+                setOnClickListener { Tema.definirCor(prefs, p.cor); Diario.anotar(a, "Aparência", "Cor: ${p.nome}.", "tela", true); aoMudar(); atualizarPrevia(); desenhar() }
+            }
+            pilula.addView(View(a).apply {
                 background = GradientDrawable().apply {
                     shape = GradientDrawable.OVAL
                     if (p.cor == 0) setColors(intArrayOf(Color.parseColor("#E36BD0"), Color.parseColor("#36D6FF"), Color.parseColor("#F5B93A")))
                     else setColor(0xFF000000.toInt() or p.cor)
-                    setStroke(a.dp(if (escolhida) 3 else 1), if (escolhida) Color.WHITE else Color.argb(80, 255, 255, 255))
                 }
-                setOnClickListener { Tema.definirCor(prefs, p.cor); Diario.anotar(a, "Aparência", "Cor: ${p.nome}.", "tela", true); aoMudar(); atualizarPrevia(); desenhar() }
-            }
-            grade.addView(bolha, LinearLayout.LayoutParams(a.dp(46), a.dp(46)).apply { marginEnd = a.dp(10) })
+            }, LinearLayout.LayoutParams(a.dp(22), a.dp(22)).apply { marginEnd = a.dp(8) })
+            pilula.addView(TextView(a).apply { text = p.nome; textSize = 13.5f; setTextColor(Color.WHITE); typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL) })
+            pilulas.addView(pilula, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, a.dp(44)).apply { marginEnd = a.dp(8) })
         }
         conteudo.addView(rolagem)
         conteudo.addView(TextView(a).apply {
@@ -156,24 +178,33 @@ class TelaAparencia(
             setPadding(0, a.dp(6), 0, 0)
         })
 
-        secao("COR PERSONALIZADA")
-        val base = if (atual != 0) atual else Tema.PREDEFINIDAS[1].cor
-        amostra = View(a).apply {
-            background = GradientDrawable().apply { cornerRadius = a.dp(14).toFloat(); setColor(0xFF000000.toInt() or base) }
+        // painel do seletor RGB (mesmo formato do app do computador)
+        val base = if (atual != 0) atual else Tema.PREDEFINIDAS[2].cor
+        val painel = LinearLayout(a).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(a.dp(14), a.dp(14), a.dp(14), a.dp(14))
+            background = GradientDrawable().apply { cornerRadius = a.dp(20).toFloat(); setColor(Color.argb(16, 255, 255, 255)); setStroke(a.dp(1), Color.argb(40, 255, 255, 255)) }
         }
-        conteudo.addView(amostra, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, a.dp(44)))
-        val nomes = listOf("Vermelho", "Verde", "Azul")
+        painel.addView(TextView(a).apply {
+            text = "Destaque"
+            textSize = 13f
+            setTextColor(Color.parseColor("#06081A"))
+            typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
+            setPadding(a.dp(16), a.dp(7), a.dp(16), a.dp(7))
+            background = GradientDrawable().apply { cornerRadius = a.dp(20).toFloat(); setColor(destaqueAtual) }
+        }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+        val letras = listOf("R", "G", "B")
+        val tons = listOf("#FF5A6E", "#4ADE80", "#5AA9FF")
         val valores = listOf(Tema.vermelho(base), Tema.verde(base), Tema.azul(base))
-        barras = nomes.mapIndexed { i, nome ->
-            conteudo.addView(TextView(a).apply {
-                text = nome
-                textSize = 12f
-                setTextColor(MainActivity.COR_TEXTO_APAGADO)
-                setPadding(0, a.dp(10), 0, 0)
-            })
-            SeekBar(a).apply {
+        valoresRgb = mutableListOf()
+        barras = letras.mapIndexed { i, letra ->
+            val linha = LinearLayout(a).apply { gravity = Gravity.CENTER_VERTICAL }
+            linha.addView(TextView(a).apply { text = letra; textSize = 13f; typeface = Typeface.DEFAULT_BOLD; setTextColor(Color.parseColor(tons[i])) }, LinearLayout.LayoutParams(a.dp(18), ViewGroup.LayoutParams.WRAP_CONTENT))
+            val barra = SeekBar(a).apply {
                 max = 255
                 progress = valores[i]
+                progressTintList = android.content.res.ColorStateList.valueOf(Color.parseColor(tons[i]))
+                thumbTintList = android.content.res.ColorStateList.valueOf(Color.parseColor(tons[i]))
                 setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
                     override fun onProgressChanged(s: SeekBar?, v: Int, doUsuario: Boolean) {
                         if (doUsuario && !atualizandoBarras) aplicarRgb(Tema.rgb(barras[0].progress, barras[1].progress, barras[2].progress))
@@ -181,9 +212,20 @@ class TelaAparencia(
                     override fun onStartTrackingTouch(s: SeekBar?) {}
                     override fun onStopTrackingTouch(s: SeekBar?) {}
                 })
-                conteudo.addView(this, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
             }
+            linha.addView(barra, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+            val caixa = TextView(a).apply {
+                text = valores[i].toString(); textSize = 14f; gravity = Gravity.CENTER; setTextColor(Color.WHITE)
+                background = GradientDrawable().apply { cornerRadius = a.dp(10).toFloat(); setColor(Color.argb(20, 255, 255, 255)); setStroke(a.dp(1), Color.argb(50, 255, 255, 255)) }
+            }
+            valoresRgb.add(caixa)
+            linha.addView(caixa, LinearLayout.LayoutParams(a.dp(48), a.dp(34)).apply { marginStart = a.dp(8) })
+            painel.addView(linha, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = a.dp(8) })
+            barra
         }
+        val rodape = LinearLayout(a).apply { gravity = Gravity.CENTER_VERTICAL }
+        amostra = View(a).apply { background = GradientDrawable().apply { cornerRadius = a.dp(10).toFloat(); setColor(0xFF000000.toInt() or base) } }
+        rodape.addView(amostra, LinearLayout.LayoutParams(a.dp(52), a.dp(40)))
         campoHex = EditText(a).apply {
             setText(Tema.hex(base))
             setTextColor(Color.WHITE)
@@ -201,7 +243,47 @@ class TelaAparencia(
                 }
             })
         }
-        conteudo.addView(campoHex, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = a.dp(8) })
+        rodape.addView(campoHex, LinearLayout.LayoutParams(a.dp(110), ViewGroup.LayoutParams.WRAP_CONTENT).apply { marginStart = a.dp(12) })
+        textoRgb = TextView(a).apply { textSize = 12f; setTextColor(MainActivity.COR_TEXTO_APAGADO); text = "rgb(${valores[0]}, ${valores[1]}, ${valores[2]})" }
+        rodape.addView(textoRgb, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { marginStart = a.dp(10) })
+        painel.addView(rodape, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = a.dp(14) })
+        conteudo.addView(painel, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = a.dp(12) })
+    }
+
+    private lateinit var valoresRgb: MutableList<TextView>
+    private lateinit var textoRgb: TextView
+
+    /** Cartão de opção: visual no alto, nome e descrição; o escolhido ganha o contorno na cor de destaque. */
+    private fun cartaoDeOpcao(visual: View, altura: Int, nome: String, descricao: String, marcada: Boolean, realce: Int, aoClicar: () -> Unit): View =
+        LinearLayout(a).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER_HORIZONTAL
+            setPadding(a.dp(6), a.dp(10), a.dp(6), a.dp(10))
+            background = GradientDrawable().apply {
+                cornerRadius = a.dp(18).toFloat()
+                setColor(if (marcada) Color.argb(40, Color.red(realce), Color.green(realce), Color.blue(realce)) else Color.argb(14, 255, 255, 255))
+                setStroke(a.dp(if (marcada) 2 else 1), if (marcada) realce else Color.argb(50, 255, 255, 255))
+            }
+            isClickable = true
+            contentDescription = "$nome. $descricao" + if (marcada) ". Escolhido" else ""
+            setOnClickListener { aoClicar() }
+            addView(visual, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, altura))
+            addView(TextView(a).apply { text = nome; textSize = 14.5f; gravity = Gravity.CENTER; setTextColor(Color.WHITE); typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL); setPadding(0, a.dp(8), 0, 0) })
+            addView(TextView(a).apply { text = descricao; textSize = 11f; gravity = Gravity.CENTER; setTextColor(MainActivity.COR_TEXTO_APAGADO); setPadding(0, a.dp(2), 0, 0) })
+        }
+
+    /** Grade de 3 colunas com `total` cartões. */
+    private fun grade(total: Int, criar: (Int) -> View) {
+        val g = LinearLayout(a).apply { orientation = LinearLayout.VERTICAL }
+        (0 until total).chunked(3).forEach { bloco ->
+            val linha = LinearLayout(a).apply { orientation = LinearLayout.HORIZONTAL }
+            for (k in 0 until 3) {
+                val i = bloco.getOrNull(k)
+                linha.addView(if (i != null) criar(i) else View(a), LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { marginEnd = if (k < 2) a.dp(8) else 0 })
+            }
+            g.addView(linha, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { bottomMargin = a.dp(8) })
+        }
+        conteudo.addView(g)
     }
 
     private fun aplicarRgb(rgb: Int, atualizarCampo: Boolean = true) {
@@ -212,6 +294,8 @@ class TelaAparencia(
         atualizandoBarras = true
         barras[0].progress = Tema.vermelho(rgbFinal); barras[1].progress = Tema.verde(rgbFinal); barras[2].progress = Tema.azul(rgbFinal)
         atualizandoBarras = false
+        valoresRgb[0].text = Tema.vermelho(rgbFinal).toString(); valoresRgb[1].text = Tema.verde(rgbFinal).toString(); valoresRgb[2].text = Tema.azul(rgbFinal).toString()
+        textoRgb.text = "rgb(${Tema.vermelho(rgbFinal)}, ${Tema.verde(rgbFinal)}, ${Tema.azul(rgbFinal)})"
         aoMudar()
         atualizarPrevia()
     }
@@ -224,30 +308,5 @@ class TelaAparencia(
             setTextColor(MainActivity.COR_TEXTO_APAGADO)
             setPadding(0, a.dp(20), 0, a.dp(8))
         })
-    }
-
-    private fun fichas(rotulos: List<String>, escolhida: Int, aoEscolher: (Int) -> Unit) {
-        val grade = LinearLayout(a).apply { orientation = LinearLayout.VERTICAL }
-        rotulos.chunked(3).forEachIndexed { bloco, parte ->
-        val linha = LinearLayout(a).apply { orientation = LinearLayout.HORIZONTAL }
-        parte.forEachIndexed { k, r ->
-            val i = bloco * 3 + k
-            val marcada = i == escolhida
-            linha.addView(TextView(a).apply {
-                text = r
-                textSize = 14f
-                gravity = Gravity.CENTER
-                setTextColor(if (marcada) Color.parseColor("#06081A") else Color.WHITE)
-                background = GradientDrawable().apply {
-                    cornerRadius = a.dp(22).toFloat()
-                    if (marcada) setColor(destaque()) else { setColor(Color.argb(14, 255, 255, 255)); setStroke(a.dp(1), Color.argb(60, 255, 255, 255)) }
-                }
-                setOnClickListener { aoEscolher(i) }
-            }, LinearLayout.LayoutParams(0, a.dp(44), 1f).apply { marginEnd = if (k < 2) a.dp(8) else 0 })
-        }
-        repeat(3 - parte.size) { linha.addView(View(a), LinearLayout.LayoutParams(0, a.dp(44), 1f).apply { marginEnd = a.dp(8) }) }
-        grade.addView(linha, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { bottomMargin = a.dp(8) })
-        }
-        conteudo.addView(grade)
     }
 }

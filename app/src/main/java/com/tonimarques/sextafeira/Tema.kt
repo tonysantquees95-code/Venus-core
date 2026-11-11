@@ -15,17 +15,23 @@ object Tema {
     const val PREF_ICONES = "tema_icones"
     const val PREF_COR = "tema_cor"
 
-    enum class Modelo(val rotulo: String) { LIQUIDO("Líquido"), CRISTAL("Cristal"), PULSO("Pulso"), NEURAL("Neural"), HOLOGRAMA("Holograma") }
-    enum class Icones(val rotulo: String) { VENUS("Vênus"), LINHA("Linha"), SOLIDO("Sólido"), NEON("Neon"), VIDRO("Vidro") }
+    enum class Modelo(val rotulo: String, val descricao: String) {
+        LIQUIDO("Aurora", "Névoa de luz girando"), CRISTAL("Prisma", "Cristal iridescente"), PULSO("Anéis", "Órbitas em 3D"),
+        NEURAL("Neural", "Constelação de partículas"), HOLOGRAMA("Holograma", "Projeção de luz em camadas"),
+    }
+    enum class Icones(val rotulo: String, val descricao: String) {
+        VENUS("Vênus", "Identidade da Vênus"), LINHA("Linha", "Traço fino e arredondado"), SOLIDO("Técnico", "Bloco sólido e firme"),
+        NEON("Neon", "Contorno luminoso"), VIDRO("Duotone", "Miolo translúcido, vidro fosco"),
+    }
 
     class Predefinida(val nome: String, val cor: Int)
 
     /** Cores prontas (0xRRGGBB, sem transparência). A primeira, 0, é "automática". */
     val PREDEFINIDAS = listOf(
         Predefinida("Automática", 0),
-        Predefinida("Magenta", 0xE36BD0),
+        Predefinida("Vênus", 0xE36BD0),
         Predefinida("Ciano", 0x36D6FF),
-        Predefinida("Dourado", 0xF5B93A),
+        Predefinida("Âmbar", 0xF5B93A),
         Predefinida("Esmeralda", 0x2ECC8F),
         Predefinida("Rubi", 0xE5384F),
         Predefinida("Violeta", 0x8F6BFF),
