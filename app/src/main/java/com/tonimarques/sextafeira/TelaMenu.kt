@@ -241,6 +241,7 @@ internal fun MainActivity.abrirMenu(@Suppress("UNUSED_PARAMETER") ancora: View) 
                         ajustes?.atualizar()
                     }
                 },
+                TelaDeAjustes.Ajuste("Ideias de vídeo (Reels)", { "Cria ideias de vídeo com os produtos do catálogo: roteiro, pedido pronto para um gerador de vídeo por IA, legenda e hashtags." }) { ideiasDeVideo() },
                 TelaDeAjustes.Ajuste("O que eu aprendi", { "Veja por tipo tudo o que a $n guardou na memória e apague o que estiver errado." }) { mostrarAprendizado() },
                 TelaDeAjustes.Ajuste("Estudo diário (memória vetorial)", {
                     val r = Estudo.ultimo(this)
