@@ -8,8 +8,10 @@ import { VitePWA } from "vite-plugin-pwa";
 export function criarConfigVite({ nome, nomeCurto, descricao, corTema, corFundo, porta, plugins = [] }) {
   return defineConfig(({ mode }) => {
     const nativo = mode === "capacitor";
+    // Endereço onde o app web fica (o servidor da Vênus serve em /app/; no resto, raiz)
+    const raiz = (process.env.VENUS_BASE || "/").replace(/\/?$/, "/");
     return {
-      base: nativo ? "./" : "/",
+      base: nativo ? "./" : raiz,
       server: { port: porta, strictPort: true, host: true },
       build: { outDir: "dist", sourcemap: !nativo, target: "es2020" },
       plugins: [
@@ -25,9 +27,9 @@ export function criarConfigVite({ nome, nomeCurto, descricao, corTema, corFundo,
               short_name: nomeCurto,
               description: descricao,
               lang: "pt-BR",
-              start_url: "/",
-              scope: "/",
-              id: "/",
+              start_url: raiz,
+              scope: raiz,
+              id: raiz,
               display: "standalone",
               display_override: ["standalone", "minimal-ui"],
               categories: ["business", "productivity"],
@@ -42,7 +44,7 @@ export function criarConfigVite({ nome, nomeCurto, descricao, corTema, corFundo,
               ]
             },
             workbox: {
-              navigateFallback: "/index.html",
+              navigateFallback: `${raiz}index.html`,
               // chamadas ao servidor (login, sincronização, /id, /v1) nunca vêm do cache
               navigateFallbackDenylist: [/^\/id(\/|$)/, /^\/v1\//, /^\/loja\//],
               globPatterns: ["**/*.{js,css,html,png,svg,woff2}"],

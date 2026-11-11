@@ -9,7 +9,7 @@ name: Servidor (Cloudflare)
 on:
   push:
     branches: [main]
-    paths: ["servidor/**", "site/**", ".github/workflows/servidor.yml"]
+    paths: ["servidor/**", "site/**", "venus-apps/apps/dois-em-um/**", "venus-apps/packages/**", ".github/workflows/servidor.yml"]
   workflow_dispatch:
 
 concurrency:
@@ -48,6 +48,17 @@ jobs:
         run: |
           for f in site/*.js; do node --check "$f"; done
           if grep -rEn "(APP_USR-|TEST-[0-9a-f]{8}|AIza[0-9A-Za-z_-]{20}|sk-[A-Za-z0-9]{20}|gsk_)" site; then echo "::error::Achei algo que parece chave no site."; exit 1; fi
+
+      # A Vênus web (a que o iPhone usa, instalável pela tela de início) vai junto com o servidor, em /app.
+      - name: Montar a Vênus web em site/app
+        working-directory: venus-apps
+        run: |
+          npm ci --no-audit --no-fund
+          VENUS_BASE=/app/ npm run build:web -w @venus/dois-em-um
+          rm -rf ../site/app
+          cp -r apps/dois-em-um/dist ../site/app
+          find ../site/app -name '*.map' -delete
+          test -f ../site/app/index.html
 
       - name: Banco D1 (cria na primeira vez)
         run: |

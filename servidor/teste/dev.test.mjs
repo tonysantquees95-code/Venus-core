@@ -242,6 +242,13 @@ test("atalhos curtos: /venus, /venus/android, /venus/windows e /paineldev", asyn
   assert.match(await responderAtalho(u, "/venus").text(), /Baixar para Windows/);
 });
 
+test("atalho /venus/web leva à Vênus web (iPhone)", () => {
+  const u = new URL("https://v.test/venus/web");
+  assert.ok(ehAtalho("/venus/web"));
+  assert.equal(responderAtalho(u, "/venus/web").headers.get("location"), "https://v.test/app/");
+  assert.ok(!ehAtalho("/vindex/web") === false); // regex comum aos dois prefixos
+});
+
 test("atalhos do Vindex e projeto Vindex ligado ao repositório", async () => {
   const u = new URL("https://v.test/x");
   assert.equal(ehAtalho("/vindex/windows"), true);
