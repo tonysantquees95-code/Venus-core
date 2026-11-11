@@ -205,3 +205,16 @@ test("token de app da suíte: mesma sessão do aparelho, não ocupa outra vaga; 
   const r = await tratarId(new Request("https://v.test/id/sso?app=vindex&voltar=https://vindex.vetorial.tech/"), env, new URL("https://v.test/id/sso"), "/id/sso");
   assert.match(await r.text(), /app-token/);
 });
+
+test("o dono (administrador) entra em quantos aparelhos e sessões quiser", async () => {
+  const env = ENV();
+  env.ADMIN_EMAIL = "dono@exemplo.com";
+  await cadastrar(env, { email: "dono@exemplo.com", senha: "senha-forte-1", nome: "Dono", dispositivo: disp(1) }, T0);
+  for (let n = 2; n <= 6; n++) await entrar(env, { email: "dono@exemplo.com", senha: "senha-forte-1", dispositivo: disp(n) }, T0 + n);
+  const { results } = await env.DB.prepare("SELECT COUNT(*) AS n FROM dispositivos").all();
+  assert.equal(results[0].n, 6);
+  // um usuário comum continua com o limite
+  await cadastrar(env, { email: "comum@exemplo.com", senha: "senha-forte-1", nome: "C", dispositivo: disp(11) }, T0);
+  for (let n = 12; n <= 13; n++) await entrar(env, { email: "comum@exemplo.com", senha: "senha-forte-1", dispositivo: disp(n), encerrar: undefined }, T0 + n).catch(() => {});
+  assert.equal((await erro(entrar(env, { email: "comum@exemplo.com", senha: "senha-forte-1", dispositivo: disp(14) }, T0 + 20))).codigo.startsWith("limite"), true);
+});

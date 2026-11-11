@@ -16,6 +16,9 @@ export class ErroId extends ErroLoja {
   }
 }
 
+/** O dono (administrador master) usa em quantos aparelhos e sessões quiser: sem limites. */
+const semLimites = (env, email) => String(email || "").trim().toLowerCase() === (String(env.ADMIN_EMAIL || "").trim().toLowerCase() || "vetorialtech.dev@gmail.com");
+
 const emailLimpo = (e) => String(e || "").trim().toLowerCase();
 
 function lerDispositivo(d) {
@@ -64,6 +67,8 @@ const AVISO_LIMITE = "Já há 2 aparelhos usando a conta agora. Encerre um deles
 
 /** Garante uma vaga entre as 2 sessões ativas; sem vaga, devolve o aviso com as opções. */
 async function abrirVaga(env, usuario, dispositivo, encerrar, agora) {
+  const dono = await env.DB.prepare("SELECT email FROM usuarios WHERE id = ?").bind(usuario).first();
+  if (dono && semLimites(env, dono.email)) return;
   let ativas = (await sessoesAtivas(env, usuario, agora)).filter((s) => s.dispositivo !== dispositivo);
   if (ativas.length >= MAX_ATIVAS) {
     const alvo = encerrar && ativas.find((s) => s.sessao === encerrar);
@@ -93,7 +98,7 @@ export async function entrar(env, { email, senha, dispositivo, encerrar, remover
   const jaTem = await env.DB.prepare("SELECT 1 AS x FROM dispositivos WHERE id = ? AND usuario = ?").bind(devId, u.id).first();
   if (!jaTem) {
     const { results } = await env.DB.prepare("SELECT id, nome, plataforma, ultimo FROM dispositivos WHERE usuario = ? ORDER BY ultimo DESC").bind(u.id).all();
-    if (results.length >= MAX_DISPOSITIVOS) {
+    if (results.length >= MAX_DISPOSITIVOS && !semLimites(env, u.email)) {
       if (!remover || !results.some((x) => x.id === remover)) {
         throw new ErroId(409, "limite_dispositivos", "Você já tem 3 aparelhos vinculados. Remova um para vincular este, ou cancele.", { dispositivos: results, opcoes: ["remover_dispositivo", "cancelar"], maxDispositivos: MAX_DISPOSITIVOS });
       }
@@ -159,7 +164,7 @@ export async function validarSessao(env, req, { agora = Date.now(), ping = true 
   if (!u) throw new ErroId(401, "sessao_inexistente", "Conta não encontrada.");
   if (agora - s.ultimo_ping > TTL_ATIVA_MS) {
     const ativas = (await sessoesAtivas(env, u.id, agora)).filter((x) => x.sessao !== s.id);
-    if (ativas.length >= MAX_ATIVAS) throw new ErroId(409, "limite_simultaneo", AVISO_LIMITE, { ativas, opcoes: ["encerrar_sessao", "cancelar"], maxAtivas: MAX_ATIVAS, sessaoAtual: s.id });
+    if (ativas.length >= MAX_ATIVAS && !semLimites(env, u.email)) throw new ErroId(409, "limite_simultaneo", AVISO_LIMITE, { ativas, opcoes: ["encerrar_sessao", "cancelar"], maxAtivas: MAX_ATIVAS, sessaoAtual: s.id });
   }
   if (ping && agora - s.ultimo_ping > 15_000) {
     await env.DB.prepare("UPDATE sessoes SET ultimo_ping = ? WHERE id = ?").bind(agora, s.id).run();

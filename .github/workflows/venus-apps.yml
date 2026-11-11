@@ -99,3 +99,23 @@ jobs:
           name: venus-windows
           path: |
             venus-apps/desktop/dist/*.exe
+
+  publicar-windows:
+    # Publica o instalador numa versão "win-1.N": é o que o Painel Dev e o link de download da Vênus entregam.
+    needs: windows
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: venus-windows
+          path: exe
+      - name: Publicar a versão
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ls -la exe
+          arq=$(ls exe/*.exe | head -n 1)
+          cp "$arq" "exe/VenusSetup.exe"
+          gh release create "win-1.${{ github.run_number }}" exe/VenusSetup.exe --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --prerelease --title "Vênus para Windows 1.${{ github.run_number }}" --notes "Instalador da Vênus para Windows."

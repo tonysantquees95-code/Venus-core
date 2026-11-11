@@ -218,13 +218,14 @@ test("GitHub: estimativa pela árvore, estado geral dos builds e APK mais novo p
   const lista = [
     { tag_name: "v1.190", html_url: "u1", published_at: "2026-11-11T00:00:00Z", assets: [{ id: 1, name: "Venus.apk", size: 10 }] },
     { tag_name: "v1.191", html_url: "u2", published_at: "2026-11-12T00:00:00Z", assets: [{ id: 2, name: "Venus.apk", size: 11 }] },
-    { tag_name: "robo-1.5", html_url: "u3", assets: [{ id: 3, name: "VenusRobo.apk", size: 5 }] },
+    { tag_name: "win-1.5", html_url: "u3", assets: [{ id: 3, name: "Venus Setup.exe", size: 5 }] },
     { tag_name: "dev-1.2", html_url: "u4", assets: [{ id: 4, name: "VenusDev.apk", size: 7 }] },
     { tag_name: "metricas", assets: [{ id: 5, name: "metricas.json" }] },
   ];
   const apks = apksDoProjeto(PROJETOS[0], lista);
   assert.equal(apks.find((x) => x.app === "venus").versao.numero, 191);
-  assert.equal(apks.find((x) => x.app === "robo").versao.numero, 5);
+  assert.equal(apks.find((x) => x.app === "windows").versao.numero, 5);
+  assert.equal(apks.some((x) => x.app === "robo"), false);
   const dev = apksDoProjeto(PROJETOS.find((p) => p.id === "devcenter"), lista);
   assert.equal(dev.find((x) => x.app === "dev").versao.tag, "dev-1.2");
 });

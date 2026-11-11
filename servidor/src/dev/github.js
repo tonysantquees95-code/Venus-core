@@ -10,7 +10,7 @@ export const PROJETOS = [
     descricao: "Assistente e plataforma do lojista: app Android, web/PWA, Windows, iOS e servidor.",
     apks: [
       { app: "venus", rotulo: "Vênus (Android)", tag: /^v?1\.(\d+)$/, arquivo: (n) => /\.apk$/i.test(n) && !/robo|dev/i.test(n) },
-      { app: "robo", rotulo: "Vênus Robô", tag: /^robo-1\.(\d+)$/, arquivo: (n) => /^venusrobo\.apk$/i.test(n) },
+      { app: "windows", rotulo: "Vênus (Windows)", tag: /^win-1\.(\d+)$/, arquivo: (n) => /\.exe$/i.test(n) },
     ],
   },
   {
