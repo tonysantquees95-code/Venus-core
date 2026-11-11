@@ -229,3 +229,14 @@ test("GitHub: estimativa pela árvore, estado geral dos builds e APK mais novo p
   const dev = apksDoProjeto(PROJETOS.find((p) => p.id === "devcenter"), lista);
   assert.equal(dev.find((x) => x.app === "dev").versao.tag, "dev-1.2");
 });
+
+import { ehAtalho, responderAtalho, PAINEL_DEV } from "../src/atalhos.js";
+test("atalhos curtos: /venus, /venus/android, /venus/windows e /paineldev", async () => {
+  assert.equal(ehAtalho("/Venus"), true);
+  assert.equal(ehAtalho("/venus/ios"), false);
+  const u = new URL("https://v.test/x");
+  assert.equal(responderAtalho(u, "/paineldev").headers.get("location"), PAINEL_DEV);
+  assert.equal(responderAtalho(u, "/venus/windows").headers.get("location"), "https://v.test/atualizacao?app=windows&baixar=1");
+  assert.equal(responderAtalho(u, "/venus/android").headers.get("location"), "https://v.test/atualizacao?app=venus&baixar=1");
+  assert.match(await responderAtalho(u, "/venus").text(), /Baixar para Windows/);
+});
