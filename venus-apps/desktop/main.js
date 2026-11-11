@@ -35,6 +35,9 @@ function criarJanela(oculta) {
     icon: path.join(__dirname, "build", "icon.ico"),
     webPreferences: { preload: path.join(__dirname, "preload.js"), contextIsolation: true, nodeIntegration: false, sandbox: true, webSecurity: true },
   });
+  // só o microfone (para falar com a Vênus) e as notificações; o resto é negado
+  janela.webContents.session.setPermissionRequestHandler((_wc, permissao, ok) => ok(permissao === "media" || permissao === "notifications"));
+  janela.webContents.session.setPermissionCheckHandler((_wc, permissao) => permissao === "media" || permissao === "notifications");
   janela.loadURL("app://venus/index.html");
   // links de fora abrem no navegador; o app nunca navega para outro site
   janela.webContents.setWindowOpenHandler(({ url }) => { if (statusModulo.linkExterno(url)) shell.openExternal(url); return { action: "deny" }; });

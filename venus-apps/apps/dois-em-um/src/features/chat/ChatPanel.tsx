@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import { IconeEnviar, IconeMais, IconeMenu } from "../../components/Icones";
+import { IconeEnviar, IconeMais, IconeMenu, IconeMicrofone } from "../../components/Icones";
 import { HolographicOrb } from "../../theming";
 import { useChat } from "../../hooks/useChat";
 import { useConversas } from "../../sessao/ConversasProvider";
+import { useVoz } from "../../voz/useVoz";
 import { AvatarDeConta } from "../../id/Avatar";
 
 export function ChatPanel({ aoAbrirMenu }: { aoAbrirMenu: () => void }) {
@@ -10,6 +11,8 @@ export function ChatPanel({ aoAbrirMenu }: { aoAbrirMenu: () => void }) {
   const { ativa, novaConversa } = useConversas();
   const [texto, setTexto] = useState("");
   const fim = useRef<HTMLDivElement>(null);
+  // falou: o que foi entendido vai direto para a Vênus, como no celular
+  const voz = useVoz((t) => void enviar(t));
 
   useEffect(() => {
     fim.current?.scrollIntoView({ behavior: "smooth", block: "end" });
@@ -60,6 +63,7 @@ export function ChatPanel({ aoAbrirMenu }: { aoAbrirMenu: () => void }) {
         <div ref={fim} />
       </ol>
 
+      {voz.erro && <p role="alert" className="px-4 pb-1 text-xs text-rose-400">{voz.erro}</p>}
       <form onSubmit={aoEnviar} className="flex gap-2 border-t border-borda p-3">
         <input
           value={texto}
@@ -67,6 +71,18 @@ export function ChatPanel({ aoAbrirMenu }: { aoAbrirMenu: () => void }) {
           placeholder="Escreva para a Vênus…"
           className="min-w-0 flex-1 rounded-full border border-borda bg-painel px-4 py-2.5 text-sm outline-none focus:border-venus"
         />
+        <button
+          type="button"
+          onClick={voz.alternar}
+          disabled={enviando || voz.estado === "transcrevendo"}
+          aria-label={voz.estado === "gravando" ? "Parar de gravar e enviar" : "Falar com a Vênus"}
+          aria-pressed={voz.estado === "gravando"}
+          title={voz.estado === "gravando" ? "Gravando… toque para enviar" : voz.estado === "transcrevendo" ? "Entendendo o que você disse…" : "Falar com a Vênus"}
+          className={`grid size-11 place-items-center rounded-full border border-borda transition active:scale-95 disabled:opacity-40
+            ${voz.estado === "gravando" ? "animate-pulse bg-rose-500 text-white" : "bg-painel text-suave hover:text-texto"}`}
+        >
+          <IconeMicrofone />
+        </button>
         <button
           type="submit"
           disabled={enviando || !texto.trim()}

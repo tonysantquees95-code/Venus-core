@@ -6,6 +6,8 @@ import { useId } from "../id/IdProvider";
 import { responderComandoDeConta } from "../ajustes/executarConta";
 import { useEmpresa } from "../empresa/EmpresaProvider";
 import { contextoDaEmpresa } from "../empresa/logica";
+import { usePreferencias } from "../ajustes/Preferencias";
+import { falar } from "../voz/useVoz";
 import { abrirNoApp } from "../id/Avatar";
 
 const novoId = () => crypto.randomUUID();
@@ -16,6 +18,7 @@ export function useChat() {
   const enviando = estaEnviando(ativa.id);
   const conta = useId();
   const { empresa } = useEmpresa();
+  const { prefs } = usePreferencias();
 
   const enviar = useCallback(
     async (texto: string) => {
@@ -32,6 +35,7 @@ export function useChat() {
         const local = await responderComandoDeConta(limpo, conta);
         if (local) {
           anexar(id, resposta(local.texto));
+          if (prefs.falarRespostas) falar(local.texto);
           if (local.abrir) abrirNoApp(local.abrir);
           return;
         }
@@ -46,13 +50,14 @@ export function useChat() {
         if (!r.ok) throw new Error(String(r.status));
         const dados = (await r.json()) as { resposta?: string };
         anexar(id, resposta(dados.resposta ?? "(sem resposta)"));
+        if (prefs.falarRespostas && dados.resposta) falar(dados.resposta);
       } catch {
         anexar(id, resposta("Não consegui falar com o servidor agora. Tente de novo em instantes."));
       } finally {
         marcarEnviando(id, false);
       }
     },
-    [ativa, anexar, estaEnviando, marcarEnviando, conta, empresa]
+    [ativa, anexar, estaEnviando, marcarEnviando, conta, empresa, prefs.falarRespostas]
   );
 
   return { mensagens: ativa.mensagens, enviando, enviar };

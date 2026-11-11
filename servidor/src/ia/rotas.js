@@ -3,6 +3,7 @@
 //   GET  /saude      estado do servidor
 //   GET  /v1/rotas   tabela função -> provedor
 //   POST /v1/chat    { mensagens:[{papel,texto}], tarefa?, sistema?, anexos?, cache?, escopo?, maxTokens?, temperatura? }
+//   POST /v1/transcrever  corpo = áudio bruto (audio/webm, ogg, wav, mp4…) → { texto }  (Groq Whisper)
 //   POST /v1/ocr     { anexos:[{mime,dados}], instrucao?, formato?:"texto"|"json" }
 //
 // O app só fala com este Worker. GROQ_API_KEY, DEEPSEEK_API_KEY e GEMINI_API_KEY ficam em segredos (env).
@@ -147,6 +148,37 @@ async function responder(request, env, ctx, { mensagens, anexos, corpo, tarefaFi
   );
 }
 
+const MAX_AUDIO = 6 * 1024 * 1024;
+const EXTENSAO_DO_AUDIO = { webm: "webm", ogg: "ogg", wav: "wav", wave: "wav", mp4: "mp4", mpeg: "mp3", mp3: "mp3", flac: "flac", aac: "m4a", "x-m4a": "m4a" };
+
+/** Voz → texto (Groq Whisper). O corpo é o áudio bruto; a chave da Groq nunca sai do servidor. */
+async function transcrever(request, env) {
+  if (!env.GROQ_API_KEY) throw new ErroHttp(503, "sem_chave", "A transcrição não está configurada no servidor.");
+  const tipo = (request.headers.get("content-type") ?? "").split(";")[0].trim().toLowerCase();
+  const ext = tipo.startsWith("audio/") || tipo === "video/webm" ? EXTENSAO_DO_AUDIO[tipo.split("/")[1]] : undefined;
+  if (!ext) throw new ErroHttp(415, "audio_invalido", "Envie o áudio com content-type audio/webm, ogg, wav, mp4 ou mp3.");
+  const declarado = Number(request.headers.get("content-length") ?? 0);
+  if (declarado > MAX_AUDIO) throw new ErroHttp(413, "audio_grande", "Áudio grande demais (máximo 6 MB).");
+  const bytes = await request.arrayBuffer();
+  if (bytes.byteLength > MAX_AUDIO) throw new ErroHttp(413, "audio_grande", "Áudio grande demais (máximo 6 MB).");
+  if (bytes.byteLength < 400) return json({ texto: "" });
+  const form = new FormData();
+  form.append("file", new Blob([bytes], { type: tipo }), `fala.${ext}`);
+  form.append("model", env.MODELO_GROQ_VOZ || "whisper-large-v3-turbo");
+  form.append("language", "pt");
+  form.append("response_format", "json");
+  form.append("temperature", "0");
+  let r;
+  try {
+    r = await fetch("https://api.groq.com/openai/v1/audio/transcriptions", { method: "POST", headers: { authorization: `Bearer ${env.GROQ_API_KEY}` }, body: form });
+  } catch {
+    throw new ErroHttp(502, "transcricao_falhou", "Não consegui falar com o serviço de voz.");
+  }
+  if (!r.ok) throw new ErroHttp(r.status === 429 ? 429 : 502, "transcricao_falhou", "O serviço de voz não respondeu agora.");
+  const dados = await r.json().catch(() => ({}));
+  return json({ texto: typeof dados.text === "string" ? dados.text.trim().slice(0, 4000) : "" });
+}
+
 async function rotear(request, env, ctx, origem) {
   const { pathname } = new URL(request.url);
 
@@ -155,6 +187,13 @@ async function rotear(request, env, ctx, origem) {
 
   if (request.method === "GET" && pathname === "/saude") return json({ ok: true, versao: VERSAO });
   if (request.method === "GET" && pathname === "/v1/rotas") return json({ rotas: TABELA, regra: "gemini apenas com anexo (multimodal/ocr)" });
+
+  if (pathname === "/v1/transcrever") {
+    if (request.method !== "POST") throw new ErroHttp(405, "metodo", "Use POST.");
+    await autenticar(request, env);
+    await limitarUso(request, env, pathname);
+    return transcrever(request, env);
+  }
 
   const eChat = pathname === "/v1/chat";
   const eOcr = pathname === "/v1/ocr";

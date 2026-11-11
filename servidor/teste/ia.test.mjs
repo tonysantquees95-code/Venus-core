@@ -186,3 +186,27 @@ test("cache degrada sem Workers AI/Vectorize", async () => {
   const semNada = criarEnv();
   assert.equal((await post("/v1/chat", msg("pergunta qualquer longa"), semNada)).status, 200);
 });
+
+test("/v1/transcrever manda o áudio à Groq Whisper e devolve só o texto", async () => {
+  mockFetch({ "audio/transcriptions": () => new Response(JSON.stringify({ text: " abrir o bloco de notas " }), { status: 200 }) });
+  const audio = new Uint8Array(2000).fill(7);
+  const r = await worker.fetch(new Request("https://x.dev/v1/transcrever", { method: "POST", headers: { "content-type": "audio/webm;codecs=opus", origin: ORIGEM }, body: audio }), criarEnv(), ctx());
+  assert.equal(r.status, 200);
+  assert.deepEqual(await r.json(), { texto: "abrir o bloco de notas" });
+  const c = chamadas[0];
+  assert.equal(c.init.headers.authorization, "Bearer gsk_SEGREDO_GROQ");
+  assert.equal(c.init.body.get("language"), "pt");
+  assert.equal(c.init.body.get("file").name, "fala.webm");
+});
+
+test("/v1/transcrever recusa o que não é áudio, áudio grande e sem chave", async () => {
+  mockFetch({});
+  const chamar = (tipo, corpo, env = criarEnv()) => worker.fetch(new Request("https://x.dev/v1/transcrever", { method: "POST", headers: { "content-type": tipo, origin: ORIGEM }, body: corpo }), env, ctx());
+  assert.equal((await chamar("application/json", "{}")).status, 415);
+  assert.equal((await chamar("audio/webm", new Uint8Array(7 * 1024 * 1024))).status, 413);
+  assert.equal((await chamar("audio/webm", new Uint8Array(2000), criarEnv({ GROQ_API_KEY: "" }))).status, 503);
+  assert.equal(chamadas.length, 0);
+  const curto = await chamar("audio/webm", new Uint8Array(10));
+  assert.deepEqual(await curto.json(), { texto: "" });
+  assert.equal((await worker.fetch(new Request("https://x.dev/v1/transcrever", { method: "GET", headers: { origin: ORIGEM } }), criarEnv(), ctx())).status, 405);
+});
