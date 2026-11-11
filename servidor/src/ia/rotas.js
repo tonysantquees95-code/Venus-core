@@ -10,6 +10,7 @@ import { comCors, origemOk, preflight } from "./cors.js";
 import { buscarNoCache, cacheViavel, gravarNoCache, sha } from "./cache.js";
 import { decidir, ErroHttp, ordemDeTentativas, TABELA } from "./roteador.js";
 import { executar } from "./provedores.js";
+import { provedoresDesligados, registrarUso } from "../dev/uso.js";
 
 const VERSAO = "1.0.0";
 const MAX_CORPO = 12 * 1024 * 1024;
@@ -105,6 +106,7 @@ async function responder(request, env, ctx, { mensagens, anexos, corpo, tarefaFi
     cacheCtx = c;
     if (acerto) {
       const v = acerto.valor;
+      ctx.waitUntil(registrarUso(env, { provedor: v.provedor, tarefa: plano.tarefa, cache: true }).catch(() => {}));
       return json(
         { resposta: v.resposta, tarefa: plano.tarefa, provedor: v.provedor, modelo: v.modelo, fallback: false, cache: { acerto: acerto.tipo, similaridade: Number(acerto.similaridade.toFixed(4)) }, uso: null },
         200,
@@ -113,14 +115,25 @@ async function responder(request, env, ctx, { mensagens, anexos, corpo, tarefaFi
     }
   }
 
-  const r = await executar(env, ordemDeTentativas(plano.provedor), {
+  // provedores desligados pelo Painel Dev ficam fora da fila (a reserva assume)
+  const desligados = await provedoresDesligados(env);
+  const ordem = ordemDeTentativas(plano.provedor).filter((p) => !desligados.has(p));
+  if (!ordem.length) throw new ErroHttp(503, "provedor_desligado", "Esse provedor de IA está desligado no momento.");
+  let r;
+  try {
+    r = await executar(env, ordem, {
     tarefa: plano.tarefa,
     mensagens,
     sistema,
     anexos,
     temperatura: limitar(corpo.temperatura, 0, 1.5, TEMPERATURAS[plano.tarefa] ?? 0.7),
     maxTokens: Math.round(limitar(corpo.maxTokens, 1, 8192, TOKENS[plano.tarefa] ?? 1024))
-  });
+    });
+  } catch (e) {
+    ctx.waitUntil(registrarUso(env, { provedor: ordem[0], tarefa: plano.tarefa, erro: true }).catch(() => {}));
+    throw e;
+  }
+  ctx.waitUntil(registrarUso(env, { provedor: r.provedor, tarefa: plano.tarefa, uso: r.uso }).catch(() => {}));
 
   if (cacheCtx) {
     ctx.waitUntil(

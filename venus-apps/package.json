@@ -16,18 +16,19 @@
     "dev:assistente": "npm run dev -w @venus/assistente",
     "dev:robo": "npm run dev -w @venus/robo",
     "build": "npm run build:web",
-    "build:web": "npm run build:web -w @venus/assistente -w @venus/robo -w @venus/dois-em-um",
+    "build:web": "npm run build:web -w @venus/assistente -w @venus/robo -w @venus/dois-em-um -w @venus/painel-dev",
     "build:pwa": "npm run build:web",
-    "build:apk": "npm run build:apk -w @venus/assistente -w @venus/robo -w @venus/dois-em-um",
-    "apk:debug": "npm run apk:debug -w @venus/assistente -w @venus/robo -w @venus/dois-em-um",
-    "apk:release": "npm run apk:release -w @venus/assistente -w @venus/robo -w @venus/dois-em-um",
-    "android:add": "npm run android:add -w @venus/assistente -w @venus/robo -w @venus/dois-em-um",
+    "build:apk": "npm run build:apk -w @venus/assistente -w @venus/robo -w @venus/dois-em-um -w @venus/painel-dev",
+    "apk:debug": "npm run apk:debug -w @venus/assistente -w @venus/robo -w @venus/dois-em-um -w @venus/painel-dev",
+    "apk:release": "npm run apk:release -w @venus/assistente -w @venus/robo -w @venus/dois-em-um -w @venus/painel-dev",
+    "android:add": "npm run android:add -w @venus/assistente -w @venus/robo -w @venus/dois-em-um -w @venus/painel-dev",
     "typecheck": "npm run typecheck --workspaces --if-present",
-    "test": "npm run test -w @venus/dois-em-um && node --test desktop/teste/status.test.mjs",
+    "test": "npm run test -w @venus/dois-em-um && npm run test -w @venus/painel-dev && node --test desktop/teste/status.test.mjs",
     "isolamento": "node scripts/verificar-isolamento.mjs",
     "chaves": "node scripts/varrer-chaves.mjs",
     "verificar": "npm run isolamento && npm run chaves && npm run test && npm run typecheck && npm run build:web",
-    "dev:dois-em-um": "npm run dev -w @venus/dois-em-um"
+    "dev:dois-em-um": "npm run dev -w @venus/dois-em-um",
+    "dev:painel-dev": "npm run dev -w @venus/painel-dev"
   },
   "devDependencies": {
     "typescript": "^5.7.0"

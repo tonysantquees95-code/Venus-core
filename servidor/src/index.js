@@ -10,6 +10,7 @@
  *   POST /chat                           → conversa com busca na web (Groq + Tavily, reserva Gemini) — ver chat.js
  *   POST /v1/chat, POST /v1/ocr, GET /v1/rotas → roteador de IA por função (Groq / DeepSeek / Gemini só multimodal), CORS e cache vetorial — ver ia/
  *  /id, /id/*                           → Vetorial ID: login único (JWT), dispositivos (3) e sessões (2 ativas), sincronização — ver id/
+ *  /dev/*                               → Painel Dev da Vetorial Tech (só o superadministrador) — ver dev/
  *  /loja/*, /canais*, /produtos, /pedidos, /webhook/*, /oauth/* → lojistas, canais de venda (Nuvemshop, Mercado Livre, site próprio) e estoque central — ver loja/
  *
  * Segredos (wrangler secret): GITHUB_TOKEN (só leitura do repositório, para o canal de atualização);
@@ -20,6 +21,8 @@ import { tratarIA } from "./ia/rotas.js";
 import { ehRotaDaLoja, tratarLoja } from "./loja/rotas.js";
 import { ehRotaDoId, tratarId } from "./id/rotas.js";
 import { limpezaDeSessoes } from "./id/conta.js";
+import { ehRotaDev, tratarDev } from "./dev/rotas.js";
+import { limparTrafego, registrarTrafego, registrarUso } from "./dev/uso.js";
 import { publicarVencidos } from "./loja/publicar.js";
 
 const REPO = "tonysantquees95-code/Venus-core";
@@ -29,6 +32,13 @@ const texto = (v, max = 200) => (typeof v === "string" && v.trim() ? v.trim().sl
 
 export default {
   async fetch(req, env, ctx) {
+    const inicio = Date.now();
+    const resp = await this.tratar(req, env, ctx);
+    if (env.DB && req.method !== "OPTIONS") ctx.waitUntil(registrarTrafego(env, { metodo: req.method, caminho: new URL(req.url).pathname.replace(/\/+$/, "") || "/", status: resp.status, ms: Date.now() - inicio, origem: req.headers.get("origin") }).catch(() => {}));
+    return resp;
+  },
+
+  async tratar(req, env, ctx) {
     const url = new URL(req.url);
     const caminho = url.pathname.replace(/\/+$/, "") || "/";
     try {
@@ -41,11 +51,16 @@ export default {
       if (caminho === "/cobranca/status" && req.method === "GET") return await cobrancaStatus(url, env);
       if (caminho.startsWith("/v1/")) return await tratarIA(req, env, ctx);
       if (ehRotaDoId(caminho)) return await tratarId(req, env, url, caminho);
+      if (ehRotaDev(caminho)) return await tratarDev(req, env, url, caminho);
       if (ehRotaDaLoja(caminho) || (env.DOMINIO_CURTO && url.hostname === env.DOMINIO_CURTO && req.method === "GET" && /^\/[a-z0-9-]{3,32}(\/[^/]+)?$/.test(caminho) && !["/saude", "/atualizacao"].includes(caminho))) {
         return await tratarLoja(req, env, ctx, url, caminho);
       }
       if (caminho === "/chat" && req.method === "OPTIONS") return chatPreflight();
-      if (caminho === "/chat" && req.method === "POST") return await chat(req, env);
+      if (caminho === "/chat" && req.method === "POST") {
+        const r = await chat(req, env);
+        if (env.DB && r.ok) ctx.waitUntil(r.clone().json().then((d) => registrarUso(env, { provedor: d.provider, tarefa: "conversa", uso: null })).catch(() => {}));
+        return r;
+      }
       return json({ error: "não encontrado" }, 404);
     } catch (e) {
       console.error("venus servidor", caminho, e && e.stack ? e.stack : e);
@@ -61,6 +76,7 @@ export default {
     }
     await env.DB.prepare("DELETE FROM avisos WHERE criado < ?").bind(Date.now() - 7 * 86400000).run();
     await limpezaDeSessoes(env);
+    await limparTrafego(env);
     await env.DB.prepare("DELETE FROM cobranca_avisos WHERE criado < ?").bind(Date.now() - 30 * 86400000).run();
   },
 };
