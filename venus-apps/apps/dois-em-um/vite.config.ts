@@ -3,8 +3,8 @@ import tailwindcss from "@tailwindcss/vite";
 import { criarConfigVite } from "@venus/build-config";
 
 export default criarConfigVite({
-  nome: "Dois em Um · Vênus",
-  nomeCurto: "Dois em Um",
+  nome: "Vênus",
+  nomeCurto: "Vênus",
   descricao: "Chat da Vênus e painel do Robô em um só app",
   corTema: "#EC6FD6",
   corFundo: "#08080F",
