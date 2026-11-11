@@ -71,3 +71,15 @@ footer{border-top:1px solid var(--borda);padding:34px 0;color:var(--suave);font-
 .perfil small{color:var(--suave)}
 .faixa{display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between}
 h2.s{font-size:24px;margin:34px 0 12px;text-align:left}
+
+.planos{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:16px;align-items:stretch}
+.plano{position:relative;display:flex;flex-direction:column;background:var(--painel);border:1px solid var(--borda);border-radius:24px;padding:26px 22px;text-align:center}
+.plano h3{margin:0;font-size:18px}.plano .v{font-size:36px;font-weight:800;margin:10px 0;letter-spacing:-.02em}.plano .v small{font-size:15px;font-weight:500;color:var(--suave)}
+.plano ul.ok{text-align:left;flex:1;margin:10px 0 20px}
+.plano .btn{display:block}
+.destaque-plano{background:linear-gradient(160deg,#ec6fd62a,#7aa2ff22);border-color:#ec6fd677;box-shadow:0 30px 90px #ec6fd622}
+.destaque-plano .grat{position:absolute;top:-13px;left:50%;transform:translateX(-50%);padding:4px 14px;border-radius:99px;background:var(--grad);color:#08080F;font-weight:700;font-size:12px;white-space:nowrap}
+.escolha{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));margin-top:12px}
+.escolha .plano{padding:18px;text-align:left}.escolha .plano .v{font-size:26px}
+.escolha .plano.sel{border-color:var(--rosa);box-shadow:0 0 0 2px #ec6fd655}
+.campo{width:100%;padding:12px 14px;border-radius:12px;border:1px solid var(--borda);background:#0008;color:#fff;font:inherit}
