@@ -8,6 +8,11 @@ export interface PonteDesktop {
   lerIniciarComOSistema(): Promise<boolean>;
   /** Pede ao Windows para executar um comando do computador (abrir programa, volume, bloquear…). */
   comando(texto: string): Promise<{ tratado: boolean; texto?: string }>;
+  /** Pergunta ao servidor se tem versão nova da Vênus para Windows. */
+  verificarAtualizacao(): Promise<{ atual: string; disponivel: boolean; nova?: string; notas?: string; erro?: string }>;
+  /** Baixa, confere e instala a versão nova (a Vênus fecha e abre de novo). */
+  instalarAtualizacao(): Promise<{ ok: boolean; erro?: string }>;
+  aoProgressoDaAtualizacao(cb: (p: { baixado: number; total: number }) => void): () => void;
   avisarEstado(estado: { escutando?: boolean; pendencias?: number }): void;
 }
 

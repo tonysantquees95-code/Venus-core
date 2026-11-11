@@ -1,6 +1,9 @@
 // Vênus para Windows: janela do dashboard + bandeja do sistema + atalho global + notificações nativas
 // + monitor de conexão com os Workers. A interface é o mesmo app React (Dois em Um) dos outros aparelhos.
-const { app, BrowserWindow, Tray, Menu, Notification, globalShortcut, ipcMain, nativeImage, protocol, net, shell } = require("electron");
+const { app, BrowserWindow, Tray, Menu, Notification, globalShortcut, ipcMain, nativeImage, protocol, net, shell, dialog } = require("electron");
+const fs = require("node:fs");
+const crypto = require("node:crypto");
+const os = require("node:os");
 const path = require("node:path");
 const { spawn } = require("node:child_process");
 const { pathToFileURL } = require("node:url");
@@ -19,6 +22,10 @@ let ultimoStatus = { online: false, ms: null, quando: 0 };
 let statusModulo = null;
 let computador = null;
 let pendente = null; // ação perigosa esperando o "sim" (vale 30 s)
+let atualizador = null;
+let novaVersao = null; // { numero, ... } quando o servidor tem versão mais nova
+let instalando = false;
+let jaPerguntou = 0;
 
 const trava = app.requestSingleInstanceLock();
 if (!trava) app.quit();
@@ -65,6 +72,8 @@ function atualizarMenu() {
     { label: `Chamar de qualquer tela: ${ATALHO.replace("CommandOrControl", "Ctrl")}`, enabled: false },
     { type: "separator" },
     { label: statusModulo.textoDoStatus(ultimoStatus), enabled: false },
+    ...(novaVersao ? [{ label: `Atualizar a Vênus para a versão 1.${novaVersao.numero}`, click: () => void instalarAtualizacao() }] : []),
+    { label: "Verificar atualizações", click: () => void conferirAtualizacao(true) },
     { label: "Iniciar com o Windows", type: "checkbox", checked: iniciar, click: (i) => definirIniciar(i.checked) },
     { type: "separator" },
     { label: "Sair", click: () => { saindo = true; app.quit(); } },
@@ -106,6 +115,7 @@ async function medir(monitor) {
 app.whenReady().then(async () => {
   statusModulo = await import(pathToFileURL(path.join(__dirname, "status.mjs")).href);
   computador = await import(pathToFileURL(path.join(__dirname, "computador.mjs")).href);
+  atualizador = await import(pathToFileURL(path.join(__dirname, "atualizador.mjs")).href);
   app.setAppUserModelId("tech.vetorial.venus"); // necessário para as notificações do Windows
 
   // app://venus/... serve só a pasta do app (sem sair dela)
@@ -127,7 +137,106 @@ app.whenReady().then(async () => {
   const monitor = statusModulo.criarMonitor();
   void medir(monitor);
   setInterval(() => void medir(monitor), INTERVALO_MS);
+
+  // atualização sozinha: confere pouco depois de abrir e a cada 6 horas (só no app instalado)
+  if (app.isPackaged) {
+    setTimeout(() => void conferirAtualizacao(false), 30_000);
+    setInterval(() => void conferirAtualizacao(false), 6 * 3600_000);
+  }
 });
+
+// ------------------------------------------------------------------ atualização
+async function infoDoServidor() {
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), 15_000);
+  try {
+    const r = await fetch(`${SERVIDOR}/atualizacao?app=windows`, { signal: ctl.signal, cache: "no-store" });
+    if (!r.ok) return null;
+    return atualizador.lerInfo(await r.json());
+  } finally { clearTimeout(timer); }
+}
+
+/** Pergunta ao servidor. Devolve { atual, disponivel, nova, notas } ou { erro }. */
+async function verificarAtualizacao() {
+  try {
+    const info = await infoDoServidor();
+    const atual = app.getVersion();
+    if (!info) return { atual, disponivel: false, erro: "Não consegui consultar as atualizações agora." };
+    const disponivel = atualizador.temNovaVersao(atual, info.numero);
+    novaVersao = disponivel ? info : null;
+    atualizarMenu();
+    return { atual, disponivel, nova: `1.${info.numero}`, notas: info.notas };
+  } catch {
+    return { atual: app.getVersion(), disponivel: false, erro: "Sem conexão para consultar as atualizações." };
+  }
+}
+
+/** Baixa o instalador (conferindo tamanho e hash), roda em modo silencioso e fecha a Vênus para ela ser trocada. */
+async function instalarAtualizacao() {
+  if (instalando) return { ok: false, erro: "Já estou atualizando." };
+  instalando = true;
+  const avisar = (p) => { if (janela) janela.webContents.send("venus:atualizacao-progresso", p); };
+  try {
+    const info = await infoDoServidor(); // o link do GitHub vale poucos minutos: pede de novo na hora de baixar
+    if (!info || !atualizador.temNovaVersao(app.getVersion(), info.numero)) return { ok: false, erro: "A Vênus já está na versão mais nova." };
+    const arquivo = path.join(os.tmpdir(), `VenusSetup-${info.numero}.exe`);
+    const r = await net.fetch(info.url);
+    if (!r.ok || !r.body) return { ok: false, erro: "O download não começou. Tente de novo em instantes." };
+    const total = Number(r.headers.get("content-length")) || info.tamanho || 0;
+    const hash = crypto.createHash("sha256");
+    const saida = fs.createWriteStream(arquivo);
+    let baixado = 0;
+    const leitor = r.body.getReader();
+    for (;;) {
+      const { done, value } = await leitor.read();
+      if (done) break;
+      baixado += value.length;
+      if (baixado > atualizador.LIMITE_DE_BYTES) { saida.destroy(); fs.rmSync(arquivo, { force: true }); return { ok: false, erro: "Arquivo grande demais." }; }
+      hash.update(value);
+      if (!saida.write(value)) await new Promise((ok) => saida.once("drain", ok));
+      avisar({ baixado, total });
+    }
+    await new Promise((ok, falha) => { saida.on("error", falha); saida.end(ok); });
+    if (!atualizador.arquivoConfere(info, baixado, hash.digest("hex"))) {
+      fs.rmSync(arquivo, { force: true });
+      return { ok: false, erro: "O arquivo baixado não confere. Não instalei, por segurança." };
+    }
+    const filho = spawn(arquivo, atualizador.argsDoInstalador(), { detached: true, stdio: "ignore" });
+    filho.on("error", () => {});
+    filho.unref();
+    saindo = true;
+    setTimeout(() => app.quit(), 800); // solta os arquivos para o instalador trocar
+    return { ok: true };
+  } catch {
+    return { ok: false, erro: "Não consegui atualizar agora. Tente de novo mais tarde." };
+  } finally {
+    instalando = false;
+  }
+}
+
+/** [manual]: o botão "Verificar atualizações" (sempre responde). Sozinha: pergunta uma vez por versão. */
+async function conferirAtualizacao(manual) {
+  const r = await verificarAtualizacao();
+  if (!r.disponivel) {
+    if (manual) void dialog.showMessageBox({ type: r.erro ? "warning" : "info", title: "Vênus", message: r.erro || `A Vênus já está na versão mais nova (${r.atual}).`, buttons: ["OK"] });
+    return;
+  }
+  if (!manual && jaPerguntou === novaVersao.numero) return;
+  jaPerguntou = novaVersao.numero;
+  const alvo = janela && janela.isVisible() ? janela : undefined;
+  const { response } = await dialog.showMessageBox(alvo, {
+    type: "question", title: "Atualização da Vênus", buttons: ["Atualizar agora", "Depois"], defaultId: 0, cancelId: 1,
+    message: `Tem uma versão nova da Vênus (${r.nova}).`,
+    detail: (r.notas ? r.notas + "\n\n" : "") + "A Vênus fecha, atualiza sozinha e abre de novo em alguns segundos.",
+  });
+  if (response === 0) {
+    const i = await instalarAtualizacao();
+    if (!i.ok) void dialog.showMessageBox({ type: "warning", title: "Vênus", message: i.erro, buttons: ["OK"] });
+  }
+}
+
+ipcMain.handle("venus:atualizacao-verificar", () => verificarAtualizacao());
+ipcMain.handle("venus:atualizacao-instalar", () => instalarAtualizacao());
 
 /** Executa uma ação já validada pelo computador.mjs (sempre de uma lista fixa, sem shell com texto do usuário). */
 function executar(exec) {
