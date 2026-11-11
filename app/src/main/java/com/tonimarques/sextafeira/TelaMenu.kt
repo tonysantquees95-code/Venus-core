@@ -197,7 +197,7 @@ internal fun MainActivity.abrirMenu(@Suppress("UNUSED_PARAMETER") ancora: View) 
                 }) { abrirCatalogo() },
                 TelaDeAjustes.Ajuste("Cobrança por link", {
                     if (Cobranca.configurada(this)) "Ligada: ${Cobranca.nomeDoProvedor(this)}. Ao registrar uma venda, a $n cria o link e confere o pagamento."
-                    else "Para loja sem site: a $n cria o link de pagamento (Mercado Pago ou InfinitePay), você manda e ela confere sozinha."
+                    else "Use a SUA conta de pagamento (Mercado Pago ou InfinitePay): cole a chave dela aqui e a $n cria o link e confere o pagamento sozinha. Sem a chave, essas formas de pagamento não funcionam. A inteligência artificial é da Vetorial Tech, você não precisa de chave de IA."
                 }) { configurarCobranca() },
                 TelaDeAjustes.Ajuste("Conectar à loja", {
                     ferramentas.loja.email?.let { "Conectada como $it. Pergunte: como foram as vendas hoje, tem pedido novo, o que está acabando. Toque para desconectar." }

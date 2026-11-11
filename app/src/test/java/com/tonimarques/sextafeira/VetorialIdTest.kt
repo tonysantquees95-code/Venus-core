@@ -106,7 +106,7 @@ class ContaPelaConversaTest {
     fun avatarEAssinatura() {
         assertEquals("TM", iniciaisDoNome("Toni Marques"))
         assertEquals("TO", iniciaisDoNome("toni"))
-        assertEquals("Z", iniciaisDoNome("", "zettel@x.com"))
+        assertEquals("A", iniciaisDoNome("", "ana@x.com"))
         assertEquals("Plano Fundadores · teste grátis, 5 dias restantes", textoDaAssinatura(JSONObject("""{"acesso":true,"emTeste":true,"diasDeTesteRestantes":5}""")))
         assertEquals("Plano Fundadores · 1 dia restante", textoDaAssinatura(JSONObject("""{"acesso":true,"emTeste":false,"diasPagosRestantes":1}""")))
         assertTrue(textoDaAssinatura(JSONObject("""{"acesso":false}""")).contains("vencido"))

@@ -128,6 +128,17 @@ export function Ajustes({ aoAbrirTema }: { aoAbrirTema: () => void }) {
           {mostra("canais", "conexoes") && <Cartao id="canais" titulo="Canais de venda" descricao="Nuvemshop, Mercado Livre e o seu site (até 3) são conectados na Central da loja do app Android, e o estoque sincroniza sozinho." />}
 
           <Titulo cat="seguranca" />
+          {mostra("pagamentos", "conexoes") && (
+            <Cartao id="pagamentos" titulo="Pagamentos e chaves do lojista" descricao="O que é seu e o que a Vetorial Tech já entrega.">
+              <ul className="list-disc space-y-1.5 pl-5 text-sm text-slate-300">
+                <li><b>Seu:</b> a chave de pagamento (Mercado Pago ou InfinitePay). Sem ela, link de cobrança, Pix e conferência automática de pagamento não funcionam. Cada lojista usa a sua, e o dinheiro cai direto na sua conta.</li>
+                <li><b>Seu:</b> os dados da empresa, o nicho, as formas de pagamento aceitas e as lojas conectadas (Nuvemshop, Mercado Livre, site). Cada conta tem os seus, separados dos de outros lojistas.</li>
+                <li><b>Sem site?</b> Cadastre a loja direto na Vênus: ela cria o catálogo e os links de cobrança para você.</li>
+                <li><b>Da Vetorial Tech:</b> a inteligência artificial, a sincronização e o login unificado. Não precisa de chave de IA.</li>
+                <li>Entre com qualquer e-mail, pessoal ou da empresa: ele vira o seu login Vetorial ID em todos os apps.</li>
+              </ul>
+            </Cartao>
+          )}
           {mostra("conta", "seguranca") && <Cartao id="conta" titulo="Conta Vetorial ID" descricao="Um login só para Vênus, Vindex e Vortex em todos os aparelhos.">{sessao ? <ContaLogada /> : <Entrar />}</Cartao>}
           {mostra("licenca", "seguranca") && <Cartao id="licenca" titulo="Plano Fundadores" descricao="R$ 49,90 por mês, com 7 dias de teste grátis. Veja a validade e renove na seção Conta acima." />}
 
