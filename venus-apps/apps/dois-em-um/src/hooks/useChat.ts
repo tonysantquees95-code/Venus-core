@@ -8,6 +8,7 @@ import { useEmpresa } from "../empresa/EmpresaProvider";
 import { contextoDaEmpresa } from "../empresa/logica";
 import { usePreferencias } from "../ajustes/Preferencias";
 import { falar } from "../voz/useVoz";
+import { ponteDesktop } from "../desktop/ponte";
 import { abrirNoApp } from "../id/Avatar";
 
 const novoId = () => crypto.randomUUID();
@@ -37,6 +38,14 @@ export function useChat() {
           anexar(id, resposta(local.texto));
           if (prefs.falarRespostas) falar(local.texto);
           if (local.abrir) abrirNoApp(local.abrir);
+          return;
+        }
+        // no Windows, "abrir calculadora", "aumentar volume", "bloquear a tela"… a Vênus faz no próprio computador
+        const pc = await ponteDesktop()?.comando(limpo).catch(() => undefined);
+        if (pc?.tratado) {
+          const t = pc.texto ?? "Feito.";
+          anexar(id, resposta(t));
+          if (prefs.falarRespostas) falar(t);
           return;
         }
         const r = await fetch(`${URL_API}/v1/chat`, {

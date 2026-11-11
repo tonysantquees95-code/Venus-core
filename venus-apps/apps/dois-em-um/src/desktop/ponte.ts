@@ -6,6 +6,8 @@ export interface PonteDesktop {
   aoAtalhoGlobal(cb: () => void): () => void;
   definirIniciarComOSistema(ligado: boolean): Promise<boolean>;
   lerIniciarComOSistema(): Promise<boolean>;
+  /** Pede ao Windows para executar um comando do computador (abrir programa, volume, bloquear…). */
+  comando(texto: string): Promise<{ tratado: boolean; texto?: string }>;
   avisarEstado(estado: { escutando?: boolean; pendencias?: number }): void;
 }
 
