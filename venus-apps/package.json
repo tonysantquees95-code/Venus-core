@@ -27,8 +27,7 @@
     "isolamento": "node scripts/verificar-isolamento.mjs",
     "chaves": "node scripts/varrer-chaves.mjs",
     "verificar": "npm run isolamento && npm run chaves && npm run test && npm run typecheck && npm run build:web",
-    "dev:dois-em-um": "npm run dev -w @venus/dois-em-um",
-    "dev:painel-dev": "npm run dev"
+    "dev:dois-em-um": "npm run dev -w @venus/dois-em-um"
   },
   "devDependencies": {
     "typescript": "^5.7.0"
