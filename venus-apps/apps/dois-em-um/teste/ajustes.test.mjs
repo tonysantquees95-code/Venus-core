@@ -75,7 +75,7 @@ import { iniciais, corDoAvatar, textoDaAssinatura, interpretarComandoConta } fro
 test("avatar: iniciais, cor estável e texto da assinatura", () => {
   assert.equal(iniciais("Toni Marques"), "TM");
   assert.equal(iniciais("toni"), "TO");
-  assert.equal(iniciais("", "zettel@x.com"), "Z");
+  assert.equal(iniciais("", "ana@x.com"), "A");
   assert.equal(iniciais("  ", ""), "?");
   assert.equal(corDoAvatar("a@b.com"), corDoAvatar("a@b.com"));
   assert.notEqual(corDoAvatar("a@b.com"), corDoAvatar("c@d.com"));
