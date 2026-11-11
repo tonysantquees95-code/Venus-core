@@ -13,3 +13,23 @@ migrations_dir = "migrations"
 # limpeza diária dos avisos antigos (01:17 em Brasília)
 [triggers]
 crons = ["17 4 * * *"]
+
+# ---------------------------------------------------------------------------
+# Roteador de IA (/v1/chat, /v1/ocr). Segredos (GROQ_API_KEY, DEEPSEEK_API_KEY, GEMINI_API_KEY, APP_TOKEN)
+# são enviados pelo workflow a partir dos segredos do repositório. Os bindings de cache (KV, Vectorize, AI)
+# e o limite por IP são acrescentados pelo workflow (servidor.yml) quando a conta permite; sem eles
+# o roteador funciona do mesmo jeito, só sem cache.
+# ---------------------------------------------------------------------------
+[vars]
+# Origens do app web/PWA/Capacitor. Acrescente aqui o endereço do PWA quando publicado.
+ORIGENS_PERMITIDAS = "https://localhost,capacitor://localhost,http://localhost,http://localhost:5173,http://localhost:5174,http://localhost:5175"
+MODELO_GROQ = "llama-3.3-70b-versatile"
+MODELO_GROQ_RAPIDO = "llama-3.1-8b-instant"
+MODELO_DEEPSEEK = "deepseek-chat"
+MODELO_DEEPSEEK_RACIOCINIO = "deepseek-reasoner"
+# Gemini: somente multimodal e OCR (segundo modelo = reserva dentro da própria família Gemini)
+MODELO_GEMINI = "gemini-3.8-flash"
+MODELO_GEMINI_RESERVA = "gemini-flash-lite-latest"
+MODELO_EMBEDDING = "@cf/baai/bge-m3"
+CACHE_TTL_SEGUNDOS = "86400"
+CACHE_LIMIAR = "0.93"

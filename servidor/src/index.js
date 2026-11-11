@@ -8,13 +8,15 @@
  *   POST /cobranca/aviso                 → webhook da InfinitePay (cobrança por link dos lojistas)
  *   GET  /cobranca/status?ref=&handle=   → o pagamento foi feito? (confirma com a InfinitePay)
  *   POST /chat                           → conversa com busca na web (Groq + Tavily, reserva Gemini) — ver chat.js
+ *   POST /v1/chat, POST /v1/ocr, GET /v1/rotas → roteador de IA por função (Groq / DeepSeek / Gemini só multimodal), CORS e cache vetorial — ver ia/
  *
  * Segredos (wrangler secret): GITHUB_TOKEN (só leitura do repositório, para o canal de atualização);
- * GROQ_API_KEY, TAVILY_API_KEY e GEMINI_API_KEY (conversa).
+ * GROQ_API_KEY, TAVILY_API_KEY e GEMINI_API_KEY (conversa); DEEPSEEK_API_KEY e APP_TOKEN (opcional) para o roteador /v1.
  */
 import { chat, chatPreflight } from "./chat.js";
+import { tratarIA } from "./ia/rotas.js";
 
-const REPO = "tonysantquees95-code/Sexta-feira-";
+const REPO = "tonysantquees95-code/Venus-core";
 const CABECALHOS = { "content-type": "application/json; charset=utf-8", "access-control-allow-origin": "*" };
 const json = (o, status = 200) => new Response(JSON.stringify(o), { status, headers: CABECALHOS });
 const texto = (v, max = 200) => (typeof v === "string" && v.trim() ? v.trim().slice(0, max) : null);
@@ -31,6 +33,7 @@ export default {
       if (canal && req.method === "GET") return await avisosDesde(canal[1], url, env);
       if (caminho === "/cobranca/aviso" && req.method === "POST") return await cobrancaAviso(req, env);
       if (caminho === "/cobranca/status" && req.method === "GET") return await cobrancaStatus(url, env);
+      if (caminho.startsWith("/v1/")) return await tratarIA(req, env, ctx);
       if (caminho === "/chat" && req.method === "OPTIONS") return chatPreflight();
       if (caminho === "/chat" && req.method === "POST") return await chat(req, env);
       return json({ error: "não encontrado" }, 404);

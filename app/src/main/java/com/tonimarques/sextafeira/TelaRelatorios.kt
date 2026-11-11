@@ -352,7 +352,7 @@ internal fun MainActivity.pedirTokenDoGithub(motivo: String?) {
             (motivo?.let { "$it\n\n" } ?: "") +
                 "Como as versões ficam num repositório privado, a ${Marca.nome} precisa de uma chave só de leitura:\n\n" +
                 "1. No GitHub: Settings → Developer settings → Personal access tokens → Fine-grained tokens → Generate new token.\n" +
-                "2. Repository access: Only select repositories → Sexta-feira-.\n" +
+                "2. Repository access: Only select repositories → Venus-core.\n" +
                 "3. Permissions → Repository → Contents: Read-only.\n" +
                 "4. Gere, copie e cole aqui.\n\n" +
                 "Ela fica criptografada só no celular e não deixa mudar nada no GitHub."

@@ -3,6 +3,7 @@ name: Servidor (Cloudflare)
 # Publica o servidor da Vênus (pasta servidor/) no Cloudflare Workers, com o banco D1.
 # Precisa dos segredos do repositório: CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID e
 # VENUS_GITHUB_LEITURA (token só de leitura do repositório, para o canal de atualização).
+# Roteador de IA (opcionais): GROQ_API_KEY, DEEPSEEK_API_KEY, GEMINI_API_KEY, APP_TOKEN.
 # Opcionais, para a conversa (/chat): GROQ_API_KEY, TAVILY_API_KEY e GEMINI_API_KEY. Quando existem aqui,
 # são copiadas para o Worker; quando não, o Worker continua com as que já tiver salvas.
 on:
@@ -56,6 +57,39 @@ jobs:
       - name: Atualizar as tabelas
         run: $WRANGLER d1 migrations apply venus --remote
 
+      - name: Testes do roteador de IA
+        working-directory: .
+        run: node --test servidor/teste/ia.test.mjs
+
+      # Cache vetorial e limite por IP: tentam criar o que falta. Se a chave da Cloudflare não tiver
+      # permissão (KV, Vectorize), segue sem o cache: o servidor atual nunca deixa de ser publicado.
+      - name: Cache e limite do roteador de IA (opcional)
+        run: |
+          cp wrangler.toml wrangler.base.toml
+          kv=$($WRANGLER kv namespace list 2>/dev/null | jq -r '.[] | select(.title|test("venus-cache")) | .id' | head -1)
+          if [ -z "$kv" ]; then
+            $WRANGLER kv namespace create venus-cache >/dev/null 2>&1 || true
+            kv=$($WRANGLER kv namespace list 2>/dev/null | jq -r '.[] | select(.title|test("venus-cache")) | .id' | head -1)
+          fi
+          if [ -n "$kv" ] && [ "$kv" != "null" ]; then
+            printf '\n[[kv_namespaces]]\nbinding = "CACHE"\nid = "%s"\n' "$kv" >> wrangler.toml
+            $WRANGLER vectorize get venus-cache >/dev/null 2>&1 || $WRANGLER vectorize create venus-cache --dimensions=1024 --metric=cosine >/dev/null 2>&1 || true
+            if $WRANGLER vectorize get venus-cache >/dev/null 2>&1; then
+              printf '\n[ai]\nbinding = "AI"\n\n[[vectorize]]\nbinding = "VETORES"\nindex_name = "venus-cache"\n' >> wrangler.toml
+              echo "Cache vetorial: ligado"
+            else
+              echo "::warning::Sem Vectorize na conta: cache semântico desligado (o cache exato continua)."
+            fi
+          else
+            echo "::warning::Sem KV na conta: cache do roteador de IA desligado."
+          fi
+          printf '\n[[ratelimits]]\nname = "LIMITADOR"\nnamespace_id = "2001"\n\n  [ratelimits.simple]\n  limit = 30\n  period = 60\n' >> wrangler.toml
+          if ! $WRANGLER deploy --dry-run >/dev/null 2>&1; then
+            echo "::warning::Configuração extra recusada; publicando só o básico (sem cache nem limite)."
+            cp wrangler.base.toml wrangler.toml
+          fi
+          rm -f wrangler.base.toml
+
       - name: Publicar
         run: |
           $WRANGLER deploy | tee deploy.txt
@@ -89,6 +123,20 @@ jobs:
             fi
           done
 
+      - name: Chaves extras do roteador de IA (DeepSeek e token do app)
+        env:
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+          APP_TOKEN: ${{ secrets.APP_TOKEN }}
+        run: |
+          for nome in DEEPSEEK_API_KEY APP_TOKEN; do
+            valor="${!nome}"
+            if [ -n "$valor" ]; then
+              printf '%s' "$valor" | $WRANGLER secret put "$nome"
+            else
+              echo "::notice::$nome não está nos segredos do repositório; o Worker usa a que já tiver salva (sem DeepSeek, /v1 usa a Groq como reserva)."
+            fi
+          done
+
       - name: Conferir se está no ar
         run: |
           # na primeira publicação o certificado do endereço novo leva alguns minutos
@@ -98,4 +146,5 @@ jobs:
           done
           curl -sS "$ENDERECO/atualizacao?app=venus" | head -c 300; echo
           curl -sS "$ENDERECO/atualizacao?app=robo" | head -c 300; echo
+          curl -sS "$ENDERECO/v1/rotas"; echo
           curl -sS -X POST "$ENDERECO/chat" -H 'content-type: application/json' -d '{"message":"oi"}' | head -c 300; echo

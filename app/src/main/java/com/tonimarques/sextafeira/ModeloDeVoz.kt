@@ -17,7 +17,7 @@ object ModeloDeVoz {
 
     private const val NOME = "vosk-model-small-pt-0.3"
     private val ENDERECOS = listOf(
-        "https://github.com/tonysantquees95-code/Sexta-feira-/releases/download/voz-pt/$NOME.zip",
+        "https://github.com/tonysantquees95-code/Venus-core/releases/download/voz-pt/$NOME.zip",
         "https://alphacephei.com/vosk/models/$NOME.zip",
         "https://huggingface.co/rhasspy/vosk-models/resolve/main/pt/$NOME.zip",
     )
