@@ -2,7 +2,7 @@
  * Servidor da Vênus (Cloudflare Workers + D1).
  *
  *   GET  /saude                          → está no ar?
- *   GET  /atualizacao?app=venus|robo     → versão mais nova {numero, tag, notas, tamanho, sha256, url}; &baixar=1 redireciona ao APK
+ *   GET  /atualizacao?app=venus|windows     → versão mais nova {numero, tag, notas, tamanho, sha256, url}; &baixar=1 redireciona ao APK
  *   POST /aviso/<canal>                  → guarda um aviso curto (ex.: "publicacao", "pago 12")
  *   GET  /aviso/<canal>?desde=<id>       → avisos depois do id {avisos:[{id,texto,criado}], ultimo}
  *   POST /cobranca/aviso                 → webhook da InfinitePay (cobrança por link dos lojistas)
@@ -119,16 +119,18 @@ async function publicacoes(env, ctx) {
 
 async function atualizacao(url, env, ctx) {
   if (!env.GITHUB_TOKEN) return json({ error: "canal sem token do GitHub" }, 503);
-  const robo = url.searchParams.get("app") === "robo";
+  const app = url.searchParams.get("app");
+  const robo = app === "robo";
+  const windows = app === "windows";
   const lista = await publicacoes(env, ctx);
   let melhor = null;
   for (const r of lista) {
     if (r.draft) continue;
-    const m = robo ? /^robo-1\.(\d+)$/.exec(r.tag_name || "") : /^v?1\.(\d+)$/.exec(r.tag_name || "");
+    const m = (robo ? /^robo-1\.(\d+)$/ : windows ? /^win-1\.(\d+)$/ : /^v?1\.(\d+)$/).exec(r.tag_name || "");
     if (!m) continue;
     const numero = Number(m[1]);
     const apk = (r.assets || []).find((a) =>
-      robo ? /^venusrobo\.apk$/i.test(a.name) : /\.apk$/i.test(a.name) && !/robo/i.test(a.name),
+      robo ? /^venusrobo\.apk$/i.test(a.name) : windows ? /\.exe$/i.test(a.name) : /\.apk$/i.test(a.name) && !/robo/i.test(a.name),
     );
     if (!apk) continue;
     if (!melhor || numero > melhor.numero) melhor = { numero, r, apk };
