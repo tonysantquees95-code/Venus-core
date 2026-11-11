@@ -5,6 +5,11 @@ import { useConversas } from "./sessao/ConversasProvider";
 import { ChatPanel } from "./features/chat/ChatPanel";
 import { RoboPanel } from "./features/robo/RoboPanel";
 import { ThemingPanel } from "./theming";
+import { Ajustes } from "./ajustes/Ajustes";
+import { AvisoDeConflito } from "./ajustes/Conta";
+import { InstalarIOS } from "./ios/InstalarIOS";
+import { Sincronizador } from "./sync/Sincronizador";
+import { useAtalhoGlobal } from "./desktop/useAtalhoGlobal";
 import { useRobo } from "./hooks/useRobo";
 import type { Tela } from "./tipos";
 
@@ -18,6 +23,7 @@ export function App() {
   const robo = useRobo();
   const { ativa } = useConversas();
   const [menuAberto, setMenuAberto] = useState(false);
+  useAtalhoGlobal(() => setTela("chat"));
   const inicioToque = useRef<{ x: number; y: number } | null>(null);
 
   // Trocou, abriu ou criou conversa (inclui reabrir o app): volta para o chat e recolhe a gaveta.
@@ -45,6 +51,8 @@ export function App() {
       <main className="flex min-h-0 min-w-0 flex-1">
         {tela === "tema" ? (
           <ThemingPanel />
+        ) : tela === "ajustes" ? (
+          <Ajustes aoAbrirTema={() => setTela("tema")} />
         ) : (
           <>
         <div className={`${tela === "chat" ? "flex" : "hidden"} min-w-0 flex-1 xl:flex`}>
@@ -59,6 +67,9 @@ export function App() {
           </>
         )}
       </main>
+      <Sincronizador />
+      <AvisoDeConflito />
+      <InstalarIOS />
     </div>
   );
 }

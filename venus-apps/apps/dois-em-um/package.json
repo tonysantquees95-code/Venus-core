@@ -6,13 +6,14 @@
   "scripts": {
     "dev": "vite",
     "build:web": "tsc -p tsconfig.json && vite build",
+    "build:desktop": "tsc -p tsconfig.json && vite build --mode capacitor --outDir dist-desktop",
     "build:apk": "tsc -p tsconfig.json && vite build --mode capacitor && cap sync android",
     "android:add": "vite build --mode capacitor && cap add android && capacitor-assets generate --android --iconBackgroundColor '#08080F' --iconBackgroundColorDark '#08080F' --splashBackgroundColor '#08080F' --splashBackgroundColorDark '#08080F'",
     "apk:debug": "npm run build:apk && cd android && ./gradlew assembleDebug",
     "apk:release": "npm run build:apk && cd android && ./gradlew assembleRelease",
     "typecheck": "tsc -p tsconfig.json",
     "preview": "vite preview",
-    "test": "node --test teste/sessao.test.mjs"
+    "test": "node --test teste/sessao.test.mjs teste/ajustes.test.mjs"
   },
   "dependencies": {
     "@capacitor/android": "^7.4.0",

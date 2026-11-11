@@ -72,3 +72,30 @@ jobs:
         with:
           name: venus-${{ matrix.app }}-apk
           path: venus-apps/apps/${{ matrix.app }}/android/app/build/outputs/apk/debug/*.apk
+
+  windows:
+    # App Windows (Electron): instalador e versão portátil. Reaproveita o build web do Dois em Um.
+    needs: verificar
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: venus-apps/package-lock.json
+      - name: Instalar e gerar o app web (modo desktop)
+        working-directory: venus-apps
+        run: |
+          npm ci
+          npm run build:desktop -w @venus/dois-em-um
+      - name: Gerar o instalador do Windows
+        working-directory: venus-apps/desktop
+        run: |
+          npm install --no-audit --no-fund
+          npm run build:win
+      - uses: actions/upload-artifact@v4
+        with:
+          name: venus-windows
+          path: |
+            venus-apps/desktop/dist/*.exe

@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import type { Tela } from "../tipos";
-import { IconeChat, IconeRobo, IconeTema } from "./Icones";
+import { IconeAjustes, IconeChat, IconeRobo, IconeTema } from "./Icones";
 
 interface Props {
   tela: Tela;
@@ -11,10 +11,11 @@ interface Props {
 const ITENS: { id: Tela; rotulo: string; icone: ReactNode }[] = [
   { id: "chat", rotulo: "Chat", icone: <IconeChat /> },
   { id: "robo", rotulo: "Robô", icone: <IconeRobo /> },
-  { id: "tema", rotulo: "Tema", icone: <IconeTema /> }
+  { id: "tema", rotulo: "Tema", icone: <IconeTema /> },
+  { id: "ajustes", rotulo: "Ajustes", icone: <IconeAjustes /> }
 ];
 
-const ROTULOS: Record<Tela, string> = { chat: "Abrir chat", robo: "Abrir painel do Robô", tema: "Abrir aparência" };
+const ROTULOS: Record<Tela, string> = { chat: "Abrir chat", robo: "Abrir painel do Robô", tema: "Abrir aparência", ajustes: "Abrir ajustes" };
 
 /**
  * Navegação única: barra lateral no tablet/desktop (md+) e barra inferior no celular.

@@ -16,3 +16,7 @@ apps/*/ios/
 *.keystore
 *.p12
 .DS_Store
+dist-desktop/
+desktop/app/
+desktop/dist/
+desktop/node_modules/
