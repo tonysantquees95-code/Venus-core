@@ -16,6 +16,7 @@
  * Segredos (wrangler secret): GITHUB_TOKEN (só leitura do repositório, para o canal de atualização);
  * GROQ_API_KEY, TAVILY_API_KEY e GEMINI_API_KEY (conversa); DEEPSEEK_API_KEY e APP_TOKEN (opcional) para o roteador /v1.
  */
+import { ehAtalho, responderAtalho } from "./atalhos.js";
 import { chat, chatPreflight } from "./chat.js";
 import { tratarIA } from "./ia/rotas.js";
 import { ehRotaDaLoja, tratarLoja } from "./loja/rotas.js";
@@ -43,6 +44,7 @@ export default {
     const caminho = url.pathname.replace(/\/+$/, "") || "/";
     try {
       if (caminho === "/" || caminho === "/saude") return json({ ok: true, servico: "venus", versao: 1 });
+      if (ehAtalho(caminho) && req.method === "GET") return responderAtalho(url, caminho);
       if (caminho === "/atualizacao" && req.method === "GET") return await atualizacao(url, env, ctx);
       const canal = caminho.match(/^\/aviso\/([A-Za-z0-9_-]{16,64})$/);
       if (canal && req.method === "POST") return await avisoNovo(canal[1], req, env);
