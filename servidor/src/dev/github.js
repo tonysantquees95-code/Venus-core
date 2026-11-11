@@ -20,8 +20,8 @@ export const PROJETOS = [
     apks: [{ app: "dev", rotulo: "Vetorial Dev (este painel)", tag: /^dev-1\.(\d+)$/, arquivo: (n) => /\.apk$/i.test(n) }],
   },
   {
-    id: "vindex", nome: "Vindex · Manend e Vault", repo: REPO_VINDEX,
-    descricao: "Otimizador de hardware, organizador de arquivos (Manend) e cofre de segredos (Vault): Windows e Android.",
+    id: "vindex", nome: "Vindex · Manager e Vault", repo: REPO_VINDEX,
+    descricao: "Otimizador de hardware, organizador de arquivos (Manager) e cofre de segredos (Vault): Windows e Android.",
     apks: [
       { app: "vindex-android", rotulo: "Vindex (Android)", tag: /^1\.(\d+)$/, arquivo: (n) => /^Vindex\.apk$/i.test(n) },
       { app: "vindex-windows", rotulo: "Vindex (Windows)", tag: /^1\.(\d+)$/, arquivo: (n) => /^VindexSetup\.exe$/i.test(n) },
