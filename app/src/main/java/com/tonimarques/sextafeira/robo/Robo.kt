@@ -70,8 +70,8 @@ object Robo {
     fun salvar(ctx: Context, endereco: String, chave: String) =
         prefs(ctx).edit().putString("endereco", endereco.trim()).putString("chave", Cofre.selar(chave.trim())).apply()
 
-    /** Em quais apps ele responde (padrão: WhatsApp Business e Instagram). */
-    fun canalLigado(ctx: Context, pacote: String) = prefs(ctx).getBoolean("canal_$pacote", pacote != WHATSAPP)
+    /** Em quais apps ele responde: só no WhatsApp (o Business por padrão). O Instagram não tem resposta automática: o texto pronto se copia e cola. */
+    fun canalLigado(ctx: Context, pacote: String) = pacote != INSTAGRAM && prefs(ctx).getBoolean("canal_$pacote", pacote != WHATSAPP)
     fun definirCanal(ctx: Context, pacote: String, v: Boolean) = prefs(ctx).edit().putBoolean("canal_$pacote", v).apply()
 
     // ------------------------------------------------------------------ pergunta à Vênus da loja

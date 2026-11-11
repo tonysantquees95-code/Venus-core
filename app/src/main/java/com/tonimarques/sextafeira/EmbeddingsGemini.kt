@@ -30,7 +30,6 @@ object EmbeddingsGemini {
     /** Nome gravado junto de cada vetor: só se comparam vetores do mesmo modelo e tamanho. */
     val MODELO: String get() = "$modeloAtivo@$DIMENSOES"
 
-    private const val ENDERECO = "https://generativelanguage.googleapis.com/v1beta/models/"
     private const val MAXIMO_DE_LETRAS = 2000
     private const val LOTE = 100
 
@@ -74,14 +73,13 @@ object EmbeddingsGemini {
         var conexao: HttpURLConnection? = null
         return try {
             val corpo = corpoDoLote(modelo, lote, comTarefa)
-            conexao = (URL("$ENDERECO$modelo:batchEmbedContents").openConnection() as HttpURLConnection).apply {
+            conexao = GeminiRota.abrir("models/$modelo:batchEmbedContents", chave).apply {
                 requestMethod = "POST"
                 connectTimeout = 10_000
                 readTimeout = 30_000
                 doOutput = true
                 setRequestProperty("Content-Type", "application/json; charset=utf-8")
                 setRequestProperty("Connection", "close")
-                setRequestProperty("x-goog-api-key", chave)
             }
             conexao.outputStream.use { it.write(corpo.toString().toByteArray(Charsets.UTF_8)) }
             val codigo = conexao.responseCode

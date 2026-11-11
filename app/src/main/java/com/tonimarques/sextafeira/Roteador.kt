@@ -139,14 +139,13 @@ object Roteador {
         for (m in listOf("gemini-flash-lite-latest", modelo.removePrefix("models/"), "gemini-3.8-flash").filter { it.isNotBlank() }.distinct()) {
             var c: HttpURLConnection? = null
             try {
-                c = URL("https://generativelanguage.googleapis.com/v1beta/models/$m:generateContent").openConnection() as HttpURLConnection
+                c = GeminiRota.abrir("models/$m:generateContent", chave)
                 c.requestMethod = "POST"
                 c.connectTimeout = 6_000
                 c.readTimeout = 12_000
                 c.doOutput = true
                 c.setRequestProperty("Content-Type", "application/json; charset=utf-8")
                 c.setRequestProperty("Connection", "close")
-                c.setRequestProperty("x-goog-api-key", chave)
                 c.outputStream.use { it.write(corpo) }
                 if (c.responseCode !in 200..299) continue
                 val json = JSONObject(c.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() })

@@ -53,7 +53,7 @@ object SegundaIA {
 
     private const val PREFS = "config"
     @Volatile
-    private var ctx: Context? = null
+    internal var ctx: Context? = null
 
     /** Modelo que respondeu por último em cada provedor (evita tentar de novo os que não existem). */
     private val modeloQueFunciona = mutableMapOf<String, String>()

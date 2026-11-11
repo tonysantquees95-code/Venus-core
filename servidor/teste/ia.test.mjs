@@ -243,3 +243,23 @@ test("/ia/v1: só com Vetorial ID, só modelos conhecidos, chave da Groq fica no
   const lista = await pedir(null, logado, criarEnv(), "/ia/v1/models", "GET");
   assert.ok((await lista.json()).data.some((m) => m.id === MODELOS[0]));
 });
+
+test("/ia/gemini: Vetorial ID obrigatório, só rotas permitidas, chave do Google fica no servidor", async () => {
+  const logado = async () => ({ usuario: { id: "u1" } });
+  const deslogado = async () => { const e = new Error("Entre de novo."); e.status = 401; throw e; };
+  const pedir = (caminho, validar, corpo = { contents: [] }, metodo = "POST", env = criarEnv()) =>
+    tratarProxyIA(new Request("https://x.dev" + caminho, { method: metodo, headers: { "content-type": "application/json", authorization: "Bearer eyJa.b.c" }, body: metodo === "POST" ? JSON.stringify(corpo) : undefined }), env, ctx(), caminho, { validar });
+  mockFetch({});
+  assert.equal((await pedir("/ia/gemini/models/gemini-3.8-flash:generateContent", deslogado)).status, 401);
+  assert.equal(chamadas.length, 0);
+  assert.equal((await pedir("/ia/gemini/models/x:deleteEverything", logado)).status, 404);
+  assert.equal((await pedir("/ia/gemini/files/abc", logado)).status, 404);
+  assert.equal((await pedir("/ia/gemini/models/x:generateContent", logado, {}, "POST", criarEnv({ GEMINI_API_KEY: "" }))).status, 503);
+  mockFetch({ "generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent": () => okGemini("oi") });
+  const r = await pedir("/ia/gemini/models/gemini-3.8-flash:generateContent", logado);
+  assert.equal(r.status, 200);
+  assert.equal(chamadas[0].init.headers["x-goog-api-key"], "AIza_SEGREDO_GEMINI");
+  assert.equal(chamadas[0].init.headers.authorization, undefined);
+  mockFetch({ "v1beta/models?pageSize=200": () => new Response(JSON.stringify({ models: [] }), { status: 200 }) });
+  assert.equal((await pedir("/ia/gemini/models", logado, null, "GET")).status, 200);
+});

@@ -20,7 +20,13 @@ const CAMPOS = ["model", "messages", "tools", "tool_choice", "temperature", "top
 const json = (o, status = 200) => new Response(JSON.stringify(o), { status, headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" } });
 const erro = (status, mensagem) => json({ error: { message: mensagem } }, status);
 
-export const ehRotaDaIA = (caminho) => caminho === "/ia/v1/models" || caminho === "/ia/v1/chat/completions";
+const GEMINI = "https://generativelanguage.googleapis.com/v1beta";
+const PREFIXO_GEMINI = "/ia/gemini/";
+// só as chamadas que o app usa: texto/PDF/áudio/foto (generateContent) e memória (embeddings)
+const GEMINI_PERMITIDO = /^models\/[A-Za-z0-9._-]{1,80}:(generateContent|batchEmbedContents|embedContent)$/;
+const MAX_CORPO_GEMINI = 24 * 1024 * 1024; // PDF e áudio vão em base64
+
+export const ehRotaDaIA = (caminho) => caminho === "/ia/v1/models" || caminho === "/ia/v1/chat/completions" || caminho.startsWith(PREFIXO_GEMINI);
 
 export async function tratarProxyIA(req, env, ctx, caminho, { validar = validarSessao } = {}) {
   let quem;
@@ -33,6 +39,7 @@ export async function tratarProxyIA(req, env, ctx, caminho, { validar = validarS
     const { success } = await env.LIMITADOR.limit({ key: `ia:${quem.usuario.id}` });
     if (!success) return erro(429, "Muitas perguntas seguidas. Espere um instante.");
   }
+  if (caminho.startsWith(PREFIXO_GEMINI)) return await tratarGemini(req, env, caminho.slice(PREFIXO_GEMINI.length));
   if (req.method === "GET" && caminho === "/ia/v1/models") return json({ object: "list", data: MODELOS.map((id) => ({ id, object: "model" })) });
   if (req.method !== "POST" || caminho !== "/ia/v1/chat/completions") return erro(405, "Método não permitido.");
   if (!env.GROQ_API_KEY) return erro(503, "A IA do servidor não está configurada.");
@@ -60,5 +67,27 @@ export async function tratarProxyIA(req, env, ctx, caminho, { validar = validarS
     return erro(502, "Não consegui falar com a IA agora.");
   }
   // devolve o status e o corpo como vieram (429 vira "limite" no app, que tenta outro modelo)
+  return new Response(r.body, { status: r.status, headers: { "content-type": r.headers.get("content-type") || "application/json", "cache-control": "no-store" } });
+}
+
+// Gemini da Vênus: o app manda o pedido do Gemini como sempre, mas para cá, com o token do Vetorial ID;
+// a chave do Google fica só no servidor. Serve PDF, áudio, foto, busca em notas e memória (embeddings).
+async function tratarGemini(req, env, caminho) {
+  if (!env.GEMINI_API_KEY) return erro(503, "O Gemini do servidor não está configurado.");
+  if (req.method === "GET" && caminho === "models") {
+    const r = await fetch(`${GEMINI}/models?pageSize=200`, { headers: { "x-goog-api-key": env.GEMINI_API_KEY } }).catch(() => null);
+    if (!r) return erro(502, "Não consegui falar com o Gemini agora.");
+    return new Response(r.body, { status: r.status, headers: { "content-type": r.headers.get("content-type") || "application/json", "cache-control": "no-store" } });
+  }
+  if (req.method !== "POST" || !GEMINI_PERMITIDO.test(caminho)) return erro(404, "Rota do Gemini não permitida.");
+  if (Number(req.headers.get("content-length") ?? 0) > MAX_CORPO_GEMINI) return erro(413, "Arquivo grande demais.");
+  const bruto = await req.arrayBuffer();
+  if (bruto.byteLength > MAX_CORPO_GEMINI) return erro(413, "Arquivo grande demais.");
+  let r;
+  try {
+    r = await fetch(`${GEMINI}/${caminho}`, { method: "POST", headers: { "x-goog-api-key": env.GEMINI_API_KEY, "content-type": "application/json" }, body: bruto });
+  } catch {
+    return erro(502, "Não consegui falar com o Gemini agora.");
+  }
   return new Response(r.body, { status: r.status, headers: { "content-type": r.headers.get("content-type") || "application/json", "cache-control": "no-store" } });
 }

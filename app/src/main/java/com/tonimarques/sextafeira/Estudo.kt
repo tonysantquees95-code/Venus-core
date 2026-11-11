@@ -142,7 +142,7 @@ object Estudo {
         if (!forcar && !ligado(ctx)) return null
         if (!Licenca.liberada(ctx)) return null
         val config = ctx.getSharedPreferences("config", Context.MODE_PRIVATE)
-        val chave = Cofre.ler(config, "chave")
+        val chave = GeminiRota.efetiva(ctx, Cofre.ler(config, "chave"))
         val modelo = config.getString("modelo", "").orEmpty().ifBlank { "gemini-flash-latest" }
         if (chave.isBlank()) return null
         if (!trava.compareAndSet(false, true)) return null

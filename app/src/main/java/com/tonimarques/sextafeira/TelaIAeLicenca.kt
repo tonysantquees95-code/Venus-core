@@ -252,7 +252,7 @@ internal fun MainActivity.pedirCloudflare() {
 }
 
 internal fun MainActivity.pedirChave() {
-    val entrada = campoSecreto(chave(), "Cole aqui sua chave")
+    val entrada = campoSecreto(Cofre.ler(prefs, PREF_CHAVE), "Cole aqui sua chave")
     AlertDialog.Builder(this)
         .setTitle("Chave do Gemini")
         .setMessage(
