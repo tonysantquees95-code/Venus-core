@@ -59,11 +59,8 @@ internal fun MainActivity.primeirosPassos() {
         Triple("Voz neural da Microsoft (opcional)", VozNeural.chave(this).isNotBlank()) { configurarVozNeural() },
     )
     val feitos = passos.count { it.second }
-    AlertDialog.Builder(this)
-        .setTitle("Primeiros passos ($feitos de ${passos.size})")
-        .setItems(passos.map { (if (it.second) "✓  " else "○  ") + it.first }.toTypedArray()) { _, i -> passos[i].third() }
-        .setPositiveButton("Fechar", null)
-        .show()
+    val itens = passos.map { (nome, feito, acao) -> TelaDeAjustes.Ajuste(nome, { if (feito) "Feito" else "Falta fazer" }, null, { feito }) { acao() } }
+    TelaDeAjustes(this, versaoDoApp(), listOf(TelaDeAjustes.Secao("Primeiros passos ($feitos de ${passos.size})", itens)), "PRIMEIROS PASSOS", compacto = true).show()
 }
 
 internal fun MainActivity.editarPerfil() {
@@ -210,11 +207,8 @@ internal fun MainActivity.editarDadosDaLoja() {
 
 internal fun MainActivity.escolherPlataforma() {
     val tipos = Plataformas.TIPOS
-    AlertDialog.Builder(this)
-        .setTitle("Onde fica a sua loja?")
-        .setItems(tipos.map { it.nome }.toTypedArray()) { _, i -> configurarPlataforma(tipos[i]) }
-        .setNegativeButton("Cancelar", null)
-        .show()
+    val itens = tipos.map { t -> TelaDeAjustes.Ajuste(t.nome) { configurarPlataforma(t) } }
+    TelaDeAjustes(this, versaoDoApp(), listOf(TelaDeAjustes.Secao("Onde fica a sua loja?", itens)), "SUA LOJA", compacto = true).show()
 }
 
 internal fun MainActivity.configurarPlataforma(t: Plataformas.Tipo) {

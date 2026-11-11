@@ -549,7 +549,68 @@ internal fun MainActivity.escolherHorariosDosStories() {
     }, manha / 60, manha % 60, true).apply { setTitle("Story da manhã") }.show()
 }
 
-/** Página das ideias de post que a Vênus criou: cada uma com Programar post e Programar story. */
+/**
+ * Pede ideias novas ao Gemini (em segundo plano) e entrega (título com data e formato, legenda); null se não deu.
+ * Usado para gerar tudo de novo, trocar uma ideia e repor a que acabou de ser programada.
+ */
+internal fun MainActivity.gerarIdeiasNovas(quantidade: Int, evitar: List<String>, pronto: (List<Pair<String, String>>?) -> Unit) {
+    val chave = chave()
+    if (chave.isBlank()) return pronto(null)
+    Thread {
+        val novas = try {
+            val datas = Gestao.textoDatas(Gestao.proximasDatas(Calendar.getInstance(), 45), 45)
+            val nomes = try {
+                ferramentas.loja.takeIf { it.conectada }?.produtos()?.filter { it.ativo }?.take(60)?.joinToString(", ") { it.nome }.orEmpty()
+            } catch (e: Exception) {
+                ""
+            }
+            val hoje = java.text.SimpleDateFormat("yyyy-MM-dd", Locale.US).format(java.util.Date())
+            Gemini.gerarJson(chave, modelo(), Estudo.pedidoDeIdeias(datas, nomes, evitar, hoje, quantidade))?.let { Estudo.lerIdeias(it) }?.takeIf { it.isNotEmpty() }
+        } catch (e: Exception) {
+            null
+        }
+        runOnUiThread { pronto(novas) }
+    }.start()
+}
+
+private fun MainActivity.guardarIdeias(novas: List<Pair<String, String>>) {
+    for ((texto, legenda) in novas) memoria.guardarVetor("ideia_post", texto, legenda)
+}
+
+/** Troca uma ideia por outra nova. */
+internal fun MainActivity.gerarOutraIdeia(ideia: IdeiasDePost.Ideia, depois: () -> Unit) {
+    responder("Pensando em outra ideia no lugar de \"${ideia.titulo}\"…")
+    val todas = try { memoria.itensDoTipo("ideia_post", Estudo.IDEIAS_POR_SEMANA * 2).map { it.texto } } catch (e: Exception) { emptyList() }
+    gerarIdeiasNovas(1, todas) { novas ->
+        if (novas == null) return@gerarIdeiasNovas responder("Não consegui uma ideia nova agora (confira a chave do Gemini e tente de novo).")
+        memoria.apagarItem(ideia.id)
+        guardarIdeias(novas)
+        Diario.anotar(this, "instagram", "Ideia de post trocada: ${ideia.titulo}", "tela", true)
+        depois()
+    }
+}
+
+/** Joga fora as ideias de agora e gera um lote inteiro novo (sem repetir os títulos de antes). */
+internal fun MainActivity.gerarTodasAsIdeias(depois: () -> Unit) {
+    responder("Gerando um lote novo de ideias de post…")
+    val antigas = try { memoria.itensDoTipo("ideia_post", Estudo.IDEIAS_POR_SEMANA * 2) } catch (e: Exception) { emptyList() }
+    gerarIdeiasNovas(Estudo.IDEIAS_POR_SEMANA, antigas.map { it.texto }) { novas ->
+        if (novas == null) return@gerarIdeiasNovas responder("Não consegui gerar as ideias agora (confira a chave do Gemini e tente de novo).")
+        antigas.forEach { memoria.apagarItem(it.id) }
+        guardarIdeias(novas)
+        Diario.anotar(this, "instagram", "Ideias de post geradas de novo (${novas.size}).", "tela", true)
+        depois()
+    }
+}
+
+/** A ideia programada sai da lista de sugestões e uma nova entra no lugar (em silêncio; se falhar, só sai). */
+internal fun MainActivity.tirarIdeiaProgramada(ideia: IdeiasDePost.Ideia) {
+    memoria.apagarItem(ideia.id)
+    val restantes = try { memoria.itensDoTipo("ideia_post", Estudo.IDEIAS_POR_SEMANA * 2).map { it.texto } } catch (e: Exception) { emptyList() }
+    gerarIdeiasNovas(1, restantes + ideia.titulo) { novas -> if (novas != null) guardarIdeias(novas) }
+}
+
+/** Página das ideias de post que a Vênus criou: cada uma com Programar post, Programar story e Gerar outra. */
 internal fun MainActivity.mostrarIdeiasDePost() {
     Thread {
         val ideias = try {
@@ -558,9 +619,12 @@ internal fun MainActivity.mostrarIdeiasDePost() {
             emptyList()
         }
         runOnUiThread {
-            if (ideias.isEmpty()) return@runOnUiThread responder("Ainda não preparei ideias de post. Elas saem no estudo de uma vez por semana; se quiser já, diga: estuda agora.")
             val f = Formulario(this, "Ideias de post", "Sugestões da ${Marca.nome} para as próximas semanas")
             val dia = java.text.SimpleDateFormat("dd/MM", Locale("pt", "BR"))
+            f.adicionar(f.botao(if (ideias.isEmpty()) "Gerar ideias agora" else "Gerar todas de novo", primario = true) {
+                f.fechar(); gerarTodasAsIdeias { mostrarIdeiasDePost() }
+            }, 4)
+            if (ideias.isEmpty()) f.adicionar(f.aviso("Ainda não há ideias. Elas saem no estudo da semana; toque acima para gerar já."), 8)
             for (ideia in ideias) {
                 f.cartao(ideia.titulo.take(40))
                 f.adicionar(f.aviso("Sugerido: " + (ideia.data?.let { dia.format(it.time) } ?: "quando quiser") + " · " + ideia.formato), 2)
@@ -576,6 +640,7 @@ internal fun MainActivity.mostrarIdeiasDePost() {
                     f.botao("Programar post", primario = ideia.formato != "story") { f.fechar(); prepararIdeia(ideia, "feed") },
                     f.botao("Programar story", primario = ideia.formato == "story") { f.fechar(); prepararIdeia(ideia, "story") },
                 )
+                f.adicionar(f.botao("↻ Gerar outra ideia") { f.fechar(); gerarOutraIdeia(ideia) { mostrarIdeiasDePost() } }, 6)
             }
             f.acoes(f.botao("Fechar", primario = true) { f.fechar() })
             f.mostrar()
@@ -640,6 +705,7 @@ internal fun MainActivity.conferirIdeia(ideia: IdeiasDePost.Ideia, tipo: String,
         if (c.timeInMillis < System.currentTimeMillis()) return@botao Toast.makeText(this, "Esse horário já passou.", Toast.LENGTH_SHORT).show()
         val p = Postagens.criar(this, c.timeInMillis, tipo, legenda.text.toString(), jpeg)
         focarPost(p.id)
+        tirarIdeiaProgramada(ideia)
         Diario.anotar(this, "instagram", "Ideia programada como ${if (tipo == "story") "story" else "post"}: ${ideia.titulo} (${java.text.SimpleDateFormat("dd/MM HH:mm", Locale("pt", "BR")).format(c.time)})", "tela")
         f.fechar()
         responder("Programado: \"${ideia.titulo}\" como ${if (tipo == "story") "story" else "post no feed"} em ${java.text.SimpleDateFormat("dd/MM 'às' HH:mm", Locale("pt", "BR")).format(c.time)}.")

@@ -30,6 +30,8 @@ class TelaDeAjustes(
     private val versao: String,
     private val secoes: List<Secao>,
     private val titulo: String = "AJUSTES",
+    /** Painel de escolha: sem orbe e sem busca, junto de baixo, e fecha ao tocar numa opção. */
+    private val compacto: Boolean = false,
 ) : Dialog(activity, R.style.Tema) {
 
     /** [ligado] != null mostra um interruptor; senão, uma setinha. [descricao] é recalculada ao atualizar. */
@@ -37,6 +39,10 @@ class TelaDeAjustes(
         val titulo: String,
         val descricao: () -> String = { "" },
         val ligado: (() -> Boolean)? = null,
+        /** != null mostra um ✓ na opção escolhida (painéis de escolha). */
+        val marcado: (() -> Boolean)? = null,
+        /** Botão redondo à direita da linha (ex.: ↻ gerar de novo), com ação própria. */
+        val extra: Pair<String, () -> Unit>? = null,
         val acao: () -> Unit,
     )
 
@@ -46,6 +52,7 @@ class TelaDeAjustes(
     private val cabecalhos = mutableListOf<TextView>()
     private val atualizadores = mutableListOf<() -> Unit>()
     private val interruptores = mutableListOf<Interruptor>()
+    private val marcasDeEscolha = mutableListOf<TextView>()
     private lateinit var tituloTela: TextView
     /** Uma linha da lista, com o que a busca precisa para escondê-la. */
     private class Entrada(val cabecalho: TextView, val cartao: LinearLayout, val linhas: List<Pair<View?, View>>, val textos: List<() -> String>)
@@ -69,10 +76,11 @@ class TelaDeAjustes(
 
     private fun montar(): View {
         val raiz = FrameLayout(context).apply {
-            background = GradientDrawable(
+            background = if (compacto) GradientDrawable().apply { setColor(Color.argb(205, 0, 0, 0)) } else GradientDrawable(
                 GradientDrawable.Orientation.TOP_BOTTOM,
                 intArrayOf(Color.parseColor("#0A0F24"), Color.parseColor("#04050C"), Color.parseColor("#000000"))
             )
+            if (compacto) setOnClickListener { dismiss() }
         }
         val rolagem = ScrollView(context).apply {
             isVerticalScrollBarEnabled = false
@@ -123,7 +131,7 @@ class TelaDeAjustes(
             aoMudarCor = { c -> recolorir(c) }
             isClickable = false
         }
-        coluna.addView(orbe, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(120)))
+        if (!compacto) coluna.addView(orbe, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(120)))
 
         // Busca rápida: digite "escuta contínua", "tema"… e só ficam os ajustes que combinam
         val busca = android.widget.EditText(context).apply {
@@ -143,7 +151,7 @@ class TelaDeAjustes(
                 override fun onTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
             })
         }
-        coluna.addView(busca, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(6) })
+        if (!compacto) coluna.addView(busca, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(6) })
 
         for (secao in secoes) {
             val cab = TextView(context).apply {
@@ -185,7 +193,7 @@ class TelaDeAjustes(
             entradas += Entrada(cab, cartao, linhasDaSecao, secao.itens.map { { it.titulo + " " + it.descricao() + " " + secao.titulo } })
         }
 
-        coluna.addView(TextView(context).apply {
+        if (!compacto) coluna.addView(TextView(context).apply {
             text = "${Marca.nome} · feita para o seu dia a dia e para a sua loja"
             textSize = 11f
             gravity = Gravity.CENTER
@@ -194,7 +202,12 @@ class TelaDeAjustes(
         })
 
         rolagem.addView(coluna)
-        raiz.addView(rolagem, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+        if (compacto) {
+            coluna.setPadding(dp(16), dp(10), dp(16), dp(24))
+            coluna.setOnClickListener { }
+            rolagem.layoutParams = null
+            raiz.addView(rolagem, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM))
+        } else raiz.addView(rolagem, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
         return raiz
     }
 
@@ -244,8 +257,27 @@ class TelaDeAjustes(
         textos.addView(descricao)
         linha.addView(textos, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { rightMargin = dp(12) })
 
+        ajuste.extra?.let { (simbolo, aoTocar) ->
+            val botao = TextView(context).apply {
+                text = simbolo
+                textSize = 18f
+                gravity = Gravity.CENTER
+                setTextColor(cor)
+                background = GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(Color.argb(24, 255, 255, 255)); setStroke(dp(1).coerceAtLeast(1), Color.argb(50, 255, 255, 255)) }
+                contentDescription = "Gerar de novo"
+                setOnClickListener { aoTocar() }
+            }
+            marcasDeEscolha += botao
+            linha.addView(botao, LinearLayout.LayoutParams(dp(40), dp(40)).apply { rightMargin = dp(8) })
+        }
         val ligado = ajuste.ligado
-        if (ligado != null) {
+        val marcado = ajuste.marcado
+        if (marcado != null) {
+            val marca = TextView(context).apply { text = "✓"; textSize = 20f; gravity = Gravity.CENTER }
+            marcasDeEscolha += marca
+            linha.addView(marca, LinearLayout.LayoutParams(dp(28), dp(28)))
+            atualizadores += { marca.setTextColor(cor); marca.visibility = if (marcado()) View.VISIBLE else View.INVISIBLE }
+        } else if (ligado != null) {
             val chave = Interruptor(context, cor)
             interruptores += chave
             linha.addView(chave, LinearLayout.LayoutParams(dp(46), dp(28)))
@@ -263,6 +295,7 @@ class TelaDeAjustes(
         }
         linha.setOnClickListener {
             ajuste.acao()
+            if (compacto) { dismiss(); return@setOnClickListener }
             // Algumas ações pedem permissão ou abrem janelas: relê o estado logo depois.
             linha.postDelayed({ atualizar() }, 250)
         }
@@ -274,6 +307,7 @@ class TelaDeAjustes(
         tituloTela.setTextColor(c)
         for (t in cabecalhos) t.setTextColor(c)
         for (i in interruptores) i.cor = c
+        for (m in marcasDeEscolha) m.setTextColor(c)
     }
 
     /** Interruptor desenhado à mão, com brilho na cor da Vênus. */

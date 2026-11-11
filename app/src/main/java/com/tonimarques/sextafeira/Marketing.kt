@@ -30,7 +30,7 @@ internal fun MainActivity.abrirMarketing(anterior: TelaDeAjustes? = null) {
                     aviso(if (r.optJSONArray("criados")?.length() == 0) "Nada novo para sugerir agora." else "Sugestões prontas!"); abrirMarketing(tela)
                 }
             },
-            TelaDeAjustes.Ajuste("Regenerar todas as sugestões", { "Reescreve em lote as que ainda não foram agendadas." }) {
+            TelaDeAjustes.Ajuste("Gerar todas de novo", { "Reescreve em lote todas as sugestões que ainda não foram agendadas." }) {
                 pedirNuvem("POST", "/marketing/regenerar", JSONObject().put("todos", true), "Reescrevendo…") { r -> aviso("${r.optInt("regenerados")} sugestões reescritas."); abrirMarketing(tela) }
             },
             TelaDeAjustes.Ajuste("Onde publicar", { "Conecte o Instagram (API oficial da Meta) ou um webhook do Vênus Robô para publicar sozinha no horário marcado." }) { abrirDestinos() },
@@ -50,7 +50,9 @@ internal fun MainActivity.abrirMarketing(anterior: TelaDeAjustes? = null) {
         val itens = fila.map { p ->
             TelaDeAjustes.Ajuste(p.optString("copy").ifBlank { p.optString("produto_nome") }, {
                 estadoDaPostagem(p.optString("status"), p.optLong("agendado_para"), p.optString("erro"), p.optLong("publicado_em")) + " · " + p.optString("produto_nome") + "\n" + p.optString("legenda") + "\n" + hashtagsDe(p).joinToString(" ")
-            }) {
+            }, extra = if (p.optString("status") == "sugerido") "↻" to {
+                pedirNuvem("POST", "/marketing/fila/${p.optInt("id")}", JSONObject(), "Reescrevendo esta sugestão…") { abrirMarketing(tela) }
+            } else null) {
                 ajustesDeMarketing = tela
                 escolher(p.optString("produto_nome"), listOf(
                     "Editar legenda, hashtags e imagem…" to { editarPostagem(p) { abrirMarketing(tela) } },
@@ -91,7 +93,12 @@ internal fun MainActivity.agendarPostagem(id: Int, tela: TelaDeAjustes?) {
         "Amanhã às 19h" to em(diasMais = 1, hora = 19),
     )
     escolher("Agendar para…", opcoes.map { (nome, quando) ->
-        nome to { pedirNuvem("POST", "/marketing/fila/$id/agendar", JSONObject().put("agendarPara", quando)) { aviso("Agendada: $nome."); abrirMarketing(tela) } }
+        nome to { pedirNuvem("POST", "/marketing/fila/$id/agendar", JSONObject().put("agendarPara", quando)) {
+            aviso("Agendada: $nome. Ela sai das sugestões e uma nova entra no lugar.")
+            Diario.anotar(this, "marketing", "Postagem $id agendada ($nome).", "tela", true)
+            // repõe: uma sugestão nova ocupa o lugar da que acabou de ser agendada
+            pedirNuvem("POST", "/marketing/sugestoes", JSONObject().put("quantidade", 1)) { abrirMarketing(tela) }
+        } }
     })
 }
 
@@ -266,13 +273,36 @@ internal fun MainActivity.previa(titulo: String, imagens: List<Bitmap>, nome: St
 }
 
 // ------------------------------------------------------------------ QR Codes
+/** Link dos materiais: o site conectado da loja ou a vitrine criada pela Vênus, conforme o que a pessoa escolheu. */
+internal fun MainActivity.linkDosMateriais(vitrine: String): String =
+    DadosDaLoja.escolherLink(prefs.getString(DadosDaLoja.PREF_LINK, "site").orEmpty(), Perfil.site, vitrine)
+
+internal fun MainActivity.escolherLinkDosMateriais(depois: () -> Unit = {}) {
+    fun definir(v: String) {
+        prefs.edit().putString(DadosDaLoja.PREF_LINK, v).apply()
+        Diario.anotar(this, "Central da loja", "Link dos materiais: ${DadosDaLoja.nomeDoLink(v, Perfil.site)}.", "tela", true)
+        aviso("Pronto: ${DadosDaLoja.nomeDoLink(v, Perfil.site)}.")
+        depois()
+    }
+    val opcoes = mutableListOf<Pair<String, () -> Unit>>()
+    if (Perfil.site.isNotBlank()) opcoes += "Site da minha loja\n${Perfil.site}" to { definir("site") }
+    opcoes += "Site criado pela Vênus\nA vitrine da Vênus, com catálogo, carrinho e pedidos funcionando." to { definir("vitrine") }
+    escolher("Link nos QR Codes, cartão e panfleto", opcoes)
+}
+
 internal fun MainActivity.abrirQr() {
-    escolher("QR Code de…", listOf(
-        "Chave Pix" to { qrPix() },
-        "Link de pagamento" to { qrTexto("Link de pagamento", "link", "Endereço https do link de pagamento") },
-        "Instagram ou outra rede" to { qrTexto("Rede social", "rede", "Endereço https (ex.: https://instagram.com/sualoja)") },
-        "Minha vitrine" to { qrVitrine() },
-    ))
+    val insta = Instagram.usuario(this)?.takeIf { Instagram.conectado(this) }
+    val itens = mutableListOf<Pair<String, () -> Unit>>()
+    itens += "Minha loja\nO link escolhido (${DadosDaLoja.nomeDoLink(prefs.getString(DadosDaLoja.PREF_LINK, "site").orEmpty(), Perfil.site).lowercase()})." to { qrVitrine() }
+    if (insta != null) itens += "Meu Instagram (${DadosDaLoja.arroba(insta)})\nJá conectado, sem digitar nada." to {
+        val url = DadosDaLoja.enderecoDoInstagram(insta)
+        pedirNuvem("POST", "/qr", JSONObject().put("tipo", "rede").put("texto", url), "Gerando…") { r -> mostrarQr(r, "Instagram ${DadosDaLoja.arroba(insta)}", url) }
+    }
+    itens += "Chave Pix" to { qrPix() }
+    itens += "Link de pagamento" to { qrTexto("Link de pagamento", "link", "Endereço https do link de pagamento") }
+    itens += "Outra rede social" to { qrTexto("Rede social", "rede", "Endereço https (ex.: https://instagram.com/sualoja)") }
+    itens += "Trocar o link da loja\nSite conectado ou site criado pela Vênus." to { escolherLinkDosMateriais { abrirQr() } }
+    escolher("QR Code de…", itens)
 }
 
 private fun MainActivity.mostrarQr(resposta: JSONObject, legenda: String, copiavel: String?) {
@@ -283,7 +313,8 @@ private fun MainActivity.mostrarQr(resposta: JSONObject, legenda: String, copiav
 }
 
 private fun MainActivity.qrPix() {
-    perguntar("QR Code do Pix", listOf("Chave Pix (CPF, CNPJ, celular, e-mail ou aleatória)" to "", "Nome do recebedor" to Perfil.loja, "Cidade" to Perfil.cidade, "Valor em R\$ (vazio = o cliente digita)" to ""), "Gerar") { v ->
+    perguntar("QR Code do Pix", listOf("Chave Pix (CPF, CNPJ, celular, e-mail ou aleatória)" to DadosDaLoja.guardado(prefs, DadosDaLoja.PREF_PIX), "Nome do recebedor" to Perfil.loja, "Cidade" to Perfil.cidade, "Valor em R\$ (vazio = o cliente digita)" to ""), "Gerar") { v ->
+        DadosDaLoja.lembrar(prefs, DadosDaLoja.PREF_PIX, v[0])
         val corpo = JSONObject().put("tipo", "pix").put("chave", v[0]).put("nome", v[1]).put("cidade", v[2])
         val valor = v[3].replace(",", ".").toDoubleOrNull()
         if (valor != null && valor > 0) corpo.put("valorCentavos", Math.round(valor * 100))
@@ -299,29 +330,38 @@ private fun MainActivity.qrTexto(titulo: String, tipo: String, dica: String) {
 
 private fun MainActivity.qrVitrine() {
     pedirNuvem("GET", "/loja/vitrine", carregando = "Gerando…") { v ->
-        val url = v.optString("url")
-        pedirNuvem("POST", "/qr", JSONObject().put("tipo", "link").put("texto", url)) { r -> mostrarQr(r, "Vitrine", url) }
+        val url = linkDosMateriais(v.optString("url"))
+        pedirNuvem("POST", "/qr", JSONObject().put("tipo", "link").put("texto", url)) { r -> mostrarQr(r, "Minha loja", url) }
     }
 }
 
 // ------------------------------------------------------------------ cartão de visita e panfleto
 internal fun MainActivity.abrirMateriais() {
     escolher("Materiais da loja", listOf(
-        "Cartão de visita (frente e verso)" to { criarCartao() },
-        "Panfleto de ofertas (A5)" to { criarPanfleto() },
+        "Cartão de visita (frente e verso)\nJá sai com seu nome, WhatsApp, Instagram e o QR Code da loja." to { criarCartao() },
+        "Panfleto de ofertas (A5)\nOfertas do catálogo, contato e QR Code, prontos." to { criarPanfleto() },
+        "Trocar o link da loja\nSite conectado ou site criado pela Vênus." to { escolherLinkDosMateriais { abrirMateriais() } },
     ))
 }
 
 private fun MainActivity.criarCartao() {
-    perguntar("Cartão de visita", listOf("Seu nome" to Perfil.dono, "Cargo ou ramo" to "Proprietária(o)", "WhatsApp com DDD" to "", "Instagram" to ""), "Criar") { v ->
+    val insta = DadosDaLoja.arroba(Instagram.usuario(this).takeIf { Instagram.conectado(this) })
+    perguntar("Cartão de visita", listOf(
+        "Seu nome" to Perfil.dono,
+        "Cargo ou ramo" to DadosDaLoja.guardado(prefs, DadosDaLoja.PREF_CARGO).ifBlank { "Proprietária(o)" },
+        "WhatsApp com DDD" to DadosDaLoja.guardado(prefs, DadosDaLoja.PREF_WHATSAPP),
+        "Instagram" to insta,
+    ), "Criar") { v ->
+        DadosDaLoja.lembrar(prefs, DadosDaLoja.PREF_WHATSAPP, v[2])
+        DadosDaLoja.lembrar(prefs, DadosDaLoja.PREF_CARGO, v[1])
         aviso("Montando o cartão…")
         emFundo({
-            val vitrine = Nuvem.pedir(this, "GET", "/loja/vitrine").json.optString("url")
+            val vitrine = linkDosMateriais(Nuvem.pedir(this, "GET", "/loja/vitrine").json.optString("url"))
             val qr = Nuvem.pedir(this, "POST", "/qr", JSONObject().put("tipo", "link").put("texto", vitrine)).json
             vitrine to qr
         }) { r ->
             val marca = marcaAtual()
-            val (vitrine, qr) = r.getOrNull() ?: ("" to JSONObject())
+            val (vitrine, qr) = r.getOrNull() ?: (Perfil.site to JSONObject())
             val contato = Criativos.Contato(v[0], v[1], v[2], v[3], vitrine)
             val temQr = qr.optString("modulos").isNotBlank()
             previa("Cartão de visita", listOf(
@@ -333,11 +373,13 @@ private fun MainActivity.criarCartao() {
 }
 
 private fun MainActivity.criarPanfleto() {
-    perguntar("Panfleto de ofertas", listOf("Título" to "Ofertas da semana", "Rodapé (contato)" to ""), "Criar") { v ->
+    val whats = DadosDaLoja.guardado(prefs, DadosDaLoja.PREF_WHATSAPP)
+    val insta = Instagram.usuario(this).takeIf { Instagram.conectado(this) }
+    perguntar("Panfleto de ofertas", listOf("Título" to "Ofertas da semana", "Rodapé (contato)" to DadosDaLoja.rodape(whats, insta, "")), "Criar") { v ->
         aviso("Montando o panfleto…")
         emFundo({
             val produtos = Nuvem.pedir(this, "GET", "/produtos").json.optJSONArray("produtos").lista()
-            val vitrine = Nuvem.pedir(this, "GET", "/loja/vitrine").json.optString("url")
+            val vitrine = linkDosMateriais(Nuvem.pedir(this, "GET", "/loja/vitrine").json.optString("url"))
             val qr = Nuvem.pedir(this, "POST", "/qr", JSONObject().put("tipo", "link").put("texto", vitrine)).json
             Triple(produtos, vitrine, qr)
         }) { r ->
@@ -349,7 +391,7 @@ private fun MainActivity.criarPanfleto() {
                 val ofertas = escolhidos.map {
                     Criativos.Oferta(it.optString("nome"), it.optLong("preco_centavos"), if (it.isNull("promocao_centavos")) null else it.optLong("promocao_centavos"))
                 }
-                val rodape = v[1].ifBlank { vitrine.removePrefix("https://") }
+                val rodape = v[1].ifBlank { DadosDaLoja.rodape(whats, insta, vitrine) }
                 val temQr = qr.optString("modulos").isNotBlank()
                 previa("Panfleto", listOf(Criativos.panfleto(marcaAtual(), v[0], ofertas, rodape, if (temQr) qr.optString("modulos") else null, qr.optInt("tamanho"))), "panfleto")
             }

@@ -583,34 +583,14 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
     }
 
     /** Monta o visual de cada botão conforme o pacote (Vênus = degradê, Linha = traço na cor, Sólido = círculo na cor). */
-    internal fun aplicarIcones() {
-        val pacote = Tema.icones(prefs)
-        for ((b, degrade) in botoesTema) {
-            b.background = null
-            b.clearColorFilter()
-            when (pacote) {
-                Tema.Icones.VENUS -> if (degrade) {
-                    b.background = vidro(Color.argb(20, 227, 107, 208), Color.argb(70, 227, 107, 208), 22)
-                } else {
-                    b.setColorFilter(if (b.contentDescription == "Menu") COR_TEXTO_APAGADO else corAtual)
-                }
-                Tema.Icones.LINHA -> b.setColorFilter(corAtual)
-                Tema.Icones.SOLIDO -> {
-                    b.background = GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(corAtual) }
-                    b.setColorFilter(Color.parseColor("#06081A"))
-                }
-            }
-        }
-    }
+    internal fun aplicarIcones() = pintarIcones()
 
-    /** Chamado a cada mudança de cor do orbe: só repinta, sem refazer os fundos. */
+    /** Repinta todos os botões conforme o pacote; chamado também a cada mudança de cor do orbe. */
     private fun pintarIcones() {
         if (botoesTema.isEmpty()) return
         val pacote = Tema.icones(prefs)
-        for ((b, degrade) in botoesTema) when (pacote) {
-            Tema.Icones.VENUS -> if (!degrade) b.setColorFilter(if (b.contentDescription == "Menu") COR_TEXTO_APAGADO else corAtual)
-            Tema.Icones.LINHA -> b.setColorFilter(corAtual)
-            Tema.Icones.SOLIDO -> (b.background as? GradientDrawable)?.setColor(corAtual)
+        for ((b, degrade) in botoesTema) {
+            EstiloDeIcone.aplicar(b, pacote, corAtual, degrade, b.contentDescription == "Menu", ::dp)
         }
     }
 

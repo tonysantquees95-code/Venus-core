@@ -476,10 +476,10 @@ object Estudo {
             (if (jaConhecidas.isNotEmpty()) "Não repita estas: ${jaConhecidas.take(60).joinToString(" | ")}. " else "") +
             "Responda só com JSON: {\"objecoes\":[{\"objecao\":\"...\",\"resposta\":\"...\"}]}"
 
-    fun pedidoDeIdeias(datas: String, produtos: String, jaFeitas: List<String>, hoje: String): String =
+    fun pedidoDeIdeias(datas: String, produtos: String, jaFeitas: List<String>, hoje: String, quantidade: Int = IDEIAS_POR_SEMANA): String =
         "Hoje é $hoje. Você é social media da ${Perfil.loja}, loja online de ${Perfil.ramo} de ${Perfil.cidade} (Instagram da loja). " +
             "$datas\n" + (if (produtos.isNotBlank()) "Produtos à venda: $produtos\n" else "") +
-            "Crie exatamente $IDEIAS_POR_SEMANA ideias de post para as próximas semanas, aproveitando as datas e os produtos: " +
+            "Crie exatamente $quantidade ${if (quantidade == 1) "ideia" else "ideias"} de post para as próximas semanas, aproveitando as datas e os produtos: " +
             "variadas (feed, story, reels), elegantes, sem nudez nem linguagem explícita (regras do Instagram). " +
             "Para cada uma: título curto, quando postar (data ou semana), formato e uma legenda pronta com chamada para o link da bio. " +
             (if (jaFeitas.isNotEmpty()) "Não repita estas: ${jaFeitas.joinToString(" | ")}. " else "") +

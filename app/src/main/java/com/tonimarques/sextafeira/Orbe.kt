@@ -14,8 +14,11 @@ import android.view.View
 import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.cos
+import kotlin.math.hypot
+import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.sin
+import kotlin.math.sqrt
 import kotlin.random.Random
 
 /**
@@ -184,6 +187,8 @@ class Orbe(context: Context) : View(context) {
             Tema.Modelo.LIQUIDO -> desenharLiquido(canvas, cx, cy, raio, cor1, cor2, cor3)
             Tema.Modelo.CRISTAL -> desenharCristal(canvas, cx, cy, raio, cor1, cor2, cor3)
             Tema.Modelo.PULSO -> desenharPulso(canvas, cx, cy, raio, cor1, cor2, cor3)
+            Tema.Modelo.NEURAL -> desenharNeural(canvas, cx, cy, raio, cor1, cor2, cor3)
+            Tema.Modelo.HOLOGRAMA -> desenharHolograma(canvas, cx, cy, raio, cor1, cor2, cor3)
         }
 
         // ----- núcleo luminoso
@@ -266,6 +271,68 @@ class Orbe(context: Context) : View(context) {
             floatArrayOf(0f, 0.6f, 1f), Shader.TileMode.CLAMP
         )
         canvas.drawCircle(cx, cy, raio * (0.62f + 0.12f * energia), pBlob)
+    }
+
+
+    /** Rede neural: nós orbitando em três anéis, ligados por fios que acendem com a energia. */
+    private fun desenharNeural(canvas: Canvas, cx: Float, cy: Float, raio: Float, cor1: Int, cor2: Int, cor3: Int) {
+        val n = 14
+        val xs = FloatArray(n)
+        val ys = FloatArray(n)
+        for (i in 0 until n) {
+            val anel = i % 3
+            val r = raio * (0.38f + anel * 0.3f) * (1f + 0.05f * energia * sin(tempo * 3f + i))
+            val ang = giro * (if (anel == 1) -0.8f else 0.6f) + i * 2.399f
+            xs[i] = cx + cos(ang) * r
+            ys[i] = cy + sin(ang) * r
+        }
+        pArco.strokeWidth = 1f * densidade
+        val alcance = raio * (0.85f + 0.2f * energia)
+        for (i in 0 until n) for (j in i + 1 until n) {
+            val d = hypot(xs[i] - xs[j], ys[i] - ys[j])
+            if (d < alcance) {
+                pArco.color = comAlfa(if ((i + j) % 2 == 0) cor1 else cor2, (1f - d / alcance) * (0.35f + 0.5f * energia))
+                canvas.drawLine(xs[i], ys[i], xs[j], ys[j], pArco)
+            }
+        }
+        for (i in 0 until n) {
+            pParticula.color = comAlfa(clarear(if (i % 2 == 0) cor1 else cor3, 0.4f), 0.85f)
+            canvas.drawCircle(xs[i], ys[i], (2.2f + (i % 3) + energia * 2f) * densidade, pParticula)
+        }
+        pParticula.color = comAlfa(clarear(cor1, 0.6f), 0.9f)
+        canvas.drawCircle(cx, cy, raio * (0.16f + 0.08f * energia), pParticula)
+    }
+
+    /** Holograma: esfera de arame (meridianos girando e paralelos) com uma linha de varredura. */
+    private fun desenharHolograma(canvas: Canvas, cx: Float, cy: Float, raio: Float, cor1: Int, cor2: Int, cor3: Int) {
+        val r = raio * (0.95f + 0.04f * energia)
+        pBlob.shader = RadialGradient(
+            cx, cy, r, intArrayOf(comAlfa(cor1, 0.05f), comAlfa(cor1, 0.22f)), floatArrayOf(0.4f, 1f), Shader.TileMode.CLAMP
+        )
+        canvas.drawCircle(cx, cy, r, pBlob)
+        pArco.strokeWidth = 1.1f * densidade
+        pArco.color = comAlfa(cor1, 0.6f)
+        canvas.drawCircle(cx, cy, r, pArco)
+        for (k in 0 until 5) {
+            val ang = giro * 0.8f + k * (PI.toFloat() / 5f)
+            val largura = abs(cos(ang)) * r
+            retangulo.set(cx - largura, cy - r, cx + largura, cy + r)
+            pArco.color = comAlfa(if (k % 2 == 0) cor2 else cor1, 0.28f + 0.3f * energia)
+            canvas.drawOval(retangulo, pArco)
+        }
+        for (k in -2..2) {
+            val y = cy + k * r * 0.34f
+            val meia = sqrt(max(0f, r * r - (k * r * 0.34f) * (k * r * 0.34f)))
+            retangulo.set(cx - meia, y - meia * 0.18f, cx + meia, y + meia * 0.18f)
+            pArco.color = comAlfa(cor3, 0.25f)
+            canvas.drawOval(retangulo, pArco)
+        }
+        val varre = ((tempo * (0.4f + energia)) % 1f) * 2f - 1f
+        val yv = cy + varre * r
+        val meiaV = sqrt(max(0f, r * r - (varre * r) * (varre * r)))
+        pArco.strokeWidth = 2f * densidade
+        pArco.color = comAlfa(clarear(cor2, 0.6f), 0.7f)
+        canvas.drawLine(cx - meiaV, yv, cx + meiaV, yv, pArco)
     }
 
     private fun arco(canvas: Canvas, cx: Float, cy: Float, r: Float, rotacao: Float, inicioEExtensao: FloatArray) {

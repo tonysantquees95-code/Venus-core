@@ -174,12 +174,6 @@ internal fun MainActivity.abrirMenu(@Suppress("UNUSED_PARAMETER") ancora: View) 
         ),
         TelaDeAjustes.Secao(
             "Loja ${Perfil.loja}", listOf(
-                TelaDeAjustes.Ajuste("Licença", { Licenca.descricao(this) }) { pedirCodigoDeLiberacao(obrigatorio = false) },
-                TelaDeAjustes.Ajuste("Licenças de teste (só o dono)", {
-                    if (!Licenca.isenta(this)) "Só no celular do dono da ${Marca.nome}."
-                    else if (Licenca.ehAdministrador(this)) "Gerar códigos de liberação para lojistas em teste."
-                    else "Criar a chave que assina os códigos (fica só neste celular)."
-                }) { if (Licenca.isenta(this)) administrarLicencas() else Toast.makeText(this, "Só no celular do dono.", Toast.LENGTH_SHORT).show() },
                 TelaDeAjustes.Ajuste("Cadastro guiado", { "Passo a passo: você e a loja, com ou sem site, regras de venda e as chaves das IAs." }) { cadastroGuiado() },
                 TelaDeAjustes.Ajuste("Primeiros passos", { "A lista do que configurar para a $n funcionar com a sua loja." }) { primeirosPassos() },
                 TelaDeAjustes.Ajuste("Perfil do dono e da loja", { Perfil.resumo() + ". A $n usa esses dados nas respostas, nos avisos e no estudo." }) { editarPerfil() },

@@ -1,6 +1,5 @@
 package com.tonimarques.sextafeira
 
-import android.app.AlertDialog
 import com.tonimarques.sextafeira.MainActivity.Companion.MENU_FUNDO
 import com.tonimarques.sextafeira.MainActivity.Companion.MENU_VIGILIA
 import com.tonimarques.sextafeira.MainActivity.Companion.PREF_FUNDO
@@ -24,11 +23,10 @@ internal object Modos {
 }
 
 internal fun MainActivity.abrirModos() {
-    val atual = VetorialId.modo(this)
-    val rotulos = VetorialId.MODOS.map { (if (it == atual) "✓ " else "") + VetorialId.ROTULOS_MODO.getValue(it) + "\n" + Modos.descricao(it) }
-    AlertDialog.Builder(this).setTitle("Como usar a ${Marca.nome}")
-        .setItems(rotulos.toTypedArray()) { _, i -> definirModo(VetorialId.MODOS[i]) }
-        .setNegativeButton("Fechar", null).show()
+    val itens = VetorialId.MODOS.map { m ->
+        TelaDeAjustes.Ajuste(VetorialId.ROTULOS_MODO.getValue(m), { Modos.descricao(m) }, null, { VetorialId.modo(this) == m }) { definirModo(m) }
+    }
+    TelaDeAjustes(this, versaoDoApp(), listOf(TelaDeAjustes.Secao("Escolha um modo", itens)), "COMO USAR A ${Marca.nomeMaiusculo}", compacto = true).show()
 }
 
 internal fun MainActivity.definirModo(modo: String) {

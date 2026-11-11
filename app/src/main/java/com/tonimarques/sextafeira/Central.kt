@@ -47,6 +47,11 @@ internal fun MainActivity.abrirCentral() {
                 TelaDeAjustes.Ajuste("Central de Marketing", { "Sugestões de legendas, chamadas e hashtags para os produtos em promoção, numa fila que você controla." }) { abrirMarketing() },
                 TelaDeAjustes.Ajuste("Logotipo e cores da marca", { "Cria conceitos de logotipo e mostra os códigos Hex das cores. Também tira as cores de uma foto." }) { abrirLogo() },
                 TelaDeAjustes.Ajuste("Cartão de visita e panfleto", { "Cartão com QR Code da vitrine e encarte de ofertas prontos para compartilhar ou imprimir." }) { abrirMateriais() },
+                TelaDeAjustes.Ajuste("Dados da loja nos materiais", {
+                    val pref = prefs.getString(DadosDaLoja.PREF_LINK, "site").orEmpty()
+                    val insta = DadosDaLoja.arroba(Instagram.usuario(this).takeIf { Instagram.conectado(this) })
+                    "Link: ${DadosDaLoja.nomeDoLink(pref, Perfil.site)}. Instagram: ${insta.ifBlank { "não conectado" }}. Tudo que já está cadastrado vem pronto no QR Code, no cartão e no panfleto. Toque para trocar o link."
+                }) { escolherLinkDosMateriais() },
                 TelaDeAjustes.Ajuste("QR Codes", { "Pix, link de pagamento, redes sociais e vitrine, na cor da sua marca." }) { abrirQr() },
             )
         ),
