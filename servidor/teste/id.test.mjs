@@ -153,3 +153,16 @@ test("rotas HTTP: login, aviso 409 com opções, tela de login e CORS", async ()
   assert.equal(op.status, 204);
   await limpezaDeSessoes(env, T0);
 });
+
+test("loja ligada à conta: o token antigo (vl_) deixa de valer, só o login do Vetorial ID", async () => {
+  const env = ENV();
+  const { registrarLoja } = await import("../src/loja/lojas.js");
+  const r = await registrarLoja(env, { nome: "Antiga" }, T0);
+  const loja = await env.DB.prepare("SELECT * FROM lojas WHERE id = ?").bind(r.id).first();
+  const vl = new Request("https://v.test/x", { headers: { authorization: `Bearer ${r.token}` } });
+  assert.equal((await lojaDoPedido(env, vl)).id, r.id); // antes de ligar, funciona
+  const s = await cadastrar(env, { email: "velho@loja.com", senha: "senha-forte-1", dispositivo: disp(1), lojaExistente: loja }, T0);
+  assert.equal((await erro(lojaDoPedido(env, vl))).codigo, "exige_vetorial_id");
+  assert.equal((await lojaDoPedido(env, req(s.token))).id, r.id);
+  assert.equal((await erro(cadastrar(env, { email: "outro@loja.com", senha: "senha-forte-1", dispositivo: disp(2), lojaExistente: loja }, T0))).codigo, "loja_ja_vinculada");
+});

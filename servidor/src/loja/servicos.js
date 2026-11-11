@@ -34,11 +34,11 @@ export async function tratarServico(req, env, loja, url, caminho, { corpoJson, e
     if (d.todos) lista = (await env.DB.prepare("SELECT id FROM fila_posts WHERE loja = ? AND status = 'sugerido' LIMIT 20").bind(loja.id).all()).results.map((r) => r.id);
     return json({ regenerados: await regenerar(env, loja, lista, { gerar }) });
   }
-  let m = /^\/marketing\/fila\/(\d+)(\/agendar)?$/.exec(caminho);
+  let m = /^\/marketing\/fila\/(\d+)(\/agendar|\/editar)?$/.exec(caminho);
   // o Android (HttpURLConnection) não faz PATCH: o app usa POST em /agendar
   if (m && ((req.method === "PATCH" && !m[2]) || (req.method === "POST" && m[2]))) {
     const d = await corpoJson(req);
-    if (d.agendarPara === undefined) { // só edição do texto/hashtags/canal/imagem: não mexe no agendamento
+    if (d.agendarPara === undefined || m[2] === "/editar") { // só edição do texto/hashtags/canal/imagem: não mexe no agendamento
       const canal = d.canal === undefined ? null : ["instagram", "webhook"].includes(d.canal) ? d.canal : null;
       let imagem = null;
       if (d.imagem !== undefined) {

@@ -144,6 +144,11 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         StoriesDoDia.agendar(this)
         // o Direct automático roda no site: ele precisa do token do Instagram em dia
         // quem instala do zero (sem nenhuma IA) vê o cadastro guiado, até concluir ou configurar uma IA
+        // Modo silencioso: o ícone leva direto à Central da loja (automações e alertas), sem abrir o chat
+        if (javaClass == MainActivity::class.java && savedInstanceState == null && VetorialId.modo(this) == "silencioso" &&
+            prefs.getBoolean(Onboarding.PREF_VISTO, false) && intent?.action == Intent.ACTION_MAIN) {
+            window.decorView.postDelayed({ if (!isFinishing) abrirCentral() }, 700)
+        }
         if (javaClass == MainActivity::class.java) {
             if (!prefs.getBoolean(Onboarding.PREF_VISTO, false)) {
                 window.decorView.postDelayed({
@@ -258,6 +263,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
 
     override fun onStart() {
         super.onStart()
+        if (javaClass == MainActivity::class.java) BatimentoId.iniciar(this)
         if (javaClass != MainActivity::class.java || saiuEm == 0L) return
         val fora = android.os.SystemClock.elapsedRealtime() - saiuEm
         saiuEm = 0L
@@ -271,6 +277,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
     }
 
     override fun onStop() {
+        if (javaClass == MainActivity::class.java) BatimentoId.parar()
         if (!isChangingConfigurations) saiuEm = android.os.SystemClock.elapsedRealtime()
         super.onStop()
     }

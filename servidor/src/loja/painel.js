@@ -21,7 +21,7 @@ svg{width:100%;height:auto;background:var(--painel);border-radius:16px;border:1p
 </div><script>
 (function(){
 var T=null;try{T=localStorage.getItem("venus_token")}catch(e){}
-var h=location.hash.match(/t=(vl_[a-f0-9]{48})/);if(h){T=h[1];try{localStorage.setItem("venus_token",T)}catch(e){}history.replaceState(null,"",location.pathname)}
+var h=location.hash.match(/t=((?:vl_[a-f0-9]{48})|(?:eyJ[\\w-]+\\.[\\w-]+\\.[\\w-]+))/);if(h){T=h[1];try{localStorage.setItem("venus_token",T)}catch(e){}history.replaceState(null,"",location.pathname)}
 var $=function(i){return document.getElementById(i)};
 var R=function(c){return (c/100).toLocaleString("pt-BR",{style:"currency",currency:"BRL"})};
 function el(t,txt,cls){var e=document.createElement(t);if(txt!==undefined)e.textContent=txt;if(cls)e.className=cls;return e}
@@ -39,7 +39,7 @@ var u=$("audit");limpa(u);var r=a.resumo;card(u,"Produtos",String(r.total));card
 var linhas=[];a.escondidos_com_estoque.forEach(function(p){linhas.push(["Oculto com estoque",p.nome])});a.sem_preco.forEach(function(p){linhas.push(["Sem preço",p.nome])});tabela($("problemas"),["Atenção","Produto"],linhas.slice(0,40))}
 function atualizar(){if(!T){$("app").style.display="none";$("entrar").style.display="block";$("estado").textContent="";return}
 Promise.all([api("/bi/financeiro?dias=30"),api("/bi/auditoria")]).then(function(v){$("entrar").style.display="none";$("app").style.display="block";pinta(v[0],v[1]);$("estado").textContent="ao vivo · atualizado "+new Date().toLocaleTimeString("pt-BR")}).catch(function(e){$("estado").textContent=e.message==="token"?"":"sem conexão — tentando de novo…";if(e.message==="token")atualizar()})}
-$("ok").onclick=function(){var v=$("tk").value.trim();if(/^vl_[a-f0-9]{48}$/.test(v)){T=v;try{localStorage.setItem("venus_token",T)}catch(e){}atualizar()}};
+$("ok").onclick=function(){var v=$("tk").value.trim();if(/^(vl_[a-f0-9]{48}|eyJ[\\w-]+\\.[\\w-]+\\.[\\w-]+)$/.test(v)){T=v;try{localStorage.setItem("venus_token",T)}catch(e){}atualizar()}};
 atualizar();setInterval(function(){if(!document.hidden)atualizar()},10000);
 })();
 </script></body></html>`;

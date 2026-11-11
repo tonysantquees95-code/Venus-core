@@ -118,6 +118,16 @@ internal fun MainActivity.abrirMenu(@Suppress("UNUSED_PARAMETER") ancora: View) 
     val n = Marca.nome
     val secoes = listOf(
         TelaDeAjustes.Secao(
+            "Conta e modos de uso", listOf(
+                TelaDeAjustes.Ajuste("Vetorial ID", {
+                    if (VetorialId.logado(this)) "Conectada como ${VetorialId.email(this)}. Mesma conta no Windows, iPhone, Vindex e Vortex."
+                    else "Entre com e-mail e senha para usar a conta em todos os aparelhos e sincronizar o tema."
+                }) { abrirConta() },
+                TelaDeAjustes.Ajuste("Meus dispositivos", { "Até 3 aparelhos vinculados e 2 usando ao mesmo tempo. Encerre sessões à distância." }) { abrirDispositivos() },
+                TelaDeAjustes.Ajuste("Como usar a $n", { "Agora: ${VetorialId.ROTULOS_MODO.getValue(VetorialId.modo(this))}. Conversa direta, orbe por voz, bolha flutuante ou silencioso." }) { abrirModos() },
+            )
+        ),
+        TelaDeAjustes.Secao(
             "Ativação por voz", listOf(
                 item("Ouvir \"$n, ativar\" com o app aberto", { "Fala a frase e ela já começa a ouvir o seu pedido." },
                     MENU_VIGILIA) { vigiliaLigada() },

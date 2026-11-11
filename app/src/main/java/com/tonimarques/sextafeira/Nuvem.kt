@@ -24,9 +24,13 @@ object Nuvem {
     class ErroNuvem(mensagem: String) : Exception(mensagem)
 
     private fun prefs(ctx: Context) = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-    fun token(ctx: Context): String = prefs(ctx).getString(PREF_TOKEN, "").orEmpty()
+    /** Token antigo da loja (vl_…), anterior ao Vetorial ID. */
+    fun tokenDaLoja(ctx: Context): String = prefs(ctx).getString(PREF_TOKEN, "").orEmpty()
+
+    /** Com o Vetorial ID ligado, o login (JWT) vale para tudo; senão, o token da loja. */
+    fun token(ctx: Context): String = VetorialId.token(ctx).ifBlank { tokenDaLoja(ctx) }
     fun slug(ctx: Context): String = prefs(ctx).getString(PREF_SLUG, "").orEmpty()
-    fun registrada(ctx: Context) = token(ctx).startsWith("vl_")
+    fun registrada(ctx: Context) = VetorialId.logado(ctx) || tokenDaLoja(ctx).startsWith("vl_")
 
     /** Um identificador do aparelho que não volta ao servidor em claro: serve para dar um único teste grátis por celular. */
     fun dispositivo(ctx: Context): String = try {
@@ -53,7 +57,11 @@ object Nuvem {
         return enviar(ctx, metodo, caminho, corpo, comToken = true)
     }
 
-    private fun enviar(ctx: Context, metodo: String, caminho: String, corpo: JSONObject?, comToken: Boolean): Resposta {
+    /** Pedido com um token escolhido (usado pelo Vetorial ID). */
+    fun bruto(ctx: Context, metodo: String, caminho: String, corpo: JSONObject?, token: String?): Resposta =
+        enviar(ctx, metodo, caminho, corpo, comToken = token != null, tokenFixo = token)
+
+    private fun enviar(ctx: Context, metodo: String, caminho: String, corpo: JSONObject?, comToken: Boolean, tokenFixo: String? = null): Resposta {
         if (!Servidor.configurado()) throw ErroNuvem("O servidor da Vênus ainda não está configurado.")
         val c = URL(Servidor.ENDERECO + caminho).openConnection() as HttpURLConnection
         try {
@@ -61,7 +69,7 @@ object Nuvem {
             c.connectTimeout = 15_000
             c.readTimeout = 45_000
             c.setRequestProperty("Accept", "application/json")
-            if (comToken) c.setRequestProperty("Authorization", "Bearer ${token(ctx)}")
+            if (comToken) c.setRequestProperty("Authorization", "Bearer ${tokenFixo ?: token(ctx)}")
             if (corpo != null) {
                 c.doOutput = true
                 c.setRequestProperty("Content-Type", "application/json; charset=utf-8")
@@ -69,7 +77,10 @@ object Nuvem {
             }
             val codigo = c.responseCode
             val texto = (if (codigo in 200..299) c.inputStream else c.errorStream)?.bufferedReader(Charsets.UTF_8)?.use { it.readText() }.orEmpty()
-            return Resposta(codigo, try { JSONObject(texto) } catch (e: Exception) { JSONObject() })
+            val json = try { JSONObject(texto) } catch (e: Exception) { JSONObject() }
+            // sessão encerrada em outro aparelho: sai do login e avisa na próxima tela
+            if (comToken && tokenFixo == null && codigo == 401 && VetorialId.sessaoPerdida(codigo, json.optString("codigo")) && VetorialId.logado(ctx)) VetorialId.limpar(ctx, "Esta sessão foi encerrada em outro aparelho. Entre de novo.")
+            return Resposta(codigo, json)
         } catch (e: ErroNuvem) {
             throw e
         } catch (e: Exception) {

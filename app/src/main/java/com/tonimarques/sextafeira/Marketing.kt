@@ -33,6 +33,9 @@ internal fun MainActivity.abrirMarketing(anterior: TelaDeAjustes? = null) {
             TelaDeAjustes.Ajuste("Regenerar todas as sugestões", { "Reescreve em lote as que ainda não foram agendadas." }) {
                 pedirNuvem("POST", "/marketing/regenerar", JSONObject().put("todos", true), "Reescrevendo…") { r -> aviso("${r.optInt("regenerados")} sugestões reescritas."); abrirMarketing(tela) }
             },
+            TelaDeAjustes.Ajuste("Onde publicar", { "Conecte o Instagram (API oficial da Meta) ou um webhook do Vênus Robô para publicar sozinha no horário marcado." }) { abrirDestinos() },
+            TelaDeAjustes.Ajuste("Registro de envios", { "Sucesso, tentando de novo ou erro de cada postagem automática." }) { abrirRegistro() },
+            TelaDeAjustes.Ajuste("Excluir várias", { "Marque as postagens que quer tirar da fila de uma vez." }) { excluirEmLote(fila) { abrirMarketing(tela) } },
             TelaDeAjustes.Ajuste("Limpar postagens agendadas", { "Tira da fila as que você já agendou." }) {
                 confirmar("Limpar as postagens agendadas?") {
                     pedirNuvem("POST", "/marketing/limpar", JSONObject().put("status", "agendado")) { r -> aviso("${r.optInt("removidos")} removidas."); abrirMarketing(tela) }
@@ -45,11 +48,13 @@ internal fun MainActivity.abrirMarketing(anterior: TelaDeAjustes? = null) {
             },
         )
         val itens = fila.map { p ->
-            val agendado = p.optString("status") == "agendado"
             TelaDeAjustes.Ajuste(p.optString("copy").ifBlank { p.optString("produto_nome") }, {
-                (if (agendado) "AGENDADA · " else "SUGESTÃO · ") + p.optString("produto_nome") + "\n" + p.optString("legenda") + "\n" + hashtagsDe(p).joinToString(" ")
+                estadoDaPostagem(p.optString("status"), p.optLong("agendado_para"), p.optString("erro"), p.optLong("publicado_em")) + " · " + p.optString("produto_nome") + "\n" + p.optString("legenda") + "\n" + hashtagsDe(p).joinToString(" ")
             }) {
+                ajustesDeMarketing = tela
                 escolher(p.optString("produto_nome"), listOf(
+                    "Editar legenda, hashtags e imagem…" to { editarPostagem(p) { abrirMarketing(tela) } },
+                    "Publicar agora" to { publicarAgora(p) { abrirMarketing(tela) } },
                     "Copiar legenda e hashtags" to { copiar("Postagem", textoDaPostagem(p)) },
                     "Compartilhar" to { startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, textoDaPostagem(p)), "Compartilhar")) },
                     "Regenerar esta" to { pedirNuvem("POST", "/marketing/fila/${p.optInt("id")}", JSONObject(), "Reescrevendo…") { abrirMarketing(tela) } },
@@ -68,11 +73,11 @@ internal fun MainActivity.abrirMarketing(anterior: TelaDeAjustes? = null) {
 private fun hashtagsDe(p: JSONObject): List<String> = p.optJSONArray("hashtags")?.let { a -> (0 until a.length()).map { a.optString(it) } } ?: emptyList()
 private fun textoDaPostagem(p: JSONObject) = p.optString("legenda") + "\n\n" + hashtagsDe(p).joinToString(" ")
 
-private fun MainActivity.confirmar(pergunta: String, sim: () -> Unit) {
+internal fun MainActivity.confirmar(pergunta: String, sim: () -> Unit) {
     AlertDialog.Builder(this).setTitle(pergunta).setPositiveButton("Sim") { _, _ -> sim() }.setNegativeButton("Cancelar", null).show()
 }
 
-private fun MainActivity.agendarPostagem(id: Int, tela: TelaDeAjustes?) {
+internal fun MainActivity.agendarPostagem(id: Int, tela: TelaDeAjustes?) {
     fun em(horas: Int = 0, diasMais: Int = 0, hora: Int = -1): Long {
         val c = Calendar.getInstance()
         if (hora >= 0) { c.add(Calendar.DAY_OF_YEAR, diasMais); c.set(Calendar.HOUR_OF_DAY, hora); c.set(Calendar.MINUTE, 0); c.set(Calendar.SECOND, 0) } else c.add(Calendar.HOUR_OF_DAY, horas)
