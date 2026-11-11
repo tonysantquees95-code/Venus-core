@@ -210,3 +210,36 @@ test("/v1/transcrever recusa o que não é áudio, áudio grande e sem chave", a
   assert.deepEqual(await curto.json(), { texto: "" });
   assert.equal((await worker.fetch(new Request("https://x.dev/v1/transcrever", { method: "GET", headers: { origin: ORIGEM } }), criarEnv(), ctx())).status, 405);
 });
+
+import { tratarProxyIA, MODELOS } from "../src/ia/proxy.js";
+test("/ia/v1: só com Vetorial ID, só modelos conhecidos, chave da Groq fica no servidor", async () => {
+  const logado = async () => ({ usuario: { id: "u1" } });
+  const deslogado = async () => { const e = new Error("Entre de novo."); e.status = 401; throw e; };
+  const pedir = (corpo, validar, env = criarEnv(), caminho = "/ia/v1/chat/completions", metodo = "POST") =>
+    tratarProxyIA(new Request("https://x.dev" + caminho, { method: metodo, headers: { "content-type": "application/json", authorization: "Bearer eyJa.b.c" }, body: metodo === "POST" ? JSON.stringify(corpo) : undefined }), env, ctx(), caminho, { validar });
+
+  mockFetch({});
+  assert.equal((await pedir({ model: MODELOS[0], messages: [{ role: "user", content: "oi" }] }, deslogado)).status, 401);
+  assert.equal(chamadas.length, 0);
+
+  assert.equal((await pedir({ model: "gpt-9000", messages: [{ role: "user", content: "oi" }] }, logado)).status, 404);
+  assert.equal((await pedir({ model: MODELOS[0], messages: [] }, logado)).status, 400);
+  assert.equal((await pedir({ model: MODELOS[0], messages: [{ role: "user", content: "oi" }] }, logado, criarEnv({ GROQ_API_KEY: "" }))).status, 503);
+
+  mockFetch({ "api.groq.com/openai/v1/chat/completions": () => new Response(JSON.stringify({ choices: [{ message: { content: "oi!" } }] }), { status: 200 }) });
+  const ok = await pedir({ model: MODELOS[0], messages: [{ role: "user", content: "oi" }], stream: true, max_tokens: 99999, tools: [{ type: "function", function: { name: "x" } }], intruso: "x" }, logado);
+  assert.equal(ok.status, 200);
+  assert.equal((await ok.json()).choices[0].message.content, "oi!");
+  const enviado = JSON.parse(chamadas[0].init.body);
+  assert.equal(chamadas[0].init.headers.authorization, "Bearer gsk_SEGREDO_GROQ");
+  assert.equal(enviado.stream, false);
+  assert.equal(enviado.max_tokens, 4096);
+  assert.equal(enviado.intruso, undefined);
+  assert.ok(enviado.tools);
+
+  mockFetch({ "api.groq.com": () => new Response(JSON.stringify({ error: { message: "rate" } }), { status: 429 }) });
+  assert.equal((await pedir({ model: MODELOS[1], messages: [{ role: "user", content: "oi" }] }, logado)).status, 429);
+
+  const lista = await pedir(null, logado, criarEnv(), "/ia/v1/models", "GET");
+  assert.ok((await lista.json()).data.some((m) => m.id === MODELOS[0]));
+});

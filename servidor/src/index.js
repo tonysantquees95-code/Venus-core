@@ -9,6 +9,7 @@
  *   GET  /cobranca/status?ref=&handle=   → o pagamento foi feito? (confirma com a InfinitePay)
  *   POST /chat                           → conversa com busca na web (Groq + Tavily, reserva Gemini) — ver chat.js
  *   POST /v1/chat, POST /v1/ocr, GET /v1/rotas → roteador de IA por função (Groq / DeepSeek / Gemini só multimodal), CORS e cache vetorial — ver ia/
+ *   POST /ia/v1/chat/completions, GET /ia/v1/models → IA para os apps (compatível com a OpenAI), só com Vetorial ID — ver ia/proxy.js
  *  /id, /id/*                           → Vetorial ID: login único (JWT), dispositivos (3) e sessões (2 ativas), sincronização — ver id/
  *  /dev/*                               → Painel Dev da Vetorial Tech (só o superadministrador) — ver dev/
  *  /loja/*, /canais*, /produtos, /pedidos, /webhook/*, /oauth/* → lojistas, canais de venda (Nuvemshop, Mercado Livre, site próprio) e estoque central — ver loja/
@@ -20,6 +21,7 @@ import { ehAtalho, responderAtalho } from "./atalhos.js";
 import { ehRotaVindex, tratarVindex } from "./vindex/rotas.js";
 import { chat, chatPreflight } from "./chat.js";
 import { tratarIA } from "./ia/rotas.js";
+import { ehRotaDaIA, tratarProxyIA } from "./ia/proxy.js";
 import { ehRotaDaLoja, tratarLoja } from "./loja/rotas.js";
 import { ehRotaDoId, tratarId } from "./id/rotas.js";
 import { limpezaDeSessoes } from "./id/conta.js";
@@ -53,6 +55,7 @@ export default {
       if (canal && req.method === "GET") return await avisosDesde(canal[1], url, env);
       if (caminho === "/cobranca/aviso" && req.method === "POST") return await cobrancaAviso(req, env);
       if (caminho === "/cobranca/status" && req.method === "GET") return await cobrancaStatus(url, env);
+      if (ehRotaDaIA(caminho)) return await tratarProxyIA(req, env, ctx, caminho);
       if (caminho.startsWith("/v1/")) return await tratarIA(req, env, ctx);
       if (ehRotaDoId(caminho)) return await tratarId(req, env, url, caminho);
       if (ehRotaVindex(caminho)) return await tratarVindex(req, env, url, caminho);
