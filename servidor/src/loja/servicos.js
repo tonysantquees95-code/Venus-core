@@ -127,7 +127,7 @@ export async function tratarServico(req, env, loja, url, caminho, { corpoJson, e
   if (caminho === "/assinatura" && req.method === "GET") return json(await estadoDaAssinatura(env, loja));
   if (caminho === "/assinatura/cobrar" && req.method === "POST") {
     const d = await corpoJson(req);
-    return json(await iniciarCobranca(env, loja, String(d.gateway || ""), origem), 201);
+    return json(await iniciarCobranca(env, loja, String(d.gateway || ""), origem, Date.now(), String(d.pacote || "venus")), 201);
   }
   if (caminho === "/assinatura/liberar" && req.method === "POST") {
     const d = await corpoJson(req);

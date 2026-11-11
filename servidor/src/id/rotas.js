@@ -21,13 +21,13 @@ async function corpo(req) {
   }
 }
 
-async function licenca(env, usuario, origem, gerar, gateway) {
+async function licenca(env, usuario, origem, gerar, gateway, pacote) {
   const loja = usuario.loja ? await comPrivilegios(env, await env.DB.prepare("SELECT * FROM lojas WHERE id = ?").bind(usuario.loja).first()) : null;
   if (!loja) return { acesso: false, plano: "sem_loja" };
   const e = await estadoDaAssinatura(env, loja);
   const vencendo = !e.emTeste && e.diasPagosRestantes <= 3 || e.emTeste && e.diasDeTesteRestantes <= 2;
   const r = { ...e, renovar: vencendo };
-  if (gerar) r.cobranca = await iniciarCobranca(env, loja, gateway || "infinitepay", origem);
+  if (gerar) r.cobranca = await iniciarCobranca(env, loja, gateway || "infinitepay", origem, Date.now(), pacote);
   return r;
 }
 
@@ -83,7 +83,7 @@ export async function tratarId(req, env, url, caminho) {
     if (m && req.method === "POST") return json({ ok: await encerrarSessao(env, ctx.usuario.id, m[1], "encerrada_remotamente") });
     if (caminho === "/id/licenca" && req.method === "GET") {
       const g = url.searchParams.get("gerar") === "1";
-      return json(await licenca(env, ctx.usuario, origem, g, url.searchParams.get("gateway")));
+      return json(await licenca(env, ctx.usuario, origem, g, url.searchParams.get("gateway"), url.searchParams.get("pacote") || "venus"));
     }
     if (caminho === "/id/sync" && req.method === "GET") return json(await lerSync(env, ctx, Number(url.searchParams.get("desde")) || 0));
     m = /^\/id\/sync\/([a-z]{3,20})$/.exec(caminho);

@@ -28,10 +28,34 @@
     <div class="perfil"><div class="av" id="inicial">V</div><div><b id="nome"></b><br><small id="email"></small></div></div>
 
     <div class="aviso ok" id="estado"></div>
-    <div class="faixa" id="acoes">
-      <button class="btn" id="assinar">Assinar por R$ 49,90/mês com o Mercado Pago</button>
+    <div class="aviso al" id="liberar" hidden><b>Pagamento recebido!</b> Para liberar o acesso, abra a Vênus e confirme com o código da verificação em duas etapas.</div>
+
+    <div id="acoes">
+      <h2 class="s">Escolha o seu pacote</h2>
+      <p style="color:var(--suave);margin:0">🎁 Os <b>7 dias grátis</b> incluem Vênus, Vindex e Vortex. A primeira cobrança só acontece quando o teste acabar. Pagamento mensal recorrente pelo Mercado Pago.</p>
+      <div class="escolha" id="pacotes">
+        <div class="plano" data-pacote="venus"><h3>Vênus</h3><div class="v">R$ 49,90<small>/mês</small></div><button class="btn sec">Assinar</button></div>
+        <div class="plano" data-pacote="venus_vindex"><h3>Vênus + Vindex</h3><div class="v">R$ 70<small>/mês</small></div><button class="btn sec">Assinar</button></div>
+        <div class="plano" data-pacote="venus_vortex"><h3>Vênus + Vortex</h3><div class="v">R$ 70<small>/mês</small></div><button class="btn sec">Assinar</button></div>
+        <div class="plano" data-pacote="completo"><h3>Completo</h3><div class="v">R$ 100<small>/mês</small></div><button class="btn">Assinar</button></div>
+      </div>
+      <p class="nota" id="msg" role="status"></p>
     </div>
-    <p class="nota" id="msg" role="status"></p>
+
+    <h2 class="s">Meu perfil</h2>
+    <form id="perfil" class="faixa" style="gap:10px">
+      <input class="campo" id="novo-nome" maxlength="80" placeholder="Seu nome" style="flex:1;min-width:200px" aria-label="Seu nome">
+      <button class="btn sec" type="submit">Salvar nome</button>
+    </form>
+    <p class="nota" id="msg-perfil" role="status"></p>
+
+    <h2 class="s">Baixar os aplicativos</h2>
+    <div class="faixa" style="justify-content:flex-start">
+      <a class="btn sec" id="dl-android2" href="#">Vênus · Android</a>
+      <a class="btn sec" id="dl-windows2" href="#">Vênus · Windows</a>
+      <a class="btn sec" id="dl-vindex-a" href="#">Vindex · Android</a>
+      <a class="btn sec" id="dl-vindex-w" href="#">Vindex · Windows</a>
+    </div>
 
     <h2 class="s">1. Instale e entre</h2>
     <div class="passos">

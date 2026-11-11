@@ -9,6 +9,25 @@ export const DIAS_DO_PLANO = 30;
 const DIA = 86_400_000;
 const titulo = "Vênus — Plano Fundadores (mensal)";
 
+/** Pacotes mensais. O teste grátis de 7 dias libera Vênus, Vindex e Vortex; depois, vale o pacote assinado. */
+export const PACOTES = {
+  venus: { nome: "Vênus", centavos: 4990, apps: { vindex: false, vortex: false } },
+  venus_vindex: { nome: "Vênus + Vindex", centavos: 7000, apps: { vindex: true, vortex: false } },
+  venus_vortex: { nome: "Vênus + Vortex", centavos: 7000, apps: { vindex: false, vortex: true } },
+  completo: { nome: "Vênus + Vindex + Vortex", centavos: 10000, apps: { vindex: true, vortex: true } },
+};
+export const pacoteDe = (chave) => (Object.prototype.hasOwnProperty.call(PACOTES, chave) ? chave : "venus");
+const tituloDo = (pacote) => (pacote === "venus" ? titulo : `${PACOTES[pacote].nome} — Plano mensal`);
+
+/** Quais apps estão liberados agora: no teste grátis, todos; pago, os do pacote; o dono, todos. */
+export function appsLiberados(loja, agora = Date.now()) {
+  if (loja.plano === "dono") return { vindex: true, vortex: true };
+  const pago = agora < (loja.ativo_ate || 0);
+  if (pago) return { ...PACOTES[pacoteDe(loja.pacote)].apps };
+  const teste = agora < (loja.trial_fim || 0);
+  return { vindex: teste, vortex: teste };
+}
+
 async function http(url, op) {
   const r = await fetch(url, { ...op, signal: AbortSignal.timeout(15000) });
   const t = await r.text();
@@ -18,7 +37,10 @@ async function http(url, op) {
   return d;
 }
 
-export async function iniciarCobranca(env, loja, gateway, origem, agora = Date.now()) {
+export async function iniciarCobranca(env, loja, gateway, origem, agora = Date.now(), pacoteEscolhido = "venus") {
+  const pacote = pacoteDe(pacoteEscolhido);
+  const preco = PACOTES[pacote].centavos;
+  const titulo = tituloDo(pacote);
   if (!["infinitepay", "mercadopago"].includes(gateway)) throw new ErroLoja(400, "gateway_invalido", "Use infinitepay ou mercadopago.");
   const id = `ass_${loja.id}_${aleatorio(4)}`;
   let url;
@@ -26,13 +48,13 @@ export async function iniciarCobranca(env, loja, gateway, origem, agora = Date.n
     if (!env.INFINITEPAY_HANDLE) throw new ErroLoja(503, "gateway_desligado", "A InfinitePay ainda não foi configurada neste servidor.");
     const d = await http("https://api.checkout.infinitepay.io/links", {
       method: "POST", headers: { "content-type": "application/json" },
-      body: JSON.stringify({ handle: String(env.INFINITEPAY_HANDLE).replace(/^\$/, ""), order_nsu: id, items: [{ quantity: 1, price: PRECO_CENTAVOS, description: titulo }], webhook_url: `${origem}/assinatura/webhook/infinitepay` }),
+      body: JSON.stringify({ handle: String(env.INFINITEPAY_HANDLE).replace(/^\$/, ""), order_nsu: id, items: [{ quantity: 1, price: preco, description: titulo }], webhook_url: `${origem}/assinatura/webhook/infinitepay` }),
     });
     url = d.url || d.checkout_url || d.link;
   } else {
     if (!env.MERCADOPAGO_ACCESS_TOKEN) throw new ErroLoja(503, "gateway_desligado", "O Mercado Pago da Vênus ainda não foi ligado neste servidor. O dono precisa enviar o token (veja o aviso nos Ajustes).");
     // assinatura mensal recorrente: a primeira cobrança só acontece quando os 7 dias grátis acabam
-    const recorrente = { frequency: 1, frequency_type: "months", transaction_amount: PRECO_CENTAVOS / 100, currency_id: "BRL" };
+    const recorrente = { frequency: 1, frequency_type: "months", transaction_amount: preco / 100, currency_id: "BRL" };
     if ((loja.trial_fim || 0) > agora + 3_600_000) recorrente.start_date = new Date(loja.trial_fim).toISOString();
     const corpo = { reason: titulo, external_reference: id, back_url: origem, notification_url: `${origem}/assinatura/webhook/mercadopago`, auto_recurring: recorrente, status: "pending" };
     if (loja.email) corpo.payer_email = loja.email;
@@ -43,8 +65,8 @@ export async function iniciarCobranca(env, loja, gateway, origem, agora = Date.n
     url = d.init_point;
   }
   if (!url) throw new ErroLoja(502, "gateway_sem_link", "O gateway não devolveu o link de pagamento.");
-  await env.DB.prepare("INSERT INTO pagamentos (id, loja, gateway, valor_centavos, status, criado, atualizado) VALUES (?, ?, ?, ?, 'aguardando', ?, ?)").bind(id, loja.id, gateway, PRECO_CENTAVOS, agora, agora).run();
-  return { id, url, valorCentavos: PRECO_CENTAVOS };
+  await env.DB.prepare("INSERT INTO pagamentos (id, loja, gateway, valor_centavos, status, criado, atualizado, pacote) VALUES (?, ?, ?, ?, 'aguardando', ?, ?, ?)").bind(id, loja.id, gateway, preco, agora, agora, pacote).run();
+  return { id, url, valorCentavos: preco, pacote };
 }
 
 /** Marca o pagamento como pago (uma vez só) e deixa a liberação esperando o 2FA. */
@@ -57,7 +79,7 @@ export async function confirmarPagamento(env, id, valorCentavos, refGateway, ago
   if (p.status === "liberado") {
     const loja = await env.DB.prepare("SELECT ativo_ate FROM lojas WHERE id = ?").bind(p.loja).first();
     const ate = Math.max(agora, (loja && loja.ativo_ate) || 0) + DIAS_DO_PLANO * DIA;
-    await env.DB.prepare("UPDATE lojas SET ativo_ate = ?, plano = 'fundadores' WHERE id = ?").bind(ate, p.loja).run();
+    await env.DB.prepare("UPDATE lojas SET ativo_ate = ?, plano = 'fundadores', pacote = ? WHERE id = ?").bind(ate, pacoteDe(p.pacote), p.loja).run();
     return true;
   }
   await env.DB.prepare("UPDATE pagamentos SET status = 'pago', ref_gateway = ?, atualizado = ? WHERE id = ? AND status = 'aguardando'").bind(String(refGateway || ""), agora, id).run();
@@ -139,7 +161,7 @@ export async function liberarAcesso(env, loja, codigo, agora = Date.now()) {
   const ate = base + DIAS_DO_PLANO * DIA;
   await env.DB.batch([
     env.DB.prepare("UPDATE pagamentos SET status = 'liberado', atualizado = ? WHERE id = ? AND status = 'pago'").bind(agora, pago.id),
-    env.DB.prepare("UPDATE lojas SET ativo_ate = ?, plano = 'fundadores' WHERE id = ?").bind(ate, loja.id),
+    env.DB.prepare("UPDATE lojas SET ativo_ate = ?, plano = 'fundadores', pacote = ? WHERE id = ?").bind(ate, pacoteDe(pago.pacote), loja.id),
   ]);
   return { ativoAte: ate };
 }
@@ -150,6 +172,8 @@ export async function estadoDaAssinatura(env, loja, agora = Date.now()) {
   const pagoRestante = Math.max(0, Math.ceil(((loja.ativo_ate || 0) - agora) / DIA));
   return {
     plano: loja.plano, precoCentavos: PRECO_CENTAVOS, diasDeTeste: 7,
+    pacote: pacoteDe(loja.pacote), apps: appsLiberados(loja, agora),
+    pacotes: Object.entries(PACOTES).map(([chave, p]) => ({ chave, nome: p.nome, precoCentavos: p.centavos })),
     emTeste: agora < loja.trial_fim && agora >= (loja.ativo_ate || 0), diasDeTesteRestantes: trialRestante, diasPagosRestantes: pagoRestante,
     acesso: agora < Math.max(loja.trial_fim || 0, loja.ativo_ate || 0),
     pagamentoAguardandoLiberacao: pend.n > 0, doisFatores: !!loja.totp_ativo,
