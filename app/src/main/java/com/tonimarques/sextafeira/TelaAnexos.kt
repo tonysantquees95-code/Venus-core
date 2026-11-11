@@ -58,7 +58,7 @@ internal fun MainActivity.abrirAnexos(ancora: View) {
         setPadding(dp(6), dp(8), dp(6), dp(8))
         background = GradientDrawable(GradientDrawable.Orientation.TL_BR, intArrayOf(Color.parseColor("#1B1035"), Color.parseColor("#0A0F24"))).apply {
             cornerRadius = dp(20).toFloat()
-            setStroke(dp(1).coerceAtLeast(1), Color.argb(90, 227, 107, 208))
+            setStroke(dp(1).coerceAtLeast(1), Aparencia.comAlfa(90))
         }
         elevation = dp(12).toFloat()
     }
@@ -73,7 +73,7 @@ internal fun MainActivity.abrirAnexos(ancora: View) {
             gravity = Gravity.CENTER_VERTICAL
             setPadding(dp(10), dp(10), dp(10), dp(10))
             background = android.graphics.drawable.RippleDrawable(
-                android.content.res.ColorStateList.valueOf(Color.argb(60, 227, 107, 208)), null,
+                android.content.res.ColorStateList.valueOf(Aparencia.comAlfa(60)), null,
                 GradientDrawable().apply { cornerRadius = dp(14).toFloat(); setColor(Color.WHITE) })
             isClickable = true
             setOnClickListener {
@@ -85,8 +85,11 @@ internal fun MainActivity.abrirAnexos(ancora: View) {
             text = simbolo
             textSize = 18f
             gravity = Gravity.CENTER
-            background = GradientDrawable(GradientDrawable.Orientation.TL_BR, intArrayOf(Color.parseColor("#E36BD0"), Color.parseColor("#9B5CF6"))).apply {
-                shape = GradientDrawable.OVAL
+            background = when (Aparencia.pacote) {
+                Tema.Icones.NEON -> GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(Aparencia.comAlfa(40)); setStroke(dp(2), Aparencia.destaque) }
+                Tema.Icones.VIDRO -> GradientDrawable().apply { cornerRadius = dp(12).toFloat(); setColor(Color.argb(46, 255, 255, 255)); setStroke(dp(1), Color.argb(90, 255, 255, 255)) }
+                Tema.Icones.LINHA -> GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(Color.TRANSPARENT); setStroke(dp(1), Aparencia.destaque) }
+                else -> GradientDrawable(GradientDrawable.Orientation.TL_BR, intArrayOf(Aparencia.destaque, Aparencia.par())).apply { shape = GradientDrawable.OVAL }
             }
         }, LinearLayout.LayoutParams(dp(38), dp(38)))
         val textos = LinearLayout(this).apply {

@@ -565,6 +565,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
 
     internal fun aplicarCor(cor: Int) {
         corAtual = cor
+        Aparencia.definir(prefs, cor)
         titulo.setTextColor(cor)
         botaoMic.setColorFilter(cor)
         botaoEnviar.setColorFilter(cor)
@@ -587,6 +588,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
 
     /** Repinta todos os botões conforme o pacote; chamado também a cada mudança de cor do orbe. */
     private fun pintarIcones() {
+        Aparencia.definir(prefs, corAtual)
         if (botoesTema.isEmpty()) return
         val pacote = Tema.icones(prefs)
         for ((b, degrade) in botoesTema) {

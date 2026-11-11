@@ -105,6 +105,7 @@ class PopupActivity : MainActivity() {
             setOnClickListener { alternarEscuta() }
             aoMudarCor = { cor -> aplicarCor(cor) }
         }
+        aplicarTema()
         cartao.addView(orbe, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(200)))
 
         status = TextView(this).apply {
