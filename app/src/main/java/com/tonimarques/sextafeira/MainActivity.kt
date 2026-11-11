@@ -95,6 +95,10 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
     internal var ouvirAposPermissao = false
     internal var naTela = false
     internal var corAtual = Color.parseColor("#36D6FF")
+    /** Botões que seguem o pacote de ícones escolhido (true = ícone com degradê próprio da Vênus). */
+    internal val botoesTema = mutableListOf<Pair<ImageButton, Boolean>>()
+    internal var gaveta: Gaveta? = null
+    private var saiuEm = 0L
     /** Os três pontinhos de "pensando" na conversa (ver BalaoPensando.kt). */
     internal var balaoPensando: View? = null
     internal fun conversaPronta() = ::mensagens.isInitialized
@@ -154,9 +158,23 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         } catch (e: Exception) {
         }
         tts = TextToSpeech(this, this)
-        setContentView(montarTela())
+        val tela = montarTela()
+        if (javaClass == MainActivity::class.java) {
+            // a gaveta (menu lateral) fica por cima da tela
+            gaveta = Gaveta(this)
+            setContentView(android.widget.FrameLayout(this).apply {
+                addView(tela, ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+                addView(gaveta, ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+            })
+        } else {
+            setContentView(tela)
+        }
+        aplicarTema()
         val antes = mensagens.childCount
-        carregarConversaAnterior()
+        // isolamento de sessão: ao abrir o app (processo novo ou depois de fechar) a conversa é sempre nova e limpa;
+        // só ao girar a tela (mesma sessão) volta o que já estava
+        if (javaClass == MainActivity::class.java && !sessaoViva) memoria.novaConversa() else carregarConversaAnterior()
+        sessaoViva = true
         // a saudação só aparece numa conversa nova (não embaixo das mensagens de uma conversa em andamento)
         if (mensagens.childCount == antes) mensagemInicial()?.let { adicionarMensagem(it, false, salvar = false) }
         tratarIntent(intent)
@@ -232,7 +250,53 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         super.onPause()
     }
 
+    override fun onStart() {
+        super.onStart()
+        if (javaClass != MainActivity::class.java || saiuEm == 0L) return
+        val fora = android.os.SystemClock.elapsedRealtime() - saiuEm
+        saiuEm = 0L
+        val temMensagens = try { memoria.conversaRecente() != null } catch (e: Exception) { false }
+        val esperando = whatsappDepois != null || saiuParaOInstagram || fotoDaCamera != null || cadastroFoto != null ||
+            dialogoLoja != null || ajustes != null
+        if (Sessao.deveComecarNova(fora, temMensagens, ocupado, esperando)) {
+            comecarConversaNova()
+            mensagemInicial()?.let { adicionarMensagem(it, false, salvar = false) }
+        }
+    }
+
+    override fun onStop() {
+        if (!isChangingConfigurations) saiuEm = android.os.SystemClock.elapsedRealtime()
+        super.onStop()
+    }
+
+    @Deprecated("Deprecated in Java")
+    override fun onBackPressed() {
+        val g = gaveta
+        if (g != null && g.aberta) {
+            g.fechar()
+            return
+        }
+        @Suppress("DEPRECATION")
+        super.onBackPressed()
+    }
+
+    private var voltarDaGaveta: android.window.OnBackInvokedCallback? = null
+
+    /** Android 13+ não chama onBackPressed com o gesto "voltar": enquanto a gaveta está aberta, ela mesma pega o gesto. */
+    internal fun vigiarVoltarDaGaveta(ligar: Boolean) {
+        if (Build.VERSION.SDK_INT < 33) return
+        if (ligar && voltarDaGaveta == null) {
+            val cb = android.window.OnBackInvokedCallback { gaveta?.fechar() }
+            voltarDaGaveta = cb
+            onBackInvokedDispatcher.registerOnBackInvokedCallback(android.window.OnBackInvokedDispatcher.PRIORITY_DEFAULT, cb)
+        } else if (!ligar) {
+            voltarDaGaveta?.let { onBackInvokedDispatcher.unregisterOnBackInvokedCallback(it) }
+            voltarDaGaveta = null
+        }
+    }
+
     override fun onDestroy() {
+        if (javaClass == MainActivity::class.java && isFinishing) sessaoViva = false
         principal.removeCallbacksAndMessages(null)
         despertador?.parar()
         interruptor?.parar()
@@ -339,13 +403,12 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
             gravity = Gravity.CENTER_VERTICAL
             setPadding(dp(8), dp(14), dp(10), dp(4))
         }
-        // Canto esquerdo: histórico de conversas
-        val botaoConversas = botaoIcone(R.drawable.ic_conversas, "Conversas", COR_TEXTO_APAGADO) { mostrarHistorico() }.apply {
-            clearColorFilter() // o ícone já vem com o degradê da Vênus
-            background = vidro(Color.argb(20, 227, 107, 208), Color.argb(70, 227, 107, 208), 22)
+        // Canto esquerdo: a gaveta (nova conversa, conversas salvas, Robô, aparência)
+        val botaoGaveta = botaoIcone(R.drawable.ic_gaveta, "Abrir o menu lateral", COR_TEXTO_APAGADO) { gaveta?.abrir() }.apply {
             setPadding(dp(9), dp(9), dp(9), dp(9))
         }
-        cabecalho.addView(botaoConversas, LinearLayout.LayoutParams(dp(44), dp(44)).apply { marginStart = dp(4) })
+        botoesTema += botaoGaveta to true
+        cabecalho.addView(botaoGaveta, LinearLayout.LayoutParams(dp(44), dp(44)).apply { marginStart = dp(4) })
         val nomes = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(4), 0, 0, 0)
@@ -367,14 +430,19 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         nomes.addView(subtitulo)
         cabecalho.addView(nomes, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         // Publicações (stories, posts, Instagram e status) ao lado dos ajustes
-        val botaoPublicacoes = botaoIcone(R.drawable.ic_publicacoes, "Publicações", COR_TEXTO_APAGADO) { abrirPublicacoes() }.apply {
-            clearColorFilter() // o ícone já vem com o degradê da Vênus
-            background = vidro(Color.argb(20, 227, 107, 208), Color.argb(70, 227, 107, 208), 22)
+        val botaoRobo = botaoIcone(R.drawable.ic_robo, "Vênus Robô", COR_TEXTO_APAGADO) { abrirRobo() }.apply {
             setPadding(dp(9), dp(9), dp(9), dp(9))
         }
-        cabecalho.addView(botaoPublicacoes, LinearLayout.LayoutParams(dp(44), dp(44)).apply { marginEnd = dp(6) })
+        botoesTema += botaoRobo to true
+        cabecalho.addView(botaoRobo, LinearLayout.LayoutParams(dp(44), dp(44)).apply { marginEnd = dp(4) })
+        val botaoPublicacoes = botaoIcone(R.drawable.ic_publicacoes, "Publicações", COR_TEXTO_APAGADO) { abrirPublicacoes() }.apply {
+            setPadding(dp(9), dp(9), dp(9), dp(9))
+        }
+        botoesTema += botaoPublicacoes to true
+        cabecalho.addView(botaoPublicacoes, LinearLayout.LayoutParams(dp(44), dp(44)).apply { marginEnd = dp(4) })
         val botaoMenu = botaoIcone(R.drawable.ic_menu_futuro, "Menu", COR_TEXTO_APAGADO) { }
         botaoMenu.setOnClickListener { abrirMenu(it) }
+        botoesTema += botaoMenu to false
         cabecalho.addView(botaoMenu)
         raiz.addView(cabecalho)
 
@@ -434,6 +502,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
             background = vidro(Color.argb(18, 255, 255, 255), Color.argb(40, 255, 255, 255), 28)
         }
         botaoAnexar = botaoIcone(R.drawable.ic_anexar, "Anexar foto ou arquivo", corAtual) { abrirAnexos(botaoAnexar) }
+        botoesTema += botaoAnexar to false
         barra.addView(botaoAnexar)
         campo = EditText(this).apply {
             hint = "Digite ou toque no orbe…"
@@ -456,6 +525,8 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         barra.addView(campo, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         botaoMic = botaoIcone(R.drawable.ic_microfone, "Falar", corAtual) { alternarEscuta() }
         botaoEnviar = botaoIcone(R.drawable.ic_enviar, "Enviar", corAtual) { enviarTexto() }
+        botoesTema += botaoMic to false
+        botoesTema += botaoEnviar to false
         barra.addView(botaoMic)
         barra.addView(botaoEnviar)
         // anexos escolhidos (fotos e arquivos), esperando o pedido, como no chat do Gemini
@@ -485,6 +556,69 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         botaoMic.setColorFilter(cor)
         botaoEnviar.setColorFilter(cor)
         if (::botaoAnexar.isInitialized) botaoAnexar.setColorFilter(cor) // o pop-up não tem o "+"
+        pintarIcones()
+    }
+
+    // ---------------------------------------------------------------- aparência (orbe, ícones, cor)
+    /** Aplica na hora o modelo do orbe, a cor e o pacote de ícones escolhidos. */
+    internal fun aplicarTema() {
+        if (!::orbe.isInitialized) return
+        val rgb = Tema.cor(prefs)
+        orbe.aplicarTema(Tema.modelo(prefs), rgb)
+        if (rgb != 0) aplicarCor(0xFF000000.toInt() or Tema.trio(rgb)[0])
+        aplicarIcones()
+    }
+
+    /** Monta o visual de cada botão conforme o pacote (Vênus = degradê, Linha = traço na cor, Sólido = círculo na cor). */
+    internal fun aplicarIcones() {
+        val pacote = Tema.icones(prefs)
+        for ((b, degrade) in botoesTema) {
+            b.background = null
+            b.clearColorFilter()
+            when (pacote) {
+                Tema.Icones.VENUS -> if (degrade) {
+                    b.background = vidro(Color.argb(20, 227, 107, 208), Color.argb(70, 227, 107, 208), 22)
+                } else {
+                    b.setColorFilter(if (b.contentDescription == "Menu") COR_TEXTO_APAGADO else corAtual)
+                }
+                Tema.Icones.LINHA -> b.setColorFilter(corAtual)
+                Tema.Icones.SOLIDO -> {
+                    b.background = GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(corAtual) }
+                    b.setColorFilter(Color.parseColor("#06081A"))
+                }
+            }
+        }
+    }
+
+    /** Chamado a cada mudança de cor do orbe: só repinta, sem refazer os fundos. */
+    private fun pintarIcones() {
+        if (botoesTema.isEmpty()) return
+        val pacote = Tema.icones(prefs)
+        for ((b, degrade) in botoesTema) when (pacote) {
+            Tema.Icones.VENUS -> if (!degrade) b.setColorFilter(if (b.contentDescription == "Menu") COR_TEXTO_APAGADO else corAtual)
+            Tema.Icones.LINHA -> b.setColorFilter(corAtual)
+            Tema.Icones.SOLIDO -> (b.background as? GradientDrawable)?.setColor(corAtual)
+        }
+    }
+
+    internal fun abrirAparencia() {
+        TelaAparencia(this) { aplicarTema() }.show()
+    }
+
+    /** O Robô responde os clientes sozinho; daqui a Vênus abre o painel dele. */
+    internal fun abrirRobo() {
+        val robo = packageManager.getLaunchIntentForPackage(Atualizador.PACOTE_ROBO)
+        if (robo != null) startActivity(robo)
+        else AlertDialog.Builder(this)
+            .setTitle("Vênus Robô")
+            .setMessage("O Vênus Robô ainda não está instalado neste celular. Quando estiver, este botão abre o painel dele.")
+            .setPositiveButton("Ok", null).show()
+    }
+
+    /** "Nova conversa" da gaveta: arquiva a atual (se tiver algo) e abre uma tela limpa. */
+    internal fun novaConversaDaGaveta() {
+        comecarConversaNova()
+        adicionarMensagem("Conversa nova. Em que posso ajudar?", false, salvar = false)
     }
 
     /** Teclado aberto: orbe pequeno (e sem o aviso embaixo); fechado: volta ao tamanho normal. */
@@ -2240,6 +2374,9 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         const val ACAO_ATIVAR = "com.tonimarques.sextafeira.ATIVAR"
         const val ACAO_PEDIDO = "com.tonimarques.sextafeira.PEDIDO"
         const val EXTRA_PEDIDO = "pedido"
+
+        /** Já existe uma sessão aberta neste processo (o próximo onCreate é só uma recriação, como girar a tela). */
+        @Volatile internal var sessaoViva = false
 
         internal val COR_TEXTO_APAGADO = Color.parseColor("#6B769A")
     }

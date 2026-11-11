@@ -28,6 +28,17 @@ class Orbe(context: Context) : View(context) {
 
     var estado = Estado.OCIOSO
 
+    /** Modelo do orbe e cor escolhida (0 = automática), vindos da aparência escolhida pela pessoa. */
+    var modelo = Tema.Modelo.LIQUIDO
+        private set
+    private var corFixa = 0
+
+    fun aplicarTema(novo: Tema.Modelo, rgb: Int) {
+        modelo = novo
+        corFixa = rgb and 0xFFFFFF
+        invalidate()
+    }
+
     /** Chamado de tempos em tempos com a cor principal atual, para o resto da tela acompanhar. */
     var aoMudarCor: ((Int) -> Unit)? = null
 
@@ -126,9 +137,10 @@ class Orbe(context: Context) : View(context) {
         } else {
             Marca.MATIZ_VENUS + Marca.OSCILACAO_VENUS * sin(tempo * 0.13f)
         }
-        val cor1 = cor(matiz)
-        val cor2 = cor(matiz + Marca.deslocamentoCor2)
-        val cor3 = cor(matiz + Marca.deslocamentoCor3, 0.7f)
+        val trio = if (corFixa != 0) Tema.trio(corFixa) else null
+        val cor1 = trio?.let { 0xFF000000.toInt() or it[0] } ?: cor(matiz)
+        val cor2 = trio?.let { 0xFF000000.toInt() or it[1] } ?: cor(matiz + Marca.deslocamentoCor2)
+        val cor3 = trio?.let { 0xFF000000.toInt() or it[2] } ?: cor(matiz + Marca.deslocamentoCor3, 0.7f)
 
         val cx = width / 2f
         val cy = height / 2f
@@ -168,20 +180,10 @@ class Orbe(context: Context) : View(context) {
         pArco.color = comAlfa(cor3, 0.12f + 0.1f * energia)
         canvas.drawCircle(cx, cy, raio * 1.28f, pArco)
 
-        // ----- três camadas de "líquido" que se deformam
-        val cores = intArrayOf(cor1, cor2, cor3)
-        for (camada in 0 until 3) {
-            val desloc = camada * 2.1f
-            montarForma(cx, cy, raio * (0.92f + camada * 0.05f), desloc)
-            val corCamada = cores[camada]
-            val fx = cx + cos(giro + desloc) * raio * 0.3f
-            val fy = cy + sin(giro + desloc) * raio * 0.3f
-            pBlob.shader = RadialGradient(
-                fx, fy, raio * 1.35f,
-                intArrayOf(comAlfa(clarear(corCamada, 0.3f), 0.5f), comAlfa(corCamada, 0.62f), comAlfa(corCamada, 0.06f)),
-                floatArrayOf(0f, 0.55f, 1f), Shader.TileMode.CLAMP
-            )
-            canvas.drawPath(caminho, pBlob)
+        when (modelo) {
+            Tema.Modelo.LIQUIDO -> desenharLiquido(canvas, cx, cy, raio, cor1, cor2, cor3)
+            Tema.Modelo.CRISTAL -> desenharCristal(canvas, cx, cy, raio, cor1, cor2, cor3)
+            Tema.Modelo.PULSO -> desenharPulso(canvas, cx, cy, raio, cor1, cor2, cor3)
         }
 
         // ----- núcleo luminoso
@@ -205,6 +207,65 @@ class Orbe(context: Context) : View(context) {
         quadros++
         if (quadros % 12 == 0) aoMudarCor?.invoke(cor1)
         postInvalidateOnAnimation()
+    }
+
+    /** Três camadas de "líquido" que se deformam. */
+    private fun desenharLiquido(canvas: Canvas, cx: Float, cy: Float, raio: Float, cor1: Int, cor2: Int, cor3: Int) {
+        val cores = intArrayOf(cor1, cor2, cor3)
+        for (camada in 0 until 3) {
+            val desloc = camada * 2.1f
+            montarForma(cx, cy, raio * (0.92f + camada * 0.05f), desloc)
+            val corCamada = cores[camada]
+            val fx = cx + cos(giro + desloc) * raio * 0.3f
+            val fy = cy + sin(giro + desloc) * raio * 0.3f
+            pBlob.shader = RadialGradient(
+                fx, fy, raio * 1.35f,
+                intArrayOf(comAlfa(clarear(corCamada, 0.3f), 0.5f), comAlfa(corCamada, 0.62f), comAlfa(corCamada, 0.06f)),
+                floatArrayOf(0f, 0.55f, 1f), Shader.TileMode.CLAMP
+            )
+            canvas.drawPath(caminho, pBlob)
+        }
+    }
+
+    /** Esfera de cristal: esfera lisa com um hexágono facetado girando por dentro. */
+    private fun desenharCristal(canvas: Canvas, cx: Float, cy: Float, raio: Float, cor1: Int, cor2: Int, cor3: Int) {
+        pBlob.shader = RadialGradient(
+            cx - raio * 0.25f, cy - raio * 0.3f, raio * 1.3f,
+            intArrayOf(comAlfa(clarear(cor1, 0.55f), 0.75f), comAlfa(cor1, 0.6f), comAlfa(cor3, 0.25f)),
+            floatArrayOf(0f, 0.55f, 1f), Shader.TileMode.CLAMP
+        )
+        canvas.drawCircle(cx, cy, raio * (0.95f + 0.04f * energia), pBlob)
+        pArco.strokeWidth = 1.2f * densidade
+        for (camada in 0 until 2) {
+            val r = raio * (0.55f + camada * 0.22f) * (1f + 0.06f * energia)
+            val giroCamada = if (camada == 0) giro else -giro * 0.7f
+            caminho.reset()
+            for (k in 0 until 6) {
+                val ang = giroCamada + k * (PI.toFloat() / 3f)
+                val x = cx + cos(ang) * r
+                val y = cy + sin(ang) * r
+                if (k == 0) caminho.moveTo(x, y) else caminho.lineTo(x, y)
+            }
+            caminho.close()
+            pArco.color = comAlfa(if (camada == 0) cor2 else clarear(cor3, 0.3f), 0.45f + 0.3f * energia)
+            canvas.drawPath(caminho, pArco)
+        }
+    }
+
+    /** Ondas concêntricas que saem do centro, mais rápidas e fortes quanto mais energia. */
+    private fun desenharPulso(canvas: Canvas, cx: Float, cy: Float, raio: Float, cor1: Int, cor2: Int, cor3: Int) {
+        pArco.strokeWidth = 2f * densidade
+        for (i in 0 until 4) {
+            val fase = ((tempo * (0.35f + energia * 0.9f) + i * 0.25f) % 1f)
+            pArco.color = comAlfa(if (i % 2 == 0) cor1 else cor2, (1f - fase) * (0.35f + 0.5f * energia))
+            canvas.drawCircle(cx, cy, raio * (0.5f + fase * 1.1f), pArco)
+        }
+        pBlob.shader = RadialGradient(
+            cx, cy, raio * 0.8f,
+            intArrayOf(comAlfa(clarear(cor1, 0.5f), 0.9f), comAlfa(cor1, 0.7f), comAlfa(cor3, 0.1f)),
+            floatArrayOf(0f, 0.6f, 1f), Shader.TileMode.CLAMP
+        )
+        canvas.drawCircle(cx, cy, raio * (0.62f + 0.12f * energia), pBlob)
     }
 
     private fun arco(canvas: Canvas, cx: Float, cy: Float, r: Float, rotacao: Float, inicioEExtensao: FloatArray) {
