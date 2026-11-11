@@ -3,6 +3,7 @@ import { IconeEnviar, IconeMais, IconeMenu } from "../../components/Icones";
 import { HolographicOrb } from "../../theming";
 import { useChat } from "../../hooks/useChat";
 import { useConversas } from "../../sessao/ConversasProvider";
+import { AvatarDeConta } from "../../id/Avatar";
 
 export function ChatPanel({ aoAbrirMenu }: { aoAbrirMenu: () => void }) {
   const { mensagens, enviando, enviar } = useChat();
@@ -36,6 +37,7 @@ export function ChatPanel({ aoAbrirMenu }: { aoAbrirMenu: () => void }) {
         >
           <IconeMais />
         </button>
+        <AvatarDeConta />
       </header>
 
       <ol className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-4 py-4" aria-live="polite">

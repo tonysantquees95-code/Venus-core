@@ -50,14 +50,72 @@ class Gaveta(private val a: MainActivity) : FrameLayout(a) {
 
     private fun cor() = a.corAtual
 
+    /** Refaz o cabeçalho quando nome, foto ou assinatura mudam (em qualquer app conectado). */
+    fun atualizarPerfil() = montar()
+
+    /** Fotinho da conta (foto ou iniciais) + nome, e-mail e assinatura; toque abre o menu rápido da conta. */
+    private fun cabecalhoDaConta(): View {
+        val logado = VetorialId.logado(a)
+        val email = VetorialId.email(a)
+        val nome = VetorialId.nomeDaConta(a)
+        val linha = LinearLayout(a).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setOnClickListener { fechar(); a.abrirMenuDaConta() }
+        }
+        val tam = a.dp(46)
+        val foto = fotoDaConta(VetorialId.foto(a), tam)
+        val avatar: View = if (foto != null) ImageView(a).apply { setImageBitmap(foto) } else TextView(a).apply {
+            text = if (logado) iniciaisDoNome(nome, email) else "?"
+            gravity = Gravity.CENTER
+            textSize = 16f
+            setTextColor(Color.WHITE)
+            typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
+            background = GradientDrawable().apply {
+                shape = GradientDrawable.OVAL
+                setColor(if (logado) Color.HSVToColor(floatArrayOf(((email.hashCode() and 0x7fffffff) % 360).toFloat(), 0.55f, 0.55f)) else Color.argb(60, 255, 255, 255))
+            }
+        }
+        linha.addView(avatar, LinearLayout.LayoutParams(tam, tam))
+        val textos = LinearLayout(a).apply { orientation = LinearLayout.VERTICAL; setPadding(a.dp(12), 0, 0, 0) }
+        textos.addView(TextView(a).apply {
+            text = if (logado) nome.ifBlank { email } else "Entrar com o Vetorial ID"
+            textSize = 14.5f; setTextColor(Color.WHITE); maxLines = 1; ellipsize = TextUtils.TruncateAt.END
+        })
+        textos.addView(TextView(a).apply {
+            text = if (logado) VetorialId.assinatura(a).ifBlank { email } else "Mesma conta em todos os aparelhos"
+            textSize = 11.5f; setTextColor(MainActivity.COR_TEXTO_APAGADO); maxLines = 2; ellipsize = TextUtils.TruncateAt.END
+        })
+        linha.addView(textos, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        return linha
+    }
+
+    private fun fotoDaConta(foto: String, lado: Int): android.graphics.Bitmap? = try {
+        if (!foto.startsWith("data:image/")) null else {
+            val bytes = android.util.Base64.decode(foto.substringAfter("base64,"), android.util.Base64.DEFAULT)
+            val bmp = android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+            val redondo = android.graphics.Bitmap.createBitmap(lado, lado, android.graphics.Bitmap.Config.ARGB_8888)
+            val c = android.graphics.Canvas(redondo)
+            val p = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG)
+            c.drawCircle(lado / 2f, lado / 2f, lado / 2f, p)
+            p.xfermode = android.graphics.PorterDuffXfermode(android.graphics.PorterDuff.Mode.SRC_IN)
+            c.drawBitmap(android.graphics.Bitmap.createScaledBitmap(bmp, lado, lado, true), 0f, 0f, p)
+            redondo
+        }
+    } catch (e: Exception) {
+        null
+    }
+
     private fun montar() {
         painel.removeAllViews()
+        painel.addView(cabecalhoDaConta())
         painel.addView(TextView(a).apply {
             text = Marca.nomeMaiusculo
             textSize = 15f
             letterSpacing = 0.35f
             typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
             setTextColor(cor())
+            setPadding(0, a.dp(14), 0, 0)
         })
         painel.addView(TextView(a).apply {
             text = "Conversas e atalhos"

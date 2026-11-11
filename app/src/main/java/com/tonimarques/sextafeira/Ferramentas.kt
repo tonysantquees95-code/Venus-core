@@ -347,6 +347,7 @@ class Ferramentas(private val activity: Activity, private val memoria: Memoria? 
         "abrir_app" -> abrirApp(a.optString("nome"))
         "tocar_musica" -> tocarMusica(a.optString("busca"), a.optString("app"))
         "controlar_midia" -> controlarMidia(a.optString("acao"), a.optString("app"), a.optString("nivel"))
+        "conta_vetorial" -> contaVetorial(a.optString("acao"))
         "buscar_perto" -> buscarPerto(a.optString("oque"), a.optString("referencia"))
         "salvar_lugar" -> salvarLugar(a.optString("lugar"), a.optString("endereco"))
         "enviar_whatsapp" -> enviarWhatsapp(a.optString("contato"), a.optString("mensagem"))
@@ -846,6 +847,34 @@ class Ferramentas(private val activity: Activity, private val memoria: Memoria? 
         if (endereco.isBlank()) return "Faltou o endereço."
         m.definir("lugar:$nome", endereco.trim())
         return "Endereço de $nome salvo: $endereco."
+    }
+
+    /** Conta do Vetorial ID pela conversa (status da assinatura, conectar, dispositivos, sair). Roda fora da tela principal. */
+    private fun contaVetorial(acao: String): String {
+        val a = activity as? MainActivity ?: return "Abra o app da Vênus para mexer na conta."
+        fun naTela(f: MainActivity.() -> Unit) = a.runOnUiThread { if (!a.isFinishing) a.f() }
+        if (!VetorialId.logado(a)) {
+            if (acao == "sair") return "Você não está conectada em nenhuma conta neste aparelho."
+            naTela { abrirConta() }
+            return if (acao == "conectar") "Abrindo a tela de login do Vetorial ID." else "Você ainda não entrou no Vetorial ID. Abrindo o login para você."
+        }
+        return when (acao) {
+            "status" -> {
+                val r = VetorialId.licenca(a, false)
+                if (!r.ok) r.erro() else "Conta ${VetorialId.email(a)}.\n" + textoDaAssinatura(r.json) +
+                    if (r.json.optBoolean("acesso") && (if (r.json.optBoolean("emTeste")) r.json.optInt("diasDeTesteRestantes") else r.json.optInt("diasPagosRestantes")) <= 3) "\nEstá acabando: diga \"renovar\" ou abra Menu › Vetorial ID › Licença." else ""
+            }
+            "conectar" -> "Para conectar o novo aparelho, abra a Vênus nele (ou o endereço ${Servidor.ENDERECO}/id no navegador) e entre com ${VetorialId.email(a)} e a sua senha. São até 3 aparelhos vinculados e 2 usando ao mesmo tempo."
+            "dispositivos" -> { naTela { abrirDispositivos() }; "Abrindo os dispositivos da sua conta." }
+            else -> {
+                naTela {
+                    android.app.AlertDialog.Builder(this).setTitle("Sair da conta?").setMessage("Você vai sair do Vetorial ID só neste aparelho (${VetorialId.email(this)}).")
+                        .setPositiveButton("Sair") { _, _ -> emFundo({ VetorialId.sair(this) }) { aviso("Você saiu do Vetorial ID neste aparelho."); gaveta?.atualizarPerfil() } }
+                        .setNegativeButton("Cancelar", null).show()
+                }
+                "Confirme na tela para eu sair da sua conta neste aparelho."
+            }
+        }
     }
 
     private fun controlarMidia(acao: String, app: String = "", nivel: String = ""): String {

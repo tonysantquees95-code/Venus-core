@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { saudeDoServidor } from "@venus/nucleo";
 import { noDesktop, ponteDesktop } from "../desktop/ponte";
 import { useId } from "../id/IdProvider";
+import { AvatarDeConta } from "../id/Avatar";
 import { HolographicOrb, useTema } from "../theming";
 import { Cartao, Chave, botaoSuave } from "./Controles";
 import { ContaLogada, Entrar, MeusDispositivos } from "./Conta";
@@ -59,7 +60,10 @@ export function Ajustes({ aoAbrirTema }: { aoAbrirTema: () => void }) {
     <section aria-label="Ajustes" className="min-h-0 flex-1 overflow-y-auto bg-[radial-gradient(900px_500px_at_15%_-10%,rgb(var(--venus-rgb)/.14),transparent),radial-gradient(700px_500px_at_100%_110%,rgb(var(--robo-rgb)/.12),transparent)]">
       <div className="mx-auto w-full max-w-3xl px-4 pb-10 pt-4">
         <header className="sticky top-0 z-10 -mx-4 mb-2 bg-fundo/70 px-4 pb-3 pt-2 backdrop-blur-xl">
-          <h1 className="text-xl font-semibold">Ajustes</h1>
+          <div className="flex items-center justify-between">
+            <h1 className="text-xl font-semibold">Ajustes</h1>
+            <AvatarDeConta />
+          </div>
           <input
             type="search"
             value={termo}

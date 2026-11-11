@@ -112,6 +112,18 @@
                 android:resource="@xml/atalhos" />
         </activity>
 
+        <!-- Sessão entre apps da Vetorial Tech no mesmo celular (Vindex, Vortex, portais): só pacotes da suíte, com confirmação -->
+        <activity
+            android:name=".AcessoDeAppsActivity"
+            android:excludeFromRecents="true"
+            android:exported="true"
+            android:theme="@style/Tema.Dialogo">
+            <intent-filter>
+                <action android:name="tech.vetorial.id.ENTRAR" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
+
         <!-- O pop-up do orbe, na parte de baixo da tela -->
         <activity
             android:name=".PopupActivity"

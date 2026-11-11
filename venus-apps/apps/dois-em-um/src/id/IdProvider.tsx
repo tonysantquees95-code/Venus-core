@@ -1,11 +1,12 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { criarApi, ErroId, type Aparelho, type ApiId, type Sessao } from "./api";
+import { criarApi, ErroId, type Aparelho, type ApiId, type Licenca, type Perfil, type Sessao } from "./api";
 import { detectarPlataforma, NOMES_DE_PLATAFORMA } from "../ajustes/logica";
 import { noDesktop } from "../desktop/ponte";
 
 const CHAVE_SESSAO = "venus:id";
 const CHAVE_APARELHO = "venus:aparelho";
-const PING_MS = 60_000;
+const PING_MS = 20_000;
+const CANAL = "venus:conta";
 
 /** Identificador fixo deste aparelho (gerado uma vez) + plataforma detectada. */
 export function meuAparelho(): Aparelho {
@@ -35,6 +36,10 @@ interface Ctx {
   entrar: (email: string, senha: string, extra?: { encerrar?: string; remover?: string }) => Promise<void>;
   cadastrar: (email: string, senha: string, nome: string) => Promise<void>;
   sair: () => Promise<void>;
+  /** Perfil e assinatura da sessão ativa, atualizados sozinhos (outro app mudou a foto? aparece aqui em segundos). */
+  conta: { usuario: Perfil; licenca: Licenca } | null;
+  recarregarConta: () => Promise<void>;
+  salvarPerfil: (p: { nome?: string; foto?: string }) => Promise<void>;
   /** Resposta ao aviso de 2 aparelhos ativos: encerrar uma das sessões, ou cancelar (sai deste aparelho). */
   resolverConflito: (encerrar?: string) => Promise<void>;
   limparAviso: () => void;
@@ -55,7 +60,9 @@ export function IdProvider({ children, api: apiFora }: { children: ReactNode; ap
   const [sessao, setSessao] = useState<Sessao | null>(lerSessao);
   const [conflito, setConflito] = useState<Conflito | null>(null);
   const [aviso, setAviso] = useState("");
+  const [conta, setConta] = useState<{ usuario: Perfil; licenca: Licenca } | null>(null);
   const ref = useRef(sessao);
+  const versaoDoPerfil = useRef(0);
   ref.current = sessao;
 
   const guardar = useCallback((s: Sessao | null) => {
@@ -67,6 +74,46 @@ export function IdProvider({ children, api: apiFora }: { children: ReactNode; ap
       /* sem armazenamento: vale só nesta sessão */
     }
   }, []);
+
+  const recarregarConta = useCallback(async () => {
+    const t = ref.current?.token;
+    if (!t) return setConta(null);
+    try {
+      const c = await api.conta(t);
+      versaoDoPerfil.current = c.usuario.atualizado;
+      setConta({ usuario: c.usuario, licenca: c.licenca });
+    } catch {
+      /* sem conexão: mantém o que já tinha */
+    }
+  }, [api]);
+
+  const salvarPerfil = useCallback<Ctx["salvarPerfil"]>(async (p) => {
+    const t = ref.current?.token;
+    if (!t) return;
+    const r = await api.salvarPerfil(t, p);
+    versaoDoPerfil.current = r.usuario.atualizado;
+    setConta((c) => (c ? { ...c, usuario: r.usuario } : c));
+    try { new BroadcastChannel(CANAL).postMessage("perfil"); } catch { /* sem suporte: os outros apps pegam no próximo batimento */ }
+  }, [api]);
+
+  // Entrada vinda de outro app da suíte: #vid=<token do app>
+  useEffect(() => {
+    const m = /[#&]vid=([^&]+)/.exec(location.hash);
+    if (!m || ref.current) return;
+    const token = decodeURIComponent(m[1]!);
+    history.replaceState(null, "", location.pathname + location.search);
+    api.conta(token).then((c) => guardar({ token, sessao: c.sessao, usuario: { id: c.usuario.id, email: c.usuario.email, nome: c.usuario.nome } })).catch(() => setAviso("Não consegui entrar com o Vetorial ID. Tente de novo."));
+  }, [api, guardar]);
+
+  // Conta em tempo real: ao entrar, quando o ping avisa que o perfil mudou, e quando outra aba/app do mesmo navegador salva.
+  useEffect(() => {
+    if (!sessao) { setConta(null); return; }
+    void recarregarConta();
+    let canal: BroadcastChannel | null = null;
+    try { canal = new BroadcastChannel(CANAL); canal.onmessage = () => void recarregarConta(); } catch { /* sem suporte */ }
+    const t = setInterval(() => void recarregarConta(), 5 * 60_000); // assinatura (dias restantes)
+    return () => { canal?.close(); clearInterval(t); };
+  }, [sessao?.sessao, recarregarConta]);
 
   const entrar = useCallback<Ctx["entrar"]>(async (email, senha, extra) => guardar(await api.entrar(email, senha, meuAparelho(), extra)), [api, guardar]);
   const cadastrar = useCallback<Ctx["cadastrar"]>(async (e, s, n) => guardar(await api.cadastrar(e, s, n, meuAparelho())), [api, guardar]);
@@ -84,8 +131,9 @@ export function IdProvider({ children, api: apiFora }: { children: ReactNode; ap
       const atual = ref.current;
       if (!atual || parar) return;
       try {
-        await api.ping(atual.token);
+        const p = await api.ping(atual.token);
         setConflito(null);
+        if (p.perfil !== versaoDoPerfil.current) void recarregarConta();
       } catch (e) {
         if (!(e instanceof ErroId)) return;
         if (e.codigo === "limite_simultaneo") setConflito({ ativas: e.dados.ativas ?? [] });
@@ -104,7 +152,7 @@ export function IdProvider({ children, api: apiFora }: { children: ReactNode; ap
       clearInterval(t);
       document.removeEventListener("visibilitychange", aoVoltar);
     };
-  }, [api, sessao?.token, guardar]);
+  }, [api, sessao?.token, guardar, recarregarConta]);
 
   // Renovação do token (30 dias de validade): uma vez por dia de uso.
   useEffect(() => {
@@ -134,8 +182,8 @@ export function IdProvider({ children, api: apiFora }: { children: ReactNode; ap
     setConflito(null);
   }, [api, sair]);
 
-  const valor = useMemo<Ctx>(() => ({ api, sessao, conflito, aviso, entrar, cadastrar, sair, resolverConflito, limparAviso: () => setAviso("") }),
-    [api, sessao, conflito, aviso, entrar, cadastrar, sair, resolverConflito]);
+  const valor = useMemo<Ctx>(() => ({ api, sessao, conflito, aviso, entrar, cadastrar, sair, conta, recarregarConta, salvarPerfil, resolverConflito, limparAviso: () => setAviso("") }),
+    [api, sessao, conflito, aviso, entrar, cadastrar, sair, conta, recarregarConta, salvarPerfil, resolverConflito]);
   return <C.Provider value={valor}>{children}</C.Provider>;
 }
 

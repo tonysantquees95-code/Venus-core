@@ -2,6 +2,9 @@ import { useCallback } from "react";
 import { URL_API } from "@venus/nucleo";
 import type { Mensagem } from "../tipos";
 import { useConversas } from "../sessao/ConversasProvider";
+import { useId } from "../id/IdProvider";
+import { responderComandoDeConta } from "../ajustes/executarConta";
+import { abrirNoApp } from "../id/Avatar";
 
 const novoId = () => crypto.randomUUID();
 
@@ -9,6 +12,7 @@ const novoId = () => crypto.randomUUID();
 export function useChat() {
   const { ativa, anexar, estaEnviando, marcarEnviando } = useConversas();
   const enviando = estaEnviando(ativa.id);
+  const conta = useId();
 
   const enviar = useCallback(
     async (texto: string) => {
@@ -21,6 +25,13 @@ export function useChat() {
       marcarEnviando(id, true);
       const resposta = (texto: string): Mensagem => ({ id: novoId(), autor: "venus", texto, quando: Date.now() });
       try {
+        // comandos de conta ("status da minha conta", "sair da minha conta aqui"…) a Vênus resolve sozinha
+        const local = await responderComandoDeConta(limpo, conta);
+        if (local) {
+          anexar(id, resposta(local.texto));
+          if (local.abrir) abrirNoApp(local.abrir);
+          return;
+        }
         const r = await fetch(`${URL_API}/v1/chat`, {
           method: "POST",
           headers: { "content-type": "application/json" },
@@ -37,7 +48,7 @@ export function useChat() {
         marcarEnviando(id, false);
       }
     },
-    [ativa, anexar, estaEnviando, marcarEnviando]
+    [ativa, anexar, estaEnviando, marcarEnviando, conta]
   );
 
   return { mensagens: ativa.mensagens, enviando, enviar };

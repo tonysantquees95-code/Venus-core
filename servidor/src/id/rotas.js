@@ -1,8 +1,8 @@
 // Rotas do Vetorial ID: /id (tela de login) e /id/* (API).
 import { estadoDaAssinatura, iniciarCobranca } from "../loja/assinatura.js";
 import { ErroLoja } from "../loja/lojas.js";
-import { ErroId, cadastrar, encerrarSessao, entrar, gravarSync, lerSync, listarDispositivos, reativar, removerDispositivo, renovarToken, tokenDoPedido, validarSessao } from "./conta.js";
-import { paginaDeLogin } from "./pagina.js";
+import { ErroId, cadastrar, perfilPublico, salvarPerfil, tokenDeApp, encerrarSessao, entrar, gravarSync, lerSync, listarDispositivos, reativar, removerDispositivo, renovarToken, tokenDoPedido, validarSessao } from "./conta.js";
+import { paginaDeLogin, paginaSso } from "./pagina.js";
 
 const CORS = { "access-control-allow-origin": "*", "access-control-allow-headers": "authorization,content-type", "access-control-allow-methods": "GET,POST,PUT,DELETE,OPTIONS" };
 const json = (d, status = 200) => new Response(JSON.stringify(d), { status, headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store", ...CORS } });
@@ -34,6 +34,9 @@ export async function tratarId(req, env, url, caminho) {
   if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: CORS });
   const origem = url.origin;
   try {
+    if (caminho === "/id/sso" && req.method === "GET") { // entrada sem digitar a senha de novo, se este aparelho já está logado
+      return new Response(paginaSso(String(env.ORIGENS_PERMITIDAS || "").split(",").map((s) => s.trim()).filter(Boolean)), { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store", "content-security-policy": "default-src 'none'; script-src 'unsafe-inline'; connect-src 'self'; base-uri 'none'", "referrer-policy": "no-referrer", "x-frame-options": "DENY" } });
+    }
     if (caminho === "/id" && req.method === "GET") {
       const origens = String(env.ORIGENS_PERMITIDAS || "").split(",").map((s) => s.trim()).filter(Boolean);
       return new Response(paginaDeLogin(origens), { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store", "content-security-policy": "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; base-uri 'none'; form-action 'none'", "referrer-policy": "no-referrer", "x-frame-options": "DENY" } });
@@ -54,11 +57,17 @@ export async function tratarId(req, env, url, caminho) {
     const ctx = await validarSessao(env, req, {});
     if (caminho === "/id/ping" && req.method === "POST") {
       const l = await licenca(env, ctx.usuario, origem, false);
-      return json({ ok: true, ativa: true, licenca: { acesso: l.acesso, renovar: !!l.renovar } });
+      return json({ ok: true, ativa: true, perfil: ctx.usuario.atualizado || 0, licenca: { acesso: l.acesso, renovar: !!l.renovar } });
     }
     if (caminho === "/id/verificar" && req.method === "GET") { // para o Vindex e o Vortex validarem o login
-      return json({ usuario: { id: ctx.usuario.id, email: ctx.usuario.email, nome: ctx.usuario.nome }, sessao: ctx.sessao, licenca: await licenca(env, ctx.usuario, origem, false) });
+      return json({ usuario: perfilPublico(ctx.usuario), app: null, sessao: ctx.sessao, licenca: await licenca(env, ctx.usuario, origem, false) });
     }
+    if (caminho === "/id/conta" && req.method === "GET") { // tudo para o avatar: perfil, licença e este aparelho
+      const lic = await licenca(env, ctx.usuario, origem, false);
+      return json({ usuario: perfilPublico(ctx.usuario), licenca: lic, sessao: ctx.sessao, dispositivo: ctx.dispositivo });
+    }
+    if (caminho === "/id/perfil" && req.method === "PUT") return json({ usuario: await salvarPerfil(env, ctx, await corpo(req)) });
+    if (caminho === "/id/app-token" && req.method === "POST") return json(await tokenDeApp(env, ctx, String((await corpo(req)).app || "")));
     if (caminho === "/id/eu" && req.method === "GET") return json({ id: ctx.usuario.id, email: ctx.usuario.email, nome: ctx.usuario.nome, loja: ctx.usuario.loja });
     if (caminho === "/id/renovar" && req.method === "POST") return json({ ...(await renovarToken(env, ctx)), licenca: await licenca(env, ctx.usuario, origem, false) });
     if (caminho === "/id/sair" && req.method === "POST") { await encerrarSessao(env, ctx.usuario.id, ctx.sessao, "saiu"); return json({ ok: true }); }
