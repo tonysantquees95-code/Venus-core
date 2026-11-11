@@ -67,7 +67,7 @@ test("rotas /dev exigem o token de superadmin; token de lojista (mesmo válido) 
   assert.ok(ehAdmin(env, "  VETORIALTECH.DEV@gmail.com "));
 });
 
-test("painel: projetos, fases e progresso (Vindex/Vortex sem repositório ficam desconectados)", async () => {
+test("painel: projetos, fases e progresso (Vortex sem repositório fica desconectado)", async () => {
   const env = ENV();
   const a = await admin(env);
   const { d } = await chamar(env, a.token, "/dev/painel");
@@ -75,7 +75,8 @@ test("painel: projetos, fases e progresso (Vindex/Vortex sem repositório ficam 
   const venus = d.projetos[0];
   assert.ok(venus.fases.length >= 8);
   assert.equal(venus.conectado, false); // sem GITHUB_TOKEN no teste
-  assert.equal(d.projetos[2].repo, null);
+  assert.equal(d.projetos[2].repo, "tonysantquees95-code/Vindex-");
+  assert.equal(d.projetos[3].repo, null);
   const nova = await chamar(env, a.token, "/dev/fases", "POST", { projeto: "vindex", titulo: "Telemetria de hardware", progresso: 40 });
   assert.equal(nova.status, 201);
   assert.equal(nova.d.status, "em_andamento");
@@ -91,11 +92,11 @@ test("painel: projetos, fases e progresso (Vindex/Vortex sem repositório ficam 
 test("repositório de projeto: aceita dono/repo e URL, recusa lixo", async () => {
   const env = ENV();
   const a = await admin(env);
-  const ok = await chamar(env, a.token, "/dev/config", "PUT", { chave: "repo:vindex", valor: "https://github.com/tonysantquees95-code/Vindex.git" });
-  assert.equal(ok.d.valor, "tonysantquees95-code/Vindex");
-  assert.equal((await chamar(env, a.token, "/dev/config", "PUT", { chave: "repo:vindex", valor: "../../etc" })).status, 400);
+  const ok = await chamar(env, a.token, "/dev/config", "PUT", { chave: "repo:vortex", valor: "https://github.com/tonysantquees95-code/Vortex.git" });
+  assert.equal(ok.d.valor, "tonysantquees95-code/Vortex");
+  assert.equal((await chamar(env, a.token, "/dev/config", "PUT", { chave: "repo:vortex", valor: "../../etc" })).status, 400);
   assert.equal((await chamar(env, a.token, "/dev/config", "PUT", { chave: "repo:venus", valor: "x/y" })).status, 400);
-  assert.equal((await chamar(env, a.token, "/dev/painel")).d.projetos[2].repo, "tonysantquees95-code/Vindex");
+  assert.equal((await chamar(env, a.token, "/dev/painel")).d.projetos[3].repo, "tonysantquees95-code/Vortex");
 });
 
 test("tráfego: normaliza rotas, ignora /dev e /saude e calcula o resumo", async () => {
@@ -239,4 +240,15 @@ test("atalhos curtos: /venus, /venus/android, /venus/windows e /paineldev", asyn
   assert.equal(responderAtalho(u, "/venus/windows").headers.get("location"), "https://v.test/atualizacao?app=windows&baixar=1");
   assert.equal(responderAtalho(u, "/venus/android").headers.get("location"), "https://v.test/atualizacao?app=venus&baixar=1");
   assert.match(await responderAtalho(u, "/venus").text(), /Baixar para Windows/);
+});
+
+test("atalhos do Vindex e projeto Vindex ligado ao repositório", async () => {
+  const u = new URL("https://v.test/x");
+  assert.equal(ehAtalho("/vindex/windows"), true);
+  assert.equal(responderAtalho(u, "/vindex/android").headers.get("location"), "https://github.com/tonysantquees95-code/Vindex-/releases/latest/download/Vindex.apk");
+  assert.match(await responderAtalho(u, "/vindex").text(), /<h1>Vindex<\/h1>[\s\S]*\/vindex\/windows/);
+  const p = PROJETOS.find((x) => x.id === "vindex");
+  assert.equal(p.repo, "tonysantquees95-code/Vindex-");
+  const apks = apksDoProjeto(p, [{ tag_name: "1.7", html_url: "u", assets: [{ id: 1, name: "Vindex.apk", size: 1 }, { id: 2, name: "VindexSetup.exe", size: 2 }] }]);
+  assert.equal(apks.find((a) => a.app === "vindex-windows").versao.numero, 7);
 });

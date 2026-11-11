@@ -1,6 +1,7 @@
 // Dados dos repositórios para o Painel Dev: métricas de código, estado dos builds e APKs publicados.
 // Usa o GITHUB_TOKEN (só leitura) do Worker. Tudo guardado em cache por alguns minutos.
 export const REPO_VENUS = "tonysantquees95-code/Venus-core";
+export const REPO_VINDEX = "tonysantquees95-code/Vindex-";
 export const REPO_DEV_CENTER = "tonysantquees95-code/vetorial-dev-center";
 
 /** Projetos do ecossistema. Vindex e Vortex ganham repositório pelo painel (dev_config "repo:<id>") ou pela variável do Worker. */
@@ -18,7 +19,14 @@ export const PROJETOS = [
     descricao: "Este painel: site (PWA) e APK Dev do administrador.",
     apks: [{ app: "dev", rotulo: "Vetorial Dev (este painel)", tag: /^dev-1\.(\d+)$/, arquivo: (n) => /\.apk$/i.test(n) }],
   },
-  { id: "vindex", nome: "Vindex", repo: "", descricao: "Ainda sem repositório ligado ao painel.", apks: [{ app: "vindex", rotulo: "Vindex (Android)", tag: /^v?\d+\.(\d+)(?:\.\d+)?$/, arquivo: (n) => /\.apk$/i.test(n) }] },
+  {
+    id: "vindex", nome: "Vindex", repo: REPO_VINDEX,
+    descricao: "Otimizador de hardware e organizador de arquivos: Windows (Tauri) e Android.",
+    apks: [
+      { app: "vindex-android", rotulo: "Vindex (Android)", tag: /^1\.(\d+)$/, arquivo: (n) => /^Vindex\.apk$/i.test(n) },
+      { app: "vindex-windows", rotulo: "Vindex (Windows)", tag: /^1\.(\d+)$/, arquivo: (n) => /^VindexSetup\.exe$/i.test(n) },
+    ],
+  },
   { id: "vortex", nome: "Vortex", repo: "", descricao: "Ainda sem repositório ligado ao painel.", apks: [{ app: "vortex", rotulo: "Vortex (Android)", tag: /^v?\d+\.(\d+)(?:\.\d+)?$/, arquivo: (n) => /\.apk$/i.test(n) }] },
 ];
 
