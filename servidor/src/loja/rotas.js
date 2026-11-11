@@ -2,7 +2,7 @@
 import { conector } from "../canais/index.js";
 import { ErroCanal } from "../canais/comum.js";
 import { hmacHex, iguais, segredoDoCanal } from "./cripto.js";
-import { acessoLiberado, ErroLoja, lojaDoPedido, registrarLoja } from "./lojas.js";
+import { acessoLiberado, comPrivilegios, ErroLoja, lojaDoPedido, registrarLoja } from "./lojas.js";
 import { endereco, esc, html, corValida, paginaDaVitrine, paginaDoProduto, RESERVADAS, urlHttps, validarCodigo, soDigitos } from "./vitrine.js";
 import { aleatorio } from "./cripto.js";
 import { ehServico, tratarServico } from "./servicos.js";
@@ -68,8 +68,10 @@ export async function tratarPublico(req, env, url, caminho) {
   const curto = env.DOMINIO_CURTO && url.hostname === env.DOMINIO_CURTO;
   m = curto ? /^\/([a-z0-9-]{3,32})(?:\/([^/]+))?$/.exec(caminho) : /^\/v\/([a-z0-9-]{3,32})(?:\/([^/]+))?$/.exec(caminho);
   if (!m || (curto && RESERVADAS.has(m[1]))) return null;
-  const loja = await env.DB.prepare("SELECT * FROM lojas WHERE slug = ?").bind(m[1]).first();
-  if (!loja || !acessoLiberado(loja)) return html("<!doctype html><meta charset=utf-8><body style='font-family:sans-serif;background:#070a1c;color:#fff;text-align:center;padding:60px'><h2>Loja não encontrada</h2>", 404, "no-store");
+  const loja = await comPrivilegios(env, await env.DB.prepare("SELECT * FROM lojas WHERE slug = ?").bind(m[1]).first());
+  const aviso = (t, s) => html(`<!doctype html><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><body style='font-family:sans-serif;background:#070a1c;color:#fff;text-align:center;padding:60px 20px'><h2>${t}</h2><p style='color:#8b95c0'>${s}</p>`, 404, "no-store");
+  if (!loja) return aviso("Loja não encontrada", "Confira o endereço do link.");
+  if (!acessoLiberado(loja)) return aviso("Loja temporariamente fora do ar", "O responsável por esta loja está renovando a assinatura. Volte em breve.");
   const { results } = await env.DB.prepare("SELECT * FROM produtos WHERE loja = ? ORDER BY nome LIMIT 500").bind(loja.id).all();
   const produtos = results.map((p) => ({ ...p, atributos: JSON.parse(p.atributos || "{}"), oculto: !!p.oculto }));
   const base = endereco(env, req, loja.slug);
@@ -97,7 +99,7 @@ export async function tratarLoja(req, env, ctx, url, caminho) {
     if (m && req.method === "POST") {
       const canal = await env.DB.prepare("SELECT * FROM canais WHERE id = ? AND plataforma = ?").bind(m[2], m[1]).first();
       if (!canal || !iguais(m[3], await segredoDoCanal(env, canal.id))) return json({ error: "não encontrado" }, 404);
-      const loja = await env.DB.prepare("SELECT * FROM lojas WHERE id = ?").bind(canal.loja).first();
+      const loja = await comPrivilegios(env, await env.DB.prepare("SELECT * FROM lojas WHERE id = ?").bind(canal.loja).first());
       if (!loja || !acessoLiberado(loja)) return json({ ok: true, ignorado: "acesso_expirado" });
       try {
         const r = await tratarWebhook(env, canal, req.headers, await lerCorpo(req, 500_000));
