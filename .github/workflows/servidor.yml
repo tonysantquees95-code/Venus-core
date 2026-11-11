@@ -176,6 +176,7 @@ jobs:
           fi
           printf '%s' "$DEV_CONVITE" | $WRANGLER secret put DEV_CONVITE
           if [ "$derivado" = "sim" ]; then
+            echo "Convite do Painel Dev (repositório privado): $DEV_CONVITE"
             echo "### Painel Dev: convite do primeiro acesso" >> "$GITHUB_STEP_SUMMARY"
             echo "Código: \`$DEV_CONVITE\` (só é usado uma vez, para criar a senha do administrador; para trocar, crie o segredo DEV_CONVITE no repositório)." >> "$GITHUB_STEP_SUMMARY"
           fi
