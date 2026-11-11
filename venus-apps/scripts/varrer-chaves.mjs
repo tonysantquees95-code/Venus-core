@@ -3,8 +3,8 @@ import { readdirSync, readFileSync, statSync, existsSync } from "node:fs";
 import { join, relative } from "node:path";
 
 const raiz = new URL("../..", import.meta.url).pathname; // raiz do repositório
-const IGNORAR = new Set(["node_modules", ".git", ".gradle", "build", ".wrangler", "package-lock.json", "varrer-chaves.mjs"]);
-const ALVOS = ["app/src/main", "venus-apps/apps", "venus-apps/packages", "robo"].filter((p) => existsSync(join(raiz, p)));
+const IGNORAR = new Set(["node_modules", "dist-desktop", ".git", ".gradle", "build", ".wrangler", "package-lock.json", "varrer-chaves.mjs"]);
+const ALVOS = ["app/src/main", "venus-apps/apps", "venus-apps/packages", "venus-apps/desktop", "robo"].filter((p) => existsSync(join(raiz, p)));
 const PADROES = [
   [/AIza[0-9A-Za-z_-]{30,}/, "chave do Google/Gemini"],
   [/\bgsk_[A-Za-z0-9]{20,}/, "chave do Groq"],

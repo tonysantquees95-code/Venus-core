@@ -1,0 +1,27 @@
+{
+  "name": "venus-desktop",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Vênus para Windows (Vetorial Tech): dashboard completo com bandeja do sistema, atalho global e notificações nativas.",
+  "author": "Vetorial Tech",
+  "license": "UNLICENSED",
+  "main": "main.js",
+  "scripts": {
+    "copiar": "node copiar.mjs",
+    "teste": "node --test teste/status.test.mjs",
+    "start": "npm run copiar && electron .",
+    "build:win": "npm run copiar && electron-builder --win nsis portable --publish never"
+  },
+  "devDependencies": {
+    "electron": "^33.2.0",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "tech.vetorial.venus",
+    "productName": "Vênus",
+    "directories": { "output": "dist", "buildResources": "build" },
+    "files": ["main.js", "preload.js", "status.mjs", "app/**", "build/tray.png"],
+    "win": { "icon": "build/icon.ico", "target": ["nsis", "portable"], "artifactName": "Venus-Windows-${version}.${ext}" },
+    "nsis": { "oneClick": false, "perMachine": false, "allowToChangeInstallationDirectory": true, "shortcutName": "Vênus" }
+  }
+}

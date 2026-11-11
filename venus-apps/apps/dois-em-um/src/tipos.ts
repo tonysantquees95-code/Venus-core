@@ -1,4 +1,4 @@
-export type Tela = "chat" | "robo" | "tema";
+export type Tela = "chat" | "robo" | "tema" | "ajustes";
 
 export interface Mensagem {
   id: string;

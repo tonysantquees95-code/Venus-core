@@ -18,6 +18,8 @@ export function criarConfigVite({ nome, nomeCurto, descricao, corTema, corFundo,
           VitePWA({
             registerType: "autoUpdate",
             includeAssets: ["icons/*.png"],
+            // iOS: o service worker assume o controle na hora e limpa caches antigos (o Safari apaga caches de apps esquecidos)
+            injectRegister: "auto",
             manifest: {
               name: nome,
               short_name: nomeCurto,
@@ -25,17 +27,29 @@ export function criarConfigVite({ nome, nomeCurto, descricao, corTema, corFundo,
               lang: "pt-BR",
               start_url: "/",
               scope: "/",
+              id: "/",
               display: "standalone",
+              display_override: ["standalone", "minimal-ui"],
+              categories: ["business", "productivity"],
               orientation: "portrait",
               theme_color: corTema,
               background_color: corFundo,
               icons: [
                 { src: "icons/pwa-192.png", sizes: "192x192", type: "image/png" },
+                { src: "icons/apple-touch-180.png", sizes: "180x180", type: "image/png" },
                 { src: "icons/pwa-512.png", sizes: "512x512", type: "image/png" },
                 { src: "icons/pwa-512.png", sizes: "512x512", type: "image/png", purpose: "maskable" }
               ]
             },
-            workbox: { navigateFallback: "/index.html", globPatterns: ["**/*.{js,css,html,png,svg,woff2}"] }
+            workbox: {
+              navigateFallback: "/index.html",
+              // chamadas ao servidor (login, sincronização, /id, /v1) nunca vêm do cache
+              navigateFallbackDenylist: [/^\/id(\/|$)/, /^\/v1\//, /^\/loja\//],
+              globPatterns: ["**/*.{js,css,html,png,svg,woff2}"],
+              cleanupOutdatedCaches: true,
+              clientsClaim: true,
+              skipWaiting: true
+            }
           })
       ].filter(Boolean)
     };
