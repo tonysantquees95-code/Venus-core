@@ -55,7 +55,7 @@ class Formulario(private val activity: Activity, titulo: String, subtitulo: Stri
             background = GradientDrawable().apply {
                 gradientType = GradientDrawable.RADIAL_GRADIENT
                 gradientRadius = dp(260).toFloat()
-                colors = intArrayOf(Color.argb(70, 227, 107, 208), Color.TRANSPARENT)
+                colors = intArrayOf(Aparencia.comAlfa(70), Color.TRANSPARENT)
             }
         }, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(320)))
 
@@ -170,7 +170,7 @@ class Formulario(private val activity: Activity, titulo: String, subtitulo: Stri
             setPadding(dp(18), dp(16), dp(18), dp(16))
             background = GradientDrawable().apply {
                 cornerRadius = dp(22).toFloat()
-                setColor(if (marcada) Color.argb(60, 227, 107, 208) else CARTAO)
+                setColor(if (marcada) Aparencia.comAlfa(60) else CARTAO)
                 setStroke(dp(if (marcada) 2 else 1), if (marcada) DESTAQUE else BORDA)
             }
             isClickable = true
@@ -277,7 +277,7 @@ class Formulario(private val activity: Activity, titulo: String, subtitulo: Stri
         typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
         isAllCaps = false
         setPadding(dp(16), dp(13), dp(16), dp(13))
-        setTextColor(if (primario) Color.WHITE else DESTAQUE)
+        setTextColor(if (primario) (if (Tema.escuraDemais(Aparencia.destaque and 0xFFFFFF)) Color.WHITE else Color.parseColor("#06081A")) else DESTAQUE)
         background = if (primario) pilulaCheia() else pilulaContorno()
         isClickable = true
         isFocusable = true
@@ -330,7 +330,7 @@ class Formulario(private val activity: Activity, titulo: String, subtitulo: Stri
         setPadding(dp(4), dp(8), 0, dp(4))
         val estados = arrayOf(intArrayOf(android.R.attr.state_checked), intArrayOf())
         thumbTintList = ColorStateList(estados, intArrayOf(DESTAQUE, Color.parseColor("#9A93B5")))
-        trackTintList = ColorStateList(estados, intArrayOf(Color.argb(120, 227, 107, 208), Color.parseColor("#2A2440")))
+        trackTintList = ColorStateList(estados, intArrayOf(Aparencia.comAlfa(120), Color.parseColor("#2A2440")))
     }
 
     /** Foto em destaque, com cantos arredondados (fica escondida até ter foto). */
@@ -399,18 +399,18 @@ class Formulario(private val activity: Activity, titulo: String, subtitulo: Stri
         })
     }
 
-    private fun pilulaCheia() = GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT, intArrayOf(Color.parseColor("#E36BD0"), Color.parseColor("#9B5CF6"))).apply {
+    private fun pilulaCheia() = GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT, intArrayOf(Aparencia.destaque, Aparencia.par())).apply {
         cornerRadius = dp(26).toFloat()
     }
 
     private fun pilulaContorno() = GradientDrawable().apply {
         cornerRadius = dp(26).toFloat()
-        setColor(Color.argb(26, 227, 107, 208))
-        setStroke(dp(1), Color.argb(150, 227, 107, 208))
+        setColor(Aparencia.comAlfa(26))
+        setStroke(dp(1), Aparencia.comAlfa(150))
     }
 
     companion object {
-        val DESTAQUE = Color.parseColor("#E36BD0")
+        val DESTAQUE: Int get() = Aparencia.destaque
         val FUNDO_1 = Color.parseColor("#0D0A1F")
         val FUNDO_2 = Color.parseColor("#05040D")
         val CARTAO = Color.argb(150, 24, 19, 44)

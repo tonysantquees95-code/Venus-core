@@ -2,7 +2,7 @@ package com.tonimarques.sextafeira
 
 import android.graphics.Color
 import android.graphics.drawable.GradientDrawable
-import android.widget.ImageButton
+import android.widget.ImageView
 
 /**
  * Visual de um botão de ícone conforme o pacote escolhido. Usado na tela principal e na prévia da Aparência,
@@ -11,7 +11,7 @@ import android.widget.ImageButton
 object EstiloDeIcone {
     private val ESCURO = Color.parseColor("#06081A")
 
-    fun aplicar(b: ImageButton, pacote: Tema.Icones, cor: Int, comFundo: Boolean, apagado: Boolean, dp: (Int) -> Int) {
+    fun aplicar(b: ImageView, pacote: Tema.Icones, cor: Int, comFundo: Boolean, apagado: Boolean, dp: (Int) -> Int) {
         b.background = null
         b.clearColorFilter()
         when (pacote) {

@@ -48,7 +48,7 @@ class TelaDeAjustes(
 
     class Secao(val titulo: String, val itens: List<Ajuste>)
 
-    private var cor = Color.parseColor("#E36BD0")
+    private var cor = Aparencia.destaque
     private val cabecalhos = mutableListOf<TextView>()
     private val atualizadores = mutableListOf<() -> Unit>()
     private val interruptores = mutableListOf<Interruptor>()
@@ -98,9 +98,9 @@ class TelaDeAjustes(
         }
         val voltar = ImageButton(context).apply {
             setImageResource(R.drawable.ic_voltar)
-            setColorFilter(COR_APAGADA)
-            background = null
             contentDescription = "Voltar"
+            if (Aparencia.pacote == Tema.Icones.VENUS) { setColorFilter(COR_APAGADA); background = null }
+            else EstiloDeIcone.aplicar(this, Aparencia.pacote, cor, true, false, ::dp)
             setPadding(dp(10), dp(10), dp(10), dp(10))
             setOnClickListener { dismiss() }
         }
@@ -128,6 +128,7 @@ class TelaDeAjustes(
 
         // Orbe pequeno: a cor dele comanda a cor de destaque da tela
         orbe = Orbe(context).apply {
+            (activity as? MainActivity)?.prefs?.let { aplicarTema(Tema.modelo(it), Tema.cor(it)) }
             aoMudarCor = { c -> recolorir(c) }
             isClickable = false
         }
@@ -285,7 +286,7 @@ class TelaDeAjustes(
         } else {
             linha.addView(ImageView(context).apply {
                 setImageResource(R.drawable.ic_seta)
-                setColorFilter(Color.argb(140, 138, 147, 184))
+                setColorFilter(if (Aparencia.pacote == Tema.Icones.VENUS) Color.argb(140, 138, 147, 184) else Aparencia.comAlfa(200))
             }, LinearLayout.LayoutParams(dp(20), dp(20)))
         }
         atualizadores += {

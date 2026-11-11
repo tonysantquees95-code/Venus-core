@@ -170,7 +170,11 @@ class Gaveta(private val a: MainActivity) : FrameLayout(a) {
         background = a.vidro(Color.argb(14, 255, 255, 255), Color.argb(40, 255, 255, 255), 16)
         isClickable = true
         setOnClickListener { acao() }
-        addView(ImageView(a).apply { setImageResource(icone) }, LinearLayout.LayoutParams(a.dp(28), a.dp(28)))
+        addView(ImageView(a).apply {
+            setImageResource(icone)
+            setPadding(a.dp(6), a.dp(6), a.dp(6), a.dp(6))
+            EstiloDeIcone.aplicar(this, if (Aparencia.pacote == Tema.Icones.VENUS) Tema.Icones.LINHA else Aparencia.pacote, a.corAtual, true, false, a::dp)
+        }, LinearLayout.LayoutParams(a.dp(38), a.dp(38)))
         val textos = LinearLayout(a).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(a.dp(12), 0, 0, 0)
