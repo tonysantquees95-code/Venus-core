@@ -58,8 +58,8 @@ internal fun MainActivity.primeirosPassos() {
         Triple("Voz neural da Microsoft (opcional)", VozNeural.chave(this).isNotBlank()) { configurarVozNeural() },
     )
     val feitos = passos.count { it.second }
-    val itens = passos.map { (nome, feito, acao) -> TelaDeAjustes.Ajuste(nome, { if (feito) "Feito" else "Falta fazer" }, null, { feito }) { acao() } }
-    TelaDeAjustes(this, versaoDoApp(), listOf(TelaDeAjustes.Secao("Primeiros passos ($feitos de ${passos.size})", itens)), "PRIMEIROS PASSOS", compacto = true).show()
+    val itens = passos.map { (nome, feito, acao) -> TelaDeAjustes.Ajuste(nome, { if (feito) "✓ Feito" else "Falta fazer" }) { acao() } }
+    TelaDeAjustes(this, versaoDoApp(), listOf(TelaDeAjustes.Secao("Primeiros passos ($feitos de ${passos.size})", itens)), "PRIMEIROS PASSOS").show()
 }
 
 internal fun MainActivity.editarPerfil() {
