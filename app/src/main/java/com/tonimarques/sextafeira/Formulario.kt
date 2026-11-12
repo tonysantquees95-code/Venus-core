@@ -331,6 +331,7 @@ class Formulario(private val activity: Activity, titulo: String, subtitulo: Stri
         val estados = arrayOf(intArrayOf(android.R.attr.state_checked), intArrayOf())
         thumbTintList = ColorStateList(estados, intArrayOf(DESTAQUE, Color.parseColor("#9A93B5")))
         trackTintList = ColorStateList(estados, intArrayOf(Aparencia.comAlfa(120), Color.parseColor("#2A2440")))
+        Aparencia.pintar(this)
     }
 
     /** Foto em destaque, com cantos arredondados (fica escondida até ter foto). */

@@ -105,12 +105,42 @@ export async function buildsDoRepo(env, repo) {
       if (!r.ok) return null;
       const vistos = new Map();
       for (const x of (await r.json()).workflow_runs || []) {
-        if (!vistos.has(x.name)) vistos.set(x.name, { workflow: x.name, estado: x.status, resultado: x.conclusion, numero: x.run_number, commit: String(x.head_sha || "").slice(0, 7), quando: Date.parse(x.updated_at) || 0, url: x.html_url });
+        if (!vistos.has(x.name)) vistos.set(x.name, { id: x.id, workflow: x.name, estado: x.status, resultado: x.conclusion, numero: x.run_number, commit: String(x.head_sha || "").slice(0, 7), quando: Date.parse(x.updated_at) || 0, url: x.html_url });
       }
       return [...vistos.values()];
     } catch (e) {
       console.error("builds", repo, e && e.message);
       return null;
+    }
+  });
+}
+
+/** Quanto de uma compilação já andou, pelos passos dos jobs (puro, testado). Sem passos ainda, cada job conta como um passo. */
+export function percentualDosJobs(jobs) {
+  let total = 0, feitos = 0, atual = "";
+  for (const j of jobs || []) {
+    const passos = Array.isArray(j.steps) && j.steps.length ? j.steps : [{ name: j.name, status: j.status }];
+    for (const p of passos) {
+      total++;
+      if (p.status === "completed") feitos++;
+      else if (!atual && p.status === "in_progress") atual = p.name || "";
+    }
+  }
+  return { percentual: total ? Math.min(99, Math.round((feitos / total) * 100)) : 0, etapa: atual };
+}
+
+/** Progresso da compilação em andamento (null se nada está compilando). */
+export async function progressoDoBuild(env, repo, builds) {
+  const b = (builds || []).find((x) => x.estado !== "completed" && x.id);
+  if (!b) return null;
+  return comCache(`jobs:${repo}:${b.id}`, 15, async () => {
+    try {
+      const r = await gh(env, `/repos/${repo}/actions/runs/${b.id}/jobs?per_page=30`);
+      if (!r.ok) return { workflow: b.workflow, percentual: 0, etapa: "" };
+      return { workflow: b.workflow, ...percentualDosJobs((await r.json()).jobs) };
+    } catch (e) {
+      console.error("jobs", repo, e && e.message);
+      return { workflow: b.workflow, percentual: 0, etapa: "" };
     }
   });
 }
