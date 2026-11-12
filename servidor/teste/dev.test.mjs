@@ -365,3 +365,22 @@ test("progresso da compilação: passos feitos sobre o total, nunca 100% antes d
   assert.equal(percentualDosJobs([]).percentual, 0);
   assert.equal(percentualDosJobs([{ name: "x", status: "queued" }]).percentual, 0);
 });
+
+test("DeepSeek lê a chave do cofre (cifrada) e, sem ela, do segredo do Worker", async () => {
+  const { deepseek } = await import("../src/ia/provedores.js");
+  const { guardar } = await import("../src/dev/cofre.js");
+  const env = ENV();
+  const orig = globalThis.fetch;
+  let cabecalho = "";
+  globalThis.fetch = async (_u, init) => { cabecalho = init.headers.authorization; return new Response(JSON.stringify({ choices: [{ message: { content: "oi" } }], model: "m" }), { status: 200 }); };
+  try {
+    const p = { tarefa: "codigo", mensagens: [{ papel: "user", texto: "x" }], temperatura: 0.2, maxTokens: 10 };
+    await assert.rejects(() => deepseek(env, p), /sem_chave/);
+    env.DEEPSEEK_API_KEY = "chave-do-worker-123";
+    await deepseek(env, p);
+    assert.equal(cabecalho, "Bearer chave-do-worker-123");
+    await guardar(env, { nome: "DEEPSEEK_API_KEY", valor: "sk-do-cofre-456789" });
+    await deepseek(env, p);
+    assert.equal(cabecalho, "Bearer sk-do-cofre-456789");
+  } finally { globalThis.fetch = orig; }
+});
