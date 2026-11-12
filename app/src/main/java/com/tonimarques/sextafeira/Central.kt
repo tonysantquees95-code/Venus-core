@@ -32,8 +32,43 @@ internal fun MainActivity.pedirNuvem(metodo: String, caminho: String, corpo: JSO
     }
 }
 
+/** O que a Central mostra sobre a loja: quantos produtos o site/catálogo tem, e o que já está na vitrine online. */
+private class ResumoDaLoja(val produtosLidos: Int?, val vitrineUrl: String?, val publicados: Int?, val erro: String?)
+
+/** Lê o catálogo da loja (site conectado ou interno) e manda o perfil e os produtos para a vitrine. Bloqueante: chame em segundo plano. */
+private fun MainActivity.sincronizarVitrine(): ResumoDaLoja {
+    var erro: String? = null
+    val produtos = try { if (ferramentas.loja.conectada) ferramentas.loja.produtos() else null } catch (e: Exception) { erro = e.message; null }
+    var url: String? = null
+    var publicados: Int? = null
+    try {
+        val atual = Nuvem.pedir(this, "GET", "/loja/vitrine")
+        val descAtual = if (atual.ok) atual.json.optString("descricao") else ""
+        val perfil = JSONObject()
+        // o que o dono personalizou na vitrine (título e cor) não é trocado por esta sincronização
+        if (!prefs.getBoolean("vitrine_personalizada", false)) perfil.put("titulo", Perfil.loja).put("cor", Paleta.hex(marcaAtual().cor))
+        perfil.put("descricao", descAtual.ifBlank { VitrineDoApp.descricao(Perfil.ramo, Perfil.cidade, Perfil.uf) })
+        val zap = DadosDaLoja.guardado(prefs, DadosDaLoja.PREF_WHATSAPP)
+        if (zap.isNotBlank()) perfil.put("whatsapp", zap)
+        val r1 = Nuvem.pedir(this, "PUT", "/loja/vitrine", perfil)
+        if (r1.ok) url = r1.json.optString("url") else erro = erro ?: r1.erro()
+        if (produtos != null) {
+            val r2 = Nuvem.pedir(this, "PUT", "/loja/vitrine/itens", JSONObject().put("produtos", VitrineDoApp.itens(produtos)))
+            if (r2.ok) publicados = r2.json.optInt("itens") else erro = erro ?: r2.erro()
+        }
+    } catch (e: Exception) {
+        erro = erro ?: e.message
+    }
+    return ResumoDaLoja(produtos?.size, url, publicados, erro)
+}
+
 internal fun MainActivity.abrirCentral() {
     atualizarIdentidadeDoSite()
+    aviso("Abrindo a sua loja…")
+    emFundo({ sincronizarVitrine() }) { r -> montarCentral(r.getOrNull()) }
+}
+
+private fun MainActivity.montarCentral(resumo: ResumoDaLoja?) {
     val insta = Instagram.usuario(this).takeIf { Instagram.conectado(this) }
     val pref = prefs.getString(DadosDaLoja.PREF_LINK, "site").orEmpty()
     val whats = DadosDaLoja.guardado(prefs, DadosDaLoja.PREF_WHATSAPP)
@@ -41,7 +76,29 @@ internal fun MainActivity.abrirCentral() {
         DadosDaLoja.nomeDoLink(pref, Perfil.site).lowercase(), Perfil.site.takeIf { it.isNotBlank() && pref != "vitrine" },
         DadosDaLoja.arroba(insta).takeIf { it.isNotBlank() }, DadosDaLoja.telefoneBonito(whats).takeIf { whats.isNotBlank() },
     ).joinToString(" · ") + "."
+    val comSite = Plataformas.tipo(this) != "interno" && Perfil.site.isNotBlank()
+    val lidos = resumo?.produtosLidos
+    val publicados = resumo?.publicados ?: 0
+    val erroDaVitrine = resumo?.erro?.let { " ($it)" } ?: ""
+    val situacao = when {
+        !ferramentas.loja.conectada -> if (comSite) "O site ainda não está conectado à Vênus: toque para conectar (Plataforma da loja)." else "Sem site: o catálogo fica aqui na Vênus e a vitrine é a sua página."
+        lidos == null -> "Não consegui ler o catálogo agora$erroDaVitrine."
+        comSite -> "Site ${Perfil.site.removePrefix("https://")} conectado · $lidos produtos lidos."
+        else -> "Catálogo da Vênus · $lidos produtos."
+    }
+    val vitrine = resumo?.vitrineUrl
     val s = listOf(
+        TelaDeAjustes.Secao(
+            "Minha loja · ${Perfil.loja}", listOf(
+                TelaDeAjustes.Ajuste("Perfil da loja", { Perfil.resumo() + " · " + Perfil.ramo }) { editarPerfil() },
+                TelaDeAjustes.Ajuste(if (comSite) "Site e catálogo" else "Catálogo da loja", { situacao }) { if (ferramentas.loja.conectada) abrirCatalogo() else escolherPlataforma() },
+                TelaDeAjustes.Ajuste("Vitrine online", {
+                    if (vitrine == null) "Não consegui publicar a vitrine agora$erroDaVitrine. Toque para tentar de novo."
+                    else "${vitrine.removePrefix("https://")} · $publicados produtos publicados com o seu nome e a sua cor."
+                }) { if (vitrine == null) abrirCentral() else try { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(vitrine))) } catch (e: Exception) { aviso("Não achei um navegador.") } },
+                TelaDeAjustes.Ajuste("Painel ao vivo", { "Faturamento, taxas e auditoria atualizando sozinhos, aqui dentro da Vênus." }) { abrirPainelDentro() },
+            )
+        ),
         TelaDeAjustes.Secao(
             "Atalhos prontos", listOf(
                 TelaDeAjustes.Ajuste("QR Code da minha loja", { usa }) { qrDaLoja() },
@@ -79,7 +136,7 @@ internal fun MainActivity.abrirCentral() {
             )
         ),
     )
-    telaDeLista("CENTRAL DA LOJA", s)
+    telaDeLista("MINHA LOJA", s)
 }
 
 // ------------------------------------------------------------------ canais
@@ -173,14 +230,7 @@ private fun MainActivity.mostrarMovimentos() {
 }
 
 // ------------------------------------------------------------------ painel e auditoria
-internal fun MainActivity.abrirPainel() {
-    emFundo({ Nuvem.garantirConta(this) }) { r ->
-        r.onFailure { aviso(it.mensagemAmigavel()) }
-        r.onSuccess {
-            try { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(Nuvem.enderecoDoPainel(this)))) } catch (e: Exception) { aviso("Não achei um navegador.") }
-        }
-    }
-}
+internal fun MainActivity.abrirPainel() = abrirPainelDentro()
 
 internal fun MainActivity.abrirAuditoria() {
     pedirNuvem("GET", "/bi/auditoria", carregando = "Varrendo o catálogo…") { j ->
@@ -204,7 +254,13 @@ internal fun MainActivity.abrirAuditoria() {
 }
 
 // ------------------------------------------------------------------ vitrine e links curtos
-internal fun MainActivity.abrirVitrine(anterior: TelaDeAjustes? = null) {
+internal fun MainActivity.abrirVitrine(anterior: TelaDeAjustes? = null, sincronizado: Boolean = false) {
+    // ao abrir pela primeira vez, a vitrine recebe o perfil e o catálogo da loja
+    if (anterior == null && !sincronizado) {
+        aviso("Atualizando a vitrine…")
+        emFundo({ sincronizarVitrine() }) { abrirVitrine(null, true) }
+        return
+    }
     pedirNuvem("GET", "/loja/vitrine", carregando = if (anterior == null) "Abrindo…" else null) { v ->
         pedirNuvem("GET", "/links") { l ->
             anterior?.dismiss()
@@ -245,7 +301,7 @@ private fun MainActivity.personalizarVitrine(v: JSONObject, tela: TelaDeAjustes?
         "Logo (endereço https, opcional)" to v.optString("logo"),
     ), "Salvar") { c ->
         val corpo = JSONObject().put("titulo", c[0]).put("descricao", c[1]).put("cor", c[2]).put("whatsapp", c[3]).put("logo", c[4])
-        pedirNuvem("PUT", "/loja/vitrine", corpo) { aviso("Vitrine atualizada."); abrirVitrine(tela) }
+        pedirNuvem("PUT", "/loja/vitrine", corpo) { prefs.edit().putBoolean("vitrine_personalizada", true).apply(); aviso("Vitrine atualizada."); abrirVitrine(tela) }
     }
 }
 

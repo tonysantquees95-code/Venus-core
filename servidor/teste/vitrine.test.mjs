@@ -118,3 +118,32 @@ test("vitrine abre mesmo com atributos quebrados e nunca devolve JSON cru em err
   assert.equal(falha.status, 500);
   assert.match(falha.headers.get("content-type"), /text\/html/);
 });
+
+test("o app envia o catálogo da loja e a vitrine mostra (dados do site conectado)", async () => {
+  const env = mk();
+  const l = await registrarLoja(env, { nome: "Sensações" });
+  assert.equal((await chamar(env, "PUT", "/loja/vitrine/itens", l.token, { produtos: "x" })).status, 400);
+  await chamar(env, "PUT", "/loja/vitrine", l.token, { titulo: "Desejo de Intimidade", descricao: "Moda íntima e sex shop", cor: "#c2399f" });
+  const r = await chamar(env, "PUT", "/loja/vitrine/itens", l.token, { produtos: [
+    { sku: "7", nome: "Conjunto Renda", preco_centavos: 12990, promocao_centavos: 9990, estoque: 4, imagem: "https://img.exemplo.com/a.jpg", categoria: "lingerie", descricao: "Renda <b>fina</b>" },
+    { sku: "8", nome: "Sem preço", preco_centavos: null },
+    { sku: "9", nome: "Esgotado", preco_centavos: 1000, estoque: 0 },
+    { sku: "7", nome: "Repetido", preco_centavos: 1 },
+    { nome: "Sem sku", preco_centavos: 5 },
+  ] });
+  assert.equal(r.status, 200);
+  assert.equal((await r.json()).itens, 3);
+  const h = await (await chamar(env, "GET", `/v/${l.slug}`)).text();
+  assert.ok(h.includes("Desejo de Intimidade") && h.includes("Conjunto Renda") && h.includes("99,90"));
+  assert.ok(!h.includes("Em breve") && !h.includes("Sem preço") && !h.includes("Esgotado") && !h.includes("Repetido"));
+  const p = await chamar(env, "GET", `/v/${l.slug}/7`);
+  assert.equal(p.status, 200);
+  assert.ok(!(await p.text()).includes("<b>fina</b>"));
+  // link curto de produto do app
+  assert.equal((await chamar(env, "POST", "/links", l.token, { sku: "7", codigo: "renda" })).status, 201);
+  // nova lista troca a anterior
+  await chamar(env, "PUT", "/loja/vitrine/itens", l.token, { produtos: [{ sku: "1", nome: "Outro", preco_centavos: 500 }] });
+  const h2 = await (await chamar(env, "GET", `/v/${l.slug}`)).text();
+  assert.ok(h2.includes("Outro") && !h2.includes("Conjunto Renda"));
+  assert.equal((await (await chamar(env, "GET", "/loja/vitrine", l.token)).json()).itensDoApp, 1);
+});

@@ -67,6 +67,19 @@ export async function tratarPublico(req, env, url, caminho) {
   }
 }
 
+/** Produtos da vitrine: os dos canais e, onde o sku não existe lá, os que o app enviou do catálogo da própria loja. */
+export async function produtosDaVitrine(env, lojaId) {
+  const { results } = await env.DB.prepare("SELECT * FROM produtos WHERE loja = ? ORDER BY nome LIMIT 500").bind(lojaId).all();
+  const produtos = results.map((p) => ({ ...p, atributos: lerAtributos(p.atributos), oculto: !!p.oculto }));
+  const vistos = new Set(produtos.map((p) => p.sku));
+  const { results: itens } = await env.DB.prepare("SELECT * FROM vitrine_itens WHERE loja = ? ORDER BY nome LIMIT 500").bind(lojaId).all();
+  for (const i of itens) {
+    if (vistos.has(i.sku)) continue;
+    produtos.push({ sku: i.sku, nome: i.nome, preco_centavos: i.preco_centavos, promocao_centavos: i.promocao_centavos, estoque: i.estoque, imagem: i.imagem, categoria: i.categoria, atributos: i.descricao ? { Descrição: i.descricao } : {}, oculto: false });
+  }
+  return produtos.sort((a, b) => String(a.nome).localeCompare(String(b.nome), "pt-BR"));
+}
+
 async function paginaPublica(req, env, url, caminho) {
   let m = /^\/l\/([a-z0-9-]{3,32})$/.exec(caminho);
   if (m) {
@@ -82,8 +95,7 @@ async function paginaPublica(req, env, url, caminho) {
   const aviso = (t, s) => html(`<!doctype html><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><body style='font-family:sans-serif;background:#070a1c;color:#fff;text-align:center;padding:60px 20px'><h2>${t}</h2><p style='color:#8b95c0'>${s}</p>`, 404, "no-store");
   if (!loja) return aviso("Loja não encontrada", "Confira o endereço do link.");
   if (!acessoLiberado(loja)) return aviso("Loja temporariamente fora do ar", "O responsável por esta loja está renovando a assinatura. Volte em breve.");
-  const { results } = await env.DB.prepare("SELECT * FROM produtos WHERE loja = ? ORDER BY nome LIMIT 500").bind(loja.id).all();
-  const produtos = results.map((p) => ({ ...p, atributos: lerAtributos(p.atributos), oculto: !!p.oculto }));
+  const produtos = await produtosDaVitrine(env, loja.id);
   const base = endereco(env, req, loja.slug);
   if (m[2]) {
     const sku = decodeURIComponent(m[2]);
@@ -176,8 +188,32 @@ export async function tratarLoja(req, env, ctx, url, caminho) {
         .bind(String(d.titulo ?? loja.titulo).slice(0, 80), String(d.descricao ?? loja.descricao).slice(0, 300), corValida(d.cor ?? loja.cor), logo ?? loja.logo, soDigitos(d.whatsapp ?? loja.whatsapp).slice(0, 15), loja.id).run();
       return json({ ok: true, url: endereco(env, req, loja.slug) });
     }
+    if (caminho === "/loja/vitrine/itens" && req.method === "PUT") {
+      exigeAcesso(loja);
+      const d = await corpoJson(req);
+      const lista = Array.isArray(d.produtos) ? d.produtos : null;
+      if (!lista) throw new ErroLoja(400, "itens_invalidos", "Envie a lista de produtos.");
+      if (lista.length > 500) throw new ErroLoja(400, "itens_demais", "A vitrine aceita até 500 produtos.");
+      const agora = Date.now();
+      const inteiro = (v) => (Number.isFinite(Number(v)) && v !== null && v !== "" ? Math.max(0, Math.round(Number(v))) : null);
+      const linhas = [];
+      const skus = new Set();
+      for (const p of lista) {
+        const sku = String(p?.sku ?? "").trim().slice(0, 64);
+        const nome = String(p?.nome ?? "").trim().slice(0, 140);
+        if (!sku || !nome || skus.has(sku)) continue;
+        skus.add(sku);
+        const imagem = p.imagem ? urlHttps(p.imagem) || "" : "";
+        linhas.push(env.DB.prepare("INSERT INTO vitrine_itens (loja, sku, nome, preco_centavos, promocao_centavos, estoque, categoria, imagem, descricao, atualizado) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+          .bind(loja.id, sku, nome, inteiro(p.preco_centavos), inteiro(p.promocao_centavos), inteiro(p.estoque) ?? 1, String(p.categoria ?? "").slice(0, 60), imagem, String(p.descricao ?? "").slice(0, 400), agora));
+      }
+      // troca tudo de uma vez: o que saiu do catálogo da loja sai da vitrine
+      await env.DB.batch([env.DB.prepare("DELETE FROM vitrine_itens WHERE loja = ?").bind(loja.id), ...linhas]);
+      return json({ ok: true, itens: linhas.length, url: endereco(env, req, loja.slug) });
+    }
     if (caminho === "/loja/vitrine" && req.method === "GET") {
-      return json({ url: endereco(env, req, loja.slug), titulo: loja.titulo, descricao: loja.descricao, cor: loja.cor, logo: loja.logo, whatsapp: loja.whatsapp });
+      const n = await env.DB.prepare("SELECT COUNT(*) AS n FROM vitrine_itens WHERE loja = ?").bind(loja.id).first();
+      return json({ url: endereco(env, req, loja.slug), titulo: loja.titulo, descricao: loja.descricao, cor: loja.cor, logo: loja.logo, whatsapp: loja.whatsapp, itensDoApp: n.n });
     }
     if (caminho === "/links" && req.method === "GET") {
       const { results } = await env.DB.prepare("SELECT codigo, destino, rotulo, cliques, criado FROM links WHERE loja = ? ORDER BY criado DESC LIMIT 200").bind(loja.id).all();
@@ -189,7 +225,8 @@ export async function tratarLoja(req, env, ctx, url, caminho) {
       const d = await corpoJson(req);
       let destino = d.destino ? urlHttps(d.destino) : null;
       if (!destino && d.sku) {
-        const p = await env.DB.prepare("SELECT sku FROM produtos WHERE loja = ? AND sku = ?").bind(loja.id, String(d.sku)).first();
+        const p = (await env.DB.prepare("SELECT sku FROM produtos WHERE loja = ? AND sku = ?").bind(loja.id, String(d.sku)).first())
+          || (await env.DB.prepare("SELECT sku FROM vitrine_itens WHERE loja = ? AND sku = ?").bind(loja.id, String(d.sku)).first());
         if (!p) throw new ErroLoja(404, "produto_inexistente", "Produto não encontrado.");
         destino = endereco(env, req, loja.slug, p.sku);
       } else if (!destino && d.vitrine) destino = endereco(env, req, loja.slug);
