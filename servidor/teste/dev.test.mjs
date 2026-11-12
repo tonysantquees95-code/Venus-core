@@ -67,7 +67,7 @@ test("rotas /dev exigem o token de superadmin; token de lojista (mesmo válido) 
   assert.ok(ehAdmin(env, "  VETORIALTECH.DEV@gmail.com "));
 });
 
-test("painel: projetos, fases e progresso (Vortex sem repositório fica desconectado)", async () => {
+test("painel: projetos, fases e progresso (Vortex já vem ligado ao repositório dele)", async () => {
   const env = ENV();
   const a = await admin(env);
   const { d } = await chamar(env, a.token, "/dev/painel");
@@ -76,7 +76,7 @@ test("painel: projetos, fases e progresso (Vortex sem repositório fica desconec
   assert.ok(venus.fases.length >= 8);
   assert.equal(venus.conectado, false); // sem GITHUB_TOKEN no teste
   assert.equal(d.projetos[2].repo, "tonysantquees95-code/Vindex-");
-  assert.equal(d.projetos[3].repo, null);
+  assert.equal(d.projetos[3].repo, "tonysantquees95-code/Vortex");
   const nova = await chamar(env, a.token, "/dev/fases", "POST", { projeto: "vindex", titulo: "Telemetria de hardware", progresso: 40 });
   assert.equal(nova.status, 201);
   assert.equal(nova.d.status, "em_andamento");
