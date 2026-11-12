@@ -17,6 +17,15 @@ export const urlHttps = (u) => {
     return null;
   }
 };
+/** Atributos vêm de canais externos: JSON quebrado não pode derrubar a página inteira. */
+export function lerAtributos(t) {
+  try {
+    const o = typeof t === "string" ? JSON.parse(t || "{}") : t;
+    return o && typeof o === "object" && !Array.isArray(o) ? o : {};
+  } catch {
+    return {};
+  }
+}
 export const soDigitos = (t) => String(t || "").replace(/\D/g, "");
 
 export function validarCodigo(codigo) {

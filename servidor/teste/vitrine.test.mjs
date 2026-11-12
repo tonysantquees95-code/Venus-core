@@ -104,3 +104,17 @@ test("vitrine com teste vencido mostra aviso claro; a do dono (admin) nunca sai 
   const ok = await chamar(env, "GET", `/v/${l.slug}`);
   assert.equal(ok.status, 200);
 });
+
+test("vitrine abre mesmo com atributos quebrados e nunca devolve JSON cru em erro", async () => {
+  const env = mk();
+  const l = await registrarLoja(env, { nome: "Quebrada" });
+  await env.DB.prepare("INSERT INTO produtos (loja, sku, nome, preco_centavos, estoque, oculto, atualizado, atributos) VALUES (?,?,?,?,?,?,?,?)").bind(l.id, "Z1", "Produto", 1000, 2, 0, Date.now(), "{quebrado").run();
+  const r = await chamar(env, "GET", `/v/${l.slug}`);
+  assert.equal(r.status, 200);
+  assert.ok((await r.text()).includes("Produto"));
+  const p = await chamar(env, "GET", `/v/${l.slug}/Z1`);
+  assert.equal(p.status, 200);
+  const falha = await chamar({ ...env, DB: { prepare() { throw new Error("banco fora"); } } }, "GET", `/v/${l.slug}`);
+  assert.equal(falha.status, 500);
+  assert.match(falha.headers.get("content-type"), /text\/html/);
+});

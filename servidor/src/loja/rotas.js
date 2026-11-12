@@ -3,7 +3,7 @@ import { conector } from "../canais/index.js";
 import { ErroCanal } from "../canais/comum.js";
 import { hmacHex, iguais, segredoDoCanal } from "./cripto.js";
 import { acessoLiberado, comPrivilegios, ErroLoja, lojaDoPedido, registrarLoja } from "./lojas.js";
-import { endereco, esc, html, corValida, paginaDaVitrine, paginaDoProduto, RESERVADAS, urlHttps, validarCodigo, soDigitos } from "./vitrine.js";
+import { endereco, esc, html, corValida, lerAtributos, paginaDaVitrine, paginaDoProduto, RESERVADAS, urlHttps, validarCodigo, soDigitos } from "./vitrine.js";
 import { aleatorio } from "./cripto.js";
 import { ehServico, tratarServico } from "./servicos.js";
 import { PAINEL } from "./painel.js";
@@ -58,6 +58,16 @@ export const ehRotaDaLoja = (c) =>
 /** Páginas públicas: vitrine e link curto (também no domínio curto, onde a primeira parte do caminho é a loja). */
 export async function tratarPublico(req, env, url, caminho) {
   if (req.method !== "GET") return null;
+  try {
+    return await paginaPublica(req, env, url, caminho);
+  } catch (e) {
+    // quem abre o link nunca deve ver JSON cru: mostra uma página e deixa o motivo no log
+    console.error("publico", caminho, e && e.stack ? e.stack : e);
+    return html("<!doctype html><meta charset=utf-8><meta name=viewport content='width=device-width,initial-scale=1'><body style='font-family:sans-serif;background:#070a1c;color:#fff;text-align:center;padding:60px 20px'><h2>Não consegui abrir agora</h2><p style='color:#8b95c0'>Tente de novo em instantes.</p>", 500, "no-store");
+  }
+}
+
+async function paginaPublica(req, env, url, caminho) {
   let m = /^\/l\/([a-z0-9-]{3,32})$/.exec(caminho);
   if (m) {
     const l = await env.DB.prepare("SELECT destino FROM links WHERE codigo = ?").bind(m[1]).first();
@@ -73,7 +83,7 @@ export async function tratarPublico(req, env, url, caminho) {
   if (!loja) return aviso("Loja não encontrada", "Confira o endereço do link.");
   if (!acessoLiberado(loja)) return aviso("Loja temporariamente fora do ar", "O responsável por esta loja está renovando a assinatura. Volte em breve.");
   const { results } = await env.DB.prepare("SELECT * FROM produtos WHERE loja = ? ORDER BY nome LIMIT 500").bind(loja.id).all();
-  const produtos = results.map((p) => ({ ...p, atributos: JSON.parse(p.atributos || "{}"), oculto: !!p.oculto }));
+  const produtos = results.map((p) => ({ ...p, atributos: lerAtributos(p.atributos), oculto: !!p.oculto }));
   const base = endereco(env, req, loja.slug);
   if (m[2]) {
     const sku = decodeURIComponent(m[2]);
@@ -236,7 +246,7 @@ export async function tratarLoja(req, env, ctx, url, caminho) {
     }
     if (caminho === "/produtos" && req.method === "GET") {
       const { results } = await env.DB.prepare("SELECT * FROM produtos WHERE loja = ? ORDER BY nome LIMIT 2000").bind(loja.id).all();
-      return json({ produtos: results.map((p) => ({ ...p, atributos: JSON.parse(p.atributos || "{}"), oculto: !!p.oculto })) });
+      return json({ produtos: results.map((p) => ({ ...p, atributos: lerAtributos(p.atributos), oculto: !!p.oculto })) });
     }
     if (caminho === "/pedidos" && req.method === "GET") {
       const { results } = await env.DB.prepare("SELECT id, canal, ref, status, total_centavos, taxa_centavos, criado FROM pedidos WHERE loja = ? ORDER BY criado DESC LIMIT 200").bind(loja.id).all();
