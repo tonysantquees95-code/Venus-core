@@ -391,14 +391,21 @@ class Cerebro(
          * Comando de música em fala livre ("pula essa", "diminui o volume para dez por cento", "aumenta o volume em 50%"),
          * ou null. Só entende música: qualquer outra coisa é ignorada até chamarem a Vênus pelo nome.
          */
-        fun comandoDeMusica(texto: String, maxPalavras: Int = 10): String? {
+        fun comandoDeMusica(texto: String, maxPalavras: Int = 10, exigirNome: Boolean = false): String? {
             if (Regex("\\[unk]").findAll(texto).count() >= 2) return null // muito barulho/letra de música: não é comando
             val t = ComandosLocais.normalizar(texto.replace("%", " por cento ")).replace("[unk]", " ")
                 .replace(Regex("[^a-z0-9 ]"), " ").replace(Regex("\\s+"), " ").trim()
-            val p = t.split(" ").filter { it.isNotBlank() }
+            var p = t.split(" ").filter { it.isNotBlank() }
             if (p.isEmpty() || p.size > maxPalavras) return null
             // só vale se TODAS as palavras são do vocabulário de música (ou números): conversa e letra de música ficam de fora
             if (p.any { it !in VOCABULARIO_MUSICA && it.toIntOrNull() == null }) return null
+            // "Vênus, passa essa": com a música tocando o comando só vale se vier depois do nome (como na Alexa)
+            if (exigirNome) {
+                val i = p.indexOfFirst { pareceVenus(it) }
+                if (i !in 0..1) return null
+                p = p.filterIndexed { idx, _ -> idx != i }
+                if (p.isEmpty() || p.any { it.startsWith("ativ") }) return null // "Vênus, ativar" abre o orbe, não é música
+            }
             fun tem(vararg w: String) = p.any { it in w }
 
             if (tem("silenciar", "silencia", "silencie", "mudo")) return "mudo"
@@ -431,7 +438,8 @@ class Cerebro(
             if (tem("anterior") || (tem("volta", "voltar", "volte") && tem("musica", "faixa"))) return "anterior"
             if (tem("continuar", "continua", "continue", "tocar", "toca", "toque", "retomar", "retoma")) return "tocar"
             if (p.size > 4) return null
-            for ((regra, acao) in COMANDOS_MUSICA) if (regra.matches(t)) return acao
+            val frase = p.joinToString(" ")
+            for ((regra, acao) in COMANDOS_MUSICA) if (regra.matches(frase)) return acao
             return null
         }
 
