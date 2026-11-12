@@ -385,6 +385,38 @@ class Cerebro(
             Regex("^(?:diminuir|diminui|diminua|abaixar|abaixa|abaixe|baixa|baixar) (?:o )?volume$") to "diminuir_volume",
         )
 
+        private val VERBOS_TOCAR = setOf("toca", "tocar", "toque", "coloca", "colocar", "poe", "bota", "botar")
+        private val ENCHIMENTO_MUSICA = setOf("musica", "musicas", "uma", "um", "umas", "de", "do", "da", "dos", "das", "o", "a", "os", "as", "no", "na", "algo", "alguma", "algum", "som")
+
+        private fun palavrasDe(texto: String): List<String> =
+            ComandosLocais.normalizar(texto.replace("%", " por cento ")).replace("[unk]", " ")
+                .replace(Regex("[^a-z0-9 ]"), " ").split(" ").filter { it.isNotBlank() }
+
+        /** "Vênus, toca…" ou "Vênus, coloca…" (menos "coloca o volume"): é hora de ouvir livre o que tocar. */
+        fun pedeTocarAlgo(texto: String): Boolean {
+            val p = palavrasDe(texto)
+            val i = p.indexOfFirst { pareceVenus(it) }
+            return i in 0..1 && p.getOrNull(i + 1) in VERBOS_TOCAR && "volume" !in p
+        }
+
+        /**
+         * O pedido já com a fala livre inteira: "Vênus, toca pagode" → "tocar_busca:pagode"; "Vênus, toca" → "tocar" (continuar);
+         * e, senão, qualquer outro comando de música com o nome ("Vênus, coloca o volume em 50%").
+         */
+        fun pedidoDeMusica(texto: String): String? {
+            val p = palavrasDe(texto)
+            val i = p.indexOfFirst { pareceVenus(it) }
+            if (i !in 0..1) return null
+            if (p.getOrNull(i + 1) in VERBOS_TOCAR && "volume" !in p) {
+                var q = p.drop(i + 2)
+                while (q.isNotEmpty() && q.first() in ENCHIMENTO_MUSICA) q = q.drop(1)
+                if (q.isEmpty()) return "tocar"
+                if (q.size > 10) return null // frase longa demais: conversa, não pedido de música
+                return "tocar_busca:" + q.joinToString(" ")
+            }
+            return comandoDeMusica(texto, 12, exigirNome = true)
+        }
+
         private val VOCABULARIO_MUSICA: Set<String> by lazy { Despertador.FRASES_MUSICA.map { ComandosLocais.normalizar(it) }.toSet() }
 
         /**

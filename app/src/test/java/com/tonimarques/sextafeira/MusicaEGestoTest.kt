@@ -52,6 +52,19 @@ class MusicaEGestoTest {
         assertEquals("pausar", Cerebro.comandoDeMusica("ei vênus para a música", exigirNome = true))
     }
 
+    @Test fun venusTocaGeneroOuArtista() {
+        assertTrue(Cerebro.pedeTocarAlgo("vênus toca [unk]"))
+        assertTrue(Cerebro.pedeTocarAlgo("venus coloca"))
+        assertFalse(Cerebro.pedeTocarAlgo("vênus coloca o volume em [unk]"))
+        assertFalse(Cerebro.pedeTocarAlgo("toca pagode"))
+        assertEquals("tocar_busca:pagode", Cerebro.pedidoDeMusica("vênus toca pagode"))
+        assertEquals("tocar_busca:rock", Cerebro.pedidoDeMusica("vênus toca música de rock"))
+        assertEquals("tocar_busca:evidencias chitaozinho e xororo", Cerebro.pedidoDeMusica("vênus coloca evidências chitãozinho e xororó"))
+        assertEquals("tocar", Cerebro.pedidoDeMusica("vênus toca"))
+        assertEquals("volume_nivel:50", Cerebro.pedidoDeMusica("vênus coloca o volume em cinquenta por cento"))
+        assertNull(Cerebro.pedidoDeMusica("toca pagode"))
+    }
+
     @Test fun semONomeNaoObedeceComMusica() {
         assertNull(Cerebro.comandoDeMusica("passa essa", exigirNome = true))
         assertNull(Cerebro.comandoDeMusica("próxima", exigirNome = true))
