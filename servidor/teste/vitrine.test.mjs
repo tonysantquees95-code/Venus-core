@@ -147,3 +147,25 @@ test("o app envia o catálogo da loja e a vitrine mostra (dados do site conectad
   assert.ok(h2.includes("Outro") && !h2.includes("Conjunto Renda"));
   assert.equal((await (await chamar(env, "GET", "/loja/vitrine", l.token)).json()).itensDoApp, 1);
 });
+
+test("foto do catálogo interno vai reduzida para o servidor e aparece na vitrine", async () => {
+  const env = mk();
+  const l = await registrarLoja(env, { nome: "Sensações" });
+  const jpeg = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 1, 2, 3, 4, 5, 6]).toString("base64");
+  // não aceita o que não é JPEG
+  assert.equal((await chamar(env, "PUT", "/loja/vitrine/foto", l.token, { sku: "5", dados: "aGVsbG8=" })).status, 400);
+  const f = await chamar(env, "PUT", "/loja/vitrine/foto", l.token, { sku: "5", dados: jpeg });
+  assert.equal(f.status, 200);
+  await chamar(env, "PUT", "/loja/vitrine/itens", l.token, { produtos: [{ sku: "5", nome: "Vela", preco_centavos: 3000 }, { sku: "6", nome: "Gel", preco_centavos: 2000 }] });
+  const h = await (await chamar(env, "GET", `/v/${l.slug}`)).text();
+  assert.ok(h.includes(`/v/${l.slug}/foto/5`), "a vitrine usa a foto guardada");
+  assert.ok(!h.includes("/foto/6"));
+  const img = await chamar(env, "GET", `/v/${l.slug}/foto/5`);
+  assert.equal(img.status, 200);
+  assert.equal(img.headers.get("content-type"), "image/jpeg");
+  assert.equal(Buffer.from(await img.arrayBuffer()).toString("base64"), jpeg);
+  assert.equal((await chamar(env, "GET", `/v/${l.slug}/foto/6`)).status, 404);
+  // produto que saiu da vitrine perde a foto
+  await chamar(env, "PUT", "/loja/vitrine/itens", l.token, { produtos: [{ sku: "6", nome: "Gel", preco_centavos: 2000 }] });
+  assert.equal((await chamar(env, "GET", `/v/${l.slug}/foto/5`)).status, 404);
+});

@@ -53,6 +53,7 @@ private fun MainActivity.sincronizarVitrine(): ResumoDaLoja {
         val r1 = Nuvem.pedir(this, "PUT", "/loja/vitrine", perfil)
         if (r1.ok) url = r1.json.optString("url") else erro = erro ?: r1.erro()
         if (produtos != null) {
+            FotosDaVitrine.enviar(this, produtos) // antes da lista, para o servidor já ter as fotos quando montar a vitrine
             val r2 = Nuvem.pedir(this, "PUT", "/loja/vitrine/itens", JSONObject().put("produtos", VitrineDoApp.itens(produtos)))
             if (r2.ok) publicados = r2.json.optInt("itens") else erro = erro ?: r2.erro()
         }

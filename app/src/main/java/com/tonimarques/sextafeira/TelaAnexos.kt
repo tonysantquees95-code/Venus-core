@@ -67,7 +67,7 @@ internal fun MainActivity.abrirAnexos(ancora: View) {
         elevation = dp(12).toFloat()
         animationStyle = android.R.style.Animation_Dialog
     }
-    fun opcao(simbolo: String, titulo: String, detalhe: String, acao: () -> Unit) {
+    fun opcao(icone: Int, titulo: String, detalhe: String, acao: () -> Unit) {
         val linha = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
@@ -81,17 +81,12 @@ internal fun MainActivity.abrirAnexos(ancora: View) {
                 acao()
             }
         }
-        linha.addView(TextView(this).apply {
-            text = simbolo
-            textSize = 18f
-            gravity = Gravity.CENTER
-            background = when (Aparencia.pacote) {
-                Tema.Icones.NEON -> GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(Aparencia.comAlfa(40)); setStroke(dp(2), Aparencia.destaque) }
-                Tema.Icones.VIDRO -> GradientDrawable().apply { cornerRadius = dp(12).toFloat(); setColor(Color.argb(46, 255, 255, 255)); setStroke(dp(1), Color.argb(90, 255, 255, 255)) }
-                Tema.Icones.LINHA -> GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(Color.TRANSPARENT); setStroke(dp(1), Aparencia.destaque) }
-                else -> GradientDrawable(GradientDrawable.Orientation.TL_BR, intArrayOf(Aparencia.destaque, Aparencia.par())).apply { shape = GradientDrawable.OVAL }
-            }
-        }, LinearLayout.LayoutParams(dp(38), dp(38)))
+        linha.addView(android.widget.ImageView(this).apply {
+            setImageResource(icone)
+            setPadding(dp(8), dp(8), dp(8), dp(8))
+            // mesmo visual dos outros ícones do app (pacote escolhido na Aparência)
+            EstiloDeIcone.aplicar(this, if (Aparencia.pacote == Tema.Icones.VENUS) Tema.Icones.LINHA else Aparencia.pacote, corAtual, true, false) { v -> dp(v) }
+        }, LinearLayout.LayoutParams(dp(40), dp(40)))
         val textos = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(12), 0, 0, 0)
@@ -114,14 +109,14 @@ internal fun MainActivity.abrirAnexos(ancora: View) {
         cadastroFoto = null
         anexar(listOf(u))
     }
-    opcao("📷", "Tirar foto", "A ${Marca.nome} olha e responde") {
+    opcao(R.drawable.ic_camera, "Tirar foto", "A ${Marca.nome} olha e responde") {
         cadastroFoto = lerFoto
         pedirFotoCamera()
     }
-    opcao("🖼️", "Fotos da galeria", "Uma ou várias: imagem, print, nota") { escolherFotos() }
-    opcao("📄", "Arquivos", "PDF, Word, Excel, áudio… (um ou vários)") { escolherArquivo() }
-    opcao("🛍️", "Produto novo", "Cadastrar na loja com foto") { abrirCadastro(emptyMap()) }
-    opcao("📣", "Post no Instagram", "Programar feed ou story") { programarPost(emptyMap()) }
+    opcao(R.drawable.ic_galeria, "Fotos da galeria", "Uma ou várias: imagem, print, nota") { escolherFotos() }
+    opcao(R.drawable.ic_arquivo, "Arquivos", "PDF, Word, Excel, áudio… (um ou vários)") { escolherArquivo() }
+    opcao(R.drawable.ic_produto, "Produto novo", "Cadastrar na loja com foto") { abrirCadastro(emptyMap()) }
+    opcao(R.drawable.ic_post, "Post no Instagram", "Programar feed ou story") { programarPost(emptyMap()) }
     caixa.measure(View.MeasureSpec.makeMeasureSpec(dp(260), View.MeasureSpec.EXACTLY), View.MeasureSpec.UNSPECIFIED)
     janela.showAsDropDown(ancora, 0, -(caixa.measuredHeight + ancora.height + dp(8)))
 }

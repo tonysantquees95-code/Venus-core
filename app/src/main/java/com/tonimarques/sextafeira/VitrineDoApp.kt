@@ -30,6 +30,13 @@ object VitrineDoApp {
         return saida
     }
 
+    /** Produtos da vitrine cuja foto só existe no celular (catálogo interno, "file://"): sku e caminho do arquivo. O servidor precisa de uma cópia reduzida. */
+    fun fotosLocais(produtos: List<Loja.Produto>): List<Pair<String, String>> =
+        produtos.filter { p -> (p.precoCentavos ?: 0) > 0 && p.ativo && p.nome.isNotBlank() }.take(MAXIMO).mapNotNull { p ->
+            val f = texto(p, "imageUrl")?.takeIf { it.startsWith("file://") } ?: return@mapNotNull null
+            p.id.toString() to f.removePrefix("file://")
+        }
+
     private fun texto(p: Loja.Produto, campo: String): String? =
         p.bruto?.takeIf { it.has(campo) && !it.isNull(campo) }?.optString(campo)?.trim()?.takeIf { it.isNotBlank() && it != "null" }
 
