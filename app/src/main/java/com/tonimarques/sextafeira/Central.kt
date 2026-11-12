@@ -33,6 +33,7 @@ internal fun MainActivity.pedirNuvem(metodo: String, caminho: String, corpo: JSO
 }
 
 internal fun MainActivity.abrirCentral() {
+    atualizarIdentidadeDoSite()
     val insta = Instagram.usuario(this).takeIf { Instagram.conectado(this) }
     val pref = prefs.getString(DadosDaLoja.PREF_LINK, "site").orEmpty()
     val whats = DadosDaLoja.guardado(prefs, DadosDaLoja.PREF_WHATSAPP)
@@ -239,7 +240,7 @@ private fun MainActivity.personalizarVitrine(v: JSONObject, tela: TelaDeAjustes?
     perguntar("Personalizar a vitrine", listOf(
         "Título" to v.optString("titulo").ifBlank { Perfil.loja },
         "Descrição curta" to v.optString("descricao"),
-        "Cor (#RRGGBB)" to v.optString("cor").ifBlank { Paleta.hex(Tema.cor(prefs).takeIf { it != 0 } ?: 0xE36BD0) },
+        "Cor (#RRGGBB)" to v.optString("cor").ifBlank { Paleta.hex(marcaAtual().cor) },
         "WhatsApp com DDD" to v.optString("whatsapp"),
         "Logo (endereço https, opcional)" to v.optString("logo"),
     ), "Salvar") { c ->
