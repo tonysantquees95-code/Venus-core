@@ -12,6 +12,7 @@ import android.widget.ScrollView
 import android.widget.TextView
 import org.json.JSONArray
 import org.json.JSONObject
+import java.io.File
 import java.util.Calendar
 
 /**
@@ -105,13 +106,49 @@ internal fun MainActivity.agendarPostagem(id: Int, tela: TelaDeAjustes?) {
 // ------------------------------------------------------------------ logotipo e cores
 private const val PREF_MARCA = "marca_conceito"
 
+private const val PREF_SITE_COR = "marca_site_cor"
+private const val PREF_SITE_FONTE = "marca_site_fonte"
+private const val PREF_SITE_QUANDO = "marca_site_quando"
+private const val ARQUIVO_LOGO_DO_SITE = "marca_site_logo.png"
+
+private fun MainActivity.siteConectado() = Perfil.site.isNotBlank() && prefs.getString(DadosDaLoja.PREF_LINK, "site").orEmpty() != "vitrine"
+
+/**
+ * Identidade da loja para panfleto, cartão e QR Code. Nada aqui vem da personalização do app (tema, orbe, ícones):
+ * com site conectado, usa logo, cor e fonte lidos do site; sem site, o logotipo criado pela Vênus e as cores que a pessoa escolheu.
+ */
 internal fun MainActivity.marcaAtual(): Criativos.Conceito {
     val salvo = prefs.getString(PREF_MARCA, "").orEmpty().split("|")
-    if (salvo.size == 5) {
-        val cor = Paleta.lerHex(salvo[3])
-        if (cor != null) return Criativos.Conceito(salvo[0], salvo[1], salvo[2], cor, salvo[4])
+    val criada = if (salvo.size == 5) Paleta.lerHex(salvo[3])?.let { Criativos.Conceito(salvo[0], salvo[1], salvo[2], it, salvo[4]) } else null
+    if (siteConectado()) {
+        val corDoSite = prefs.getInt(PREF_SITE_COR, -1).takeIf { it >= 0 }
+        val logo = File(filesDir, ARQUIVO_LOGO_DO_SITE).takeIf { it.isFile }?.let { android.graphics.BitmapFactory.decodeFile(it.path) }
+        if (corDoSite != null || logo != null) {
+            val base = criada ?: Criativos.Conceito(Perfil.loja, "", "circulo", Paleta.corDoNome(Perfil.loja), "moderna")
+            return Criativos.Conceito(base.nome, base.slogan, base.forma, corDoSite ?: base.cor, IdentidadeDoSite.estiloDaFonte(prefs.getString(PREF_SITE_FONTE, null)), logo)
+        }
     }
-    return Criativos.Conceito(Perfil.loja, "", "circulo", Tema.cor(prefs).takeIf { it != 0 } ?: Paleta.corDoNome(Perfil.loja), "elegante")
+    return criada ?: Criativos.Conceito(Perfil.loja, "", "circulo", Paleta.corDoNome(Perfil.loja), "elegante")
+}
+
+/** Lê de novo o site da loja (logo, cor e fonte). Sem [forcar], só confere uma vez por dia. */
+internal fun MainActivity.atualizarIdentidadeDoSite(forcar: Boolean = false, aoTerminar: ((Boolean) -> Unit)? = null) {
+    if (!siteConectado()) { aoTerminar?.invoke(false); return }
+    val agora = System.currentTimeMillis()
+    if (!forcar && agora - prefs.getLong(PREF_SITE_QUANDO, 0L) < 24L * 3600 * 1000) { aoTerminar?.invoke(false); return }
+    val site = Perfil.site
+    emFundo({ IdentidadeDoSite.buscar(site) }) { r ->
+        val achou = r.getOrNull()
+        if (achou == null) { aoTerminar?.invoke(false); return@emFundo }
+        val (id, bytes) = achou
+        val ed = prefs.edit().putLong(PREF_SITE_QUANDO, agora)
+        id.cor?.let { ed.putInt(PREF_SITE_COR, it) }
+        id.fonte?.let { ed.putString(PREF_SITE_FONTE, it) }
+        ed.apply()
+        if (bytes != null && android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size) != null) File(filesDir, ARQUIVO_LOGO_DO_SITE).writeBytes(bytes)
+        Diario.anotar(this, "Marketing", "Identidade da loja lida do site (cor, logo e fonte).", "app", true)
+        aoTerminar?.invoke(id.cor != null || bytes != null || id.fonte != null)
+    }
 }
 
 private fun MainActivity.guardarMarca(k: Criativos.Conceito) {
@@ -152,7 +189,10 @@ internal fun MainActivity.abrirLogo() {
         "Criar conceitos de logotipo" to { criarLogotipos() },
         "Tirar as cores de uma foto ou logo" to { coresDeUmaFoto() },
         "Ver as cores da minha marca" to { mostrarCores(marcaAtual().paleta, "Cores da marca") },
-    ))
+    ) + (if (siteConectado()) listOf("Ler logo, cores e fonte do meu site" to {
+        aviso("Lendo o seu site…")
+        atualizarIdentidadeDoSite(true) { ok -> aviso(if (ok) "Pronto: panfleto, cartão e QR já usam a identidade do seu site." else "Não consegui ler o site agora. Confira o endereço e tente de novo.") }
+    }) else emptyList()))
 }
 
 private fun MainActivity.criarLogotipos() {
@@ -223,11 +263,11 @@ internal fun MainActivity.mostrarCores(cores: List<Int>, titulo: String) {
         .setNegativeButton("Fechar", null).show()
 }
 
-/** A cor vira a cor do app (orbe e ícones) e a da vitrine online. */
+/** A cor vira a cor da identidade da loja (materiais) e da vitrine online; o tema do app não muda. */
 internal fun MainActivity.usarCorDaLoja(rgb: Int) {
-    Tema.definirCor(prefs, rgb)
-    aplicarTema()
-    pedirNuvem("PUT", "/loja/vitrine", JSONObject().put("cor", Paleta.hex(rgb))) { aviso("Cor ${Paleta.hex(rgb)} aplicada no app e na vitrine.") }
+    val atual = marcaAtual()
+    guardarMarca(Criativos.Conceito(atual.nome, atual.slogan, atual.forma, rgb, atual.estilo))
+    pedirNuvem("PUT", "/loja/vitrine", JSONObject().put("cor", Paleta.hex(rgb))) { aviso("Cor ${Paleta.hex(rgb)} aplicada nos materiais da loja e na vitrine.") }
 }
 
 private fun MainActivity.usarComoMarca(k: Criativos.Conceito) {

@@ -22,7 +22,7 @@ import java.io.File
  * (frente e verso) e panfleto/encarte. Tudo sai em PNG para compartilhar ou imprimir.
  */
 object Criativos {
-    class Conceito(val nome: String, val slogan: String, val forma: String, val cor: Int, val estilo: String) {
+    class Conceito(val nome: String, val slogan: String, val forma: String, val cor: Int, val estilo: String, val logo: Bitmap? = null) {
         val paleta: List<Int> get() = Paleta.harmonia(cor)
     }
 
@@ -79,6 +79,14 @@ object Criativos {
     /** O símbolo da marca (forma com degradê e a inicial) centrado em (cx, cy). */
     private fun simbolo(c: Canvas, k: Conceito, cx: Float, cy: Float, r: Float) {
         val pal = k.paleta
+        k.logo?.let { img ->
+            // logo do próprio site: cabe inteiro dentro do círculo do símbolo, sem esticar
+            val fator = minOf(2 * r / img.width, 2 * r / img.height)
+            val l = img.width * fator
+            val a = img.height * fator
+            c.drawBitmap(img, null, RectF(cx - l / 2, cy - a / 2, cx + l / 2, cy + a / 2), Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG))
+            return
+        }
         val pincel = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             shader = LinearGradient(cx - r, cy - r, cx + r, cy + r, argb(pal[0]), argb(pal[1]), Shader.TileMode.CLAMP)
         }

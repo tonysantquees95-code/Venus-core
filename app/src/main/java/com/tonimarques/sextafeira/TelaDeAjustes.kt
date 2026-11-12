@@ -58,6 +58,10 @@ class TelaDeAjustes(
     private class Entrada(val cabecalho: TextView, val cartao: LinearLayout, val linhas: List<Pair<View?, View>>, val textos: List<() -> String>)
     private val entradas = mutableListOf<Entrada>()
     private lateinit var orbe: Orbe
+    /** Com muitas seções, cada uma vira uma aba (um toque troca de categoria) em vez de uma lista enorme. */
+    private val usaAbas = !compacto && secoes.size >= 4
+    private var aba = 0
+    private val chips = mutableListOf<TextView>()
 
     init {
         setContentView(montar())
@@ -154,6 +158,26 @@ class TelaDeAjustes(
         }
         if (!compacto) coluna.addView(busca, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(6) })
 
+        if (usaAbas) {
+            val faixa = LinearLayout(context).apply { orientation = LinearLayout.HORIZONTAL; setPadding(0, dp(4), 0, dp(2)) }
+            secoes.forEachIndexed { i, sc ->
+                val chip = TextView(context).apply {
+                    text = sc.titulo
+                    textSize = 13f
+                    maxLines = 1
+                    setPadding(dp(16), dp(9), dp(16), dp(9))
+                    typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
+                    isClickable = true
+                    setOnClickListener { aba = i; pintarChips(); filtrar(busca.text?.toString().orEmpty()) }
+                }
+                chips += chip
+                faixa.addView(chip, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { rightMargin = dp(8) })
+            }
+            coluna.addView(android.widget.HorizontalScrollView(context).apply { isHorizontalScrollBarEnabled = false; addView(faixa) },
+                LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(8) })
+            pintarChips()
+        }
+
         for (secao in secoes) {
             val cab = TextView(context).apply {
                 text = secao.titulo.uppercase()
@@ -194,6 +218,7 @@ class TelaDeAjustes(
             entradas += Entrada(cab, cartao, linhasDaSecao, secao.itens.map { { it.titulo + " " + it.descricao() + " " + secao.titulo } })
         }
 
+        filtrar("")
         if (!compacto) coluna.addView(TextView(context).apply {
             text = "${Marca.nome} · feita para o seu dia a dia e para a sua loja"
             textSize = 11f
@@ -215,7 +240,9 @@ class TelaDeAjustes(
     /** Esconde o que não combina com [termo] (sem acento e sem maiúsculas; todas as palavras precisam aparecer). */
     private fun filtrar(termo: String) {
         val palavras = ComandosLocais.normalizar(termo).split(" ").filter { it.isNotBlank() }
-        for (e in entradas) {
+        val buscando = palavras.isNotEmpty()
+        entradas.forEachIndexed { idx, e ->
+            val naAba = !usaAbas || buscando || idx == aba
             var primeiro = true
             var algum = false
             e.linhas.forEachIndexed { i, (sep, linha) ->
@@ -225,8 +252,19 @@ class TelaDeAjustes(
                 sep?.visibility = if (ok && !primeiro) View.VISIBLE else View.GONE
                 if (ok) { primeiro = false; algum = true }
             }
-            e.cabecalho.visibility = if (algum) View.VISIBLE else View.GONE
-            e.cartao.visibility = if (algum) View.VISIBLE else View.GONE
+            e.cabecalho.visibility = if (algum && naAba && !(usaAbas && !buscando)) View.VISIBLE else View.GONE
+            e.cartao.visibility = if (algum && naAba) View.VISIBLE else View.GONE
+        }
+    }
+
+    private fun pintarChips() {
+        chips.forEachIndexed { i, c ->
+            val sel = i == aba
+            c.setTextColor(if (sel) Color.parseColor("#05060D") else Color.WHITE)
+            c.background = GradientDrawable().apply {
+                cornerRadius = dpf(20f)
+                if (sel) setColor(cor) else { setColor(Color.argb(22, 255, 255, 255)); setStroke(dp(1).coerceAtLeast(1), Color.argb(40, 255, 255, 255)) }
+            }
         }
     }
 
@@ -307,6 +345,7 @@ class TelaDeAjustes(
         cor = c
         tituloTela.setTextColor(c)
         for (t in cabecalhos) t.setTextColor(c)
+        pintarChips()
         for (i in interruptores) i.cor = c
         for (m in marcasDeEscolha) m.setTextColor(c)
     }
