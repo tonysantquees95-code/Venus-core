@@ -25,9 +25,9 @@ internal object Modos {
 internal fun MainActivity.abrirModos() {
     try {
         val itens = VetorialId.MODOS.map { m ->
-            TelaDeAjustes.Ajuste(VetorialId.ROTULOS_MODO[m] ?: m, { Modos.descricao(m) }, null, { VetorialId.modo(this) == m }) { definirModo(m) }
+            TelaDeAjustes.Ajuste(VetorialId.ROTULOS_MODO[m] ?: m, { (if (VetorialId.modo(this) == m) "✓ Em uso. " else "") + Modos.descricao(m) }) { definirModo(m) }
         }
-        TelaDeAjustes(this, versaoDoApp(), listOf(TelaDeAjustes.Secao("Escolha um modo", itens)), "COMO USAR A ${Marca.nomeMaiusculo}", compacto = true).show()
+        TelaDeAjustes(this, versaoDoApp(), listOf(TelaDeAjustes.Secao("Escolha um modo", itens)), "COMO USAR A ${Marca.nomeMaiusculo}").show()
     } catch (e: Exception) {
         Registro.anotar(this, "modos", "abrir: ${e.javaClass.simpleName} ${e.message}")
         aviso("Não consegui abrir essa tela agora.")
