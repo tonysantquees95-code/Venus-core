@@ -7,6 +7,7 @@ import { criarAdmin, emailAdmin, entrarAdmin, exigirAdmin } from "./admin.js";
 import { PROJETOS, REPO_VALIDO, apksDoProjeto, buildsDoRepo, estadoGeral, linkDoApk, progressoDoBuild, listaDeVersoes, metricasDoRepo } from "./github.js";
 import { bi, esquecerProvedores, listarTrafego } from "./uso.js";
 import * as cofre from "./cofre.js";
+import { lerSegredo } from "./cofre.js";
 
 const CORS = { "access-control-allow-origin": "*", "access-control-allow-headers": "authorization,content-type", "access-control-allow-methods": "GET,POST,PUT,DELETE,OPTIONS" };
 const json = (d, status = 200) => new Response(JSON.stringify(d), { status, headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store", ...CORS } });
@@ -110,13 +111,13 @@ async function ferramentas(env, agora = Date.now()) {
   const cfg = await configuracoes(env);
   const hora = Math.floor(agora / 3_600_000);
   const { results: uso } = await env.DB.prepare("SELECT provedor, tarefa, SUM(requisicoes) AS req, SUM(erros) AS erros, MAX(hora) AS ultima FROM dev_uso_ia WHERE hora > ? GROUP BY provedor, tarefa").bind(hora - 24).all();
-  const provedores = Object.keys(CHAVE_DO_PROVEDOR).map((p) => ({
+  const provedores = await Promise.all(Object.keys(CHAVE_DO_PROVEDOR).map(async (p) => ({
     id: p,
-    chaveConfigurada: !!env[CHAVE_DO_PROVEDOR[p]],
+    chaveConfigurada: p === "deepseek" ? !!(await lerSegredo(env, CHAVE_DO_PROVEDOR[p])) : !!env[CHAVE_DO_PROVEDOR[p]],
     ligado: cfg[`provedor:${p}`] !== "0",
     requisicoes24h: uso.filter((u) => u.provedor === p).reduce((s, u) => s + u.req, 0),
     erros24h: uso.filter((u) => u.provedor === p).reduce((s, u) => s + u.erros, 0),
-  }));
+  })));
   const automacoes = IAS.map((a) => {
     const linhas = uso.filter((u) => a.tarefas.includes(u.tarefa));
     const exec = provedores.find((p) => p.id === a.executor);

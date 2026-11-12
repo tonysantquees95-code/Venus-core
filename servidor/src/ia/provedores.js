@@ -1,5 +1,6 @@
 // Chamadas aos provedores. As chaves vêm de `env` (segredos do Worker) e nunca saem daqui.
 import { ErroHttp } from "./roteador.js";
+import { lerSegredo } from "../dev/cofre.js";
 
 const TEMPO_PADRAO = 30_000;
 const TEMPO_RACIOCINIO = 110_000;
@@ -64,7 +65,9 @@ export async function groq(env, p) {
 }
 
 export async function deepseek(env, p) {
-  if (!env.DEEPSEEK_API_KEY) throw new ErroProvedor("deepseek", 0, true, "sem_chave");
+  // a chave vem do cofre do Painel Dev (cifrada) e, se não estiver lá, do segredo do Worker
+  const chave = await lerSegredo(env, "DEEPSEEK_API_KEY");
+  if (!chave) throw new ErroProvedor("deepseek", 0, true, "sem_chave");
   const raciocinio = p.tarefa === "logica";
   const modelo = raciocinio ? env.MODELO_DEEPSEEK_RACIOCINIO || "deepseek-reasoner" : env.MODELO_DEEPSEEK || "deepseek-chat";
   const corpo = { model: modelo, messages: paraOpenAI(p.sistema, p.mensagens), max_tokens: p.maxTokens };
@@ -72,7 +75,7 @@ export async function deepseek(env, p) {
   const dados = await postar(
     "deepseek",
     "https://api.deepseek.com/chat/completions",
-    { authorization: `Bearer ${env.DEEPSEEK_API_KEY}` },
+    { authorization: `Bearer ${chave}` },
     corpo,
     raciocinio ? TEMPO_RACIOCINIO : TEMPO_PADRAO
   );
