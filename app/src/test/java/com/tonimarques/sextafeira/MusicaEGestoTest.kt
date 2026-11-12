@@ -42,6 +42,27 @@ class MusicaEGestoTest {
         assertEquals("diminuir_volume", Cerebro.comandoDeMusica("mais baixo"))
     }
 
+    @Test fun comOsNomeDaVenusComoNaAlexa() {
+        assertEquals("proxima", Cerebro.comandoDeMusica("vênus passa essa", exigirNome = true))
+        assertEquals("proxima", Cerebro.comandoDeMusica("vênus próxima", exigirNome = true))
+        assertEquals("anterior", Cerebro.comandoDeMusica("vênus volta a música", exigirNome = true))
+        assertEquals("aumentar_volume", Cerebro.comandoDeMusica("vênus aumentar o volume", exigirNome = true))
+        assertEquals("diminuir_volume", Cerebro.comandoDeMusica("vênus abaixa o volume", exigirNome = true))
+        assertEquals("volume_nivel:50", Cerebro.comandoDeMusica("vênus coloca o volume em cinquenta por cento", exigirNome = true))
+        assertEquals("pausar", Cerebro.comandoDeMusica("ei vênus para a música", exigirNome = true))
+    }
+
+    @Test fun semONomeNaoObedeceComMusica() {
+        assertNull(Cerebro.comandoDeMusica("passa essa", exigirNome = true))
+        assertNull(Cerebro.comandoDeMusica("próxima", exigirNome = true))
+        assertNull(Cerebro.comandoDeMusica("aumenta o volume", exigirNome = true))
+    }
+
+    @Test fun venusAtivarNaoEComandoDeMusica() {
+        assertNull(Cerebro.comandoDeMusica("vênus ativar", exigirNome = true))
+        assertNull(Cerebro.comandoDeMusica("vênus", exigirNome = true))
+    }
+
     @Test fun foraDaMusicaNaoEComando() {
         assertNull(Cerebro.comandoDeMusica("qual é a previsão do tempo"))
         assertNull(Cerebro.comandoDeMusica("manda mensagem para a Maria"))

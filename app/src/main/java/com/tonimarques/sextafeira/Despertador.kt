@@ -211,17 +211,20 @@ class Despertador(
                     // Com música o som nunca "para": analisa tudo e confirma o comando por alguns instantes.
                     val terminou = rec.acceptWaveForm(bloco, n)
                     val texto = if (terminou) campo(rec.result, "text") else campo(rec.partialResult, "partial")
-                    if (Cerebro.pareceAtivacao(texto, acionarPeloNome())) {
+                    val comando = Cerebro.comandoDeMusica(texto, exigirNome = true)
+                    // "Vênus, ativar" abre o orbe; só o nome ("Vênus") vale depois que a pessoa termina de falar
+                    if (comando == null && Cerebro.pareceAtivacao(texto, terminou && acionarPeloNome())) {
                         ouviu = true
                         break
                     }
-                    val comando = Cerebro.comandoDeMusica(texto)
                     if (comando != null && agora >= esperaAte) {
                         if (comando == candidato) repeticoes++ else {
                             candidato = comando
                             repeticoes = 1
                         }
-                        if (terminou || repeticoes >= 3) {
+                        // volume só depois da frase inteira ("vinte" não pode virar 20 antes do "e cinco")
+                        val precisaDoFim = comando.startsWith("volume") || comando == "aumentar_volume" || comando == "diminuir_volume"
+                        if (terminou || (!precisaDoFim && repeticoes >= 3)) {
                             val c = comando
                             principal.post { aoComando?.invoke(c) }
                             esperaAte = agora + 1500
@@ -260,7 +263,7 @@ class Despertador(
                     }
                     // Comandos de música também funcionam com o som baixo
                     if (terminou && aoComando != null && modoMusicaLigado() && audio?.isMusicActive == true) {
-                        Cerebro.comandoDeMusica(texto, 4)?.let { c -> principal.post { aoComando?.invoke(c) } }
+                        Cerebro.comandoDeMusica(texto, 6, exigirNome = true)?.let { c -> principal.post { aoComando?.invoke(c) } }
                     }
                 } else if (analisando) {
                     analisando = false
