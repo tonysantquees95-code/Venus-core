@@ -52,4 +52,13 @@ class VitrineDoAppTest {
         val l = VitrineDoApp.fotosLocais(listOf(produto(1, "A", bruto = local), produto(2, "B", bruto = nuvem), produto(3, "C", ativo = false, bruto = local), produto(4, "D")))
         assertEquals(listOf("1" to "/data/user/0/app/files/catalogo_fotos/a.jpg"), l)
     }
+
+    @Test
+    fun fotoComCaminhoDoSiteViraEnderecoCompleto() {
+        val b = JSONObject().put("imageUrl", "/_cdn/produtos/a.jpg")
+        val i = VitrineDoApp.itens(listOf(produto(1, "A", bruto = b)), "https://loja.exemplo.com/").getJSONObject(0)
+        assertEquals("https://loja.exemplo.com/_cdn/produtos/a.jpg", i.getString("imagem"))
+        assertFalse(VitrineDoApp.itens(listOf(produto(1, "A", bruto = b))).getJSONObject(0).has("imagem"))
+        assertEquals(null, VitrineDoApp.endereco("http://x.com/a.jpg", "https://loja.exemplo.com"))
+    }
 }

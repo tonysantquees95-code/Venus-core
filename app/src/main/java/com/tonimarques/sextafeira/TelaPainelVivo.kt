@@ -41,11 +41,19 @@ internal fun MainActivity.abrirPainelDentro() {
                 settings.javaScriptEnabled = true
                 settings.domStorageEnabled = true
                 setBackgroundColor(Color.parseColor("#070A1C"))
+                isVerticalScrollBarEnabled = true
+                overScrollMode = android.view.View.OVER_SCROLL_IF_CONTENT_SCROLLS
                 webViewClient = object : WebViewClient() {}
                 loadUrl(Nuvem.enderecoDoPainel(this@abrirPainelDentro))
             }
             raiz.addView(barra, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
             raiz.addView(web, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
+            // tela cheia por trás das barras do sistema: sem isto o fim da página fica escondido atrás da barra de navegação
+            @Suppress("DEPRECATION")
+            raiz.setOnApplyWindowInsetsListener { v, ins ->
+                v.setPadding(ins.systemWindowInsetLeft, ins.systemWindowInsetTop, ins.systemWindowInsetRight, ins.systemWindowInsetBottom)
+                ins
+            }
             dialogo.setContentView(raiz)
             dialogo.setOnKeyListener { _, tecla, evento ->
                 if (tecla == KeyEvent.KEYCODE_BACK && evento.action == KeyEvent.ACTION_UP) { dialogo.dismiss(); true } else false
