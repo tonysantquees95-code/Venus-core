@@ -76,7 +76,7 @@ jobs:
 
       - name: Testes do servidor (IA, lojistas, canais e estoque)
         working-directory: .
-        run: node --test servidor/teste/ia.test.mjs servidor/teste/loja.test.mjs servidor/teste/vitrine.test.mjs servidor/teste/qr.test.mjs servidor/teste/servicos.test.mjs servidor/teste/id.test.mjs servidor/teste/publicar.test.mjs servidor/teste/dev.test.mjs
+        run: node --test servidor/teste/ia.test.mjs servidor/teste/loja.test.mjs servidor/teste/vitrine.test.mjs servidor/teste/qr.test.mjs servidor/teste/servicos.test.mjs servidor/teste/id.test.mjs servidor/teste/publicar.test.mjs servidor/teste/dev.test.mjs servidor/teste/vortex.test.mjs
 
       # Cache vetorial e limite por IP: tentam criar o que falta. Se a chave da Cloudflare não tiver
       # permissão (KV, Vectorize), segue sem o cache: o servidor atual nunca deixa de ser publicado.
@@ -106,6 +106,19 @@ jobs:
             cp wrangler.base.toml wrangler.toml
           fi
           rm -f wrangler.base.toml
+
+      # Saves do Vortex na nuvem (R2). Se a conta não tiver R2 ligado, o resto do servidor continua igual
+      # e o Vortex avisa que a nuvem de saves ainda não está disponível.
+      - name: Nuvem de saves do Vortex (R2, opcional)
+        run: |
+          cp wrangler.toml wrangler.sem-r2.toml
+          if $WRANGLER r2 bucket list 2>/dev/null | grep -q "venus-saves" || $WRANGLER r2 bucket create venus-saves >/dev/null 2>&1; then
+            printf '\n[[r2_buckets]]\nbinding = "SAVES"\nbucket_name = "venus-saves"\n' >> wrangler.toml
+            if $WRANGLER deploy --dry-run >/dev/null 2>&1; then echo "Saves na nuvem: ligado"; else echo "::warning::Configuração do R2 recusada; saves na nuvem desligados."; cp wrangler.sem-r2.toml wrangler.toml; fi
+          else
+            echo "::warning::Sem R2 na conta (ative em Cloudflare → R2): saves na nuvem desligados."
+          fi
+          rm -f wrangler.sem-r2.toml
 
       - name: Publicar
         run: |
