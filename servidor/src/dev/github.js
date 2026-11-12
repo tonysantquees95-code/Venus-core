@@ -101,20 +101,27 @@ export async function metricasDoRepo(env, repo) {
 }
 
 /** Último resultado de cada workflow (build do APK, servidor, web). */
+/** Último motivo de falha ao ler os builds de cada repositório (o painel mostra no lugar de "Sem build"). */
+export const falhaDosBuilds = new Map();
+
 export async function buildsDoRepo(env, repo) {
   return comCache(`builds:${repo}`, 120, async () => {
-    try {
-      const r = await gh(env, `/repos/${repo}/actions/runs?per_page=30`);
-      if (!r.ok) return null;
-      const vistos = new Map();
-      for (const x of (await r.json()).workflow_runs || []) {
-        if (!vistos.has(x.name)) vistos.set(x.name, { id: x.id, workflow: x.name, estado: x.status, resultado: x.conclusion, numero: x.run_number, commit: String(x.head_sha || "").slice(0, 7), quando: Date.parse(x.updated_at) || 0, url: x.html_url });
+    for (let tentativa = 0; tentativa < 2; tentativa++) {
+      try {
+        const r = await gh(env, `/repos/${repo}/actions/runs?per_page=30`);
+        if (!r.ok) { falhaDosBuilds.set(repo, `o GitHub respondeu ${r.status}`); continue; }
+        const vistos = new Map();
+        for (const x of (await r.json()).workflow_runs || []) {
+          if (!vistos.has(x.name)) vistos.set(x.name, { id: x.id, workflow: x.name, estado: x.status, resultado: x.conclusion, numero: x.run_number, commit: String(x.head_sha || "").slice(0, 7), quando: Date.parse(x.updated_at) || 0, url: x.html_url });
+        }
+        falhaDosBuilds.delete(repo);
+        return [...vistos.values()];
+      } catch (e) {
+        falhaDosBuilds.set(repo, String((e && e.message) || e).slice(0, 80));
+        console.error("builds", repo, e && e.message);
       }
-      return [...vistos.values()];
-    } catch (e) {
-      console.error("builds", repo, e && e.message);
-      return null;
     }
+    return null;
   });
 }
 

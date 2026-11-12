@@ -4,7 +4,7 @@ import { verificar } from "../id/jwt.js";
 import { ErroLoja } from "../loja/lojas.js";
 import { TABELA } from "../ia/roteador.js";
 import { criarAdmin, emailAdmin, entrarAdmin, exigirAdmin } from "./admin.js";
-import { PROJETOS, REPO_VALIDO, apksDoProjeto, buildsDoRepo, estadoGeral, linkDoApk, progressoDoBuild, listaDeVersoes, metricasDoRepo } from "./github.js";
+import { PROJETOS, REPO_VALIDO, apksDoProjeto, buildsDoRepo, falhaDosBuilds, estadoGeral, linkDoApk, progressoDoBuild, listaDeVersoes, metricasDoRepo } from "./github.js";
 import { bi, esquecerProvedores, listarTrafego } from "./uso.js";
 import * as cofre from "./cofre.js";
 import { lerSegredo } from "./cofre.js";
@@ -54,7 +54,7 @@ async function painel(env) {
     const [metricas, builds, versoes] = await Promise.all([metricasDoRepo(env, repo), buildsDoRepo(env, repo), listaDeVersoes(env, repo)]);
     const apks = apksDoProjeto(p, versoes).map(({ _id, ...a }) => ({ ...a, baixar: a.versao ? `/dev/apk?app=${a.app}` : null }));
     const compilando = await progressoDoBuild(env, repo, builds);
-    return { ...base, conectado: true, metricas, builds: builds || [], estadoBuild: estadoGeral(builds), apks, compilando };
+    return { ...base, conectado: true, ...(builds ? {} : { aviso: `Não consegui ler os builds do GitHub (${falhaDosBuilds.get(repo) || "sem resposta"}).` }), metricas, builds: builds || [], estadoBuild: estadoGeral(builds), apks, compilando };
   }));
   return { gerado: Date.now(), admin: emailAdmin(env), projetos };
 }
