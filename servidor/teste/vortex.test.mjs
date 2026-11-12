@@ -70,3 +70,24 @@ test("saves de uma conta não aparecem para outra", async () => {
   await chamar(env, token, "PUT", "/vortex/saves/a/x.srm", new Uint8Array([1]), { "x-base": "0" });
   assert.equal((await (await chamar(env, outra.token, "GET", "/vortex/saves")).json()).saves.length, 0);
 });
+
+test("ponte de voz: Vênus pede, Vortex busca e responde; Vortex fechado avisa", async () => {
+  const { env, token } = await mundo();
+  const j = async (r) => ({ status: r.status, ...(await r.json()) });
+  const fechado = await j(await chamar(env, token, "POST", "/vortex/pedidos", JSON.stringify({ comando: "abrir_jogo", argumento: "Zelda" })));
+  assert.equal(fechado.status, 409);
+  assert.equal(fechado.codigo, "vortex_fechado");
+  await chamar(env, token, "GET", "/vortex/fila?plataforma=windows"); // o Vortex aparece
+  assert.equal((await j(await chamar(env, token, "POST", "/vortex/pedidos", JSON.stringify({ comando: "apagar_tudo" })))).status, 400);
+  assert.equal((await j(await chamar(env, token, "POST", "/vortex/pedidos", JSON.stringify({ comando: "abrir_jogo", argumento: " " })))).status, 400);
+  const p = await j(await chamar(env, token, "POST", "/vortex/pedidos", JSON.stringify({ comando: "abrir_jogo", argumento: "Zelda" })));
+  assert.equal(p.status, 201);
+  const fila = await j(await chamar(env, token, "GET", "/vortex/fila?plataforma=windows"));
+  assert.equal(fila.pedidos.length, 1);
+  assert.equal(fila.pedidos[0].argumento, "Zelda");
+  assert.equal((await j(await chamar(env, token, "GET", "/vortex/fila?plataforma=windows"))).pedidos.length, 0); // já foi entregue
+  await chamar(env, token, "POST", `/vortex/pedidos/${p.id}/resultado`, JSON.stringify({ ok: true, resumo: "Abri The Legend of Zelda." }));
+  const s = await j(await chamar(env, token, "GET", `/vortex/pedidos/${p.id}`));
+  assert.equal(s.status, "concluido");
+  assert.equal(s.resumo, "Abri The Legend of Zelda.");
+});

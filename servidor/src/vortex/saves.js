@@ -8,12 +8,13 @@
 import { ErroId as ErroLoja } from "../id/conta.js";
 import { validarSessao } from "../id/conta.js";
 import { appsLiberados } from "../loja/assinatura.js";
+import { buscar, consultar, pedir, responder, vortexOnline } from "./ponte.js";
 
 
 export const ehRotaVortex = (c) => c.startsWith("/vortex/");
 export const MAX_ARQUIVO = 8 * 1024 * 1024;
 export const MAX_TOTAL = 256 * 1024 * 1024;
-const CORS = { "access-control-allow-origin": "*", "access-control-allow-headers": "authorization,content-type,x-base", "access-control-allow-methods": "GET,PUT,DELETE,OPTIONS" };
+const CORS = { "access-control-allow-origin": "*", "access-control-allow-headers": "authorization,content-type,x-base", "access-control-allow-methods": "GET,PUT,POST,DELETE,OPTIONS" };
 const json = (d, status = 200) => new Response(JSON.stringify(d), { status, headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store", ...CORS } });
 const NOME = /^[A-Za-z0-9][A-Za-z0-9._ -]{0,79}$/;
 const JOGO = /^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/;
@@ -41,6 +42,17 @@ export async function tratarVortex(req, env, url, caminho, agora = Date.now()) {
     const ok = await liberado(env, ctx.usuario, agora);
     if (caminho === "/vortex/licenca") return json({ vortex: ok, mensagem: ok ? "" : "O Vortex não está liberado para esta conta. Assine um pacote com o Vortex ou comece o teste grátis." });
     if (!ok) throw new ErroLoja(402, "vortex_nao_liberado", "O Vortex não está liberado para esta conta.");
+    // ponte de voz Vênus ↔ Vortex
+    if (caminho === "/vortex/presenca" && req.method === "GET") return json(await vortexOnline(env, ctx.usuario.id, agora));
+    if (caminho === "/vortex/pedidos" && req.method === "POST") {
+      const d = await req.json().catch(() => ({}));
+      return json(await pedir(env, ctx.usuario.id, String(d.comando || ""), d.argumento, agora), 201);
+    }
+    if (caminho === "/vortex/fila" && req.method === "GET") return json({ pedidos: await buscar(env, ctx.usuario.id, url.searchParams.get("plataforma") === "android" ? "android" : "windows", agora) });
+    let pm = /^\/vortex\/pedidos\/([a-f0-9]{24})$/.exec(caminho);
+    if (pm && req.method === "GET") return json(await consultar(env, ctx.usuario.id, pm[1], agora));
+    pm = /^\/vortex\/pedidos\/([a-f0-9]{24})\/resultado$/.exec(caminho);
+    if (pm && req.method === "POST") return json(await responder(env, ctx.usuario.id, pm[1], await req.json().catch(() => ({})), agora));
     if (!env.SAVES) throw new ErroLoja(503, "nuvem_indisponivel", "A nuvem de saves ainda não está ligada no servidor.");
     const raiz = `u/${ctx.usuario.id}/`;
     if (caminho === "/vortex/saves" && req.method === "GET") {
