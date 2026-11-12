@@ -244,8 +244,8 @@ internal fun MainActivity.abrirMenu(@Suppress("UNUSED_PARAMETER") ancora: View) 
                     }
                 },
             )) + listOf(
-                TelaDeAjustes.Ajuste("Ideias de vídeo (Reels)", { "Cria ideias de vídeo com os produtos do catálogo: roteiro, pedido pronto para um gerador de vídeo por IA, legenda e hashtags." }) { ideiasDeVideo() },
                 TelaDeAjustes.Ajuste("O que eu aprendi", { "Veja por tipo tudo o que a $n guardou na memória e apague o que estiver errado." }) { mostrarAprendizado() },
+            ) + (if (VetorialId.admin(this)) listOf(
                 TelaDeAjustes.Ajuste("Estudo diário (memória vetorial)", {
                     val r = Estudo.ultimo(this)
                     "Todo dia, em segundo plano: ${Estudo.FRASES_POR_DIA} jeitos de pedir, ${Estudo.ENIGMAS_POR_DIA} charadas, " +
@@ -259,7 +259,8 @@ internal fun MainActivity.abrirMenu(@Suppress("UNUSED_PARAMETER") ancora: View) 
                     Estudo.definirLigado(this, !Estudo.ligado(this))
                     ajustes?.atualizar()
                 },
-            ) + (if (VetorialId.admin(this)) listOf(item("Modelo do Gemini", { modelo() }, MENU_MODELO)) else emptyList())
+                item("Modelo do Gemini", { modelo() }, MENU_MODELO),
+            ) else emptyList())
         ),
         TelaDeAjustes.Secao(
             "Aparência", listOf(

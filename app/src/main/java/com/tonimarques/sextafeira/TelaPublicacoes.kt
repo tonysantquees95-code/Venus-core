@@ -86,9 +86,13 @@ internal fun MainActivity.abrirPublicacoes() {
                     ajustes?.dismiss()
                     listarPosts()
                 },
-                TelaDeAjustes.Ajuste("Ideias de post", { "As ideias que a $n estudou para a semana, prontas para virar post." }) {
+                TelaDeAjustes.Ajuste("Ideias de post", { "As ideias da $n para a semana, prontas para virar post." }) {
                     ajustes?.dismiss()
                     mostrarIdeiasDePost()
+                },
+                TelaDeAjustes.Ajuste("Ideias de vídeo (Reels)", { "Cria ideias de vídeo com os produtos do catálogo: roteiro, pedido pronto para um gerador de vídeo por IA, legenda e hashtags." }) {
+                    ajustes?.dismiss()
+                    ideiasDeVideo()
                 },
             )
         ),
