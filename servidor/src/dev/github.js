@@ -28,7 +28,10 @@ export const PROJETOS = [
       { app: "vindex-windows", rotulo: "Vindex (Windows)", tag: /^1\.(\d+)$/, arquivo: (n) => /^VindexSetup\.exe$/i.test(n) },
     ],
   },
-  { id: "vortex", nome: "Vortex · Game Space", repo: REPO_VORTEX, descricao: "Game Space: launcher de jogos retrô com Modo Jogo, saves na nuvem e voz da Vênus (Windows e Android).", apks: [{ app: "vortex", rotulo: "Vortex (Android)", tag: /^v?\d+\.(\d+)(?:\.\d+)?$/, arquivo: (n) => /\.apk$/i.test(n) }] },
+  { id: "vortex", nome: "Vortex · Game Space", repo: REPO_VORTEX, descricao: "Game Space: launcher de jogos retrô com Modo Jogo, saves na nuvem e voz da Vênus (Windows e Android).", apks: [
+      { app: "vortex-android", rotulo: "Vortex (Android)", tag: /^v?1\.(\d+)$/, arquivo: (n) => /^Vortex\.apk$/i.test(n) },
+      { app: "vortex-windows", rotulo: "Vortex (Windows)", tag: /^v?1\.(\d+)$/, arquivo: (n) => /^VortexSetup\.exe$/i.test(n) },
+    ] },
 ];
 
 export const REPO_VALIDO = /^[A-Za-z0-9_.-]{1,60}\/[A-Za-z0-9_.-]{1,100}$/;
