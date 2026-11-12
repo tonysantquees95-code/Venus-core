@@ -254,6 +254,11 @@ test("atalhos do Vindex e projeto Vindex ligado ao repositório", async () => {
   assert.equal(ehAtalho("/vindex/windows"), true);
   assert.equal(responderAtalho(u, "/vindex/android").headers.get("location"), "https://github.com/tonysantquees95-code/Vindex-/releases/latest/download/Vindex.apk");
   assert.match(await responderAtalho(u, "/vindex").text(), /<h1>Vindex<\/h1>[\s\S]*\/vindex\/windows/);
+  assert.equal(ehAtalho("/vortex/android") && ehAtalho("/vortex"), true);
+  assert.equal(ehAtalho("/vortex/pedidos") || ehAtalho("/vortex/fila"), false);
+  assert.equal(responderAtalho(u, "/vortex/android").headers.get("location"), "https://github.com/tonysantquees95-code/Vortex/releases/latest/download/Vortex.apk");
+  assert.equal(responderAtalho(u, "/vortex/windows").headers.get("location"), "https://github.com/tonysantquees95-code/Vortex/releases/latest/download/VortexSetup.exe");
+  assert.match(await responderAtalho(u, "/vortex").text(), /VORTEX[\s\S]*\/vortex\/windows/);
   const p = PROJETOS.find((x) => x.id === "vindex");
   assert.equal(p.repo, "tonysantquees95-code/Vindex-");
   const apks = apksDoProjeto(p, [{ tag_name: "1.7", html_url: "u", assets: [{ id: 1, name: "Vindex.apk", size: 1 }, { id: 2, name: "VindexSetup.exe", size: 2 }] }]);
