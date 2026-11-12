@@ -15,8 +15,16 @@ import org.json.JSONObject
 
 private fun JSONArray?.itens(): List<JSONObject> = if (this == null) emptyList() else (0 until length()).mapNotNull { optJSONObject(it) }
 
-internal fun MainActivity.abrirConta() {
-    if (!VetorialId.logado(this)) return formularioDeConta(criar = false)
+/** Qualquer falha ao montar a janela da conta vira aviso (e fica no registro) em vez de fechar a Vênus. */
+private inline fun MainActivity.protegido(onde: String, bloco: () -> Unit) {
+    try { bloco() } catch (e: Throwable) {
+        Registro.anotar(this, "erro", "$onde → " + Registro.resumoDoErro(e).replace("\n", " | "))
+        try { aviso("Não consegui abrir o Vetorial ID agora. Tente de novo.") } catch (_: Throwable) { }
+    }
+}
+
+internal fun MainActivity.abrirConta() = protegido("abrirConta") {
+    if (!VetorialId.logado(this)) return@protegido formularioDeConta(criar = false)
     escolher("Vetorial ID · ${VetorialId.email(this)}", listOf(
         "Meus dispositivos" to { abrirDispositivos() },
         "Licença e renovação" to { abrirLicenca() },
@@ -127,8 +135,8 @@ internal fun MainActivity.abrirLicenca() {
 }
 
 /** Menu rápido da conta (avatar): e-mail, assinatura e atalhos. */
-internal fun MainActivity.abrirMenuDaConta() {
-    if (!VetorialId.logado(this)) return abrirConta()
+internal fun MainActivity.abrirMenuDaConta() = protegido("abrirMenuDaConta") {
+    if (!VetorialId.logado(this)) return@protegido abrirConta()
     val nome = VetorialId.nomeDaConta(this).ifBlank { "Minha conta" }
     escolher("$nome\n${VetorialId.email(this)}\n${VetorialId.assinatura(this).ifBlank { "Carregando assinatura…" }}", listOf(
         "Gerenciar conta" to { abrirConta() },
