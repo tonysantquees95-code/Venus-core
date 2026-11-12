@@ -231,7 +231,6 @@ class TelaDeAjustes(
         if (compacto) {
             coluna.setPadding(dp(16), dp(10), dp(16), dp(24))
             coluna.setOnClickListener { }
-            rolagem.layoutParams = null
             raiz.addView(rolagem, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM))
         } else raiz.addView(rolagem, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
         return raiz
