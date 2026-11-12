@@ -19,7 +19,7 @@ private fun JSONArray?.itens(): List<JSONObject> = if (this == null) emptyList()
 private inline fun MainActivity.protegido(onde: String, bloco: () -> Unit) {
     try { bloco() } catch (e: Throwable) {
         Registro.anotar(this, "erro", "$onde → " + Registro.resumoDoErro(e).replace("\n", " | "))
-        try { aviso("Não consegui abrir o Vetorial ID agora. Tente de novo.") } catch (_: Throwable) { }
+        try { aviso("Não consegui abrir o Vetorial ID ($onde): ${e.javaClass.simpleName} ${e.message.orEmpty().take(90)} ${e.stackTrace.firstOrNull()?.let { "@" + it.fileName + ":" + it.lineNumber }.orEmpty()}") } catch (_: Throwable) { }
     }
 }
 
