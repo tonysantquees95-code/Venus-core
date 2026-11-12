@@ -2101,6 +2101,16 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == Ferramentas.PEDIDO_CONTATOS) {
+            if (grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED) {
+                Toast.makeText(this, "Contatos liberados. Agora é só pedir: \"ligar para fulano\".", Toast.LENGTH_LONG).show()
+            } else if (!shouldShowRequestPermissionRationale(Manifest.permission.READ_CONTACTS)) {
+                Toast.makeText(this, "O Android bloqueou o pedido. Libere em Permissões > Contatos.", Toast.LENGTH_LONG).show()
+                try { startActivity(Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:$packageName"))) } catch (_: Exception) { }
+            }
+            ajustes?.atualizar()
+            return
+        }
         if (requestCode == Ferramentas.PEDIDO_LOCALIZACAO) {
             if (grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED) {
                 Toast.makeText(this, "Localização liberada. Pergunte o clima de novo.", Toast.LENGTH_LONG).show()

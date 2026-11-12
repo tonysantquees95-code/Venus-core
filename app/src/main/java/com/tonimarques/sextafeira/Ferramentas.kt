@@ -1036,10 +1036,10 @@ class Ferramentas(private val activity: Activity, private val memoria: Memoria? 
         if (contato.isBlank()) return Contato("", null, "Para quem? Preciso do nome ou do número.")
 
         if (activity.checkSelfPermission(Manifest.permission.READ_CONTACTS) != PackageManager.PERMISSION_GRANTED) {
-            activity.requestPermissions(arrayOf(Manifest.permission.READ_CONTACTS), PEDIDO_CONTATOS)
+            activity.runOnUiThread { activity.requestPermissions(arrayOf(Manifest.permission.READ_CONTACTS), PEDIDO_CONTATOS) }
             return Contato(
                 contato, null,
-                "Preciso de permissão para ler seus contatos: toque em Permitir e repita o pedido."
+                "Preciso de permissão para ler seus contatos: toque em Permitir e repita o pedido. Se o aviso não aparecer, vá em Ajustes > Sistema > Contatos e ligações."
             )
         }
 
