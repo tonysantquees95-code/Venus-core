@@ -105,7 +105,6 @@ class PopupActivity : MainActivity() {
             setOnClickListener { alternarEscuta() }
             aoMudarCor = { cor -> aplicarCor(cor) }
         }
-        aplicarTema()
         cartao.addView(orbe, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(200)))
 
         status = TextView(this).apply {
@@ -158,6 +157,8 @@ class PopupActivity : MainActivity() {
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
         ).apply { setMargins(dp(10), 0, dp(10), dp(18)) }
         raiz.addView(cartao, params)
+        // só agora: o tema pinta o microfone e os botões, que precisam já existir (antes disso o pop-up fechava ao abrir)
+        aplicarTema()
         return raiz
     }
 }
