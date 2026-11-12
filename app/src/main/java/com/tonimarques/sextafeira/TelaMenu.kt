@@ -223,6 +223,7 @@ internal fun MainActivity.abrirMenu(@Suppress("UNUSED_PARAMETER") ancora: View) 
                     "Responde só com os próprios recursos (comandos, pesquisa e notícias), sem usar o Gemini."
                 }, MENU_INDEPENDENTE) { modoIndependente() },
             ) + (if (!VetorialId.admin(this)) emptyList() else listOf(
+                TelaDeAjustes.Ajuste("Quem faz o quê (Groq, DeepSeek, Gemini)", { "A função de cada IA no servidor da $n: texto e conversa, lógica e código, imagem e áudio." }) { quemFazOQue() },
                 item("Chave do Gemini (opcional)", { if (Cofre.ler(prefs, MainActivity.PREF_CHAVE).isNotBlank()) "Chave própria configurada" else if (GeminiRota.doServidor(chave())) "Usando o Gemini da ${Marca.nome} (servidor)" else "Entre no Vetorial ID para usar o Gemini da ${Marca.nome}" }, MENU_CHAVE),
                 TelaDeAjustes.Ajuste("IA reserva (Groq ou Grok)", {
                     if (!SegundaIA.configurada(this)) "Não configurada. Com uma chave grátis da Groq, a $n continua respondendo quando o Gemini falhar ou ficar sem cota."
