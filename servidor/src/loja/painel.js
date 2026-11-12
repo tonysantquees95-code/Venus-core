@@ -3,7 +3,7 @@
 export const PAINEL = `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Painel · Vênus</title><meta name="robots" content="noindex"><style>
 :root{--fundo:#070a1c;--painel:#0e1330;--texto:#f3f4ff;--suave:#8b95c0;--cor:#E36BD0;--taxa:#F5B93A;--ok:#2ECC8F;--ruim:#E5384F}
-*{box-sizing:border-box}body{margin:0;background:var(--fundo);color:var(--texto);font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;padding:16px;max-width:980px;margin:auto}
+*{box-sizing:border-box}body{margin:0;background:var(--fundo);color:var(--texto);font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;padding:16px 16px 96px;max-width:980px;margin:auto}
 h1{font-size:18px;letter-spacing:.2em;margin:6px 0 14px}h2{font-size:13px;color:var(--suave);letter-spacing:.15em;margin:22px 0 8px}
 .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}.c{background:var(--painel);border:1px solid #ffffff1a;border-radius:16px;padding:14px}
 .c{min-width:0}.c small{color:var(--suave);display:block;margin-bottom:4px;overflow-wrap:anywhere;line-height:1.25}.c b{font-size:20px}.ok{color:var(--ok)}.tx{color:var(--taxa)}.ruim{color:var(--ruim)}

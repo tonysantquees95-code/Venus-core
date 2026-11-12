@@ -8,7 +8,7 @@ object VitrineDoApp {
     const val MAXIMO = 500
 
     /** Só o que dá para vender: ativo e com preço. Preço antigo maior que o atual vira promoção. */
-    fun itens(produtos: List<Loja.Produto>): JSONArray {
+    fun itens(produtos: List<Loja.Produto>, site: String = ""): JSONArray {
         val saida = JSONArray()
         for (p in produtos) {
             if (saida.length() >= MAXIMO) break
@@ -23,11 +23,20 @@ object VitrineDoApp {
                 .put("estoque", p.estoque ?: 1)
                 .put("categoria", categoria(p))
             if (promocao) item.put("promocao_centavos", preco)
-            texto(p, "imageUrl")?.takeIf { it.startsWith("https://") }?.let { item.put("imagem", it) }
+            texto(p, "imageUrl")?.let { endereco(it, site) }?.let { item.put("imagem", it) }
             texto(p, "description")?.let { item.put("descricao", it.replace(Regex("\\s+"), " ").take(400)) }
             saida.put(item)
         }
         return saida
+    }
+
+    /** A foto do produto como endereço https completo: o site guarda caminhos como "/_cdn/produtos/x.jpg", que a vitrine (em outro endereço) não alcança. */
+    fun endereco(imagem: String, site: String): String? {
+        val i = imagem.trim()
+        if (i.startsWith("https://")) return i
+        val base = site.trim().trimEnd('/')
+        if (!base.startsWith("https://") || i.startsWith("http") || i.startsWith("file:") || i.startsWith("data:")) return null
+        return base + (if (i.startsWith("/")) i else "/$i")
     }
 
     /** Produtos da vitrine cuja foto só existe no celular (catálogo interno, "file://"): sku e caminho do arquivo. O servidor precisa de uma cópia reduzida. */
