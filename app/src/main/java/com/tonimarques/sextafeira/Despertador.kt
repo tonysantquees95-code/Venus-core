@@ -148,6 +148,7 @@ class Despertador(
     private fun executar(minha: Int) {
         var gravador: AudioRecord? = null
         var reconhecedor: Recognizer? = null
+        var livre: Recognizer? = null // fala livre (nome de gênero, artista...) depois de "Vênus, toca"
         var ouviu = false
         var falhou = false
         try {
@@ -182,6 +183,7 @@ class Despertador(
             var candidato: String? = null
             var repeticoes = 0
             var esperaAte = 0L
+            var livreAte = 0L
             var inicioDaFala = 0L
             while (minha == geracao) {
                 val n = gravador.read(bloco, 0, bloco.size)
@@ -198,6 +200,8 @@ class Despertador(
                     if (deveSer != modoMusica) {
                         modoMusica = deveSer
                         reconhecedor?.close()
+                        try { livre?.close() } catch (e: Throwable) { }
+                        livre = null
                         reconhecedor = if (modoMusica) Recognizer(modelo, TAXA.toFloat(), GRAMATICA_MUSICA) else Recognizer(modelo, TAXA.toFloat())
                         analisando = false
                         candidato = null
@@ -208,9 +212,35 @@ class Despertador(
                 val rec = reconhecedor ?: break
 
                 if (modoMusica) {
+                    // Guarda uns 4 s de áudio: ao ouvir "Vênus, toca…" a fala livre recomeça do nome.
+                    anteriores.addLast(bloco.copyOf(n))
+                    if (anteriores.size > 40) anteriores.removeFirst()
+                    val l = livre
+                    if (l != null) {
+                        val fim = l.acceptWaveForm(bloco, n)
+                        if (fim || agora >= livreAte) {
+                            val dito = campo(if (fim) l.result else l.finalResult, "text")
+                            try { l.close() } catch (e: Throwable) { }
+                            livre = null
+                            Cerebro.pedidoDeMusica(dito)?.let { c -> principal.post { aoComando?.invoke(c) } }
+                            rec.reset()
+                            candidato = null
+                            repeticoes = 0
+                            esperaAte = agora + 1500
+                            inicioDaFala = agora
+                        }
+                        continue
+                    }
                     // Com música o som nunca "para": analisa tudo e confirma o comando por alguns instantes.
                     val terminou = rec.acceptWaveForm(bloco, n)
                     val texto = if (terminou) campo(rec.result, "text") else campo(rec.partialResult, "partial")
+                    if (agora >= esperaAte && Cerebro.pedeTocarAlgo(texto)) {
+                        val novo = Recognizer(modelo, TAXA.toFloat())
+                        for (a in anteriores) novo.acceptWaveForm(a, a.size)
+                        livre = novo
+                        livreAte = agora + 6000
+                        continue
+                    }
                     val comando = Cerebro.comandoDeMusica(texto, exigirNome = true)
                     // "Vênus, ativar" abre o orbe; só o nome ("Vênus") vale depois que a pessoa termina de falar
                     if (comando == null && Cerebro.pareceAtivacao(texto, terminou && acionarPeloNome())) {
@@ -285,6 +315,10 @@ class Despertador(
             gravador?.release()
             try {
                 reconhecedor?.close()
+            } catch (e: Throwable) {
+            }
+            try {
+                livre?.close()
             } catch (e: Throwable) {
             }
             if (minha == geracao) {

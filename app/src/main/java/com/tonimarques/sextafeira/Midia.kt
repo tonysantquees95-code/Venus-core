@@ -1,7 +1,10 @@
 package com.tonimarques.sextafeira
 
+import android.app.SearchManager
 import android.content.Context
+import android.content.Intent
 import android.media.AudioManager
+import android.provider.MediaStore
 import android.view.KeyEvent
 
 /** Controla o que estiver tocando (Deezer, Spotify, YouTube Music...) pelos botões de mídia do Android. */
@@ -44,7 +47,32 @@ object Midia {
     fun escolherPlayer(dito: String?, lembrado: String?, instalados: List<String>): String? =
         dito?.takeIf { it.isNotBlank() } ?: lembrado?.takeIf { it in instalados } ?: instalados.firstOrNull()
 
+    private val PLAYERS = listOf("deezer.android.app", "com.spotify.music", "com.google.android.apps.youtube.music")
+
+    /** "Vênus, toca pagode": pede ao player (o último usado primeiro) para tocar a busca. */
+    fun tocarBusca(contexto: Context, busca: String): String {
+        val consulta = busca.trim()
+        if (consulta.isEmpty()) return "O que devo tocar?"
+        val pm = contexto.packageManager
+        val ultimo = contexto.getSharedPreferences("config", Context.MODE_PRIVATE).getString("ultimo_player", null)
+        val ordem = listOfNotNull(ultimo?.takeIf { it in PLAYERS }) + PLAYERS.filter { it != ultimo }
+        for (pacote in ordem) {
+            if (pm.getLaunchIntentForPackage(pacote) == null) continue
+            val intent = Intent(MediaStore.INTENT_ACTION_MEDIA_PLAY_FROM_SEARCH)
+                .setPackage(pacote)
+                .putExtra(SearchManager.QUERY, consulta)
+                .putExtra(MediaStore.EXTRA_MEDIA_FOCUS, "vnd.android.cursor.item/*")
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            try {
+                contexto.startActivity(intent)
+                return "Tocando \"$consulta\"."
+            } catch (e: Exception) { }
+        }
+        return "Não achei um player de música para tocar \"$consulta\"."
+    }
+
     fun executar(contexto: Context, acao: String): String {
+        if (acao.startsWith("tocar_busca:")) return tocarBusca(contexto, acao.substringAfter(':'))
         val audio = contexto.getSystemService(AudioManager::class.java) ?: return "Não consegui controlar o som."
         fun tecla(codigo: Int) {
             audio.dispatchMediaKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, codigo))
