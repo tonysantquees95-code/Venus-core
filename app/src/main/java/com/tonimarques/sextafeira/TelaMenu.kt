@@ -595,6 +595,7 @@ internal fun MainActivity.alternarAvisosDaLoja() {
 }
 
 internal fun MainActivity.estudarAgora() {
+    if (negarSeNaoForAdmin()) return
     if (chave().isBlank()) return responder("Para estudar eu uso o Gemini. Configure a chave do Gemini nos ajustes.")
     if (estudando || Estudo.ocupado()) return responder("Já estou estudando. Leva uns minutos; eu aviso quando terminar.")
     estudando = true

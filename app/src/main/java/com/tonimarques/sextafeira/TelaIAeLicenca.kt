@@ -48,7 +48,15 @@ import java.util.Locale
  * Funções da tela principal (MainActivity) separadas por assunto; o comportamento é o mesmo de antes.
  */
 
+/** Telas de chave, IA reserva, modelo e estudo são só da conta do administrador (o servidor confirma). */
+internal fun MainActivity.negarSeNaoForAdmin(): Boolean {
+    if (VetorialId.admin(this)) return false
+    aviso("Essa opção é só da conta do administrador.")
+    return true
+}
+
 internal fun MainActivity.pedirIAReserva() {
+    if (negarSeNaoForAdmin()) return
     val opcoes = SegundaIA.PROVEDORES
     var escolhido = opcoes.indexOfFirst { it.id == SegundaIA.provedor(this).id }.coerceAtLeast(0)
     val caixa = LinearLayout(this).apply {
@@ -209,6 +217,7 @@ internal fun MainActivity.administrarLicencas() {
 }
 
 internal fun MainActivity.pedirCloudflare() {
+    if (negarSeNaoForAdmin()) return
     val caixa = LinearLayout(this).apply {
         orientation = LinearLayout.VERTICAL
         setPadding(dp(20), dp(8), dp(20), 0)
@@ -253,6 +262,7 @@ internal fun MainActivity.pedirCloudflare() {
 }
 
 internal fun MainActivity.pedirChave() {
+    if (negarSeNaoForAdmin()) return
     val entrada = campoSecreto(Cofre.ler(prefs, PREF_CHAVE), "Cole aqui sua chave")
     AlertDialog.Builder(this)
         .setTitle("Chave do Gemini")
@@ -278,6 +288,7 @@ internal fun MainActivity.pedirChave() {
 }
 
 internal fun MainActivity.pedirModelo() {
+    if (negarSeNaoForAdmin()) return
     val entrada = campoDeDialogo(modelo(), MODELO_PADRAO)
     AlertDialog.Builder(this)
         .setTitle("Modelo do Gemini")
