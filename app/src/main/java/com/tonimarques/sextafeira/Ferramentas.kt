@@ -66,6 +66,16 @@ class Ferramentas(private val activity: Activity, private val memoria: Memoria? 
         )
         .put(
             funcao(
+                "vortex",
+                "Pede ao Vortex (central de jogos retrô do computador ou do celular, que precisa estar aberto) para abrir um jogo pelo nome " +
+                    "ou para otimizar o próprio Vortex.",
+                listOf("acao"),
+                "acao" to opcoes("O que o Vortex deve fazer.", "abrir_jogo", "otimizar"),
+                "jogo" to texto("Nome do jogo a abrir (só para abrir_jogo), como a pessoa falou.")
+            )
+        )
+        .put(
+            funcao(
                 "vindex",
                 "Pede ao Vindex (otimizador do computador ou do celular, que precisa estar aberto) para otimizar o sistema com 1 clique " +
                     "(limpeza segura de temporários e memória) ou para dizer como está o aparelho (CPU, memória, disco).",
@@ -357,6 +367,7 @@ class Ferramentas(private val activity: Activity, private val memoria: Memoria? 
         "tocar_musica" -> tocarMusica(a.optString("busca"), a.optString("app"))
         "controlar_midia" -> controlarMidia(a.optString("acao"), a.optString("app"), a.optString("nivel"))
         "vindex" -> vindexPedir(a.optString("acao"))
+        "vortex" -> vortexPedir(a.optString("acao"), a.optString("jogo"))
         "conta_vetorial" -> contaVetorial(a.optString("acao"))
         "buscar_perto" -> buscarPerto(a.optString("oque"), a.optString("referencia"))
         "salvar_lugar" -> salvarLugar(a.optString("lugar"), a.optString("endereco"))
@@ -860,6 +871,33 @@ class Ferramentas(private val activity: Activity, private val memoria: Memoria? 
     }
 
     /** Conta do Vetorial ID pela conversa (status da assinatura, conectar, dispositivos, sair). Roda fora da tela principal. */
+    /** Pede ao Vortex pela nuvem (Vetorial ID) e espera a resposta dele por até 50 segundos. */
+    private fun vortexPedir(acao: String, jogo: String): String {
+        if (!VetorialId.logado(activity)) return "Entre com o seu Vetorial ID para eu falar com o Vortex."
+        val ac = if (acao == "otimizar") "otimizar" else "abrir_jogo"
+        if (ac == "abrir_jogo" && jogo.isBlank()) return "Qual jogo você quer abrir no Vortex?"
+        val token = VetorialId.token(activity)
+        val r = Nuvem.bruto(activity, "POST", "/vortex/pedidos", JSONObject().put("comando", ac).put("argumento", jogo), token)
+        if (!r.ok) return when (r.json.optString("codigo")) {
+            "vortex_fechado" -> "O Vortex não está aberto no seu aparelho agora. Abra o Vortex e me peça de novo."
+            "vortex_nao_liberado" -> "O Vortex não está liberado na sua conta. Veja os pacotes em Conta."
+            else -> "Não consegui falar com o Vortex: ${r.erro()}"
+        }
+        val id = r.json.optString("id")
+        val fim = System.currentTimeMillis() + 50_000
+        while (System.currentTimeMillis() < fim) {
+            Thread.sleep(2_000)
+            val s = Nuvem.bruto(activity, "GET", "/vortex/pedidos/$id", null, token)
+            if (!s.ok) return "Não consegui acompanhar o pedido ao Vortex: ${s.erro()}"
+            when (s.json.optString("status")) {
+                "concluido" -> return "Vortex: " + s.json.optString("resumo").ifBlank { "pronto." }
+                "falhou" -> return "O Vortex não conseguiu: " + s.json.optString("resumo").ifBlank { "erro desconhecido." }
+                "expirado" -> return "O Vortex não respondeu a tempo."
+            }
+        }
+        return "Pedi ao Vortex, mas ele ainda não respondeu. Veja a tela dele."
+    }
+
     /** Pede a ação ao Vindex pela nuvem (Vetorial ID) e espera a resposta dele por até 50 segundos. */
     private fun vindexPedir(acao: String): String {
         if (!VetorialId.logado(activity)) return "Entre com o seu Vetorial ID para eu falar com o Vindex."
@@ -1347,7 +1385,7 @@ class Ferramentas(private val activity: Activity, private val memoria: Memoria? 
             "loja_retiradas", "loja_estoque_geral", "loja_alterar", "loja_status", "loja_reposicao", "loja_mais_vendidos", "loja_comparar", "loja_parados", "loja_margem", "loja_margens", "loja_lucro", "loja_previsao", "loja_produto", "loja_entregue", "loja_confirmar", "loja_agendar",
             "caixa_resultado", "caixa_equilibrio", "caixa_previsao",
             "pesquisar_preco", "loja_curva_abc", "loja_compras", "loja_recompra", "loja_chamar_cliente", "loja_promo_parados",
-            "instagram_resumo", "robo_resumo", "robo_ligar", "vindex",
+            "instagram_resumo", "robo_resumo", "robo_ligar", "vindex", "vortex",
         )
 
         private const val SPOTIFY = "com.spotify.music"

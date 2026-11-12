@@ -952,6 +952,8 @@ object ComandosLocais {
     val TIPO_POST = Regex("^(?:(?:muda|mudar|mude|troca|trocar|troque|passa|poste|posta|postar|publica|publicar|faz|faca|coloca|bota)(?: (?:ele|ela|isso|o post|a postagem))? )?(?:no|pro|para o|pra|para|pelo|como) (feed|story|stories)\\b")
 
     private val ROBO = "(?:o |a )?(?:robo|robozinho|venus robo|atendimento automatico|resposta automatica)"
+    private val VORTEX_OTIMIZAR = Regex("\\b(?:otimiz\\w*|acelera\\w*)\\b.*\\bvortex\\b|\\bvortex\\b.*\\b(?:otimiz\\w*|acelera\\w*)\\b")
+    private val VORTEX_ABRIR = Regex("^(?:(?:pode|vamos|quero|vou)\\s+)?(?:abr\\w+|inici\\w+|rod\\w+|jog\\w+|execut\\w+|coloc\\w+)\\s+(?:o\\s+)?(?:jogo\\s+(.+?)(?:\\s+(?:no|pelo|com o|usando o)\\s+vortex)?|(.+?)\\s+(?:no|pelo|com o)\\s+vortex)$")
     private val VINDEX_OTIMIZAR = Regex("\\b(?:otimiz\\w*|limp\\w*|acelera\\w*)\\b.*\\bvindex\\b|\\bvindex\\b.*\\b(?:otimiz\\w*|limp\\w*|acelera\\w*)\\b")
     private val VINDEX_DIAGNOSTICO = Regex("\\bvindex\\b.*\\b(?:como esta|diagnostic\\w*|status|saude)\\b|\\b(?:como esta|diagnostic\\w*|saude)\\b.*\\bvindex\\b")
     private val ROBO_LIGAR = Regex("^(?:pode )?(liga|ligar|ligue|ativa|ativar|ative|volta|voltar|desliga|desligar|desligue|desativa|desativar|desative|pausa|pausar|pause|para|parar|pare)(?: o| a)? $ROBO\\b")
@@ -1013,6 +1015,11 @@ object ComandosLocais {
         if (POSTAR_AGORA.matches(t)) return Resultado.Acao("postar_agora", emptyMap())
         if (ESTUDO_AGORA.matches(t)) return Resultado.Acao("estudo_agora", emptyMap())
         if (IDEIAS_POST.containsMatchIn(t)) return Resultado.Acao("estudo_ideias", emptyMap())
+        if (VORTEX_OTIMIZAR.containsMatchIn(t)) return Resultado.Acao("vortex", mapOf("acao" to "otimizar"))
+        VORTEX_ABRIR.matchEntire(t.trim().trimEnd('.', '!', '?'))?.let { m ->
+            val jogo = (m.groups[1] ?: m.groups[2])?.value?.trim().orEmpty()
+            if (jogo.length >= 2) return Resultado.Acao("vortex", mapOf("acao" to "abrir_jogo", "jogo" to jogo))
+        }
         if (VINDEX_OTIMIZAR.containsMatchIn(t)) return Resultado.Acao("vindex", mapOf("acao" to "otimizar"))
         if (VINDEX_DIAGNOSTICO.containsMatchIn(t)) return Resultado.Acao("vindex", mapOf("acao" to "diagnostico"))
         ROBO_LIGAR.find(t)?.let { m -> return Resultado.Acao("robo_ligar", mapOf("ligado" to !Regex("^(?:des|pausa|para|pare|parar)").containsMatchIn(m.groupValues[1]))) }
