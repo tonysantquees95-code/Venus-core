@@ -260,7 +260,7 @@ class Despertador(
                     }
                     // Comandos de música também funcionam com o som baixo
                     if (terminou && aoComando != null && modoMusicaLigado() && audio?.isMusicActive == true) {
-                        Cerebro.comandoDeMusica(texto)?.let { c -> principal.post { aoComando?.invoke(c) } }
+                        Cerebro.comandoDeMusica(texto, 4)?.let { c -> principal.post { aoComando?.invoke(c) } }
                     }
                 } else if (analisando) {
                     analisando = false
@@ -307,18 +307,21 @@ class Despertador(
         private const val TAXA = 16000
         private const val LIMIAR_MINIMO = 180.0
 
-        /** O que a Vênus espera ouvir quando tem música tocando ("[unk]" = qualquer outra coisa). */
+        /**
+         * As palavras que a Vênus aceita ouvir quando tem música tocando ("[unk]" = qualquer outra coisa). São palavras soltas,
+         * não frases: assim ela entende "diminui o volume para dez por cento" ou "pula essa" do jeito que você falar,
+         * mas nada fora da música é reconhecido; para conversar, é só chamar "Vênus".
+         */
         val FRASES_MUSICA = listOf(
-            "pausar música", "pausa a música", "pausa música", "parar música", "para a música", "para música",
-            "continuar música", "continua a música", "tocar música", "toca a música", "volta a tocar",
-            "próxima música", "próxima", "passa a música", "pula a música", "pular música",
-            "música anterior", "volta a música", "voltar música",
-            "aumentar volume", "aumenta o volume", "aumentar o volume", "sobe o volume",
-            "diminuir volume", "diminui o volume", "diminuir o volume", "abaixa o volume", "abaixar volume", "baixa o volume",
-            "vênus ativar", "venus ativar", "vênus ativa", "vênus",
-            "próxima faixa", "passa essa", "pula essa", "faixa anterior", "volta a faixa",
-            "pausa de tocar", "para de tocar", "pausa o som", "para o som",
-            "volume máximo", "volume mínimo", "volume na metade", "mais alto", "mais baixo", "silenciar música",
+            "vênus", "venus", "ativar", "ativa",
+            "pausar", "pausa", "pause", "parar", "para", "pare", "continuar", "continua", "continue", "tocar", "toca", "toque", "retomar",
+            "próxima", "proxima", "próximo", "seguinte", "pula", "pular", "pule", "passa", "passar", "anterior", "volta", "voltar", "volte",
+            "música", "musica", "faixa", "som", "player", "essa", "esta", "de", "a", "o", "e", "um", "uma", "pouco",
+            "volume", "aumentar", "aumenta", "aumente", "sobe", "subir", "suba", "diminuir", "diminui", "diminua", "abaixar", "abaixa", "abaixe",
+            "baixa", "baixar", "reduz", "reduzir", "menos", "mais", "alto", "baixo", "máximo", "maximo", "total", "mínimo", "minimo", "metade", "meio",
+            "mudo", "silenciar", "silencia", "silencie", "tira", "tirar", "coloca", "põe", "bota", "deixa", "no", "na", "em", "pra", "por", "cento", "porcento",
+            "zero", "dois", "duas", "três", "tres", "quatro", "cinco", "seis", "sete", "oito", "nove", "dez", "onze", "doze", "treze", "catorze", "quatorze",
+            "quinze", "dezesseis", "dezessete", "dezoito", "dezenove", "vinte", "trinta", "quarenta", "cinquenta", "sessenta", "setenta", "oitenta", "noventa", "cem",
         )
         private val GRAMATICA_MUSICA = (FRASES_MUSICA + "[unk]").joinToString(",", "[", "]") { "\"$it\"" }
 

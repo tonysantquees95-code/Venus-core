@@ -27,9 +27,30 @@ class MusicaEGestoTest {
         assertNull(Cerebro.comandoDeMusica(""))
     }
 
-    @Test fun todaFraseDaListaFazAlgo() {
-        for (f in Despertador.FRASES_MUSICA) {
-            assertTrue("\"$f\" não leva a nenhum comando", Cerebro.comandoDeMusica(f) != null || Cerebro.pareceAtivacao(f, soNome = true))
+    @Test fun falaLivreDeMusica() {
+        assertEquals("proxima", Cerebro.comandoDeMusica("pula essa"))
+        assertEquals("proxima", Cerebro.comandoDeMusica("passa para a próxima"))
+        assertEquals("anterior", Cerebro.comandoDeMusica("volta a música"))
+        assertEquals("pausar", Cerebro.comandoDeMusica("para de tocar"))
+        assertEquals("tocar", Cerebro.comandoDeMusica("volta a tocar"))
+        assertEquals("volume_nivel:10", Cerebro.comandoDeMusica("diminui o volume para dez por cento"))
+        assertEquals("volume_nivel:50", Cerebro.comandoDeMusica("volume em 50"))
+        assertEquals("volume_rel:50", Cerebro.comandoDeMusica("aumenta o volume em cinquenta por cento"))
+        assertEquals("volume_rel:-20", Cerebro.comandoDeMusica("abaixa o volume em vinte por cento"))
+        assertEquals("volume_nivel:25", Cerebro.comandoDeMusica("volume para vinte e cinco por cento"))
+        assertEquals("aumentar_volume", Cerebro.comandoDeMusica("aumenta um pouco o volume"))
+        assertEquals("diminuir_volume", Cerebro.comandoDeMusica("mais baixo"))
+    }
+
+    @Test fun foraDaMusicaNaoEComando() {
+        assertNull(Cerebro.comandoDeMusica("qual é a previsão do tempo"))
+        assertNull(Cerebro.comandoDeMusica("manda mensagem para a Maria"))
+        assertNull(Cerebro.comandoDeMusica("[unk] volume [unk]"))
+    }
+
+    @Test fun vocabularioTemOsNumerosEOsComandos() {
+        for (w in listOf("volume", "próxima", "pula", "dez", "cinquenta", "cem", "cento", "vênus")) {
+            assertTrue("\"$w\" falta na lista", w in Despertador.FRASES_MUSICA)
         }
     }
 

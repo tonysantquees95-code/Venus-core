@@ -385,11 +385,52 @@ class Cerebro(
             Regex("^(?:diminuir|diminui|diminua|abaixar|abaixa|abaixe|baixa|baixar) (?:o )?volume$") to "diminuir_volume",
         )
 
-        /** Comando curto de música ("pausar música", "próxima", "aumenta o volume"), ou null. */
-        fun comandoDeMusica(texto: String): String? {
-            val t = ComandosLocais.normalizar(texto).replace("[unk]", " ").replace(Regex("[^a-z ]"), " ")
-                .replace(Regex("\\s+"), " ").trim()
-            if (t.isBlank() || t.split(" ").size > 4) return null
+        private val VOCABULARIO_MUSICA: Set<String> by lazy { Despertador.FRASES_MUSICA.map { ComandosLocais.normalizar(it) }.toSet() }
+
+        /**
+         * Comando de música em fala livre ("pula essa", "diminui o volume para dez por cento", "aumenta o volume em 50%"),
+         * ou null. Só entende música: qualquer outra coisa é ignorada até chamarem a Vênus pelo nome.
+         */
+        fun comandoDeMusica(texto: String, maxPalavras: Int = 10): String? {
+            if (Regex("\\[unk]").findAll(texto).count() >= 2) return null // muito barulho/letra de música: não é comando
+            val t = ComandosLocais.normalizar(texto.replace("%", " por cento ")).replace("[unk]", " ")
+                .replace(Regex("[^a-z0-9 ]"), " ").replace(Regex("\\s+"), " ").trim()
+            val p = t.split(" ").filter { it.isNotBlank() }
+            if (p.isEmpty() || p.size > maxPalavras) return null
+            // só vale se TODAS as palavras são do vocabulário de música (ou números): conversa e letra de música ficam de fora
+            if (p.any { it !in VOCABULARIO_MUSICA && it.toIntOrNull() == null }) return null
+            fun tem(vararg w: String) = p.any { it in w }
+
+            if (tem("silenciar", "silencia", "silencie", "mudo")) return "mudo"
+            val aumentar = tem("aumentar", "aumenta", "aumente", "sobe", "subir", "suba", "mais")
+            val diminuir = tem("diminuir", "diminui", "diminua", "abaixar", "abaixa", "abaixe", "baixa", "baixar", "reduz", "reduzir", "menos", "tira", "tirar")
+            if (tem("volume", "som") || tem("alto", "baixo")) {
+                if (tem("mais") && tem("baixo")) return "diminuir_volume"
+                if (tem("mais") && tem("alto")) return "aumentar_volume"
+                if (tem("maximo", "total")) return "volume_maximo"
+                if (tem("minimo")) return "volume_minimo"
+                if (tem("metade", "meio")) return "volume_metade"
+                val nivel = Midia.numeroDasPalavras(p)
+                if (nivel != null) {
+                    val relativo = tem("em") && !tem("para", "pra", "no", "na")
+                    return when {
+                        relativo && aumentar -> "volume_rel:$nivel"
+                        relativo && diminuir -> "volume_rel:-$nivel"
+                        else -> "volume_nivel:$nivel"
+                    }
+                }
+                if (diminuir && !aumentar) return "diminuir_volume"
+                if (aumentar && !diminuir) return "aumentar_volume"
+                return null
+            }
+            val parar = tem("pausar", "pausa", "pause", "parar", "pare")
+            if (parar || (tem("para") && tem("musica", "som", "faixa", "player", "tocar"))) return "pausar"
+            if (tem("proxima", "proximo", "seguinte") ||
+                (tem("pula", "pular", "pule", "passa", "passar", "avanca") && (tem("musica", "faixa", "essa", "esta") || p.size <= 2))
+            ) return "proxima"
+            if (tem("anterior") || (tem("volta", "voltar", "volte") && tem("musica", "faixa"))) return "anterior"
+            if (tem("continuar", "continua", "continue", "tocar", "toca", "toque", "retomar", "retoma")) return "tocar"
+            if (p.size > 4) return null
             for ((regra, acao) in COMANDOS_MUSICA) if (regra.matches(t)) return acao
             return null
         }
