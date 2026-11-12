@@ -121,7 +121,7 @@ export async function buildsDoRepo(env, repo) {
         console.error("builds", repo, e && e.message);
       }
     }
-    return null;
+    return undefined; // falha não vai para o cache: a próxima leitura tenta de novo e guarda o motivo
   });
 }
 
