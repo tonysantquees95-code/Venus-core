@@ -119,7 +119,7 @@ async function publicacoes(env, ctx, repo = REPO, publico = false) {
   const guardada = await cache.match(chave);
   if (guardada) return guardada.json();
   const r = publico
-    ? await fetch(`https://api.github.com/repos/${repo}/releases?per_page=100`, { headers: { "User-Agent": "venus-servidor", Accept: "application/vnd.github+json" } })
+    ? await fetch(`https://api.github.com/repos/${repo}/releases?per_page=100`, { headers: { "User-Agent": "venus-servidor", Accept: "application/vnd.github+json", ...(env.GITHUB_TOKEN ? { Authorization: `Bearer ${env.GITHUB_TOKEN}` } : {}) } })
     : await gh(env, `/repos/${repo}/releases?per_page=100`);
   if (!r.ok) throw new Error(`GitHub ${r.status}`);
   const lista = await r.json();
