@@ -18,7 +18,7 @@
   $("dl-vindex-w").href = A.api + "/vindex/windows";
   const escolhido = new URLSearchParams(location.search).get("pacote") || "";
 
-  const NOMES = { venus: "Vênus", venus_vindex: "Vênus + Vindex", venus_vortex: "Vênus + Vortex", completo: "Completo (Vênus + Vindex + Vortex)" };
+  const NOMES = { venus: "Vênus", venus_vindex: "Vênus + Vindex", venus_vortex: "Vênus + Vortex", completo: "Completo (Vênus + Vindex + Vortex)", vortex: "Vortex", vindex: "Vindex", vindex_vortex: "Vindex + Vortex" };
   const mostrar = (qual) => { $("carregando").hidden = true; $("deslogado").hidden = qual !== "d"; $("logado").hidden = qual !== "l"; $("sair").hidden = qual !== "l"; };
   async function api(caminho, token) {
     const r = await fetch(A.api + caminho, { headers: { authorization: "Bearer " + token } });
