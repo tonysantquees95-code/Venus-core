@@ -278,6 +278,13 @@ internal fun MainActivity.abrirMenu(@Suppress("UNUSED_PARAMETER") ancora: View) 
         ),
         TelaDeAjustes.Secao(
             "Sistema", listOf(
+                TelaDeAjustes.Ajuste("Contatos e ligações", {
+                    if (checkSelfPermission(Manifest.permission.READ_CONTACTS) == PackageManager.PERMISSION_GRANTED) "Liberado: posso achar o número pelo nome para ligar, mandar WhatsApp e SMS."
+                    else "Sem acesso aos contatos. Toque para permitir e eu poder ligar e mandar mensagem pelo nome."
+                }) {
+                    if (checkSelfPermission(Manifest.permission.READ_CONTACTS) == PackageManager.PERMISSION_GRANTED) aviso("Os contatos já estão liberados.")
+                    else requestPermissions(arrayOf(Manifest.permission.READ_CONTACTS), Ferramentas.PEDIDO_CONTATOS)
+                },
                 TelaDeAjustes.Ajuste("Atualizações", {
                     "Versão ${versaoDoApp()} instalada. A ${Marca.nome} avisa sozinha quando sai uma nova; toque para procurar agora."
                 }) { procurarAtualizacao(manual = true) },
