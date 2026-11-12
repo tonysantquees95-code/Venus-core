@@ -19,6 +19,7 @@
  */
 import { ehAtalho, responderAtalho } from "./atalhos.js";
 import { ehRotaVindex, tratarVindex } from "./vindex/rotas.js";
+import { ehRotaCi, tratarCi } from "./ci/assinatura.js";
 import { chat, chatPreflight } from "./chat.js";
 import { tratarIA } from "./ia/rotas.js";
 import { ehRotaDaIA, tratarProxyIA } from "./ia/proxy.js";
@@ -58,6 +59,7 @@ export default {
       if (ehRotaDaIA(caminho)) return await tratarProxyIA(req, env, ctx, caminho);
       if (caminho.startsWith("/v1/")) return await tratarIA(req, env, ctx);
       if (ehRotaDoId(caminho)) return await tratarId(req, env, url, caminho);
+      if (ehRotaCi(caminho)) return await tratarCi(req, env, url, caminho);
       if (ehRotaVindex(caminho)) return await tratarVindex(req, env, url, caminho);
       if (ehRotaDev(caminho)) return await tratarDev(req, env, url, caminho);
       if (ehRotaDaLoja(caminho) || (env.DOMINIO_CURTO && url.hostname === env.DOMINIO_CURTO && req.method === "GET" && /^\/[a-z0-9-]{3,32}(\/[^/]+)?$/.test(caminho) && !["/saude", "/atualizacao"].includes(caminho))) {
