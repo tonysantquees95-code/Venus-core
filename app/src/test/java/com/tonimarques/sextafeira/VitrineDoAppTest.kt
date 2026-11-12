@@ -44,4 +44,12 @@ class VitrineDoAppTest {
         assertEquals("Moda íntima e sex shop · Porto Alegre/RS", VitrineDoApp.descricao("moda íntima e sex shop", "Porto Alegre", "RS"))
         assertEquals("Moda", VitrineDoApp.descricao("moda", "", ""))
     }
+
+    @Test
+    fun fotoSoNoCelularVaiParaOServidorMasHttpsNao() {
+        val local = JSONObject().put("imageUrl", "file:///data/user/0/app/files/catalogo_fotos/a.jpg")
+        val nuvem = JSONObject().put("imageUrl", "https://img.exemplo.com/b.jpg")
+        val l = VitrineDoApp.fotosLocais(listOf(produto(1, "A", bruto = local), produto(2, "B", bruto = nuvem), produto(3, "C", ativo = false, bruto = local), produto(4, "D")))
+        assertEquals(listOf("1" to "/data/user/0/app/files/catalogo_fotos/a.jpg"), l)
+    }
 }

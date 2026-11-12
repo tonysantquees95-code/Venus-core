@@ -89,6 +89,19 @@ async function paginaPublica(req, env, url, caminho) {
     return new Response(null, { status: 302, headers: { location: l.destino, "cache-control": "no-store", "referrer-policy": "no-referrer" } });
   }
   const curto = env.DOMINIO_CURTO && url.hostname === env.DOMINIO_CURTO;
+  // foto de produto do catálogo interno (guardada reduzida no servidor)
+  const f = (curto ? /^\/([a-z0-9-]{3,32})\/foto\/([^/]+)$/ : /^\/v\/([a-z0-9-]{3,32})\/foto\/([^/]+)$/).exec(caminho);
+  if (f) {
+    const dono = await env.DB.prepare("SELECT id FROM lojas WHERE slug = ?").bind(f[1]).first();
+    let sku = f[2];
+    try { sku = decodeURIComponent(sku); } catch { /* usa como veio */ }
+    const foto = dono ? await env.DB.prepare("SELECT dados FROM vitrine_fotos WHERE loja = ? AND sku = ?").bind(dono.id, sku).first() : null;
+    if (!foto) return new Response("Foto não encontrada", { status: 404, headers: { "cache-control": "no-store" } });
+    const bin = atob(foto.dados);
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    return new Response(bytes, { headers: { "content-type": "image/jpeg", "cache-control": "public, max-age=3600", "x-content-type-options": "nosniff" } });
+  }
   m = curto ? /^\/([a-z0-9-]{3,32})(?:\/([^/]+))?$/.exec(caminho) : /^\/v\/([a-z0-9-]{3,32})(?:\/([^/]+))?$/.exec(caminho);
   if (!m || (curto && RESERVADAS.has(m[1]))) return null;
   const loja = await comPrivilegios(env, await env.DB.prepare("SELECT * FROM lojas WHERE slug = ?").bind(m[1]).first());
@@ -198,18 +211,38 @@ export async function tratarLoja(req, env, ctx, url, caminho) {
       const inteiro = (v) => (Number.isFinite(Number(v)) && v !== null && v !== "" ? Math.max(0, Math.round(Number(v))) : null);
       const linhas = [];
       const skus = new Set();
+      const { results: comFoto } = await env.DB.prepare("SELECT sku FROM vitrine_fotos WHERE loja = ?").bind(loja.id).all();
+      const temFoto = new Set(comFoto.map((x) => x.sku));
+      const raiz = endereco(env, req, loja.slug);
       for (const p of lista) {
         const sku = String(p?.sku ?? "").trim().slice(0, 64);
         const nome = String(p?.nome ?? "").trim().slice(0, 140);
         if (!sku || !nome || skus.has(sku)) continue;
         skus.add(sku);
-        const imagem = p.imagem ? urlHttps(p.imagem) || "" : "";
+        let imagem = p.imagem ? urlHttps(p.imagem) || "" : "";
+        if (!imagem && temFoto.has(sku)) imagem = `${raiz}/foto/${encodeURIComponent(sku)}`;
         linhas.push(env.DB.prepare("INSERT INTO vitrine_itens (loja, sku, nome, preco_centavos, promocao_centavos, estoque, categoria, imagem, descricao, atualizado) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
           .bind(loja.id, sku, nome, inteiro(p.preco_centavos), inteiro(p.promocao_centavos), inteiro(p.estoque) ?? 1, String(p.categoria ?? "").slice(0, 60), imagem, String(p.descricao ?? "").slice(0, 400), agora));
       }
       // troca tudo de uma vez: o que saiu do catálogo da loja sai da vitrine
       await env.DB.batch([env.DB.prepare("DELETE FROM vitrine_itens WHERE loja = ?").bind(loja.id), ...linhas]);
+      // foto de produto que saiu da vitrine não fica guardada
+      for (const x of temFoto) if (!skus.has(x)) await env.DB.prepare("DELETE FROM vitrine_fotos WHERE loja = ? AND sku = ?").bind(loja.id, x).run();
       return json({ ok: true, itens: linhas.length, url: endereco(env, req, loja.slug) });
+    }
+    if (caminho === "/loja/vitrine/foto" && req.method === "PUT") {
+      exigeAcesso(loja);
+      const d = await corpoJson(req);
+      const sku = String(d.sku ?? "").trim().slice(0, 64);
+      const dados = String(d.dados ?? "");
+      if (!sku) throw new ErroLoja(400, "sku_invalido", "Informe o sku do produto.");
+      // JPEG em base64 (começa com /9j/), reduzido pelo app: até uns 250 KB
+      if (!/^\/9j\/[A-Za-z0-9+/=]+$/.test(dados) || dados.length > 340_000) throw new ErroLoja(400, "foto_invalida", "Mande a foto em JPEG, reduzida (até 250 KB).");
+      const total = await env.DB.prepare("SELECT COUNT(*) AS n FROM vitrine_fotos WHERE loja = ? AND sku <> ?").bind(loja.id, sku).first();
+      if (total.n >= 500) throw new ErroLoja(409, "fotos_demais", "A vitrine guarda até 500 fotos.");
+      await env.DB.prepare("INSERT INTO vitrine_fotos (loja, sku, dados, atualizado) VALUES (?, ?, ?, ?) ON CONFLICT(loja, sku) DO UPDATE SET dados = excluded.dados, atualizado = excluded.atualizado")
+        .bind(loja.id, sku, dados, Date.now()).run();
+      return json({ ok: true, url: `${endereco(env, req, loja.slug)}/foto/${encodeURIComponent(sku)}` });
     }
     if (caminho === "/loja/vitrine" && req.method === "GET") {
       const n = await env.DB.prepare("SELECT COUNT(*) AS n FROM vitrine_itens WHERE loja = ?").bind(loja.id).first();

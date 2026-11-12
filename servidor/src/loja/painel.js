@@ -6,8 +6,8 @@ export const PAINEL = `<!doctype html><html lang="pt-BR"><head><meta charset="ut
 *{box-sizing:border-box}body{margin:0;background:var(--fundo);color:var(--texto);font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;padding:16px;max-width:980px;margin:auto}
 h1{font-size:18px;letter-spacing:.2em;margin:6px 0 14px}h2{font-size:13px;color:var(--suave);letter-spacing:.15em;margin:22px 0 8px}
 .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}.c{background:var(--painel);border:1px solid #ffffff1a;border-radius:16px;padding:14px}
-.c small{color:var(--suave);display:block;margin-bottom:4px}.c b{font-size:20px}.ok{color:var(--ok)}.tx{color:var(--taxa)}.ruim{color:var(--ruim)}
-svg{width:100%;height:auto;background:var(--painel);border-radius:16px;border:1px solid #ffffff1a}table{width:100%;border-collapse:collapse}td,th{padding:8px 6px;text-align:left;border-bottom:1px solid #ffffff14;font-size:14px}th{color:var(--suave);font-weight:500}
+.c{min-width:0}.c small{color:var(--suave);display:block;margin-bottom:4px;overflow-wrap:anywhere;line-height:1.25}.c b{font-size:20px}.ok{color:var(--ok)}.tx{color:var(--taxa)}.ruim{color:var(--ruim)}
+svg{width:100%;height:auto;background:var(--painel);border-radius:16px;border:1px solid #ffffff1a}table{width:100%;border-collapse:collapse;display:block;overflow-x:auto}td,th{padding:8px 6px;text-align:left;border-bottom:1px solid #ffffff14;font-size:14px}th{color:var(--suave);font-weight:500}
 .leg span{margin-right:14px;font-size:12px;color:var(--suave)}.leg i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:5px}
 #estado{color:var(--suave);font-size:12px}#entrar{display:none}input,button{font:inherit;padding:12px;border-radius:12px;border:1px solid #ffffff30;background:var(--painel);color:var(--texto);width:100%;margin:6px 0}button{background:var(--cor);color:#06081a;font-weight:700;border:0}
 </style></head><body><h1>VÊNUS · PAINEL</h1><div id="estado">carregando…</div>
