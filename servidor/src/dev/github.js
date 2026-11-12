@@ -109,7 +109,11 @@ export async function buildsDoRepo(env, repo) {
     for (let tentativa = 0; tentativa < 2; tentativa++) {
       try {
         const r = await gh(env, `/repos/${repo}/actions/runs?per_page=30`);
-        if (!r.ok) { falhaDosBuilds.set(repo, `o GitHub respondeu ${r.status}`); continue; }
+        if (!r.ok) {
+          const msg = String(((await r.json().catch(() => ({}))) || {}).message || "").slice(0, 110);
+          falhaDosBuilds.set(repo, `o GitHub respondeu ${r.status}: ${msg}${r.headers.get("x-ratelimit-remaining") === "0" ? " · limite de uso esgotado" : ""}`);
+          continue;
+        }
         const vistos = new Map();
         for (const x of (await r.json()).workflow_runs || []) {
           if (!vistos.has(x.name)) vistos.set(x.name, { id: x.id, workflow: x.name, estado: x.status, resultado: x.conclusion, numero: x.run_number, commit: String(x.head_sha || "").slice(0, 7), quando: Date.parse(x.updated_at) || 0, url: x.html_url });
