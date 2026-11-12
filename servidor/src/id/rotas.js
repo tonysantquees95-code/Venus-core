@@ -66,7 +66,7 @@ export async function tratarId(req, env, url, caminho) {
     }
     if (caminho === "/id/conta" && req.method === "GET") { // tudo para o avatar: perfil, licença e este aparelho
       const lic = await licenca(env, ctx.usuario, origem, false);
-      return json({ usuario: perfilPublico(ctx.usuario), licenca: lic, sessao: ctx.sessao, dispositivo: ctx.dispositivo });
+      return json({ usuario: perfilPublico(ctx.usuario), licenca: lic, sessao: ctx.sessao, dispositivo: ctx.dispositivo, admin: ehAdmin(env, ctx.usuario.email) });
     }
     if (caminho === "/id/perfil" && req.method === "PUT") return json({ usuario: await salvarPerfil(env, ctx, await corpo(req)) });
     if (caminho === "/id/app-token" && req.method === "POST") return json(await tokenDeApp(env, ctx, String((await corpo(req)).app || "")));

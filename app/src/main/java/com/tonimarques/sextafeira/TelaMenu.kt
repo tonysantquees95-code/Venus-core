@@ -222,6 +222,7 @@ internal fun MainActivity.abrirMenu(@Suppress("UNUSED_PARAMETER") ancora: View) 
                 item("Modo independente", {
                     "Responde só com os próprios recursos (comandos, pesquisa e notícias), sem usar o Gemini."
                 }, MENU_INDEPENDENTE) { modoIndependente() },
+            ) + (if (!VetorialId.admin(this)) emptyList() else listOf(
                 item("Chave do Gemini (opcional)", { if (Cofre.ler(prefs, MainActivity.PREF_CHAVE).isNotBlank()) "Chave própria configurada" else if (GeminiRota.doServidor(chave())) "Usando o Gemini da ${Marca.nome} (servidor)" else "Entre no Vetorial ID para usar o Gemini da ${Marca.nome}" }, MENU_CHAVE),
                 TelaDeAjustes.Ajuste("IA reserva (Groq ou Grok)", {
                     if (!SegundaIA.configurada(this)) "Não configurada. Com uma chave grátis da Groq, a $n continua respondendo quando o Gemini falhar ou ficar sem cota."
@@ -242,6 +243,7 @@ internal fun MainActivity.abrirMenu(@Suppress("UNUSED_PARAMETER") ancora: View) 
                         ajustes?.atualizar()
                     }
                 },
+            )) + listOf(
                 TelaDeAjustes.Ajuste("Ideias de vídeo (Reels)", { "Cria ideias de vídeo com os produtos do catálogo: roteiro, pedido pronto para um gerador de vídeo por IA, legenda e hashtags." }) { ideiasDeVideo() },
                 TelaDeAjustes.Ajuste("O que eu aprendi", { "Veja por tipo tudo o que a $n guardou na memória e apague o que estiver errado." }) { mostrarAprendizado() },
                 TelaDeAjustes.Ajuste("Estudo diário (memória vetorial)", {
@@ -257,8 +259,7 @@ internal fun MainActivity.abrirMenu(@Suppress("UNUSED_PARAMETER") ancora: View) 
                     Estudo.definirLigado(this, !Estudo.ligado(this))
                     ajustes?.atualizar()
                 },
-                item("Modelo do Gemini", { modelo() }, MENU_MODELO),
-            )
+            ) + (if (VetorialId.admin(this)) listOf(item("Modelo do Gemini", { modelo() }, MENU_MODELO)) else emptyList())
         ),
         TelaDeAjustes.Secao(
             "Aparência", listOf(
