@@ -48,7 +48,7 @@ test("cobrança recorrente usa o valor do pacote e guarda o pacote no pagamento"
     assert.equal(corpos[1].auto_recurring.transaction_amount, 49.9);
   } finally { globalThis.fetch = antes; }
   const e = await estadoDaAssinatura(env, await env.DB.prepare("SELECT * FROM lojas WHERE id = ?").bind(l.id).first());
-  assert.equal(e.pacotes.length, 4);
+  assert.equal(e.pacotes.length, 7);
   assert.deepEqual(e.apps, { vindex: true, vortex: true });
 });
 
@@ -69,4 +69,16 @@ test("atualização: escolhe a maior versão certa de cada app", () => {
   assert.equal(escolherVersao(lista, "venus").numero, 12); // 1.N sem filtro de arquivo extra: pega o APK
   assert.equal(escolherVersao(lista, "inexistente"), null);
   assert.equal(escolherVersao(lista, "__proto__"), null);
+});
+
+import { acessoLiberado } from "../src/loja/lojas.js";
+test("Vortex e Vindex vendidos sozinhos: liberam só o app, não a Vênus", () => {
+  const agora = 1_800_000_000_000;
+  assert.equal(PACOTES.vortex.centavos, 2490);
+  assert.equal(PACOTES.vindex_vortex.centavos, 5000);
+  assert.deepEqual(appsLiberados({ trial_fim: 0, ativo_ate: agora + DIA, pacote: "vortex" }, agora), { vindex: false, vortex: true });
+  assert.deepEqual(appsLiberados({ trial_fim: 0, ativo_ate: agora + DIA, pacote: "vindex_vortex" }, agora), { vindex: true, vortex: true });
+  assert.equal(acessoLiberado({ trial_fim: 0, ativo_ate: agora + DIA, pacote: "vortex" }, agora), false);
+  assert.equal(acessoLiberado({ trial_fim: 0, ativo_ate: agora + DIA, pacote: "venus_vortex" }, agora), true);
+  assert.equal(acessoLiberado({ trial_fim: agora + DIA, ativo_ate: 0, pacote: "vortex" }, agora), true);
 });
