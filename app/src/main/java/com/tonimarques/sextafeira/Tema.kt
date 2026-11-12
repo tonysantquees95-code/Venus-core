@@ -15,9 +15,10 @@ object Tema {
     const val PREF_ICONES = "tema_icones"
     const val PREF_COR = "tema_cor"
 
+    /** O orbe é um só (a constelação de partículas, igual à do site); o que muda é o jeito de se mexer. */
     enum class Modelo(val rotulo: String, val descricao: String) {
-        LIQUIDO("Aurora", "Névoa de luz girando"), CRISTAL("Prisma", "Cristal iridescente"), PULSO("Anéis", "Órbitas em 3D"),
-        NEURAL("Neural", "Constelação de partículas"), HOLOGRAMA("Holograma", "Projeção de luz em camadas"),
+        RESPIRAR("Respirar", "Cresce e encolhe devagar"), GIRO("Giro", "Gira de lado sem parar"), BATIDA("Batida", "Pulso forte, como um coração"),
+        ONDA("Onda", "Ondas atravessando a esfera"), FLUTUAR("Flutuar", "Balança e inclina com leveza"),
     }
     enum class Icones(val rotulo: String, val descricao: String) {
         VENUS("Vênus", "Identidade da Vênus"), LINHA("Linha", "Traço fino e arredondado"), SOLIDO("Técnico", "Bloco sólido e firme"),
@@ -37,7 +38,7 @@ object Tema {
         Predefinida("Violeta", 0x8F6BFF),
     )
 
-    fun modelo(p: SharedPreferences): Modelo = Modelo.values().getOrElse(p.getInt(PREF_MODELO, 0)) { Modelo.LIQUIDO }
+    fun modelo(p: SharedPreferences): Modelo = Modelo.values().getOrElse(p.getInt(PREF_MODELO, 0)) { Modelo.RESPIRAR }
     fun icones(p: SharedPreferences): Icones = Icones.values().getOrElse(p.getInt(PREF_ICONES, 0)) { Icones.VENUS }
     fun cor(p: SharedPreferences): Int = p.getInt(PREF_COR, 0) and 0xFFFFFF
 

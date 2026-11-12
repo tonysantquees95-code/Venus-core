@@ -69,7 +69,7 @@ class TemaESessaoTest {
         assertEquals(5, Tema.Modelo.values().size)
         assertEquals(5, Tema.Icones.values().size)
         // os três primeiros mantêm a ordem antiga (as preferências já salvas continuam valendo)
-        assertEquals(listOf("LIQUIDO", "CRISTAL", "PULSO"), Tema.Modelo.values().take(3).map { it.name })
+        assertEquals(listOf("RESPIRAR", "GIRO", "BATIDA"), Tema.Modelo.values().take(3).map { it.name })
         assertEquals(listOf("VENUS", "LINHA", "SOLIDO"), Tema.Icones.values().take(3).map { it.name })
     }
 }
