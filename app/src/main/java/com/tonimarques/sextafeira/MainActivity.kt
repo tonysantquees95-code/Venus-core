@@ -567,9 +567,9 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
     internal fun aplicarCor(cor: Int) {
         corAtual = cor
         Aparencia.definir(prefs, cor)
-        titulo.setTextColor(cor)
-        botaoMic.setColorFilter(cor)
-        botaoEnviar.setColorFilter(cor)
+        if (::titulo.isInitialized) titulo.setTextColor(cor)
+        if (::botaoMic.isInitialized) botaoMic.setColorFilter(cor)
+        if (::botaoEnviar.isInitialized) botaoEnviar.setColorFilter(cor)
         if (::botaoAnexar.isInitialized) botaoAnexar.setColorFilter(cor) // o pop-up não tem o "+"
         pintarIcones()
     }
