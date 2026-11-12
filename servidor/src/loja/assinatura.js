@@ -1,7 +1,7 @@
 // Plano Fundadores: R$ 49,90 por mês, 7 dias grátis. Cobrança recorrente no Mercado Pago do dono (assinatura mensal) ou InfinitePay, confirmado pelo webhook
 // (e conferido na própria API do gateway). O acesso pago só é liberado depois da verificação em duas etapas (2FA).
 import { aleatorio, cifrar, decifrar, hmacHex, iguais } from "./cripto.js";
-import { ErroLoja } from "./lojas.js";
+import { ErroLoja, acessoLiberado } from "./lojas.js";
 import { conferirTotp, novoSegredo, uriOtp } from "./totp.js";
 
 export const PRECO_CENTAVOS = 4990;
@@ -15,6 +15,10 @@ export const PACOTES = {
   venus_vindex: { nome: "Vênus + Vindex", centavos: 7000, apps: { vindex: true, vortex: false } },
   venus_vortex: { nome: "Vênus + Vortex", centavos: 7000, apps: { vindex: false, vortex: true } },
   completo: { nome: "Vênus + Vindex + Vortex", centavos: 10000, apps: { vindex: true, vortex: true } },
+  // vendidos sozinhos, sem a Vênus
+  vortex: { nome: "Vortex", centavos: 2490, apps: { vindex: false, vortex: true } },
+  vindex: { nome: "Vindex", centavos: 3490, apps: { vindex: true, vortex: false } },
+  vindex_vortex: { nome: "Vindex + Vortex", centavos: 5000, apps: { vindex: true, vortex: true } },
 };
 export const pacoteDe = (chave) => (Object.prototype.hasOwnProperty.call(PACOTES, chave) ? chave : "venus");
 const tituloDo = (pacote) => (pacote === "venus" ? titulo : `${PACOTES[pacote].nome} — Plano mensal`);
@@ -175,7 +179,8 @@ export async function estadoDaAssinatura(env, loja, agora = Date.now()) {
     pacote: pacoteDe(loja.pacote), apps: appsLiberados(loja, agora),
     pacotes: Object.entries(PACOTES).map(([chave, p]) => ({ chave, nome: p.nome, precoCentavos: p.centavos })),
     emTeste: agora < loja.trial_fim && agora >= (loja.ativo_ate || 0), diasDeTesteRestantes: trialRestante, diasPagosRestantes: pagoRestante,
-    acesso: agora < Math.max(loja.trial_fim || 0, loja.ativo_ate || 0),
+    acesso: agora < Math.max(loja.trial_fim || 0, loja.ativo_ate || 0), // conta ativa (vale para o Vindex e o Vortex)
+    venus: acessoLiberado(loja, agora), // a Vênus em si: pacotes sem ela não abrem a loja
     pagamentoAguardandoLiberacao: pend.n > 0, doisFatores: !!loja.totp_ativo,
   };
 }

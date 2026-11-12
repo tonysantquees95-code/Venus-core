@@ -71,7 +71,11 @@ async function lojaDoPedidoBruta(env, req) {
   return loja;
 }
 
-/** O acesso vale durante o teste grátis ou enquanto a assinatura estiver paga. */
+/** Pacotes que não incluem a Vênus (Vindex e/ou Vortex vendidos sozinhos): o pagamento não abre a loja, os canais e a vitrine da Vênus. */
+export const PACOTES_SEM_VENUS = new Set(["vindex", "vortex", "vindex_vortex"]);
+
+/** O acesso à Vênus vale durante o teste grátis ou enquanto a assinatura de um pacote COM a Vênus estiver paga. */
 export function acessoLiberado(loja, agora = Date.now()) {
-  return agora < Math.max(loja.trial_fim || 0, loja.ativo_ate || 0);
+  const pago = agora < (loja.ativo_ate || 0) && !PACOTES_SEM_VENUS.has(loja.pacote);
+  return agora < (loja.trial_fim || 0) || pago;
 }
