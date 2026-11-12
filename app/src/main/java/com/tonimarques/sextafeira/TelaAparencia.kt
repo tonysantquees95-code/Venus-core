@@ -119,12 +119,12 @@ class TelaAparencia(
     private fun desenhar() {
         conteudo.removeAllViews()
         val destaqueAtual = destaque()
-        secao("ORBE HOLOGRÁFICO")
+        secao("MOVIMENTO DO ORBE")
         grade(Tema.Modelo.values().size) { i ->
             val m = Tema.Modelo.values()[i]
             val mini = Orbe(a).apply { aplicarTema(m, Tema.cor(prefs)) }
             cartaoDeOpcao(mini, a.dp(78), m.rotulo, m.descricao, Tema.modelo(prefs) == m, destaqueAtual) {
-                Tema.definirModelo(prefs, m); Diario.anotar(a, "Aparência", "Orbe: ${m.rotulo}.", "tela", true); aoMudar(); atualizarPrevia(); desenhar()
+                Tema.definirModelo(prefs, m); Diario.anotar(a, "Aparência", "Movimento do orbe: ${m.rotulo}.", "tela", true); aoMudar(); atualizarPrevia(); desenhar()
             }
         }
         secao("PACOTE DE ÍCONES")

@@ -14,6 +14,7 @@ import android.view.View
 import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.cos
+import kotlin.math.exp
 import kotlin.math.hypot
 import kotlin.math.max
 import kotlin.math.min
@@ -32,7 +33,7 @@ class Orbe(context: Context) : View(context) {
     var estado = Estado.OCIOSO
 
     /** Modelo do orbe e cor escolhida (0 = automática), vindos da aparência escolhida pela pessoa. */
-    var modelo = Tema.Modelo.LIQUIDO
+    var modelo = Tema.Modelo.RESPIRAR
         private set
     private var corFixa = 0
 
@@ -63,6 +64,16 @@ class Orbe(context: Context) : View(context) {
     private val pBlob = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) blendMode = BlendMode.SCREEN
     }
+
+    private val esfera = Array(N_ESFERA) { i ->
+        val y = 1f - (i / (N_ESFERA - 1f)) * 2f
+        val raioY = sqrt(1f - y * y)
+        val t = i * 2.399963f
+        floatArrayOf(cos(t) * raioY, y, sin(t) * raioY, Random.nextFloat())
+    }
+    private val esferaX = FloatArray(N_ESFERA)
+    private val esferaY = FloatArray(N_ESFERA)
+    private val esferaZ = FloatArray(N_ESFERA)
 
     private val caminho = Path()
     private val pontos = FloatArray(PONTOS * 2)
@@ -157,39 +168,7 @@ class Orbe(context: Context) : View(context) {
         )
         canvas.drawCircle(cx, cy, raio * 2.4f, pGlow)
 
-        // ----- partículas orbitando
-        for (p in particulas) {
-            val ang = p[0] + giro * p[2]
-            val dist = raio * p[1] * (1f + 0.08f * sin(tempo * p[2] * 2f + p[4]))
-            val brilho = (0.25f + 0.55f * energia) * (0.5f + 0.5f * sin(tempo * 1.7f + p[4]))
-            pParticula.color = comAlfa(if (p[4] > 3.14f) cor2 else cor3, brilho)
-            canvas.drawCircle(cx + cos(ang) * dist, cy + sin(ang) * dist, p[3] * densidade, pParticula)
-        }
-
-        // ----- anéis estilo painel futurista
-        pArco.strokeWidth = 1.4f * densidade
-        pArco.color = comAlfa(cor1, 0.35f + 0.25f * energia)
-        arco(canvas, cx, cy, raio * 1.42f, giro * 40f, floatArrayOf(10f, 70f, 140f, 25f, 200f, 95f))
-
-        pArco.strokeWidth = 1f * densidade
-        pArco.color = comAlfa(cor2, 0.25f + 0.2f * energia)
-        val tracos = FloatArray(24)
-        for (i in 0 until 12) {
-            tracos[i * 2] = i * 30f
-            tracos[i * 2 + 1] = 10f
-        }
-        arco(canvas, cx, cy, raio * 1.62f, -giro * 25f, tracos)
-
-        pArco.color = comAlfa(cor3, 0.12f + 0.1f * energia)
-        canvas.drawCircle(cx, cy, raio * 1.28f, pArco)
-
-        when (modelo) {
-            Tema.Modelo.LIQUIDO -> desenharLiquido(canvas, cx, cy, raio, cor1, cor2, cor3)
-            Tema.Modelo.CRISTAL -> desenharCristal(canvas, cx, cy, raio, cor1, cor2, cor3)
-            Tema.Modelo.PULSO -> desenharPulso(canvas, cx, cy, raio, cor1, cor2, cor3)
-            Tema.Modelo.NEURAL -> desenharNeural(canvas, cx, cy, raio, cor1, cor2, cor3)
-            Tema.Modelo.HOLOGRAMA -> desenharHolograma(canvas, cx, cy, raio, cor1, cor2, cor3)
-        }
+        desenharEsfera(canvas, cx, cy, raio, cor1, cor2, cor3)
 
         // ----- núcleo luminoso
         pNucleo.shader = RadialGradient(
@@ -214,125 +193,70 @@ class Orbe(context: Context) : View(context) {
         postInvalidateOnAnimation()
     }
 
-    /** Três camadas de "líquido" que se deformam. */
-    private fun desenharLiquido(canvas: Canvas, cx: Float, cy: Float, raio: Float, cor1: Int, cor2: Int, cor3: Int) {
-        val cores = intArrayOf(cor1, cor2, cor3)
-        for (camada in 0 until 3) {
-            val desloc = camada * 2.1f
-            montarForma(cx, cy, raio * (0.92f + camada * 0.05f), desloc)
-            val corCamada = cores[camada]
-            val fx = cx + cos(giro + desloc) * raio * 0.3f
-            val fy = cy + sin(giro + desloc) * raio * 0.3f
-            pBlob.shader = RadialGradient(
-                fx, fy, raio * 1.35f,
-                intArrayOf(comAlfa(clarear(corCamada, 0.3f), 0.5f), comAlfa(corCamada, 0.62f), comAlfa(corCamada, 0.06f)),
-                floatArrayOf(0f, 0.55f, 1f), Shader.TileMode.CLAMP
-            )
-            canvas.drawPath(caminho, pBlob)
-        }
-    }
-
-    /** Esfera de cristal: esfera lisa com um hexágono facetado girando por dentro. */
-    private fun desenharCristal(canvas: Canvas, cx: Float, cy: Float, raio: Float, cor1: Int, cor2: Int, cor3: Int) {
-        pBlob.shader = RadialGradient(
-            cx - raio * 0.25f, cy - raio * 0.3f, raio * 1.3f,
-            intArrayOf(comAlfa(clarear(cor1, 0.55f), 0.75f), comAlfa(cor1, 0.6f), comAlfa(cor3, 0.25f)),
-            floatArrayOf(0f, 0.55f, 1f), Shader.TileMode.CLAMP
-        )
-        canvas.drawCircle(cx, cy, raio * (0.95f + 0.04f * energia), pBlob)
-        pArco.strokeWidth = 1.2f * densidade
-        for (camada in 0 until 2) {
-            val r = raio * (0.55f + camada * 0.22f) * (1f + 0.06f * energia)
-            val giroCamada = if (camada == 0) giro else -giro * 0.7f
-            caminho.reset()
-            for (k in 0 until 6) {
-                val ang = giroCamada + k * (PI.toFloat() / 3f)
-                val x = cx + cos(ang) * r
-                val y = cy + sin(ang) * r
-                if (k == 0) caminho.moveTo(x, y) else caminho.lineTo(x, y)
+    /**
+     * A esfera de partículas com constelações (a mesma do site): pontos numa esfera girando, ligados quando ficam perto.
+     * Os cinco "movimentos" só mudam o jeito de se mexer; as cores são as escolhidas na aparência.
+     */
+    private fun desenharEsfera(canvas: Canvas, cx: Float, cy: Float, raio: Float, cor1: Int, cor2: Int, cor3: Int) {
+        val r0 = raio * 1.3f
+        var rotY = giro
+        var rotX = 0.25f
+        var escala = 1f
+        var bob = 0f
+        var ondaAmp = 0f
+        when (modelo) {
+            Tema.Modelo.RESPIRAR -> { rotY = giro * 0.6f; escala = 1f + 0.06f * sin(tempo * 1.3f) }
+            Tema.Modelo.GIRO -> { rotY = giro * 3.2f; rotX = 0.25f + 0.15f * sin(giro * 0.5f) }
+            Tema.Modelo.BATIDA -> {
+                rotY = giro * 0.5f
+                val ciclo = (tempo * 1.25f) % 1f
+                val segundo = ((ciclo - 0.22f) + 1f) % 1f
+                escala = 1f + 0.13f * (exp(-ciclo * 9f) + 0.7f * exp(-segundo * 9f))
             }
-            caminho.close()
-            pArco.color = comAlfa(if (camada == 0) cor2 else clarear(cor3, 0.3f), 0.45f + 0.3f * energia)
-            canvas.drawPath(caminho, pArco)
-        }
-    }
-
-    /** Ondas concêntricas que saem do centro, mais rápidas e fortes quanto mais energia. */
-    private fun desenharPulso(canvas: Canvas, cx: Float, cy: Float, raio: Float, cor1: Int, cor2: Int, cor3: Int) {
-        pArco.strokeWidth = 2f * densidade
-        for (i in 0 until 4) {
-            val fase = ((tempo * (0.35f + energia * 0.9f) + i * 0.25f) % 1f)
-            pArco.color = comAlfa(if (i % 2 == 0) cor1 else cor2, (1f - fase) * (0.35f + 0.5f * energia))
-            canvas.drawCircle(cx, cy, raio * (0.5f + fase * 1.1f), pArco)
-        }
-        pBlob.shader = RadialGradient(
-            cx, cy, raio * 0.8f,
-            intArrayOf(comAlfa(clarear(cor1, 0.5f), 0.9f), comAlfa(cor1, 0.7f), comAlfa(cor3, 0.1f)),
-            floatArrayOf(0f, 0.6f, 1f), Shader.TileMode.CLAMP
-        )
-        canvas.drawCircle(cx, cy, raio * (0.62f + 0.12f * energia), pBlob)
-    }
-
-
-    /** Rede neural: nós orbitando em três anéis, ligados por fios que acendem com a energia. */
-    private fun desenharNeural(canvas: Canvas, cx: Float, cy: Float, raio: Float, cor1: Int, cor2: Int, cor3: Int) {
-        val n = 14
-        val xs = FloatArray(n)
-        val ys = FloatArray(n)
-        for (i in 0 until n) {
-            val anel = i % 3
-            val r = raio * (0.38f + anel * 0.3f) * (1f + 0.05f * energia * sin(tempo * 3f + i))
-            val ang = giro * (if (anel == 1) -0.8f else 0.6f) + i * 2.399f
-            xs[i] = cx + cos(ang) * r
-            ys[i] = cy + sin(ang) * r
-        }
-        pArco.strokeWidth = 1f * densidade
-        val alcance = raio * (0.85f + 0.2f * energia)
-        for (i in 0 until n) for (j in i + 1 until n) {
-            val d = hypot(xs[i] - xs[j], ys[i] - ys[j])
-            if (d < alcance) {
-                pArco.color = comAlfa(if ((i + j) % 2 == 0) cor1 else cor2, (1f - d / alcance) * (0.35f + 0.5f * energia))
-                canvas.drawLine(xs[i], ys[i], xs[j], ys[j], pArco)
+            Tema.Modelo.ONDA -> { rotY = giro * 0.8f; ondaAmp = 0.085f }
+            Tema.Modelo.FLUTUAR -> {
+                rotY = giro * 0.5f + 0.5f * sin(tempo * 0.6f)
+                rotX = 0.25f + 0.35f * sin(tempo * 0.8f)
+                bob = r0 * 0.07f * sin(tempo * 1.1f)
             }
         }
-        for (i in 0 until n) {
-            pParticula.color = comAlfa(clarear(if (i % 2 == 0) cor1 else cor3, 0.4f), 0.85f)
-            canvas.drawCircle(xs[i], ys[i], (2.2f + (i % 3) + energia * 2f) * densidade, pParticula)
+        escala *= 1f + 0.10f * energia
+        val ca = cos(rotY)
+        val sa = sin(rotY)
+        val cb = cos(rotX)
+        val sb = sin(rotX)
+        val r = r0 * escala
+        for (i in 0 until N_ESFERA) {
+            val q = esfera[i]
+            val x1 = q[0] * ca + q[2] * sa
+            val z1 = -q[0] * sa + q[2] * ca
+            val y2 = q[1] * cb - z1 * sb
+            val z2 = q[1] * sb + z1 * cb
+            val pulso = 1f + 0.03f * sin(tempo * 1.1f + q[3] * 9f) + ondaAmp * sin(tempo * 3.2f + q[1] * 5.5f)
+            esferaX[i] = cx + x1 * r * pulso
+            esferaY[i] = cy + bob + y2 * r * pulso
+            esferaZ[i] = z2
         }
-        pParticula.color = comAlfa(clarear(cor1, 0.6f), 0.9f)
-        canvas.drawCircle(cx, cy, raio * (0.16f + 0.08f * energia), pParticula)
-    }
-
-    /** Holograma: esfera de arame (meridianos girando e paralelos) com uma linha de varredura. */
-    private fun desenharHolograma(canvas: Canvas, cx: Float, cy: Float, raio: Float, cor1: Int, cor2: Int, cor3: Int) {
-        val r = raio * (0.95f + 0.04f * energia)
-        pBlob.shader = RadialGradient(
-            cx, cy, r, intArrayOf(comAlfa(cor1, 0.05f), comAlfa(cor1, 0.22f)), floatArrayOf(0.4f, 1f), Shader.TileMode.CLAMP
-        )
-        canvas.drawCircle(cx, cy, r, pBlob)
-        pArco.strokeWidth = 1.1f * densidade
-        pArco.color = comAlfa(cor1, 0.6f)
-        canvas.drawCircle(cx, cy, r, pArco)
-        for (k in 0 until 5) {
-            val ang = giro * 0.8f + k * (PI.toFloat() / 5f)
-            val largura = abs(cos(ang)) * r
-            retangulo.set(cx - largura, cy - r, cx + largura, cy + r)
-            pArco.color = comAlfa(if (k % 2 == 0) cor2 else cor1, 0.28f + 0.3f * energia)
-            canvas.drawOval(retangulo, pArco)
+        pArco.strokeWidth = 0.8f * densidade
+        val lim = (r * 0.2f) * (r * 0.2f)
+        for (i in 0 until N_ESFERA) for (j in i + 1 until N_ESFERA) {
+            val dx = esferaX[i] - esferaX[j]
+            val dy = esferaY[i] - esferaY[j]
+            val d2 = dx * dx + dy * dy
+            if (d2 < lim && esferaZ[i] + esferaZ[j] > -0.4f) {
+                val a = (1f - d2 / lim) * (0.35f + 0.3f * energia) * ((esferaZ[i] + esferaZ[j] + 2f) / 4f)
+                pArco.color = comAlfa(clarear(cor3, 0.45f), a)
+                canvas.drawLine(esferaX[i], esferaY[i], esferaX[j], esferaY[j], pArco)
+            }
         }
-        for (k in -2..2) {
-            val y = cy + k * r * 0.34f
-            val meia = sqrt(max(0f, r * r - (k * r * 0.34f) * (k * r * 0.34f)))
-            retangulo.set(cx - meia, y - meia * 0.18f, cx + meia, y + meia * 0.18f)
-            pArco.color = comAlfa(cor3, 0.25f)
-            canvas.drawOval(retangulo, pArco)
+        // fundo primeiro, frente depois
+        for (passo in 0..1) for (i in 0 until N_ESFERA) {
+            val z = esferaZ[i]
+            if ((z >= 0f) != (passo == 1)) continue
+            val f = (z + 1f) / 2f
+            pParticula.color = comAlfa(if (esfera[i][3] > 0.5f) cor1 else cor2, 0.25f + f * 0.75f)
+            canvas.drawCircle(esferaX[i], esferaY[i], (0.9f + f * 2.1f) * densidade, pParticula)
         }
-        val varre = ((tempo * (0.4f + energia)) % 1f) * 2f - 1f
-        val yv = cy + varre * r
-        val meiaV = sqrt(max(0f, r * r - (varre * r) * (varre * r)))
-        pArco.strokeWidth = 2f * densidade
-        pArco.color = comAlfa(clarear(cor2, 0.6f), 0.7f)
-        canvas.drawLine(cx - meiaV, yv, cx + meiaV, yv, pArco)
     }
 
     private fun arco(canvas: Canvas, cx: Float, cy: Float, r: Float, rotacao: Float, inicioEExtensao: FloatArray) {
@@ -370,5 +294,6 @@ class Orbe(context: Context) : View(context) {
 
     companion object {
         private const val PONTOS = 72
+        private const val N_ESFERA = 130
     }
 }
