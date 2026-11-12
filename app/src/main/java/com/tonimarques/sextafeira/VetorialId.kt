@@ -22,6 +22,7 @@ object VetorialId {
     const val PREF_FOTO = "vid_foto"
     const val PREF_PERFIL_V = "vid_perfil_v"
     const val PREF_ASSINATURA = "vid_assinatura"
+    const val PREF_ADMIN = "vid_admin"
 
     val MODOS = listOf("conversacional", "orbe", "bolha", "silencioso")
     val ROTULOS_MODO = mapOf(
@@ -34,6 +35,8 @@ object VetorialId {
     fun nomeDaConta(ctx: Context): String = prefs(ctx).getString(PREF_NOME_CONTA, "").orEmpty()
     fun foto(ctx: Context): String = prefs(ctx).getString(PREF_FOTO, "").orEmpty()
     fun assinatura(ctx: Context): String = prefs(ctx).getString(PREF_ASSINATURA, "").orEmpty()
+    /** Só a conta do dono (o servidor diz): libera as telas de escolha de IA, chaves e modelo. */
+    fun admin(ctx: Context): Boolean = logado(ctx) && prefs(ctx).getBoolean(PREF_ADMIN, false)
     fun perfilVersao(ctx: Context): Long = prefs(ctx).getLong(PREF_PERFIL_V, -1L)
 
     /** Puxa nome, foto e assinatura do servidor (o avatar do menu lê daqui). Chamar fora da tela principal. */
@@ -42,7 +45,7 @@ object VetorialId {
         if (!r.ok) return false
         val u = r.json.optJSONObject("usuario") ?: return false
         prefs(ctx).edit().putString(PREF_NOME_CONTA, u.optString("nome")).putString(PREF_FOTO, u.optString("foto"))
-            .putLong(PREF_PERFIL_V, u.optLong("atualizado")).putString(PREF_ASSINATURA, textoDaAssinatura(r.json.optJSONObject("licenca"))).apply()
+            .putBoolean(PREF_ADMIN, r.json.optBoolean("admin", false)).putLong(PREF_PERFIL_V, u.optLong("atualizado")).putString(PREF_ASSINATURA, textoDaAssinatura(r.json.optJSONObject("licenca"))).apply()
         return true
     }
 
@@ -59,7 +62,7 @@ object VetorialId {
     }
 
     fun limpar(ctx: Context, aviso: String = "") {
-        prefs(ctx).edit().remove(PREF_TOKEN).remove(PREF_SESSAO).remove(PREF_EMAIL).remove(PREF_NOME_CONTA).remove(PREF_FOTO).remove(PREF_PERFIL_V).remove(PREF_ASSINATURA).remove(PREF_VERSOES).remove(PREF_ENVIADO).remove(PREF_DOC_PREFS)
+        prefs(ctx).edit().remove(PREF_TOKEN).remove(PREF_SESSAO).remove(PREF_EMAIL).remove(PREF_NOME_CONTA).remove(PREF_FOTO).remove(PREF_PERFIL_V).remove(PREF_ASSINATURA).remove(PREF_ADMIN).remove(PREF_VERSOES).remove(PREF_ENVIADO).remove(PREF_DOC_PREFS)
             .apply { if (aviso.isNotBlank()) putString(PREF_AVISO, aviso) }.apply()
     }
 
