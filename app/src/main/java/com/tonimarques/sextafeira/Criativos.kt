@@ -2,6 +2,7 @@ package com.tonimarques.sextafeira
 
 import android.content.Context
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.LinearGradient
@@ -27,6 +28,24 @@ object Criativos {
     }
 
     class Oferta(val nome: String, val precoCentavos: Long, val promocaoCentavos: Long?)
+
+    private fun reduzir(abrir: (BitmapFactory.Options) -> Bitmap?, maxLado: Int): Bitmap? {
+        return try {
+            val medida = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            abrir(medida)
+            if (medida.outWidth <= 0 || medida.outHeight <= 0) return null
+            var amostra = 1
+            while (maxOf(medida.outWidth, medida.outHeight) / amostra > maxLado) amostra *= 2
+            abrir(BitmapFactory.Options().apply { inSampleSize = amostra })
+        } catch (e: Throwable) {
+            null // imagem estragada ou grande demais: segue sem ela, sem derrubar o app
+        }
+    }
+
+    /** Lê uma imagem de arquivo já reduzida (no máximo [maxLado] px) para não estourar a memória com logos enormes. */
+    fun lerReduzida(arquivo: File, maxLado: Int = 1024): Bitmap? = reduzir({ BitmapFactory.decodeFile(arquivo.path, it) }, maxLado)
+
+    fun lerReduzida(bytes: ByteArray, maxLado: Int = 1024): Bitmap? = reduzir({ BitmapFactory.decodeByteArray(bytes, 0, bytes.size, it) }, maxLado)
 
     val FORMAS = listOf("circulo", "hexagono", "losango", "folha", "escudo")
     val ESTILOS = listOf("moderna", "serifa", "elegante")

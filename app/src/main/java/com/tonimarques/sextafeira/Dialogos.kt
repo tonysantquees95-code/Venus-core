@@ -15,7 +15,8 @@ import android.widget.Toast
 /** Roda [trabalho] fora da tela e entrega o resultado (ou o erro) de volta na tela. */
 internal fun <T> MainActivity.emFundo(trabalho: () -> T, pronto: (Result<T>) -> Unit) {
     Thread {
-        val r = try { Result.success(trabalho()) } catch (e: Exception) { Result.failure(e) }
+        // Throwable: falta de memória ao montar imagens vira aviso na tela, não fechamento do app
+        val r = try { Result.success(trabalho()) } catch (e: Throwable) { Result.failure(e) }
         Handler(Looper.getMainLooper()).post { if (!isFinishing && !isDestroyed) pronto(r) }
     }.start()
 }
