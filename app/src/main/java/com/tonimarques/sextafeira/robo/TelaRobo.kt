@@ -82,6 +82,7 @@ class TelaRobo : TelaBase() {
             setTextColor(Color.WHITE)
             textSize = 16f
             setOnCheckedChangeListener { _, v -> Robo.definirLigado(this@TelaRobo, v) }
+            com.tonimarques.sextafeira.Aparencia.pintar(this)
         }
         adicionar(ligado)
         adicionar(texto(if (acesso) "✓ Acesso às notificações liberado." else "✗ Falta liberar o acesso às notificações.", 14f, if (acesso) Color.parseColor("#7CE0A3") else Color.parseColor("#FF8A80")))
@@ -113,6 +114,7 @@ class TelaRobo : TelaBase() {
                 setTextColor(Color.WHITE)
                 textSize = 15f
                 setOnCheckedChangeListener { _, v -> Robo.definirCanal(this@TelaRobo, pacote, v) }
+                com.tonimarques.sextafeira.Aparencia.pintar(this)
             })
         }
 
@@ -126,6 +128,7 @@ class TelaRobo : TelaBase() {
             setTextColor(Color.WHITE)
             textSize = 15f
             setOnCheckedChangeListener { _, v -> Robo.definirModo(this@TelaRobo, v) }
+            com.tonimarques.sextafeira.Aparencia.pintar(this)
         })
         adicionar(texto("Ligado: o robô responde com as regras, os produtos e as IAs da Vênus instalada aqui (o normal para cada loja). " +
             "Desligado: pergunta à Vênus da loja no site, com o endereço e a chave abaixo.", 12.5f, apagado))

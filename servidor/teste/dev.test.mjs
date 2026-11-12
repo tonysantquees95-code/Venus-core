@@ -85,7 +85,7 @@ test("painel: projetos, fases e progresso (Vortex já vem ligado ao repositório
   assert.equal((await chamar(env, a.token, "/dev/fases", "POST", { projeto: "nada", titulo: "x" })).status, 400);
   assert.equal((await chamar(env, a.token, `/dev/fases/${nova.d.id}`, "PUT", { progresso: 150 })).status, 400);
   assert.equal(progressoDasFases([{ progresso: 100 }, { progresso: 50 }]), 75);
-  assert.equal(progressoDasFases([]), 0);
+  assert.equal(progressoDasFases([]), 100); // sem etapas cadastradas não mostra 0%: as etapas entram conforme ficam prontas
   assert.equal((await chamar(env, a.token, `/dev/fases/${nova.d.id}`, "DELETE")).d.ok, true);
 });
 
@@ -355,4 +355,13 @@ test("cofre: importação dos segredos do GitHub com código de uso único", asy
   const c3 = (await chamar(env, adm.token, "/dev/cofre/codigo", "POST", { senha: SENHA })).d.codigo;
   env.DB._db.prepare("UPDATE cofre_codigos SET expira = 1").run();
   assert.equal((await chamar(env, null, "/dev/cofre/importar", "POST", { codigo: c3, segredos })).d.codigo, "codigo_invalido");
+});
+
+test("progresso da compilação: passos feitos sobre o total, nunca 100% antes de acabar", async () => {
+  const { percentualDosJobs } = await import("../src/dev/github.js");
+  const r = percentualDosJobs([{ steps: [{ status: "completed" }, { status: "completed" }, { status: "in_progress", name: "Compilar" }, { status: "queued" }] }]);
+  assert.deepEqual(r, { percentual: 50, etapa: "Compilar" });
+  assert.equal(percentualDosJobs([{ steps: Array(5).fill({ status: "completed" }) }]).percentual, 99);
+  assert.equal(percentualDosJobs([]).percentual, 0);
+  assert.equal(percentualDosJobs([{ name: "x", status: "queued" }]).percentual, 0);
 });

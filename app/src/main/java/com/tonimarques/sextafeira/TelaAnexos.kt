@@ -684,11 +684,13 @@ internal fun MainActivity.confirmarCompra(itens: List<Loja.ItemDeCompra>, produt
         text = "Somar as quantidades ao estoque"
         isChecked = true
         setPadding(0, dp(14), 0, 0)
+        Aparencia.pintar(this)
     }
     val salvar = android.widget.CheckBox(this).apply {
         text = if (podeCusto) "Salvar o custo de cada produto" else "Salvar o custo (o site ainda não tem esse campo)"
         isChecked = podeCusto
         isEnabled = podeCusto
+        Aparencia.pintar(this)
     }
     caixa.addView(somar)
     caixa.addView(salvar)

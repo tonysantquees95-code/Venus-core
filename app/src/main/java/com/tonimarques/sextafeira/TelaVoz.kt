@@ -74,6 +74,7 @@ internal fun MainActivity.configurarVozNeural() {
             id = 9200 + i
             text = "${v.nome} — ${v.descricao}"
             isChecked = i == voz
+            Aparencia.pintar(this)
         })
     }
     caixa.addView(grupoVoz)
@@ -84,6 +85,7 @@ internal fun MainActivity.configurarVozNeural() {
             id = 9300 + i
             text = e.nome
             isChecked = i == estilo
+            Aparencia.pintar(this)
         })
     }
     caixa.addView(grupoEstilo)
@@ -256,6 +258,7 @@ internal fun MainActivity.ajustarVoz() {
         val sb = SeekBar(this).apply {
             max = 100
             progress = ((valor - 0.5f) * 100).toInt().coerceIn(0, 100)
+            Aparencia.pintar(this)
         }
         layout.addView(sb)
         return sb

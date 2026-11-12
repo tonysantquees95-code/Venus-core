@@ -23,24 +23,36 @@ internal object Modos {
 }
 
 internal fun MainActivity.abrirModos() {
-    val itens = VetorialId.MODOS.map { m ->
-        TelaDeAjustes.Ajuste(VetorialId.ROTULOS_MODO.getValue(m), { Modos.descricao(m) }, null, { VetorialId.modo(this) == m }) { definirModo(m) }
+    try {
+        val itens = VetorialId.MODOS.map { m ->
+            TelaDeAjustes.Ajuste(VetorialId.ROTULOS_MODO[m] ?: m, { Modos.descricao(m) }, null, { VetorialId.modo(this) == m }) { definirModo(m) }
+        }
+        TelaDeAjustes(this, versaoDoApp(), listOf(TelaDeAjustes.Secao("Escolha um modo", itens)), "COMO USAR A ${Marca.nomeMaiusculo}", compacto = true).show()
+    } catch (e: Exception) {
+        Registro.anotar(this, "modos", "abrir: ${e.javaClass.simpleName} ${e.message}")
+        aviso("Não consegui abrir essa tela agora.")
     }
-    TelaDeAjustes(this, versaoDoApp(), listOf(TelaDeAjustes.Secao("Escolha um modo", itens)), "COMO USAR A ${Marca.nomeMaiusculo}", compacto = true).show()
+}
+
+/** Cada passo roda separado: se um falhar (permissão, serviço), os outros e o app continuam. */
+private fun MainActivity.passo(nome: String, f: () -> Unit) {
+    try { f() } catch (e: Throwable) { Registro.anotar(this, "modos", "$nome: ${e.javaClass.simpleName} ${e.message}") }
 }
 
 internal fun MainActivity.definirModo(modo: String) {
+    if (modo !in VetorialId.MODOS) return
     prefs.edit().putString(VetorialId.PREF_MODO, modo).apply()
     val (escutaAberta, escutaFundo) = Modos.efeito(modo)
     // desliga o que o modo novo não usa
-    if (!escutaAberta && vigiliaLigada()) { prefs.edit().putBoolean(PREF_VIGILIA, false).apply(); pararVigilia() }
-    if (!escutaFundo && prefs.getBoolean(PREF_FUNDO, false)) tratarMenu(MENU_FUNDO)
+    passo("desligar escuta") { if (!escutaAberta && vigiliaLigada()) { prefs.edit().putBoolean(PREF_VIGILIA, false).apply(); pararVigilia() } }
+    passo("desligar fundo") { if (!escutaFundo && prefs.getBoolean(PREF_FUNDO, false)) tratarMenu(MENU_FUNDO) }
     // liga o que ele usa (o aviso do microfone e os pedidos de permissão ficam nos caminhos que já existiam)
-    if (escutaAberta && !vigiliaLigada()) tratarMenu(MENU_VIGILIA)
-    if (escutaFundo && !prefs.getBoolean(PREF_FUNDO, false)) tratarMenu(MENU_FUNDO)
-    Diario.anotar(this, "Modo de uso", "Modo \"${VetorialId.ROTULOS_MODO[modo]}\" escolhido.", "tela", true)
-    mudarEstadoOcioso()
-    ajustes?.atualizar()
-    aviso("Modo: ${VetorialId.ROTULOS_MODO[modo]}.")
-    BatimentoId.agora(this)
+    passo("ligar escuta") { if (escutaAberta && !vigiliaLigada()) tratarMenu(MENU_VIGILIA) }
+    passo("ligar fundo") { if (escutaFundo && !prefs.getBoolean(PREF_FUNDO, false)) tratarMenu(MENU_FUNDO) }
+    passo("diário") { Diario.anotar(this, "Modo de uso", "Modo \"${VetorialId.ROTULOS_MODO[modo]}\" escolhido.", "tela", true) }
+    passo("estado") { mudarEstadoOcioso() }
+    passo("tela") { ajustes?.atualizar() }
+    aviso(if (modo == "silencioso") "Modo: silencioso. Ao abrir o app você vai direto para a Central da loja; para voltar ao chat, escolha \"Conversa direta\"."
+          else "Modo: ${VetorialId.ROTULOS_MODO[modo]}.")
+    passo("batimento") { BatimentoId.agora(this) }
 }

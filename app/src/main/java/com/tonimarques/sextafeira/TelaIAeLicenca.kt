@@ -61,6 +61,7 @@ internal fun MainActivity.pedirIAReserva() {
             id = 9100 + i
             text = p.nome
             isChecked = i == escolhido
+            Aparencia.pintar(this)
         })
     }
     grupo.setOnCheckedChangeListener { _, id -> escolhido = id - 9100 }

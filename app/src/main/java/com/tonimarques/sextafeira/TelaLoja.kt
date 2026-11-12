@@ -113,6 +113,7 @@ internal fun MainActivity.editarDadosDaLoja() {
     fun marcar(valor: Boolean, t: String) = android.widget.CheckBox(this).apply {
         text = t
         isChecked = valor
+        Aparencia.pintar(this)
         caixa.addView(this)
     }
     fun reais(c: Int?) = c?.let { String.format(java.util.Locale("pt", "BR"), "%.2f", it / 100.0) }.orEmpty()

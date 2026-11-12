@@ -4,7 +4,7 @@ import { verificar } from "../id/jwt.js";
 import { ErroLoja } from "../loja/lojas.js";
 import { TABELA } from "../ia/roteador.js";
 import { criarAdmin, emailAdmin, entrarAdmin, exigirAdmin } from "./admin.js";
-import { PROJETOS, REPO_VALIDO, apksDoProjeto, buildsDoRepo, estadoGeral, linkDoApk, listaDeVersoes, metricasDoRepo } from "./github.js";
+import { PROJETOS, REPO_VALIDO, apksDoProjeto, buildsDoRepo, estadoGeral, linkDoApk, progressoDoBuild, listaDeVersoes, metricasDoRepo } from "./github.js";
 import { bi, esquecerProvedores, listarTrafego } from "./uso.js";
 import * as cofre from "./cofre.js";
 
@@ -38,7 +38,7 @@ export async function repoDoProjeto(env, projeto, cfg) {
 }
 
 // ------------------------------------------------------------------ projetos
-export const progressoDasFases = (fases) => (fases.length ? Math.round(fases.reduce((s, f) => s + f.progresso, 0) / fases.length) : 0);
+export const progressoDasFases = (fases) => (fases.length ? Math.round(fases.reduce((s, f) => s + f.progresso, 0) / fases.length) : 100);
 
 async function painel(env) {
   const cfg = await configuracoes(env);
@@ -52,7 +52,8 @@ async function painel(env) {
     if (!comToken) return { ...base, conectado: false, aviso: "O Worker está sem o token de leitura do GitHub (VENUS_GITHUB_LEITURA).", metricas: null, builds: [], estadoBuild: "desconhecido", apks: [] };
     const [metricas, builds, versoes] = await Promise.all([metricasDoRepo(env, repo), buildsDoRepo(env, repo), listaDeVersoes(env, repo)]);
     const apks = apksDoProjeto(p, versoes).map(({ _id, ...a }) => ({ ...a, baixar: a.versao ? `/dev/apk?app=${a.app}` : null }));
-    return { ...base, conectado: true, metricas, builds: builds || [], estadoBuild: estadoGeral(builds), apks };
+    const compilando = await progressoDoBuild(env, repo, builds);
+    return { ...base, conectado: true, metricas, builds: builds || [], estadoBuild: estadoGeral(builds), apks, compilando };
   }));
   return { gerado: Date.now(), admin: emailAdmin(env), projetos };
 }
