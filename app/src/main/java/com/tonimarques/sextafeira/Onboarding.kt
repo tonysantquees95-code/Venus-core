@@ -32,10 +32,10 @@ internal object Onboarding {
             else abrir(it, Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, it.packageName))
         },
         Passo(
-            "3. Contatos",
-            "Permita os contatos para eu achar o número pelo nome: \"ligar para a Maria\", \"mandar WhatsApp para o João\". Eu só leio o número na hora do pedido.",
-            "Permitir contatos",
-        ) { it.requestPermissions(arrayOf(Manifest.permission.READ_CONTACTS), Ferramentas.PEDIDO_CONTATOS) },
+            "3. Contatos e ligações",
+            "Permita os contatos e as ligações para eu achar o número pelo nome e ligar: \"ligar para a Maria\". Eu sempre pergunto antes de ligar, e você responde sim ou não.",
+            "Permitir contatos e ligações",
+        ) { it.requestPermissions(arrayOf(Manifest.permission.READ_CONTACTS, Manifest.permission.CALL_PHONE), Ferramentas.PEDIDO_CONTATOS) },
         Passo(
             "4. Bateria sem limite",
             "Para eu continuar ouvindo com a tela apagada, tire a otimização de bateria deste app. Na tela que abrir, escolha \"Sem restrições\" ou \"Permitir\".",

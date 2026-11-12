@@ -374,6 +374,7 @@ class Ferramentas(private val activity: Activity, private val memoria: Memoria? 
         "enviar_whatsapp" -> enviarWhatsapp(a.optString("contato"), a.optString("mensagem"))
         "enviar_sms" -> enviarSms(a.optString("contato"), a.optString("mensagem"))
         "fazer_ligacao" -> ligar(a.optString("contato"))
+        "confirmar_ligacao" -> confirmarLigacao()
         "lanterna" -> lanterna(a.optBoolean("ligar", true))
         "criar_alarme" -> alarme(a.optInt("hora"), a.optInt("minuto"), a.optString("descricao"))
         "criar_timer" -> timer(a.optInt("segundos"), a.optString("descricao"))
@@ -781,12 +782,19 @@ class Ferramentas(private val activity: Activity, private val memoria: Memoria? 
     @Volatile
     var respostaPendente: RespostaPendente? = null
 
-    val temPendente get() = lojaPendente != null || respostaPendente != null
-    val pendenteQualquer: Any? get() = lojaPendente ?: respostaPendente
+    /** Ligação esperando o "sim" (a Vênus entendeu o nome e pergunta antes de discar). */
+    data class LigacaoPendente(val nome: String, val numero: String)
+
+    @Volatile
+    var ligacaoPendente: LigacaoPendente? = null
+
+    val temPendente get() = lojaPendente != null || respostaPendente != null || ligacaoPendente != null
+    val pendenteQualquer: Any? get() = lojaPendente ?: respostaPendente ?: ligacaoPendente
 
     fun esquecerPendentes() {
         lojaPendente = null
         respostaPendente = null
+        ligacaoPendente = null
     }
 
     /** Última conversa lida, para "responde que..." sem dizer o nome. */
@@ -1018,12 +1026,34 @@ class Ferramentas(private val activity: Activity, private val memoria: Memoria? 
         return "SMS para ${achado.nome} pronto. Toque em Enviar."
     }
 
+    /** Entende para quem ligar e pergunta antes: só disca depois do "sim". */
     private fun ligar(contato: String): String {
         val achado = resolverContato(contato)
         val numero = achado.numero ?: return achado.aviso
-        activity.startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:" + Uri.encode(numero))))
-        registrarContato(achado.nome)
-        return "Discador aberto com o número de ${achado.nome}. Toque para ligar."
+        lojaPendente = null
+        respostaPendente = null
+        ligacaoPendente = LigacaoPendente(achado.nome, numero)
+        return "Entendi que você quer ligar para ${achado.nome}. Quer ligar? Diga sim para confirmar ou não para cancelar."
+    }
+
+    /** O "sim": liga direto (com a permissão de ligação) ou, sem ela, abre o discador com o número. */
+    private fun confirmarLigacao(): String {
+        val l = ligacaoPendente ?: return "Não tinha nenhuma ligação esperando confirmação."
+        ligacaoPendente = null
+        val uri = Uri.parse("tel:" + Uri.encode(l.numero))
+        registrarContato(l.nome)
+        if (activity.checkSelfPermission(Manifest.permission.CALL_PHONE) == PackageManager.PERMISSION_GRANTED) {
+            activity.runOnUiThread {
+                try { activity.startActivity(Intent(Intent.ACTION_CALL, uri)) }
+                catch (e: Exception) { activity.startActivity(Intent(Intent.ACTION_DIAL, uri)) }
+            }
+            return "Ligando para ${l.nome}."
+        }
+        activity.runOnUiThread {
+            activity.requestPermissions(arrayOf(Manifest.permission.CALL_PHONE), PEDIDO_LIGACAO)
+            activity.startActivity(Intent(Intent.ACTION_DIAL, uri))
+        }
+        return "Abri o discador com o número de ${l.nome}. Para eu ligar direto da próxima vez, permita \"Fazer e gerenciar ligações\"."
     }
 
     private class Contato(val nome: String, val numero: String?, val aviso: String)
@@ -1375,13 +1405,14 @@ class Ferramentas(private val activity: Activity, private val memoria: Memoria? 
             "Ler e responder mensagens do WhatsApp não funciona nesta versão: o Android bloqueia a instalação de apps de fora da Play Store " +
                 "que leem notificações. Para mandar uma mensagem nova, diga: manda mensagem para a Natália que, e a mensagem."
         const val PEDIDO_CONTATOS = 20
+        const val PEDIDO_LIGACAO = 22
         const val PEDIDO_LOCALIZACAO = 21
         val USAM_REDE = setOf(
             "sobre_mim", "previsao_do_tempo", "resumo_wikipedia", "buscar_na_internet", "cotacao_moeda", "noticias",
             "acompanhar_tema", "atualizar_noticias", "traduzir", "consultar_cep", "consultar_cnpj", "consultar_ddd", "feriados",
             "buscar_cep", "dicionario", "ortografia", "distancia",
             "loja_resumo", "loja_pedidos", "loja_acabando", "loja_estoque",
-            "rotina_bom_dia", "responder_mensagem", "confirmar_resposta",
+            "rotina_bom_dia", "responder_mensagem", "confirmar_resposta", "fazer_ligacao", "confirmar_ligacao",
             "loja_retiradas", "loja_estoque_geral", "loja_alterar", "loja_status", "loja_reposicao", "loja_mais_vendidos", "loja_comparar", "loja_parados", "loja_margem", "loja_margens", "loja_lucro", "loja_previsao", "loja_produto", "loja_entregue", "loja_confirmar", "loja_agendar",
             "caixa_resultado", "caixa_equilibrio", "caixa_previsao",
             "pesquisar_preco", "loja_curva_abc", "loja_compras", "loja_recompra", "loja_chamar_cliente", "loja_promo_parados",
