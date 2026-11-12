@@ -122,7 +122,7 @@ internal fun MainActivity.marcaAtual(): Criativos.Conceito {
     val criada = if (salvo.size == 5) Paleta.lerHex(salvo[3])?.let { Criativos.Conceito(salvo[0], salvo[1], salvo[2], it, salvo[4]) } else null
     if (siteConectado()) {
         val corDoSite = prefs.getInt(PREF_SITE_COR, -1).takeIf { it >= 0 }
-        val logo = File(filesDir, ARQUIVO_LOGO_DO_SITE).takeIf { it.isFile }?.let { android.graphics.BitmapFactory.decodeFile(it.path) }
+        val logo = File(filesDir, ARQUIVO_LOGO_DO_SITE).takeIf { it.isFile }?.let { Criativos.lerReduzida(it) }
         if (corDoSite != null || logo != null) {
             val base = criada ?: Criativos.Conceito(Perfil.loja, "", "circulo", Paleta.corDoNome(Perfil.loja), "moderna")
             return Criativos.Conceito(base.nome, base.slogan, base.forma, corDoSite ?: base.cor, IdentidadeDoSite.estiloDaFonte(prefs.getString(PREF_SITE_FONTE, null)), logo)
@@ -145,7 +145,9 @@ internal fun MainActivity.atualizarIdentidadeDoSite(forcar: Boolean = false, aoT
         id.cor?.let { ed.putInt(PREF_SITE_COR, it) }
         id.fonte?.let { ed.putString(PREF_SITE_FONTE, it) }
         ed.apply()
-        if (bytes != null && android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size) != null) File(filesDir, ARQUIVO_LOGO_DO_SITE).writeBytes(bytes)
+        // guarda o logo já reduzido (logos de site podem ter milhares de pixels e estourar a memória)
+        val logo = bytes?.let { Criativos.lerReduzida(it) }
+        if (logo != null) try { File(filesDir, ARQUIVO_LOGO_DO_SITE).outputStream().use { logo.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) } } catch (e: Exception) { }
         Diario.anotar(this, "Marketing", "Identidade da loja lida do site (cor, logo e fonte).", "app", true)
         aoTerminar?.invoke(id.cor != null || bytes != null || id.fonte != null)
     }
@@ -424,8 +426,8 @@ internal fun MainActivity.criarCartao(link: String? = null) {
                 val marca = marcaAtual()
                 val contato = Criativos.Contato(v[0], v[1], DadosDaLoja.telefoneBonito(v[2]), v[3], destino)
                 previa("Cartão de visita", listOf(Criativos.cartaoFrente(marca, contato), Criativos.cartaoVerso(marca, contato, qr.modulos, qr.tamanho)), "cartao")
-            } catch (e: Exception) {
-                aviso(e.message ?: "Não consegui montar o cartão.")
+            } catch (e: Throwable) {
+                aviso(if (e is OutOfMemoryError) "O celular ficou sem memória para montar o cartão. Feche outros apps e tente de novo." else e.message ?: "Não consegui montar o cartão.")
             }
         }
         if (link != null) montar(link) else comLinkDaLoja(montar)
@@ -465,22 +467,21 @@ internal fun MainActivity.criarPanfleto(link: String? = null) {
     perguntar("Panfleto de ofertas", listOf("Título" to "Ofertas da semana", "Rodapé (contato)" to DadosDaLoja.rodape(whats, insta, "")), "Criar") { v ->
         val montar = { destino: String ->
             aviso("Montando o panfleto…")
-            emFundo({ ofertasDaLoja() }) { r ->
-                try {
-                    val ofertas = r.getOrNull().orEmpty()
-                    val qr = QrLocal.matriz(destino)
-                    val rodape = v[1].ifBlank { DadosDaLoja.rodape(whats, insta, destino) }
-                    previa("Panfleto", listOf(Criativos.panfleto(marcaAtual(), v[0], ofertas, rodape, qr.modulos, qr.tamanho)), "panfleto")
-                } catch (e: Exception) {
-                    aviso(e.message ?: "Não consegui montar o panfleto.")
-                }
+            // ofertas, QR, logo e o desenho em si (imagem grande) saem da tela principal; qualquer falha vira aviso, não fechamento
+            emFundo({
+                val ofertas = ofertasDaLoja()
+                val qr = QrLocal.matriz(destino)
+                val rodape = v[1].ifBlank { DadosDaLoja.rodape(whats, insta, destino) }
+                Criativos.panfleto(marcaAtual(), v[0], ofertas, rodape, qr.modulos, qr.tamanho)
+            }) { r ->
+                r.onSuccess { previa("Panfleto", listOf(it), "panfleto") }
+                    .onFailure { aviso(if (it is OutOfMemoryError) "O celular ficou sem memória para montar o panfleto. Feche outros apps e tente de novo." else it.mensagemAmigavel()) }
             }
         }
         if (link != null) montar(link) else comLinkDaLoja(montar)
     }
 }
 
-// ------------------------------------------------------------------ links curtos já cadastrados
 /** O que fazer com um link: QR Code, panfleto, cartão, copiar e compartilhar (tudo já com o link escolhido). */
 internal fun MainActivity.acoesDoLink(titulo: String, link: String, extra: List<Pair<String, () -> Unit>> = emptyList()) {
     escolher(titulo, listOf(
