@@ -1109,6 +1109,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
                 decisao.nome == "programar_post" -> programarPost(decisao.args)
                 decisao.nome == "listar_posts" -> listarPosts()
                 decisao.nome == "instagram_conectar" -> conectarInstagram()
+                decisao.nome == "estudo_resumo" && !VetorialId.admin(this) -> responder("Esse assunto é só da conta do administrador.")
                 decisao.nome == "estudo_resumo" -> {
                     val r = Estudo.ultimo(this)
                     Thread {
