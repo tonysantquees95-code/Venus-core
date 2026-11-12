@@ -19,6 +19,7 @@
  */
 import { ehAtalho, responderAtalho } from "./atalhos.js";
 import { ehRotaVindex, tratarVindex } from "./vindex/rotas.js";
+import { ehRotaCofre, tratarCofre } from "./vindex/cofre.js";
 import { ehRotaVortex, tratarVortex } from "./vortex/saves.js";
 import { ehRotaCi, tratarCi } from "./ci/assinatura.js";
 import { chat, chatPreflight } from "./chat.js";
@@ -63,6 +64,7 @@ export default {
       if (ehRotaCi(caminho)) return await tratarCi(req, env, url, caminho);
       if (ehRotaVortex(caminho)) return await tratarVortex(req, env, url, caminho);
       if (ehRotaVindex(caminho)) return await tratarVindex(req, env, url, caminho);
+      if (ehRotaCofre(caminho)) return await tratarCofre(req, env, url, caminho);
       if (ehRotaDev(caminho)) return await tratarDev(req, env, url, caminho);
       if (ehRotaDaLoja(caminho) || (env.DOMINIO_CURTO && url.hostname === env.DOMINIO_CURTO && req.method === "GET" && /^\/[a-z0-9-]{3,32}(\/[^/]+)?$/.test(caminho) && !["/saude", "/atualizacao"].includes(caminho))) {
         return await tratarLoja(req, env, ctx, url, caminho);
