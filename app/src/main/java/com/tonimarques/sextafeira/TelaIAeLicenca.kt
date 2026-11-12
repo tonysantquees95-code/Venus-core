@@ -305,3 +305,18 @@ internal fun MainActivity.pedirModelo() {
         .setNegativeButton("Cancelar", null)
         .show()
 }
+
+/** Painel do administrador: o que cada IA do servidor faz (a divisão é feita pelo roteador do servidor). */
+internal fun MainActivity.quemFazOQue() {
+    if (negarSeNaoForAdmin()) return
+    fun ia(nome: String, papel: String, tarefas: String) = TelaDeAjustes.Secao(nome, listOf(
+        TelaDeAjustes.Ajuste(papel, { tarefas }) { },
+    ))
+    telaDeLista("QUEM FAZ O QUÊ", listOf(
+        ia("Groq", "Velocidade e texto", "Conversa, respostas rápidas, textos, resumos e traduções. É quem responde primeiro no dia a dia."),
+        ia("DeepSeek", "Lógica, código e relatórios", "Raciocínio passo a passo, código, relatórios e análises de BI (faturamento, margem, tendências). Usa o modo de raciocínio quando o pedido pede."),
+        ia("Gemini", "Imagem, PDF, áudio e OCR", "Só entra quando há anexo (foto, PDF, áudio) ou leitura de texto em imagem. No app também faz a busca no Google."),
+        ia("Cloudflare", "Reserva", "Segunda reserva grátis: entra quando a IA principal atingir o limite."),
+        TelaDeAjustes.Secao("Como é escolhido", listOf(TelaDeAjustes.Ajuste("Automático, pelo servidor", { "O servidor lê o pedido e escolhe a IA pela tarefa. Os gastos e o uso de cada uma aparecem no Painel Dev (aba BI)." }) { })),
+    ))
+}
