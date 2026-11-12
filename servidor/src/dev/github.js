@@ -2,6 +2,7 @@
 // Usa o GITHUB_TOKEN (só leitura) do Worker. Tudo guardado em cache por alguns minutos.
 export const REPO_VENUS = "tonysantquees95-code/Venus-core";
 export const REPO_VINDEX = "tonysantquees95-code/Vindex-";
+export const REPO_VORTEX = "tonysantquees95-code/Vortex";
 export const REPO_DEV_CENTER = "tonysantquees95-code/vetorial-dev-center";
 
 /** Projetos do ecossistema. Vindex e Vortex ganham repositório pelo painel (dev_config "repo:<id>") ou pela variável do Worker. */
@@ -27,7 +28,7 @@ export const PROJETOS = [
       { app: "vindex-windows", rotulo: "Vindex (Windows)", tag: /^1\.(\d+)$/, arquivo: (n) => /^VindexSetup\.exe$/i.test(n) },
     ],
   },
-  { id: "vortex", nome: "Vortex · Game Space", repo: "", descricao: "Game Space: ainda sem repositório ligado ao painel.", apks: [{ app: "vortex", rotulo: "Vortex (Android)", tag: /^v?\d+\.(\d+)(?:\.\d+)?$/, arquivo: (n) => /\.apk$/i.test(n) }] },
+  { id: "vortex", nome: "Vortex · Game Space", repo: REPO_VORTEX, descricao: "Game Space: launcher de jogos retrô com Modo Jogo, saves na nuvem e voz da Vênus (Windows e Android).", apks: [{ app: "vortex", rotulo: "Vortex (Android)", tag: /^v?\d+\.(\d+)(?:\.\d+)?$/, arquivo: (n) => /\.apk$/i.test(n) }] },
 ];
 
 export const REPO_VALIDO = /^[A-Za-z0-9_.-]{1,60}\/[A-Za-z0-9_.-]{1,100}$/;
