@@ -279,11 +279,18 @@ internal fun MainActivity.abrirMenu(@Suppress("UNUSED_PARAMETER") ancora: View) 
         TelaDeAjustes.Secao(
             "Sistema", listOf(
                 TelaDeAjustes.Ajuste("Contatos e ligações", {
-                    if (checkSelfPermission(Manifest.permission.READ_CONTACTS) == PackageManager.PERMISSION_GRANTED) "Liberado: posso achar o número pelo nome para ligar, mandar WhatsApp e SMS."
-                    else "Sem acesso aos contatos. Toque para permitir e eu poder ligar e mandar mensagem pelo nome."
+                    val contatos = checkSelfPermission(Manifest.permission.READ_CONTACTS) == PackageManager.PERMISSION_GRANTED
+                    val ligar = checkSelfPermission(Manifest.permission.CALL_PHONE) == PackageManager.PERMISSION_GRANTED
+                    when {
+                        contatos && ligar -> "Liberado: acho o número pelo nome e ligo direto, depois de perguntar se você quer ligar."
+                        contatos -> "Contatos liberados. Falta permitir ligações para eu ligar direto (hoje abro o discador)."
+                        else -> "Sem acesso aos contatos. Toque para permitir e eu poder ligar e mandar mensagem pelo nome."
+                    }
                 }) {
-                    if (checkSelfPermission(Manifest.permission.READ_CONTACTS) == PackageManager.PERMISSION_GRANTED) aviso("Os contatos já estão liberados.")
-                    else requestPermissions(arrayOf(Manifest.permission.READ_CONTACTS), Ferramentas.PEDIDO_CONTATOS)
+                    val faltam = listOf(Manifest.permission.READ_CONTACTS, Manifest.permission.CALL_PHONE)
+                        .filter { checkSelfPermission(it) != PackageManager.PERMISSION_GRANTED }
+                    if (faltam.isEmpty()) aviso("Contatos e ligações já estão liberados.")
+                    else requestPermissions(faltam.toTypedArray(), Ferramentas.PEDIDO_CONTATOS)
                 },
                 TelaDeAjustes.Ajuste("Atualizações", {
                     "Versão ${versaoDoApp()} instalada. A ${Marca.nome} avisa sozinha quando sai uma nova; toque para procurar agora."

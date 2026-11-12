@@ -1304,7 +1304,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
             ferramentas.ultimasFontes = emptyList()
             val resultado = ferramentas.executar(nome, args)
             val fontes = ferramentas.ultimasFontes
-            val pendente = if (nome in setOf("loja_alterar", "loja_entregue", "loja_status", "responder_mensagem", "loja_promo_parados")) ferramentas.pendenteQualquer else null
+            val pendente = if (nome in setOf("loja_alterar", "loja_entregue", "loja_status", "responder_mensagem", "loja_promo_parados", "fazer_ligacao")) ferramentas.pendenteQualquer else null
             val acao: () -> Unit = {
                 if (pendente != null) forcarEscuta = true
                 responder(resultado)
@@ -1322,7 +1322,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
     internal fun mostrarConfirmacaoLoja(pergunta: String) {
         fecharConfirmacaoLoja()
         dialogoLoja = AlertDialog.Builder(this)
-            .setTitle(if (ferramentas.lojaPendente != null) "Confirmar mudança na loja" else "Confirmar resposta")
+            .setTitle(if (ferramentas.lojaPendente != null) "Confirmar mudança na loja" else if (ferramentas.ligacaoPendente != null) "Confirmar ligação" else "Confirmar resposta")
             .setMessage(pergunta.replace(" Diga sim para confirmar ou não para cancelar.", ""))
             .setPositiveButton("Confirmar") { _, _ ->
                 dialogoLoja = null
@@ -1349,12 +1349,13 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
 
     internal fun responderConfirmacaoLoja(sim: Boolean) {
         fecharConfirmacaoLoja()
+        val eraLigacao = ferramentas.ligacaoPendente != null
         val eraMensagem = ferramentas.lojaPendente == null && ferramentas.respostaPendente != null
         if (sim) {
-            executarNaRede(if (eraMensagem) "confirmar_resposta" else "loja_confirmar", emptyMap())
+            executarNaRede(if (eraLigacao) "confirmar_ligacao" else if (eraMensagem) "confirmar_resposta" else "loja_confirmar", emptyMap())
         } else {
             ferramentas.esquecerPendentes()
-            responder(if (eraMensagem) "Tudo bem, não respondi." else "Tudo bem, não mudei nada.")
+            responder(if (eraLigacao) "Tudo bem, não liguei." else if (eraMensagem) "Tudo bem, não respondi." else "Tudo bem, não mudei nada.")
         }
     }
 
