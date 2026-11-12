@@ -2,7 +2,7 @@
  * Servidor da Vênus (Cloudflare Workers + D1).
  *
  *   GET  /saude                          → está no ar?
- *   GET  /atualizacao?app=venus|windows|robo|vindex-android|vindex-windows → versão mais nova {numero, tag, notas, tamanho, sha256, url}; &baixar=1 redireciona ao APK
+ *   GET  /atualizacao?app=venus|windows|robo|vindex-android|vindex-windows|vortex-android|vortex-windows → versão mais nova {numero, tag, notas, tamanho, sha256, url}; &baixar=1 redireciona ao APK
  *   POST /aviso/<canal>                  → guarda um aviso curto (ex.: "publicacao", "pago 12")
  *   GET  /aviso/<canal>?desde=<id>       → avisos depois do id {avisos:[{id,texto,criado}], ultimo}
  *   POST /cobranca/aviso                 → webhook da InfinitePay (cobrança por link dos lojistas)
