@@ -21,7 +21,7 @@
     "productName": "Vênus",
     "directories": { "output": "dist", "buildResources": "build" },
     "files": ["main.js", "preload.js", "status.mjs", "computador.mjs", "atualizador.mjs", "app/**", "build/tray.png"],
-    "win": { "icon": "build/icon.ico", "target": ["nsis", "portable"], "artifactName": "Venus-Windows-${version}.${ext}" },
-    "nsis": { "oneClick": false, "perMachine": false, "allowToChangeInstallationDirectory": true, "shortcutName": "Vênus" }
+    "win": { "icon": "build/icon.ico", "target": ["nsis"], "artifactName": "Venus-Windows-${version}.${ext}" },
+    "nsis": { "oneClick": false, "perMachine": false, "allowToChangeInstallationDirectory": true, "shortcutName": "Vênus", "createDesktopShortcut": "always", "createStartMenuShortcut": true, "installerIcon": "build/icon.ico", "uninstallerIcon": "build/icon.ico", "installerHeaderIcon": "build/icon.ico", "runAfterFinish": true }
   }
 }

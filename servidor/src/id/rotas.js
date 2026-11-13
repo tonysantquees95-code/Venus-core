@@ -40,7 +40,7 @@ export async function tratarId(req, env, url, caminho) {
     }
     if (caminho === "/id" && req.method === "GET") {
       const origens = String(env.ORIGENS_PERMITIDAS || "").split(",").map((s) => s.trim()).filter(Boolean);
-      return new Response(paginaDeLogin(origens), { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store", "content-security-policy": "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; base-uri 'none'; form-action 'none'", "referrer-policy": "no-referrer", "x-frame-options": "DENY" } });
+      return new Response(paginaDeLogin(origens), { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store", "content-security-policy": "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; connect-src 'self'; base-uri 'none'; form-action 'none'", "referrer-policy": "no-referrer", "x-frame-options": "DENY" } });
     }
     if (caminho === "/id/cadastrar" && req.method === "POST") {
       const d = await corpo(req);
