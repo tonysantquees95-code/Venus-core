@@ -167,6 +167,23 @@ jobs:
             fi
           done
 
+      - name: Envio de códigos (recuperação de senha por e-mail e SMS)
+        env:
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          EMAIL_REMETENTE: ${{ secrets.EMAIL_REMETENTE }}
+          TWILIO_SID: ${{ secrets.TWILIO_SID }}
+          TWILIO_TOKEN: ${{ secrets.TWILIO_TOKEN }}
+          TWILIO_DE: ${{ secrets.TWILIO_DE }}
+        run: |
+          for nome in RESEND_API_KEY EMAIL_REMETENTE TWILIO_SID TWILIO_TOKEN TWILIO_DE; do
+            valor="${!nome}"
+            if [ -n "$valor" ]; then
+              printf '%s' "$valor" | $WRANGLER secret put "$nome"
+            else
+              echo "::notice::$nome não está nos segredos do repositório; sem ele o canal de recuperação correspondente fica desligado."
+            fi
+          done
+
       - name: Cofre e chaves das plataformas (Nuvemshop, Mercado Livre)
         env:
           CHAVE_COFRE: ${{ secrets.CHAVE_COFRE }}
