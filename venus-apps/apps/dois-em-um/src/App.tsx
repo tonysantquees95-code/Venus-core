@@ -77,13 +77,10 @@ export function App() {
           <Ajustes aoAbrirTema={() => setTela("tema")} alvo={alvoAjuste} />
         ) : (
           <>
-        <div className={`${tela === "chat" ? "flex" : "hidden"} min-w-0 flex-1 xl:flex`}>
+        <div className={`${tela === "chat" ? "flex" : "hidden"} min-w-0 flex-1`}>
           <ChatPanel aoAbrirMenu={() => setMenuAberto(true)} />
         </div>
-        <div
-          className={`${tela === "robo" ? "flex" : "hidden"} min-w-0 flex-1 xl:flex xl:max-w-md xl:flex-none xl:border-l xl:border-borda
-            ${tela === "robo" ? "xl:bg-robo/5" : ""}`}
-        >
+        <div className={`${tela === "robo" ? "flex" : "hidden"} min-w-0 flex-1`}>
           <RoboPanel robo={robo} />
         </div>
           </>

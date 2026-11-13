@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { IconeNomeado } from "../components/Icones";
 import { PaginaComLateral, type ItemLateral } from "../components/PaginaComLateral";
+import { CartaoDeVisitas, Panfleto, QrCodeSecao, VitrineECatalogo } from "./Divulgacao";
 import { DadosDaLoja, Historico, IdeiasDePost, IdeiasDeVideo, InstagramDaLoja, PrimeirosPassos, RegrasDeVenda, RespostasDoInstagram, StoriesDoDia } from "./secoes";
 
 const SECOES: ItemLateral[] = [
@@ -12,7 +13,11 @@ const SECOES: ItemLateral[] = [
   { id: "videos", rotulo: "Ideias de vídeo (Reels)", icone: <IconeNomeado nome="video" className="size-5" />, grupo: "Instagram" },
   { id: "stories", rotulo: "Stories do dia", icone: <IconeNomeado nome="story" className="size-5" />, grupo: "Instagram" },
   { id: "respostas", rotulo: "Respostas do Instagram", icone: <IconeNomeado nome="respostas" className="size-5" />, grupo: "Instagram" },
-  { id: "conta", rotulo: "Instagram da loja", icone: <IconeNomeado nome="conta" className="size-5" />, grupo: "Instagram" }
+  { id: "conta", rotulo: "Instagram da loja", icone: <IconeNomeado nome="conta" className="size-5" />, grupo: "Instagram" },
+  { id: "qr", rotulo: "QR Code", icone: <IconeNomeado nome="qr" className="size-5" />, grupo: "Divulgação" },
+  { id: "cartao", rotulo: "Cartão de visitas", icone: <IconeNomeado nome="cartao" className="size-5" />, grupo: "Divulgação" },
+  { id: "panfleto", rotulo: "Panfleto", icone: <IconeNomeado nome="panfleto" className="size-5" />, grupo: "Divulgação" },
+  { id: "vitrine", rotulo: "Vitrine e catálogo", icone: <IconeNomeado nome="vitrine" className="size-5" />, grupo: "Divulgação" }
 ];
 
 /** "Minha empresa": as mesmas opções do celular que fazem sentido no computador, numa barra lateral própria. */
@@ -30,6 +35,10 @@ export function TelaEmpresa() {
         {secao === "stories" && <StoriesDoDia />}
         {secao === "respostas" && <RespostasDoInstagram />}
         {secao === "conta" && <InstagramDaLoja />}
+        {secao === "qr" && <QrCodeSecao />}
+        {secao === "cartao" && <CartaoDeVisitas />}
+        {secao === "panfleto" && <Panfleto />}
+        {secao === "vitrine" && <VitrineECatalogo />}
       </div>
     </PaginaComLateral>
   );

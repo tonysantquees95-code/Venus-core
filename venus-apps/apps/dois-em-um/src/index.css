@@ -33,3 +33,27 @@ body {
 
 /* ---------- Orbe (canvas, porte do Orbe.kt do celular) ---------- */
 .orbe { display: inline-block; flex: none; }
+
+/* ---- impressão (cartão, panfleto, QR): só a folha aparece */
+.folha-impressao { display: none; }
+@media print {
+  body { background: #fff !important; }
+  body > *:not(.folha-impressao) { display: none !important; }
+  .folha-impressao { display: block !important; color: #000; }
+  @page { margin: 8mm; }
+}
+.cartao-visita { width: 90mm; height: 50mm; display: flex; justify-content: space-between; align-items: stretch; padding: 5mm 6mm; box-sizing: border-box; font-family: system-ui, sans-serif; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+.cv-texto { display: flex; flex-direction: column; min-width: 0; }
+.cv-loja { font-size: 16pt; font-weight: 800; line-height: 1.1; }
+.cv-linha { font-size: 8.5pt; margin-top: 1mm; }
+.cv-suave { opacity: .7; }
+.cv-espaco { flex: 1; }
+.cv-qr { align-self: flex-end; background: #fff; padding: 1.5mm; border-radius: 2mm; }
+.panfleto { width: 148mm; height: 210mm; box-sizing: border-box; padding: 10mm 12mm; font-family: system-ui, sans-serif; display: flex; flex-direction: column; background: #fff; color: #111; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+.pf-loja { font-size: 30pt; font-weight: 900; margin: 6mm 0 0; line-height: 1.05; }
+.pf-chamada { font-size: 20pt; font-weight: 700; margin: 8mm 0 0; line-height: 1.2; }
+.pf-oferta { align-self: flex-start; color: #fff; font-size: 18pt; font-weight: 800; padding: 3mm 6mm; border-radius: 3mm; margin-top: 8mm; }
+.pf-sobre { font-size: 11pt; margin-top: 8mm; color: #333; }
+.pf-rodape { margin-top: auto; display: flex; align-items: center; gap: 8mm; }
+.pf-contato { font-size: 14pt; font-weight: 700; }
+.pf-suave { font-size: 10pt; color: #555; }

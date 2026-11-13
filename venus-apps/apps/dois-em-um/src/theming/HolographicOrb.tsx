@@ -88,12 +88,14 @@ export function HolographicOrb({ variante, tamanho = 48, className = "", estado 
       ctx.clearRect(0, 0, W, H);
 
       // brilho de fundo
-      let g = ctx.createRadialGradient(cx, cy, 0, cx, cy, raio * 2.4);
+      // o brilho some por completo antes da borda da caixa: sem isso aparece um quadrado
+      const raioBrilho = Math.min(raio * 2.4, Math.min(W, H) / 2 - 1);
+      let g = ctx.createRadialGradient(cx, cy, 0, cx, cy, raioBrilho);
       g.addColorStop(0, rgba(c1, 0.3 + 0.25 * energia));
       g.addColorStop(0.45, rgba(c2, 0.12));
       g.addColorStop(1, rgba(c2, 0));
       ctx.fillStyle = g;
-      ctx.beginPath(); ctx.arc(cx, cy, raio * 2.4, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(cx, cy, raioBrilho, 0, Math.PI * 2); ctx.fill();
 
       // esfera de partículas com constelações
       const r0 = raio * 1.3;

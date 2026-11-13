@@ -1,5 +1,7 @@
 import { useCallback } from "react";
-import { URL_API } from "@venus/nucleo";
+import { perguntarIA } from "../ia/cliente";
+import { useMarketing } from "../empresa/MarketingProvider";
+import { contextoDeMarketing } from "../empresa/marketing";
 import type { Mensagem } from "../tipos";
 import { useConversas } from "../sessao/ConversasProvider";
 import { useId } from "../id/IdProvider";
@@ -19,6 +21,7 @@ export function useChat() {
   const enviando = estaEnviando(ativa.id);
   const conta = useId();
   const { empresa } = useEmpresa();
+  const mk = useMarketing();
   const { prefs } = usePreferencias();
 
   const enviar = useCallback(
@@ -48,25 +51,19 @@ export function useChat() {
           if (prefs.falarRespostas) falar(t);
           return;
         }
-        const r = await fetch(`${URL_API}/v1/chat`, {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({
-            sistema: contextoDaEmpresa(empresa) || undefined,
-            mensagens: historico.slice(-20).map((m) => ({ papel: m.autor === "eu" ? "user" : "assistant", texto: m.texto }))
-          })
-        });
-        if (!r.ok) throw new Error(String(r.status));
-        const dados = (await r.json()) as { resposta?: string };
-        anexar(id, resposta(dados.resposta ?? "(sem resposta)"));
-        if (prefs.falarRespostas && dados.resposta) falar(dados.resposta);
-      } catch {
-        anexar(id, resposta("Não consegui falar com o servidor agora. Tente de novo em instantes."));
+        const texto2 = await perguntarIA(
+          [contextoDaEmpresa(empresa), contextoDeMarketing(mk.todasAsIdeias, mk.postsDoCelular, mk.storiesDoCelular)].filter(Boolean).join("\n\n") || undefined,
+          historico.map((m) => ({ papel: m.autor === "eu" ? ("user" as const) : ("assistant" as const), texto: m.texto }))
+        );
+        anexar(id, resposta(texto2));
+        if (prefs.falarRespostas) falar(texto2);
+      } catch (e) {
+        anexar(id, resposta(e instanceof Error && e.message ? e.message : "Não consegui falar com o servidor agora. Tente de novo em instantes."));
       } finally {
         marcarEnviando(id, false);
       }
     },
-    [ativa, anexar, estaEnviando, marcarEnviando, conta, empresa, prefs.falarRespostas]
+    [ativa, anexar, estaEnviando, marcarEnviando, conta, empresa, mk.todasAsIdeias, mk.postsDoCelular, mk.storiesDoCelular, prefs.falarRespostas]
   );
 
   return { mensagens: ativa.mensagens, enviando, enviar };
