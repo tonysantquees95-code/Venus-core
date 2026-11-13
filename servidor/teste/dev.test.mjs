@@ -128,6 +128,7 @@ test("uso das IAs: soma por hora, tokens do Groq e do Gemini, e séries do BI", 
   await registrarUso(env, { provedor: "deepseek", tarefa: "bi", erro: true }, T);
   await registrarUso(env, { provedor: "groq", tarefa: "conversa", cache: true }, T);
   await env.DB.prepare("INSERT INTO lojas (id, token_hash, nome, criado, trial_fim, plano, ativo_ate) VALUES ('l1', 'h1', 'A', ?, ?, 'fundadores', ?)").bind(T - 3600_000, T + 86400_000, T + 5 * 86400_000).run();
+  await env.DB.prepare("INSERT INTO usuarios (id, email, nome, senha_hash, salt, loja, criado) VALUES ('u1', 'a@teste.com', 'A', 'x', 'y', 'l1', ?)").bind(T - 3600_000).run();
   await env.DB.prepare("INSERT INTO pagamentos (id, loja, gateway, valor_centavos, status, criado, atualizado) VALUES ('p1', 'l1', 'infinitepay', 4990, 'liberado', ?, ?)").bind(T, T).run();
   await env.DB.prepare("INSERT INTO pagamentos (id, loja, gateway, valor_centavos, status, criado, atualizado) VALUES ('p2', 'l1', 'infinitepay', 4990, 'aguardando', ?, ?)").bind(T, T).run();
   const r = await bi(env, 7, T + 3600_000);
