@@ -8,6 +8,7 @@
 import { ErroId as ErroLoja } from "../id/conta.js";
 import { validarSessao } from "../id/conta.js";
 import { appsLiberados } from "../loja/assinatura.js";
+import * as steam from "./steam.js";
 import { buscar, consultar, pedir, responder, vortexOnline } from "./ponte.js";
 
 
@@ -38,10 +39,16 @@ async function total(env, prefixo) {
 export async function tratarVortex(req, env, url, caminho, agora = Date.now()) {
   if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: CORS });
   try {
+    // a Steam volta aqui pelo navegador, sem sessão: o "n" do link prova de qual conta é o login
+    if (caminho === "/vortex/steam/retorno" && req.method === "GET") return steam.retorno(env, url, url.origin, env.fetchSteam ?? fetch, agora);
     const ctx = await validarSessao(env, req, { agora });
     const ok = await liberado(env, ctx.usuario, agora);
     if (caminho === "/vortex/licenca") return json({ vortex: ok, mensagem: ok ? "" : "O Vortex não está liberado para esta conta. Assine um pacote com o Vortex ou comece o teste grátis." });
     if (!ok) throw new ErroLoja(402, "vortex_nao_liberado", "O Vortex não está liberado para esta conta.");
+    if (caminho === "/vortex/steam/iniciar" && req.method === "POST") return json(await steam.iniciar(env, ctx.usuario.id, url.origin, agora));
+    if (caminho === "/vortex/steam" && req.method === "GET") return json(await steam.estado(env, ctx.usuario.id));
+    if (caminho === "/vortex/steam" && req.method === "DELETE") return json(await steam.desligar(env, ctx.usuario.id));
+    if (caminho === "/vortex/steam/jogos" && req.method === "GET") return json(await steam.jogos(env, ctx.usuario.id, env.fetchSteam ?? fetch));
     // ponte de voz Vênus ↔ Vortex
     if (caminho === "/vortex/presenca" && req.method === "GET") return json(await vortexOnline(env, ctx.usuario.id, agora));
     if (caminho === "/vortex/pedidos" && req.method === "POST") {
