@@ -313,3 +313,25 @@ test("trava no servidor: com o teste vencido, sincronização e IA respondem 402
   const q = new Request("https://v.test/ia/v1/models", { headers: { authorization: `Bearer ${e.token}` } });
   assert.equal((await tratarProxyIA(q, env, {}, "/ia/v1/models")).status, 402);
 });
+
+test("teste grátis: fora da janela promocional, ou a 3ª conta da mesma rede, ou o mesmo aparelho já nascem pedindo pagamento", async () => {
+  const env = mundo2();
+  const T = Date.now();
+  const cad = (n, extra = {}, ip = "200.1.1.1") => cadastrar(env, { email: `c${n}@b.com`, senha: "senha-forte-1", telefone: `5198000${String(n).padStart(4, "0")}`, dispositivo: D(100 + n), ip, ...extra }, T);
+  const acesso = async (n) => (await chamarId(env, "GET", "/id/licenca", null, (await entrarConta(env, { email: `c${n}@b.com`, senha: "senha-forte-1", dispositivo: D(100 + n) }, T)).token)).acesso;
+  await cad(1); await cad(2);
+  assert.equal(await acesso(1), true);
+  assert.equal(await acesso(2), true);
+  await cad(3); // 3ª da mesma rede
+  assert.equal(await acesso(3), false);
+  await cad(4, {}, "200.9.9.9"); // outra rede
+  assert.equal(await acesso(4), true);
+  // fora da janela
+  env.TESTE_GRATIS_ATE = String(T - 1000);
+  await cad(5, {}, "200.7.7.7");
+  assert.equal(await acesso(5), false);
+  // IP vazio (sem cabeçalho) não derruba o teste de quem tem janela aberta
+  env.TESTE_GRATIS_ATE = String(T + 86_400_000);
+  await cad(6, {}, "");
+  assert.equal(await acesso(6), true);
+});
