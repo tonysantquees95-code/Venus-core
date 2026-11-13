@@ -23,7 +23,12 @@ const REGRAS_DE_CONTEUDO =
   "Estética elegante, sem nudez nem linguagem vulgar (regras do Instagram), sem promessas de saúde e sem inventar preços, prazos ou características que não foram informados.";
 
 // ---------------------------------------------------------------- ideias de post
-export interface IdeiaDePost { id: string; titulo: string; formato: "feed" | "story"; legenda: string; quando: string; usada: boolean }
+/** Mesma ideia do celular: o `id` é o título sem acento nem caixa, e é por ele que os aparelhos se entendem. */
+export interface IdeiaDePost {
+  id: string; titulo: string; formato: "feed" | "story" | "reels"; legenda: string; quando: string; usada: boolean;
+  origem?: "celular" | "windows"; removida?: boolean; ts?: number;
+}
+export const chaveDeTitulo = (t: string) => semAcento(t).replace(/[^a-z0-9]+/g, " ").trim();
 
 export function pedidoDeIdeiasDePost(e: Empresa, jaFeitas: string[], quantidade: number, hojeISO: string): string {
   return (
@@ -40,7 +45,7 @@ export function lerIdeiasDePost(texto: string): IdeiaDePost[] {
   return a.flatMap((x: any, k: number) => {
     const titulo = str(x?.titulo, 70), legenda = str(x?.legenda, 600);
     if (!titulo || !legenda) return [];
-    return [{ id: `${Date.now().toString(36)}-${k}`, titulo, legenda, formato: x?.formato === "story" ? ("story" as const) : ("feed" as const), quando: /^\d{4}-\d{2}-\d{2}$/.test(str(x?.data, 10)) ? str(x.data, 10) : "", usada: false }];
+    return [{ id: chaveDeTitulo(titulo) || `i${k}`, titulo, legenda, formato: x?.formato === "story" ? ("story" as const) : ("feed" as const), origem: "windows" as const, quando: /^\d{4}-\d{2}-\d{2}$/.test(str(x?.data, 10)) ? str(x.data, 10) : "", usada: false }];
   });
 }
 
@@ -157,4 +162,45 @@ export function buscarConversas(conversas: Conversa[], termo: string): Conversa[
     const palheiro = semAcento(`${c.titulo} ${c.mensagens.map((m) => m.texto).join(" ")}`);
     return palavras.every((p) => palheiro.includes(p));
   });
+}
+
+
+/** Lê o documento "ideiaspost" que vem da conta (celular ou outro computador); ignora o que não faz sentido. */
+export function lerDocIdeias(doc: any): IdeiaDePost[] {
+  const a = doc && Array.isArray(doc.itens) ? doc.itens : [];
+  return a.flatMap((x: any) => {
+    const titulo = str(x?.titulo, 80);
+    const id = chaveDeTitulo(titulo);
+    if (!id) return [];
+    if (x?.removida === true) return [{ id, titulo, formato: "feed" as const, legenda: "", quando: "", usada: false, removida: true, ts: Number(x.ts) || Date.now() }];
+    const legenda = str(x?.legenda, 600);
+    if (!legenda) return [];
+    const formato = x?.formato === "story" ? "story" : x?.formato === "reels" ? "reels" : "feed";
+    return [{ id, titulo, formato: formato as IdeiaDePost["formato"], legenda, quando: /^\d{4}-\d{2}-\d{2}$/.test(str(x?.quando, 10)) ? str(x.quando, 10) : "", usada: x?.usada === true, origem: x?.origem === "windows" ? ("windows" as const) : ("celular" as const) }];
+  });
+}
+
+export interface PostProgramado { id: number; quando: number; tipo: "feed" | "story"; legenda: string; link: string }
+export function lerDocPosts(doc: any): PostProgramado[] {
+  const a = doc && Array.isArray(doc.itens) ? doc.itens : [];
+  return a.flatMap((x: any) => (Number.isFinite(Number(x?.quando)) && Number(x.quando) > 0
+    ? [{ id: Number(x.id) || 0, quando: Number(x.quando), tipo: x.tipo === "story" ? ("story" as const) : ("feed" as const), legenda: str(x.legenda, 600), link: str(x.link, 300) }] : []));
+}
+
+export interface StoriesDoCelular {
+  ligado: boolean; manha: string; tarde: string; tardeInterativa: boolean; ultimo: string;
+  fila: { tipo: string; titulo: string; texto: string; enquete: string }[]; usados: string[];
+}
+export function lerDocStories(doc: any): StoriesDoCelular | null {
+  if (!doc || typeof doc !== "object" || !Array.isArray(doc.fila)) return null;
+  return {
+    ligado: doc.ligado !== false, manha: str(doc.manha, 8), tarde: str(doc.tarde, 8), tardeInterativa: doc.tardeInterativa === true, ultimo: str(doc.ultimo, 200),
+    fila: doc.fila.flatMap((x: any) => (str(x?.texto, 300) ? [{ tipo: str(x.tipo, 20), titulo: str(x.titulo, 80), texto: str(x.texto, 300), enquete: str(x.enquete, 80) }] : [])),
+    usados: Array.isArray(doc.usados) ? doc.usados.map((u: unknown) => str(u, 80)).filter(Boolean).slice(-20) : []
+  };
+}
+
+/** O que vai para a conta: sem o `id` (o outro aparelho recalcula pelo título). */
+export function docDeIdeias(l: IdeiaDePost[]) {
+  return { itens: l.map(({ id: _id, ...resto }) => resto) };
 }

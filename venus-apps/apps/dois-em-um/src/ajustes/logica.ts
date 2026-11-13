@@ -2,11 +2,11 @@
 
 export type Categoria = "aparencia" | "comportamento" | "conexoes" | "seguranca" | "dispositivos";
 export const CATEGORIAS: { id: Categoria; nome: string; icone: string }[] = [
-  { id: "aparencia", nome: "Aparência & Tema", icone: "🎨" },
-  { id: "comportamento", nome: "Comportamento & Voz", icone: "🎙️" },
-  { id: "conexoes", nome: "Conexões & E-commerce", icone: "🛒" },
-  { id: "seguranca", nome: "Segurança & Vetorial ID", icone: "🔐" },
-  { id: "dispositivos", nome: "Meus dispositivos", icone: "📱" }
+  { id: "aparencia", nome: "Aparência & Tema", icone: "aparencia" },
+  { id: "comportamento", nome: "Comportamento & Voz", icone: "voz" },
+  { id: "conexoes", nome: "Conexões & E-commerce", icone: "conexoes" },
+  { id: "seguranca", nome: "Segurança & Vetorial ID", icone: "seguranca" },
+  { id: "dispositivos", nome: "Meus dispositivos", icone: "dispositivos" }
 ];
 
 export type ModoDeUso = "conversacional" | "orbe" | "bolha" | "silencioso";

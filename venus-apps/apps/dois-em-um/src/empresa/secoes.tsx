@@ -2,6 +2,7 @@ import { useMemo, useState, type ReactNode } from "react";
 import { useConversas } from "../sessao/ConversasProvider";
 import { useId } from "../id/IdProvider";
 import { usePersistido } from "../hooks/usePersistido";
+import { useMarketing } from "./MarketingProvider";
 import { Cartao, botaoPrimario, botaoSuave, campo } from "../ajustes/Controles";
 import { useEmpresa } from "./EmpresaProvider";
 import { pedirTexto } from "./ia";
@@ -186,7 +187,9 @@ export function Historico() {
 // ------------------------------------------------------------------ ideias de post
 export function IdeiasDePost() {
   const { empresa } = useEmpresa();
-  const [ideias, setIdeias] = usePersistido<IdeiaDePost[]>("venus:ideias-post", []);
+  const mk = useMarketing();
+  const ideias = mk.ideias;
+  const setIdeias = (l: IdeiaDePost[]) => mk.trocarIdeias(l);
   const g = useGeracao();
   const gerar = (quantos: number, manter: IdeiaDePost[]) => g.rodar(async () => {
     const t = await pedirTexto(pedidoDeIdeiasDePost(empresa, [...ideias, ...manter].map((i) => i.titulo), quantos, hoje()), empresa);
@@ -199,25 +202,48 @@ export function IdeiasDePost() {
       <Titulo titulo="Ideias de post" descricao="Sugestões da Vênus para as próximas semanas, prontas para copiar e postar." />
       <div className="mb-4 flex flex-wrap items-center gap-2">
         <button className={botaoPrimario} disabled={g.ocupado} onClick={async () => { const n = await gerar(6, []); if (n) setIdeias(n); }}>{g.ocupado ? "Criando…" : ideias.length ? "Gerar todas de novo" : "Gerar ideias agora"}</button>
-        {ideias.length > 0 && <button className={botaoSuave} disabled={g.ocupado} onClick={async () => { const n = await gerar(3, []); if (n) setIdeias([...ideias, ...n]); }}>Mais 3 ideias</button>}
+        {ideias.length > 0 && <button className={botaoSuave} disabled={g.ocupado} onClick={async () => { const n = await gerar(3, []); if (n) mk.juntarIdeias(n); }}>Mais 3 ideias</button>}
         <Erro texto={g.erro} />
       </div>
       {!ideias.length && !g.ocupado && <Vazio>Ainda não há ideias. Toque em “Gerar ideias agora”.</Vazio>}
       <div className="grid gap-3 xl:grid-cols-2">
         {ideias.map((i) => (
-          <Cartao key={i.id} id={`ideia-${i.id}`} titulo={i.titulo} descricao={`${i.formato === "story" ? "Story" : "Feed"} · sugerido para ${dataBr(i.quando)}${i.usada ? " · já postada" : ""}`}>
+          <Cartao key={i.id} id={`ideia-${i.id}`} titulo={i.titulo} descricao={`${i.formato === "story" ? "Story" : i.formato === "reels" ? "Reels" : "Feed"}${i.quando ? ` · sugerido para ${dataBr(i.quando)}` : ""}${i.origem === "celular" ? " · do celular" : ""}${i.usada ? " · já postada" : ""}`}>
             <p className="whitespace-pre-wrap text-sm">{i.legenda}</p>
             <div className="mt-3 flex flex-wrap gap-2">
               <BotaoCopiar texto={i.legenda} rotulo="Copiar legenda" />
-              <button className={botaoSuave} disabled={g.ocupado} onClick={async () => { const n = await gerar(1, [i]); if (n) setIdeias(ideias.map((x) => (x.id === i.id ? n[0]! : x))); }}>↻ Outra ideia</button>
-              <button className={botaoSuave} onClick={() => setIdeias(ideias.map((x) => (x.id === i.id ? { ...x, usada: !x.usada } : x)))}>{i.usada ? "Desmarcar" : "Marcar como postada"}</button>
-              <button className={botaoSuave} onClick={() => setIdeias(ideias.filter((x) => x.id !== i.id))}>Tirar</button>
+              <button className={botaoSuave} disabled={g.ocupado} onClick={async () => { const n = await gerar(1, [i]); if (n) { mk.tirarIdeia(i.id); mk.juntarIdeias(n); } }}>↻ Outra ideia</button>
+              <button className={botaoSuave} onClick={() => mk.atualizarIdeia(i.id, { usada: !i.usada })}>{i.usada ? "Desmarcar" : "Marcar como postada"}</button>
+              <button className={botaoSuave} onClick={() => mk.tirarIdeia(i.id)}>Tirar</button>
             </div>
           </Cartao>
         ))}
       </div>
+      <PostsProgramados />
       <p className="mt-4 text-xs text-suave">Para programar o post com foto e hora marcada, use o celular (Publicações → Posts no Instagram): o Instagram só aceita publicar pelo aplicativo conectado.</p>
     </>
+  );
+}
+
+function PostsProgramados() {
+  const { postsDoCelular } = useMarketing();
+  const agora = Date.now();
+  const lista = [...postsDoCelular].sort((a, b) => a.quando - b.quando);
+  const quando = (ms: number) => new Date(ms).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+  return (
+    <div className="mt-6">
+      <h3 className="mb-2 text-sm font-semibold">Posts do celular</h3>
+      {!lista.length ? <Vazio>Nenhum post programado no celular. Quando houver, aparece aqui.</Vazio> : (
+        <div className="grid gap-3 xl:grid-cols-2">
+          {lista.map((p) => (
+            <Cartao key={p.id} id={`post-${p.id}`} titulo={`${p.tipo === "story" ? "Story" : "Feed"} · ${quando(p.quando)}`} descricao={p.quando > agora ? "Programado" : "Já passou"}>
+              <p className="whitespace-pre-wrap text-sm">{p.legenda || "(sem legenda)"}</p>
+              <div className="mt-3 flex gap-2">{p.legenda && <BotaoCopiar texto={p.legenda} rotulo="Copiar legenda" />}</div>
+            </Cartao>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -283,6 +309,7 @@ export function StoriesDoDia() {
         }}>{g.ocupado ? "Criando…" : atuais.length ? "Gerar outros" : "Gerar os stories de hoje"}</button>
         <Erro texto={g.erro} />
       </div>
+      <StoriesDoCelularBloco />
       {!atuais.length && !g.ocupado && <Vazio>Nenhum story para hoje ainda.</Vazio>}
       <div className="grid gap-3 xl:grid-cols-2">
         {atuais.map((s, k) => (
@@ -294,6 +321,31 @@ export function StoriesDoDia() {
         ))}
       </div>
     </>
+  );
+}
+
+function StoriesDoCelularBloco() {
+  const { storiesDoCelular: c } = useMarketing();
+  if (!c) return null;
+  return (
+    <div className="mb-5 rounded-2xl border border-white/10 bg-white/5 p-4">
+      <h3 className="mb-1 text-sm font-semibold">Stories automáticos do celular</h3>
+      <p className="mb-2 text-xs text-suave">
+        {c.ligado ? "Ligado" : "Desligado"}{c.manha ? ` · manhã ${c.manha}` : ""}{c.tarde ? ` · tarde ${c.tarde}${c.tardeInterativa ? " (com enquete)" : ""}` : ""}{c.ultimo ? ` · último: ${c.ultimo}` : ""}
+      </p>
+      {c.fila.length ? (
+        <ul className="space-y-2 text-sm">
+          {c.fila.map((f, k) => (
+            <li key={k} className="rounded-xl bg-white/5 p-3">
+              <span className="font-medium">{f.titulo || f.tipo}</span>
+              <p className="whitespace-pre-wrap text-suave">{f.texto}</p>
+              {f.enquete && <p className="mt-1 text-xs">📊 {f.enquete}</p>}
+            </li>
+          ))}
+        </ul>
+      ) : <p className="text-xs text-suave">Nenhuma dica na fila.</p>}
+      {c.usados.length > 0 && <p className="mt-2 text-xs text-suave">Já usados: {c.usados.join(", ")}</p>}
+    </div>
   );
 }
 

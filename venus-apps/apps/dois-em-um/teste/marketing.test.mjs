@@ -74,3 +74,25 @@ test("tema igual ao do celular: trio e cor par", () => {
   assert.ok(Math.max(...Object.values(trio({ r: 20, g: 5, b: 5 })[0])) >= 178);
   assert.notDeepEqual(paraSecundaria(rosa), rosa);
 });
+
+import { lerDocIdeias, lerDocPosts, lerDocStories, docDeIdeias, chaveDeTitulo } from "../src/empresa/marketing.ts";
+
+test("ideias do celular: id vem do título, removidas viram marca", () => {
+  const l = lerDocIdeias({ itens: [
+    { titulo: "Dica de Carregador", formato: "feed", legenda: "Texto", quando: "2026-11-20", usada: true, origem: "celular" },
+    { titulo: "Velha", removida: true, ts: 5 },
+    { titulo: "", legenda: "x" }
+  ] });
+  assert.equal(l.length, 2);
+  assert.equal(l[0].id, chaveDeTitulo("Dica de Carregador"));
+  assert.equal(l[0].usada, true);
+  assert.equal(l[1].removida, true);
+  assert.deepEqual(lerDocIdeias(docDeIdeias(l)).map((x) => x.id), l.map((x) => x.id));
+});
+
+test("posts e stories do celular", () => {
+  assert.equal(lerDocPosts({ itens: [{ id: 1, quando: 1000, tipo: "story", legenda: "a", link: "" }, { quando: 0 }] }).length, 1);
+  const s = lerDocStories({ ligado: true, manha: "09:00", fila: [{ tipo: "dica", titulo: "T", texto: "x", enquete: "" }, { texto: "" }], usados: ["a"] });
+  assert.equal(s.fila.length, 1);
+  assert.equal(lerDocStories({}), null);
+});

@@ -6,6 +6,7 @@ import { ConversasProvider } from "./sessao/ConversasProvider";
 import { ThemingProvider } from "./theming";
 import { IdProvider } from "./id/IdProvider";
 import { EmpresaProvider } from "./empresa/EmpresaProvider";
+import { MarketingProvider } from "./empresa/MarketingProvider";
 import { PreferenciasProvider } from "./ajustes/Preferencias";
 
 // iOS/Safari: pede armazenamento persistente para o histórico e as preferências não serem apagados pelo sistema.
@@ -21,9 +22,11 @@ createRoot(document.getElementById("app")!).render(
       <PreferenciasProvider>
         <IdProvider>
           <EmpresaProvider>
+          <MarketingProvider>
             <ConversasProvider>
               <App />
             </ConversasProvider>
+          </MarketingProvider>
           </EmpresaProvider>
         </IdProvider>
       </PreferenciasProvider>

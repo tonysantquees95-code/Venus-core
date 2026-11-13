@@ -50,7 +50,7 @@ export function HolographicOrb({ variante, tamanho = 48, className = "", estado 
     const dpr = Math.min(2, window.devicePixelRatio || 1);
     cv.width = Math.round(tamanho * dpr);
     cv.height = Math.round(tamanho * dpr);
-    const reduzir = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
+    const reduzir = false; // a orbe sempre se move (no Windows o "reduzir animações" do sistema a deixava parada)
 
     let tempo = 0, energia = 0.07, giro = 0, ultimo = 0, raf = 0;
     const sx = new Float32Array(N), sy = new Float32Array(N), sz = new Float32Array(N);

@@ -10,16 +10,19 @@ import org.junit.Test
 class VetorialIdTest {
     @Test
     fun temaVaiEVoltaEntreAndroidEWeb() {
-        // Líquido=0, Vênus=0, cor rosa
+        // Respirar=0, Vênus=0, cor rosa
         val j = VetorialId.temaParaJson(0, 0, 0xE36BD0)
-        assertEquals("aurora", j.getString("orbe"))
-        assertEquals("duotone", j.getString("icones"))
+        assertEquals("respirar", j.getString("orbe"))
+        assertEquals("venus", j.getString("icones"))
         assertEquals(0xE3, j.getJSONObject("cores").getJSONObject("destaque").getInt("r"))
         assertEquals(Triple(0, 0, 0xE36BD0), VetorialId.temaDoJson(j))
-        // Cristal=1 → prisma; Sólido=2 → tecnico; Pulso=2 → aneis
-        assertEquals("prisma", VetorialId.temaParaJson(1, 1, 0x112233).getString("orbe"))
+        // Giro=1, Técnico=2, Flutuar=4, Duotone=4; cor automática (0) vai e volta como automática
+        assertEquals("giro", VetorialId.temaParaJson(1, 1, 0x112233).getString("orbe"))
         assertEquals("tecnico", VetorialId.temaParaJson(2, 2, 0x112233).getString("icones"))
-        assertEquals("aneis", VetorialId.temaParaJson(2, 0, 0x112233).getString("orbe"))
+        assertEquals("flutuar", VetorialId.temaParaJson(4, 0, 0x112233).getString("orbe"))
+        assertEquals("duotone", VetorialId.temaParaJson(0, 4, 0x112233).getString("icones"))
+        assertEquals(Triple(3, 3, 0), VetorialId.temaDoJson(VetorialId.temaParaJson(3, 3, 0)))
+        // nomes antigos do primeiro Windows continuam valendo
         assertEquals(Triple(2, 1, 0x00FF7F), VetorialId.temaDoJson(JSONObject("""{"orbe":"aneis","icones":"linha","cores":{"destaque":{"r":0,"g":255,"b":127},"secundaria":{"r":1,"g":2,"b":3}}}""")))
     }
 

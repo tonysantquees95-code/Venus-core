@@ -5,6 +5,8 @@ import { usePreferencias } from "../ajustes/Preferencias";
 import { useEmpresa } from "../empresa/EmpresaProvider";
 import { empresaPreenchida, limparEmpresa } from "../empresa/logica";
 import { useTema } from "../theming";
+import { docDeIdeias, lerDocIdeias } from "../empresa/marketing";
+import { useMarketing } from "../empresa/MarketingProvider";
 import { prefsParaEnviar, prefsRecebidas } from "../ajustes/logica";
 import { decidirRemoto, temaValido, type Versoes } from "./mesclar";
 
@@ -16,11 +18,14 @@ export function Sincronizador() {
   const { tema, definirTudo: definirTemaTudo } = useTema();
   const { prefs, definirTodas } = usePreferencias();
   const { empresa, definirTudo } = useEmpresa();
+  const mk = useMarketing();
   const versoes = useRef<Versoes>({});
   const desde = useRef(0);
   const ultimoEnviado = useRef<Record<string, string>>({});
-  const atual = useRef({ tema, prefs, empresa });
-  atual.current = { tema, prefs, empresa };
+  const atual = useRef({ tema, prefs, empresa, ideias: mk.todasAsIdeias });
+  atual.current = { tema, prefs, empresa, ideias: mk.todasAsIdeias };
+  const receberMk = useRef(mk.receber);
+  receberMk.current = mk.receber;
 
   // puxar
   useEffect(() => {
@@ -36,6 +41,9 @@ export function Sincronizador() {
           if (doc.chave === "tema" && temaValido(doc.valor)) {
             ultimoEnviado.current.tema = JSON.stringify(doc.valor);
             definirTemaTudo(doc.valor);
+          } else if (doc.chave === "ideiaspost" || doc.chave === "postagens" || doc.chave === "stories") {
+            if (doc.chave === "ideiaspost") ultimoEnviado.current.ideiaspost = JSON.stringify(docDeIdeias(lerDocIdeias(doc.valor)));
+            receberMk.current(doc.chave, doc.valor);
           } else if (doc.chave === "empresa") {
             const nova = limparEmpresa(doc.valor);
             ultimoEnviado.current.empresa = JSON.stringify(nova);
@@ -68,6 +76,7 @@ export function Sincronizador() {
     const espera = setTimeout(async () => {
       const itens: [string, unknown][] = [["tema", atual.current.tema], ["preferencias", prefsParaEnviar(atual.current.prefs)]];
       if (empresaPreenchida(atual.current.empresa)) itens.push(["empresa", atual.current.empresa]);
+      if (atual.current.ideias.length) itens.push(["ideiaspost", docDeIdeias(atual.current.ideias)]);
       for (const [chave, valor] of itens) {
         const texto = JSON.stringify(valor);
         if (ultimoEnviado.current[chave] === texto) continue;
@@ -81,7 +90,7 @@ export function Sincronizador() {
       }
     }, 1500);
     return () => clearTimeout(espera);
-  }, [api, sessao?.token, tema, prefs, empresa]);
+  }, [api, sessao?.token, tema, prefs, empresa, mk.todasAsIdeias]);
 
   return null;
 }

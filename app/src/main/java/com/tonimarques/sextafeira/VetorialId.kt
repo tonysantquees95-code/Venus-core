@@ -103,9 +103,12 @@ object VetorialId {
     // ------------------------------------------------------------------ regras puras (testadas)
     fun sessaoPerdida(status: Int, codigo: String) = status == 401 && codigo in setOf("sessao_encerrada", "sessao_inexistente", "token_invalido")
 
-    // Tema compartilhado com o app web/Windows/iPhone: orbe aurora|aneis|prisma, ícones linha|duotone|tecnico, cores {destaque, secundaria}.
-    private val ORBE_WEB = listOf("aurora", "prisma", "aneis")      // Líquido, Cristal, Pulso
-    private val ICONES_WEB = listOf("duotone", "linha", "tecnico")  // Vênus, Linha, Sólido
+    // Tema compartilhado com o app web/Windows/iPhone: o mesmo do celular (cinco movimentos e cinco pacotes de ícones).
+    private val ORBE_WEB = listOf("respirar", "giro", "batida", "onda", "flutuar")
+    private val ICONES_WEB = listOf("venus", "linha", "tecnico", "neon", "duotone")
+    // nomes antigos (versões do Windows anteriores à 1.19) ainda são entendidos
+    private val ORBE_ANTIGO = listOf("aurora", "prisma", "aneis")
+    private val ICONES_ANTIGO = listOf("duotone", "linha", "tecnico")
 
     private fun rgbJson(rgb: Int) = JSONObject().put("r", (rgb shr 16) and 0xFF).put("g", (rgb shr 8) and 0xFF).put("b", rgb and 0xFF)
     private fun rgbDe(j: JSONObject?): Int? {
@@ -115,19 +118,21 @@ object VetorialId {
     }
 
     fun temaParaJson(modelo: Int, icones: Int, cor: Int): JSONObject {
-        val destaque = if (cor == 0) 0xEC6FD6 else cor
+        val destaque = if (cor == 0) 0xE36BD0 else cor
         val secundaria = Tema.trio(destaque)[1] and 0xFFFFFF
-        return JSONObject().put("orbe", ORBE_WEB.getOrElse(modelo) { "aurora" }).put("icones", ICONES_WEB.getOrElse(icones) { "duotone" })
+        return JSONObject().put("orbe", ORBE_WEB.getOrElse(modelo) { "respirar" }).put("icones", ICONES_WEB.getOrElse(icones) { "venus" })
+            .put("auto", cor == 0)
             .put("cores", JSONObject().put("destaque", rgbJson(destaque)).put("secundaria", rgbJson(secundaria)))
     }
 
     /** (modelo, ícones, cor) vindos de outro aparelho; null se o documento não for válido. */
     fun temaDoJson(j: JSONObject?): Triple<Int, Int, Int>? {
         if (j == null) return null
-        val m = ORBE_WEB.indexOf(j.optString("orbe"))
-        val i = ICONES_WEB.indexOf(j.optString("icones"))
+        val novo = j.has("auto") // documentos novos usam os nomes do celular; os antigos, os nomes do primeiro Windows
+        val m = ORBE_WEB.indexOf(j.optString("orbe")).takeIf { it >= 0 } ?: ORBE_ANTIGO.indexOf(j.optString("orbe"))
+        val i = (if (novo) ICONES_WEB else ICONES_ANTIGO).indexOf(j.optString("icones")).takeIf { it >= 0 } ?: ICONES_WEB.indexOf(j.optString("icones"))
         val cor = rgbDe(j.optJSONObject("cores")?.optJSONObject("destaque"))
-        return if (m >= 0 && i >= 0 && cor != null) Triple(m, i, cor) else null
+        return if (m >= 0 && i >= 0 && cor != null) Triple(m, i, if (j.optBoolean("auto", false)) 0 else cor) else null
     }
 
     /** O que fazer com um documento que chegou do servidor. */
