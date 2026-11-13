@@ -22,5 +22,8 @@ contextBridge.exposeInMainWorld("venusDesktop", {
   verificarAtualizacao: () => ipcRenderer.invoke("venus:atualizacao-verificar"),
   instalarAtualizacao: () => ipcRenderer.invoke("venus:atualizacao-instalar"),
   aoProgressoDaAtualizacao: (cb) => ouvir("venus:atualizacao-progresso", cb),
+  idDoComputador: ipcRenderer.sendSync("venus:id-do-computador"),
+  limparDados: () => ipcRenderer.invoke("venus:limpar-dados"),
+  desinstalar: () => ipcRenderer.invoke("venus:desinstalar"),
   avisarEstado: (estado) => ipcRenderer.send("venus:estado", estado),
 });

@@ -1,6 +1,6 @@
 // Vênus para Windows: janela do dashboard + bandeja do sistema + atalho global + notificações nativas
 // + monitor de conexão com os Workers. A interface é o mesmo app React (Dois em Um) dos outros aparelhos.
-const { app, BrowserWindow, Tray, Menu, Notification, globalShortcut, ipcMain, nativeImage, protocol, net, shell, dialog } = require("electron");
+const { app, BrowserWindow, Tray, Menu, Notification, globalShortcut, ipcMain, nativeImage, protocol, net, shell, dialog, session } = require("electron");
 const fs = require("node:fs");
 const crypto = require("node:crypto");
 const os = require("node:os");
@@ -273,6 +273,51 @@ ipcMain.handle("venus:comando", (_e, texto) => {
   const exec = computador.montarExecucao(a);
   if (!exec) return { tratado: true, texto: computador.respostaDa(a) };
   return { tratado: true, texto: executar(exec) ? computador.respostaDa(a) : "Não consegui fazer isso agora." };
+});
+
+/** Identificador fixo do computador (sobrevive a desinstalar e limpar dados): é o que impede teste grátis repetido. Só o hash sai daqui. */
+function idDoComputador() {
+  const crypto = require("node:crypto");
+  let base = "";
+  try {
+    const out = require("node:child_process").execFileSync("reg", ["query", "HKLM\\SOFTWARE\\Microsoft\\Cryptography", "/v", "MachineGuid"], { encoding: "utf8", windowsHide: true, timeout: 4000 });
+    base = (/MachineGuid\s+REG_SZ\s+(\S+)/.exec(out) || [])[1] || "";
+  } catch { /* fora do Windows ou sem permissão */ }
+  if (!base) base = `${require("node:os").hostname()}|${(require("node:os").cpus()[0] || {}).model || ""}`;
+  return "pc-" + crypto.createHash("sha256").update(`venus-pc:${base}`).digest("hex").slice(0, 40);
+}
+const ID_DO_COMPUTADOR = idDoComputador();
+ipcMain.on("venus:id-do-computador", (e) => { e.returnValue = ID_DO_COMPUTADOR; });
+
+/** Limpeza: apaga tudo o que a Vênus guardou neste computador (login, conversas, cache) e abre limpa. */
+ipcMain.handle("venus:limpar-dados", async () => {
+  const { response } = await dialog.showMessageBox({ type: "warning", title: "Vênus", message: "Limpar os dados da Vênus neste computador?", detail: "Você sai da conta e as conversas guardadas aqui são apagadas. O que está na sua conta Vetorial ID continua lá.", buttons: ["Limpar e reiniciar", "Cancelar"], defaultId: 1, cancelId: 1 });
+  if (response !== 0) return { ok: false };
+  try {
+    await session.defaultSession.clearStorageData();
+    await session.defaultSession.clearCache();
+  } catch (e) { return { ok: false, erro: String(e && e.message || e) }; }
+  saindo = true;
+  app.relaunch();
+  app.exit(0);
+  return { ok: true };
+});
+
+/** Desinstalar: abre o desinstalador do Windows da própria Vênus (o de "Aplicativos instalados") e fecha o app. */
+ipcMain.handle("venus:desinstalar", async () => {
+  const { response } = await dialog.showMessageBox({ type: "warning", title: "Vênus", message: "Desinstalar a Vênus deste computador?", detail: "Para instalar de novo depois, baixe o instalador no Painel Dev ou no site. Sua conta e seus dados na nuvem não são apagados.", buttons: ["Desinstalar", "Cancelar"], defaultId: 1, cancelId: 1 });
+  if (response !== 0) return { ok: false };
+  const pasta = require("node:path").dirname(process.execPath);
+  const alvo = require("node:fs").readdirSync(pasta).find((f) => /^Uninstall .*\.exe$/i.test(f));
+  if (!alvo) return { ok: false, erro: "Não achei o desinstalador. Use Configurações do Windows → Aplicativos → Vênus → Desinstalar." };
+  try {
+    const f = spawn(require("node:path").join(pasta, alvo), [], { detached: true, stdio: "ignore" });
+    f.on("error", () => {});
+    f.unref();
+  } catch (e) { return { ok: false, erro: String(e && e.message || e) }; }
+  saindo = true;
+  setTimeout(() => app.quit(), 400);
+  return { ok: true };
 });
 
 ipcMain.on("venus:versao", (e) => { e.returnValue = app.getVersion(); });
