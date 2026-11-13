@@ -22,6 +22,8 @@ export type Plataforma = "android" | "ios" | "windows" | "web";
 export interface Sessao {
   token: string;
   sessao: string;
+  /** Selo de licença assinado que veio junto da entrada (guardado à parte). */
+  selo?: string;
   usuario: { id: string; email: string; nome: string };
 }
 
@@ -62,6 +64,8 @@ export interface Licenca {
   diasPagosRestantes?: number;
   emTeste?: boolean;
   cobranca?: { url: string; valorCentavos: number };
+  selo?: string;
+  fimDoAcesso?: number;
 }
 
 export function criarApi(base: string = URL_API, f: typeof fetch = (...a) => fetch(...a)) {
@@ -83,9 +87,13 @@ export function criarApi(base: string = URL_API, f: typeof fetch = (...a) => fet
   return {
     entrar: (email: string, senha: string, dispositivo: Aparelho, extra: { encerrar?: string; remover?: string } = {}) =>
       chamar<Sessao>("POST", "/id/entrar", { email, senha, dispositivo, ...extra }),
-    cadastrar: (email: string, senha: string, nome: string, dispositivo: Aparelho) =>
-      chamar<Sessao>("POST", "/id/cadastrar", { email, senha, nome, dispositivo }),
-    ping: (t: string) => chamar<{ ok: boolean; perfil: number; licenca: { acesso: boolean; renovar: boolean } }>("POST", "/id/ping", {}, t),
+    cadastrar: (email: string, senha: string, nome: string, telefone: string, dispositivo: Aparelho) =>
+      chamar<Sessao>("POST", "/id/cadastrar", { email, senha, nome, telefone, dispositivo }),
+    recuperarCanais: () => chamar<{ canais: { email: boolean; sms: boolean } }>("GET", "/id/recuperar/canais"),
+    recuperarPedir: (email: string, canal: "email" | "sms") => chamar<{ ok: boolean; mensagem: string }>("POST", "/id/recuperar/pedir", { email, canal }),
+    recuperarConfirmar: (email: string, codigo: string, novaSenha: string) => chamar<{ ok: boolean }>("POST", "/id/recuperar/confirmar", { email, codigo, novaSenha }),
+    salvarTelefone: (t: string, telefone: string) => chamar<{ ok: boolean }>("PUT", "/id/telefone", { telefone }, t),
+    ping: (t: string) => chamar<{ ok: boolean; perfil: number; selo?: string; licenca: { acesso: boolean; renovar: boolean } }>("POST", "/id/ping", {}, t),
     conta: (t: string) => chamar<{ usuario: Perfil; licenca: Licenca; sessao: string; dispositivo: string }>("GET", "/id/conta", undefined, t),
     salvarPerfil: (t: string, p: { nome?: string; foto?: string }) => chamar<{ usuario: Perfil }>("PUT", "/id/perfil", p, t),
     tokenDeApp: (t: string, app: string) => chamar<{ app: string; token: string }>("POST", "/id/app-token", { app }, t),

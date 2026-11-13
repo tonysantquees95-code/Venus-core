@@ -13,6 +13,7 @@ import { Sincronizador } from "./sync/Sincronizador";
 import { useAtalhoGlobal } from "./desktop/useAtalhoGlobal";
 import { useId } from "./id/IdProvider";
 import { TelaLogin } from "./id/TelaLogin";
+import { TelaBloqueio, TelaValidando } from "./id/TelaBloqueio";
 import { useRobo } from "./hooks/useRobo";
 import type { Tela } from "./tipos";
 
@@ -28,15 +29,12 @@ export function App() {
   const [menuAberto, setMenuAberto] = useState(false);
   const [alvoAjuste, setAlvoAjuste] = useState<string | undefined>();
   useAtalhoGlobal(() => setTela("chat"));
-  const { sessao } = useId();
-  const [loginAberto, setLoginAberto] = useState(() => {
-    try { return !localStorage.getItem("venus:id:dispensado"); } catch { return true; }
-  });
+  const { sessao, estado } = useId();
   // Avatar, comandos de conversa e o Windows pedem telas por este evento
   useEffect(() => {
     const ouvir = (e: Event) => {
       const { tela: t, alvo } = (e as CustomEvent<{ tela: "ajustes" | "empresa" | "login"; alvo?: string }>).detail;
-      if (t === "login") return setLoginAberto(true);
+      if (t === "login") return;
       if (t === "empresa") return setTela("empresa");
       setTela("ajustes");
       setAlvoAjuste(alvo ? `${alvo}` : undefined);
@@ -64,6 +62,11 @@ export function App() {
     if (t && i && t.clientX - i.x > 60 && Math.abs(t.clientY - i.y) < 50) setMenuAberto(true);
   };
 
+  // Trava de segurança: sem Vetorial ID e sem selo de licença válido o aplicativo não abre.
+  if (!sessao) return <TelaLogin />;
+  if (estado.tipo === "teste_acabou") return <TelaBloqueio />;
+  if (estado.tipo === "validar_online") return <TelaValidando />;
+
   return (
     <div onTouchStart={aoTocar} onTouchEnd={aoSoltar} className="flex h-dvh flex-col pt-[env(safe-area-inset-top)] md:flex-row">
       <SidebarDrawer aberto={menuAberto} aoFechar={() => setMenuAberto(false)} aoNavegar={() => { setTela("chat"); setMenuAberto(false); }} />
@@ -89,9 +92,6 @@ export function App() {
       <Sincronizador />
       <AvisoDeConflito />
       <InstalarIOS />
-      {!sessao && loginAberto && (
-        <TelaLogin aoContinuarSemConta={() => { setLoginAberto(false); try { localStorage.setItem("venus:id:dispensado", "1"); } catch { /* ok */ } }} />
-      )}
     </div>
   );
 }

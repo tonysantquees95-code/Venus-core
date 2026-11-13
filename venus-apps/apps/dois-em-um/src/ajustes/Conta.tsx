@@ -7,12 +7,66 @@ import { haQuantoTempo, NOMES_DE_PLATAFORMA } from "./logica";
 const ICONE: Record<string, string> = { android: "🤖", ios: "📱", windows: "🖥️", web: "🌐" };
 
 /** Entrar ou criar conta, com o aviso inteligente de aparelhos (3 vinculados, 2 ativos). */
+/** Recuperação de senha: pede o código (e-mail ou SMS), confirma e define a nova senha. */
+function RecuperarSenha({ emailInicial, aoFechar }: { emailInicial: string; aoFechar: () => void }) {
+  const { api } = useId();
+  const [email, setEmail] = useState(emailInicial);
+  const [canais, setCanais] = useState<{ email: boolean; sms: boolean } | null>(null);
+  const [canal, setCanal] = useState<"email" | "sms">("email");
+  const [enviado, setEnviado] = useState(false);
+  const [codigo, setCodigo] = useState("");
+  const [nova, setNova] = useState("");
+  const [msg, setMsg] = useState("");
+  const [pronto, setPronto] = useState(false);
+  useEffect(() => { api.recuperarCanais().then((r) => { setCanais(r.canais); if (!r.canais.email && r.canais.sms) setCanal("sms"); }).catch(() => undefined); }, [api]);
+  async function pedir(ev: FormEvent) {
+    ev.preventDefault(); setMsg("");
+    try { const r = await api.recuperarPedir(email, canal); setEnviado(true); setMsg(r.mensagem); } catch (e) { setMsg(e instanceof Error ? e.message : "Não consegui enviar."); }
+  }
+  async function confirmar(ev: FormEvent) {
+    ev.preventDefault(); setMsg("");
+    try { await api.recuperarConfirmar(email, codigo, nova); setPronto(true); } catch (e) { setMsg(e instanceof Error ? e.message : "Não deu certo."); }
+  }
+  return (
+    <div role="dialog" aria-label="Recuperar senha" className="space-y-3 rounded-2xl border border-white/15 bg-white/10 p-4 text-sm">
+      <p className="font-semibold">Recuperar a senha</p>
+      {pronto ? (
+        <>
+          <p className="text-emerald-300">Senha trocada. Entre com a nova senha.</p>
+          <button className={`${botaoPrimario} w-full`} onClick={aoFechar}>Voltar para o login</button>
+        </>
+      ) : !enviado ? (
+        <form onSubmit={pedir} className="space-y-3">
+          <input className={campo} type="email" required placeholder="E-mail da conta" value={email} onChange={(e) => setEmail(e.target.value)} />
+          <div className="flex gap-2" role="radiogroup" aria-label="Como receber o código">
+            {(["email", "sms"] as const).map((c) => (
+              <button key={c} type="button" role="radio" aria-checked={canal === c} disabled={canais ? !canais[c] : false} onClick={() => setCanal(c)}
+                className={`min-h-10 flex-1 rounded-xl text-sm font-semibold disabled:opacity-40 ${canal === c ? "bg-white/20" : "bg-black/30 text-suave"}`}>{c === "email" ? "Por e-mail" : "Por SMS"}</button>
+            ))}
+          </div>
+          <button className={`${botaoPrimario} w-full`}>Enviar código</button>
+        </form>
+      ) : (
+        <form onSubmit={confirmar} className="space-y-3">
+          <input className={campo} inputMode="numeric" required maxLength={6} placeholder="Código de 6 dígitos" value={codigo} onChange={(e) => setCodigo(e.target.value)} autoComplete="one-time-code" />
+          <input className={campo} type="password" required minLength={8} placeholder="Nova senha (8 ou mais caracteres)" value={nova} onChange={(e) => setNova(e.target.value)} autoComplete="new-password" />
+          <button className={`${botaoPrimario} w-full`}>Trocar a senha</button>
+        </form>
+      )}
+      {msg && !pronto && <p role="status" className="text-suave">{msg}</p>}
+      {!pronto && <button type="button" className={`${botaoSuave} w-full`} onClick={aoFechar}>Cancelar</button>}
+    </div>
+  );
+}
+
 export function Entrar() {
   const { entrar, cadastrar, aviso, limparAviso } = useId();
   const [criar, setCriar] = useState(false);
   const [email, setEmail] = useState("");
   const [senha, setSenha] = useState("");
   const [nome, setNome] = useState("");
+  const [telefone, setTelefone] = useState("");
+  const [recuperando, setRecuperando] = useState(false);
   const [erro, setErro] = useState("");
   const [ocupado, setOcupado] = useState(false);
   const [escolha, setEscolha] = useState<{ tipo: "encerrar" | "remover"; itens: { id: string; titulo: string }[] } | null>(null);
@@ -22,7 +76,7 @@ export function Entrar() {
     setOcupado(true);
     limparAviso();
     try {
-      if (criar && !extra.encerrar && !extra.remover) await cadastrar(email, senha, nome);
+      if (criar && !extra.encerrar && !extra.remover) await cadastrar(email, senha, nome, telefone);
       else await entrar(email, senha, extra);
       setEscolha(null);
     } catch (e) {
@@ -49,11 +103,14 @@ export function Entrar() {
       </div>
       <form onSubmit={aoEnviar} className="space-y-3">
         {criar && <input className={campo} placeholder="Nome da loja ou o seu nome" value={nome} onChange={(e) => setNome(e.target.value)} autoComplete="organization" />}
+        {criar && <input className={campo} type="tel" required placeholder="Celular com DDD (para recuperar a senha)" value={telefone} onChange={(e) => setTelefone(e.target.value)} autoComplete="tel" />}
         <input className={campo} type="email" required placeholder="E-mail" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="username" />
         <input className={campo} type="password" required minLength={8} placeholder="Senha (8 ou mais caracteres)" value={senha} onChange={(e) => setSenha(e.target.value)} autoComplete={criar ? "new-password" : "current-password"} />
         <button className={`${botaoPrimario} w-full`} disabled={ocupado}>{criar ? "Criar conta" : "Entrar"}</button>
       </form>
       {erro && <p role="alert" className="text-sm text-rose-300">{erro}</p>}
+      {!criar && <button type="button" className="w-full text-center text-sm text-suave underline" onClick={() => setRecuperando(true)}>Esqueci minha senha</button>}
+      {recuperando && <RecuperarSenha emailInicial={email} aoFechar={() => setRecuperando(false)} />}
       {escolha && (
         <div role="alertdialog" className="rounded-2xl border border-white/15 bg-white/10 p-4 text-sm">
           <p className="font-semibold">

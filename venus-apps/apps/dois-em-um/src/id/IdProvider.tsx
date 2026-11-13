@@ -2,11 +2,14 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { criarApi, ErroId, type Aparelho, type ApiId, type Licenca, type Perfil, type Sessao } from "./api";
 import { detectarPlataforma, NOMES_DE_PLATAFORMA } from "../ajustes/logica";
 import { noDesktop } from "../desktop/ponte";
+import { avaliar, type Estado } from "./trava";
 
 const CHAVE_SESSAO = "venus:id";
 const CHAVE_APARELHO = "venus:aparelho";
 const PING_MS = 20_000;
 const CANAL = "venus:conta";
+const CHAVE_SELO = "venus:selo";
+const CHAVE_VISTO = "venus:selo:visto";
 
 /** Identificador fixo deste aparelho (gerado uma vez) + plataforma detectada. */
 export function meuAparelho(): Aparelho {
@@ -34,7 +37,10 @@ interface Ctx {
   conflito: Conflito | null;
   aviso: string;
   entrar: (email: string, senha: string, extra?: { encerrar?: string; remover?: string }) => Promise<void>;
-  cadastrar: (email: string, senha: string, nome: string) => Promise<void>;
+  cadastrar: (email: string, senha: string, nome: string, telefone: string) => Promise<void>;
+  /** Trava de segurança: o que o selo de licença assinado autoriza agora. */
+  estado: Estado;
+  validarAgora: () => Promise<void>;
   sair: () => Promise<void>;
   /** Perfil e assinatura da sessão ativa, atualizados sozinhos (outro app mudou a foto? aparece aqui em segundos). */
   conta: { usuario: Perfil; licenca: Licenca } | null;
@@ -55,17 +61,35 @@ function lerSessao(): Sessao | null {
   }
 }
 
+function lerLocal(chave: string): string {
+  try { return localStorage.getItem(chave) ?? ""; } catch { return ""; }
+}
+function gravarLocal(chave: string, v: string) {
+  try { localStorage.setItem(chave, v); } catch { /* sem armazenamento: vale só nesta sessão */ }
+}
+
 export function IdProvider({ children, api: apiFora }: { children: ReactNode; api?: ApiId }) {
   const api = useMemo(() => apiFora ?? criarApi(), [apiFora]);
   const [sessao, setSessao] = useState<Sessao | null>(lerSessao);
   const [conflito, setConflito] = useState<Conflito | null>(null);
   const [aviso, setAviso] = useState("");
   const [conta, setConta] = useState<{ usuario: Perfil; licenca: Licenca } | null>(null);
+  const [selo, setSelo] = useState(() => lerLocal(CHAVE_SELO));
+  const [agora, setAgora] = useState(() => Date.now());
+  const visto = useRef(Number(lerLocal(CHAVE_VISTO)) || 0);
   const ref = useRef(sessao);
   const versaoDoPerfil = useRef(0);
   ref.current = sessao;
 
+  const aceitarSelo = useCallback((novo?: string) => {
+    if (!novo) return;
+    setSelo(novo);
+    gravarLocal(CHAVE_SELO, novo);
+  }, []);
+
   const guardar = useCallback((s: Sessao | null) => {
+    if (s?.selo) { const { selo: novo, ...resto } = s; aceitarSelo(novo); s = resto; }
+    if (!s) { setSelo(""); gravarLocal(CHAVE_SELO, ""); }
     setSessao(s);
     try {
       if (s) localStorage.setItem(CHAVE_SESSAO, JSON.stringify(s));
@@ -73,7 +97,7 @@ export function IdProvider({ children, api: apiFora }: { children: ReactNode; ap
     } catch {
       /* sem armazenamento: vale só nesta sessão */
     }
-  }, []);
+  }, [aceitarSelo]);
 
   const recarregarConta = useCallback(async () => {
     const t = ref.current?.token;
@@ -81,11 +105,12 @@ export function IdProvider({ children, api: apiFora }: { children: ReactNode; ap
     try {
       const c = await api.conta(t);
       versaoDoPerfil.current = c.usuario.atualizado;
+      aceitarSelo(c.licenca.selo);
       setConta({ usuario: c.usuario, licenca: c.licenca });
     } catch {
       /* sem conexão: mantém o que já tinha */
     }
-  }, [api]);
+  }, [api, aceitarSelo]);
 
   const salvarPerfil = useCallback<Ctx["salvarPerfil"]>(async (p) => {
     const t = ref.current?.token;
@@ -116,7 +141,7 @@ export function IdProvider({ children, api: apiFora }: { children: ReactNode; ap
   }, [sessao?.sessao, recarregarConta]);
 
   const entrar = useCallback<Ctx["entrar"]>(async (email, senha, extra) => guardar(await api.entrar(email, senha, meuAparelho(), extra)), [api, guardar]);
-  const cadastrar = useCallback<Ctx["cadastrar"]>(async (e, s, n) => guardar(await api.cadastrar(e, s, n, meuAparelho())), [api, guardar]);
+  const cadastrar = useCallback<Ctx["cadastrar"]>(async (e, s, n, t) => guardar(await api.cadastrar(e, s, n, t, meuAparelho())), [api, guardar]);
   const sair = useCallback(async () => {
     const t = ref.current?.token;
     guardar(null);
@@ -132,6 +157,7 @@ export function IdProvider({ children, api: apiFora }: { children: ReactNode; ap
       if (!atual || parar) return;
       try {
         const p = await api.ping(atual.token);
+        aceitarSelo(p.selo);
         setConflito(null);
         if (p.perfil !== versaoDoPerfil.current) void recarregarConta();
       } catch (e) {
@@ -152,7 +178,7 @@ export function IdProvider({ children, api: apiFora }: { children: ReactNode; ap
       clearInterval(t);
       document.removeEventListener("visibilitychange", aoVoltar);
     };
-  }, [api, sessao?.token, guardar, recarregarConta]);
+  }, [api, sessao?.token, guardar, recarregarConta, aceitarSelo]);
 
   // Renovação do token (30 dias de validade): uma vez por dia de uso.
   useEffect(() => {
@@ -170,6 +196,36 @@ export function IdProvider({ children, api: apiFora }: { children: ReactNode; ap
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [api, sessao?.sessao]);
 
+  // Relógio da trava: confere o selo a cada 20 s e lembra o maior horário visto (para pegar quem volta o relógio).
+  useEffect(() => {
+    const t = setInterval(() => setAgora(Date.now()), 20_000);
+    return () => clearInterval(t);
+  }, []);
+  const estado = useMemo<Estado>(() => avaliar(selo, agora, visto.current, sessao?.usuario.id), [selo, agora, sessao?.usuario.id]);
+  useEffect(() => {
+    if (estado.tipo === "validar_online" && estado.motivo === "relogio") return; // não grava um horário falso
+    if (agora > visto.current) { visto.current = agora; gravarLocal(CHAVE_VISTO, String(agora)); }
+  }, [agora, estado]);
+  const validarAgora = useCallback(async () => {
+    const t = ref.current?.token;
+    if (!t) return;
+    try {
+      const l = await api.licenca(t);
+      aceitarSelo(l.selo);
+      // o servidor confirmou a hora certa: o relógio deste aparelho volta a valer
+      if (Date.now() < visto.current) { visto.current = Date.now(); gravarLocal(CHAVE_VISTO, String(visto.current)); }
+      setAgora(Date.now());
+    } catch (e) {
+      if (e instanceof ErroId && e.status === 401) { guardar(null); setAviso("Entre de novo com o seu Vetorial ID."); }
+    }
+  }, [api, aceitarSelo, guardar]);
+  useEffect(() => {
+    if (!sessao || estado.tipo !== "validar_online") return;
+    void validarAgora();
+    const t = setInterval(() => void validarAgora(), 15_000);
+    return () => clearInterval(t);
+  }, [sessao?.sessao, estado.tipo, validarAgora]);
+
   const resolverConflito = useCallback(async (encerrar?: string) => {
     const t = ref.current?.token;
     if (!t) return;
@@ -182,8 +238,8 @@ export function IdProvider({ children, api: apiFora }: { children: ReactNode; ap
     setConflito(null);
   }, [api, sair]);
 
-  const valor = useMemo<Ctx>(() => ({ api, sessao, conflito, aviso, entrar, cadastrar, sair, conta, recarregarConta, salvarPerfil, resolverConflito, limparAviso: () => setAviso("") }),
-    [api, sessao, conflito, aviso, entrar, cadastrar, sair, conta, recarregarConta, salvarPerfil, resolverConflito]);
+  const valor = useMemo<Ctx>(() => ({ api, sessao, conflito, aviso, entrar, cadastrar, estado, validarAgora, sair, conta, recarregarConta, salvarPerfil, resolverConflito, limparAviso: () => setAviso("") }),
+    [api, sessao, conflito, aviso, entrar, cadastrar, estado, validarAgora, sair, conta, recarregarConta, salvarPerfil, resolverConflito]);
   return <C.Provider value={valor}>{children}</C.Provider>;
 }
 
