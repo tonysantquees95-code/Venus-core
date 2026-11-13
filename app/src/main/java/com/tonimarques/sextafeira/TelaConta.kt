@@ -194,6 +194,7 @@ object BatimentoId {
                         h.post { if (!a.isFinishing) { a.aviso("Sua sessão foi encerrada em outro aparelho."); a.ajustes?.atualizar() } }
                     }
                     r.ok -> {
+                        VetorialId.guardarSelo(a, r.json.optString("selo"))
                         if (r.json.optLong("perfil") != VetorialId.perfilVersao(a) && VetorialId.atualizarPerfil(a)) h.post { a.gaveta?.atualizarPerfil() }
                         SincroniaId.rodar(a)
                     }

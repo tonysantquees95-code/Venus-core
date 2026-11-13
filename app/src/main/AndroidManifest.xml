@@ -60,6 +60,12 @@
         android:supportsRtl="true"
         android:theme="@style/Tema">
 
+        <!-- Trava de segurança: Vetorial ID + licença antes de abrir a Vênus -->
+        <activity
+            android:name=".TravaActivity"
+            android:exported="false"
+            android:windowSoftInputMode="adjustResize" />
+
         <activity
             android:name=".MainActivity"
             android:exported="true"

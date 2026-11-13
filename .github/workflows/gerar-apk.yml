@@ -53,6 +53,11 @@ jobs:
             echo "Ainda sem a chave nova: assinando com a chave do repositório."
           fi
 
+      - name: Chave pública do selo de licença (embutida no app)
+        run: |
+          x=$(curl -fsS --retry 5 --retry-delay 5 https://venus-servidor.tonysantquees95.workers.dev/id/chave-publica | python3 -c 'import sys,json,re;j=json.load(sys.stdin);assert re.fullmatch(r"[A-Za-z0-9_-]{43}",j["x"]);print(j["x"])')
+          echo "SELO_CHAVE=$x" >> "$GITHUB_ENV"
+
       - name: Testar os comandos locais
         run: |
           set -o pipefail

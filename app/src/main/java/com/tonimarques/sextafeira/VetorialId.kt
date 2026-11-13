@@ -23,6 +23,9 @@ object VetorialId {
     const val PREF_PERFIL_V = "vid_perfil_v"
     const val PREF_ASSINATURA = "vid_assinatura"
     const val PREF_ADMIN = "vid_admin"
+    const val PREF_SELO = "vid_selo"
+    const val PREF_VISTO = "vid_visto"
+    const val PREF_USUARIO_ID = "vid_usuario_id"
 
     val MODOS = listOf("conversacional", "orbe", "bolha", "silencioso")
     val ROTULOS_MODO = mapOf(
@@ -62,14 +65,48 @@ object VetorialId {
     }
 
     fun limpar(ctx: Context, aviso: String = "") {
-        prefs(ctx).edit().remove(PREF_TOKEN).remove(PREF_SESSAO).remove(PREF_EMAIL).remove(PREF_NOME_CONTA).remove(PREF_FOTO).remove(PREF_PERFIL_V).remove(PREF_ASSINATURA).remove(PREF_ADMIN).remove(PREF_VERSOES).remove(PREF_ENVIADO).remove(PREF_DOC_PREFS)
+        prefs(ctx).edit().remove(PREF_TOKEN).remove(PREF_SESSAO).remove(PREF_EMAIL).remove(PREF_NOME_CONTA).remove(PREF_FOTO).remove(PREF_PERFIL_V).remove(PREF_ASSINATURA).remove(PREF_ADMIN).remove(PREF_SELO).remove(PREF_USUARIO_ID).remove(PREF_VERSOES).remove(PREF_ENVIADO).remove(PREF_DOC_PREFS)
             .apply { if (aviso.isNotBlank()) putString(PREF_AVISO, aviso) }.apply()
     }
 
     private fun guardar(ctx: Context, j: JSONObject) {
         prefs(ctx).edit().putString(PREF_TOKEN, j.optString("token")).putString(PREF_SESSAO, j.optString("sessao"))
-            .putString(PREF_EMAIL, j.optJSONObject("usuario")?.optString("email").orEmpty()).remove(PREF_AVISO).apply()
+            .putString(PREF_EMAIL, j.optJSONObject("usuario")?.optString("email").orEmpty())
+            .putString(PREF_USUARIO_ID, j.optJSONObject("usuario")?.optString("id").orEmpty()).remove(PREF_AVISO).apply()
+        guardarSelo(ctx, j.optString("selo"))
     }
+
+    // ------------------------------------------------------------------ trava de segurança (selo de licença assinado)
+    fun guardarSelo(ctx: Context, selo: String?) {
+        if (!selo.isNullOrBlank()) prefs(ctx).edit().putString(PREF_SELO, selo).apply()
+    }
+
+    /** O que o selo guardado autoriza agora (conferido sem internet). Sem conta ⇒ ValidarOnline("sem_conta"). */
+    fun estado(ctx: Context, agora: Long = System.currentTimeMillis()): Selo.Estado {
+        if (!logado(ctx)) return Selo.Estado.ValidarOnline("sem_conta")
+        val visto = prefs(ctx).getLong(PREF_VISTO, 0L)
+        val e = Selo.avaliar(prefs(ctx).getString(PREF_SELO, ""), agora, visto, prefs(ctx).getString(PREF_USUARIO_ID, "").orEmpty())
+        if (!(e is Selo.Estado.ValidarOnline && e.motivo == "relogio") && agora > visto) prefs(ctx).edit().putLong(PREF_VISTO, agora).apply()
+        return e
+    }
+
+    /** Pergunta ao servidor (fora da tela principal): renova o selo. Devolve o novo estado. */
+    fun validar(ctx: Context): Selo.Estado {
+        val r = licenca(ctx, false)
+        if (r.ok) {
+            guardarSelo(ctx, r.json.optString("selo"))
+            // o servidor confirmou a hora: o relógio deste aparelho volta a valer
+            val ag = System.currentTimeMillis()
+            if (ag < prefs(ctx).getLong(PREF_VISTO, 0L)) prefs(ctx).edit().putLong(PREF_VISTO, ag).apply()
+        } else if (sessaoPerdida(r.status, r.json.optString("codigo"))) limpar(ctx, "Entre de novo com o seu Vetorial ID.")
+        return estado(ctx)
+    }
+
+    // ------------------------------------------------------------------ recuperação de senha
+    fun recuperarCanais(ctx: Context) = Nuvem.bruto(ctx, "GET", "/id/recuperar/canais", null, null)
+    fun recuperarPedir(ctx: Context, email: String, canal: String) = Nuvem.bruto(ctx, "POST", "/id/recuperar/pedir", JSONObject().put("email", email).put("canal", canal), null)
+    fun recuperarConfirmar(ctx: Context, email: String, codigo: String, novaSenha: String) =
+        Nuvem.bruto(ctx, "POST", "/id/recuperar/confirmar", JSONObject().put("email", email).put("codigo", codigo).put("novaSenha", novaSenha), null)
 
     private fun aparelho(ctx: Context) = JSONObject().put("id", Nuvem.dispositivo(ctx).ifBlank { "android-${Build.MODEL}-${Build.ID}".padEnd(8, 'x') })
         .put("nome", Build.MODEL.orEmpty().ifBlank { "Android" }).put("plataforma", "android")
@@ -83,8 +120,8 @@ object VetorialId {
     }
 
     /** Cria a conta; se este celular já usa a loja (token vl_…), a loja é ligada à conta. */
-    fun cadastrar(ctx: Context, email: String, senha: String, nome: String): Nuvem.Resposta {
-        val corpo = JSONObject().put("email", email).put("senha", senha).put("nome", nome).put("dispositivo", aparelho(ctx))
+    fun cadastrar(ctx: Context, email: String, senha: String, nome: String, telefone: String = ""): Nuvem.Resposta {
+        val corpo = JSONObject().put("email", email).put("senha", senha).put("nome", nome).put("telefone", telefone).put("dispositivo", aparelho(ctx))
         val antigo = Nuvem.tokenDaLoja(ctx).takeIf { it.startsWith("vl_") }
         return Nuvem.bruto(ctx, "POST", "/id/cadastrar", corpo, antigo).also { if (it.ok) guardar(ctx, it.json) }
     }

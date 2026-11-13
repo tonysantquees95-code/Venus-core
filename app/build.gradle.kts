@@ -3,6 +3,8 @@ plugins {
     id("org.jetbrains.kotlin.android")
 }
 
+// Chave pública do selo de licença (a CI busca no servidor e passa em SELO_CHAVE); sem ela o app não abre.
+val chaveDoSelo = System.getenv("SELO_CHAVE") ?: ""
 val numeroDaVersao = (System.getenv("GITHUB_RUN_NUMBER") ?: "1").toInt()
 
 android {
@@ -17,6 +19,7 @@ android {
         targetSdk = 34
         versionCode = numeroDaVersao
         versionName = "1.$numeroDaVersao"
+        buildConfigField("String", "SELO_CHAVE", "\"$chaveDoSelo\"")
         // Só os processadores de celular (deixa o APK menor com o reconhecimento de voz offline).
         ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a") }
     }
@@ -43,6 +46,8 @@ android {
             signingConfig = signingConfigs.getByName("fixa")
         }
     }
+
+    buildFeatures { buildConfig = true }
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
@@ -71,6 +76,8 @@ dependencies {
     implementation("com.google.android.gms:play-services-mlkit-subject-segmentation:16.0.0-beta1")
     // QR Code gerado no próprio celular (cartão, panfleto e QR da Central da loja não dependem mais do servidor).
     implementation("com.google.zxing:core:3.5.3")
+    // Ed25519 (conferir a assinatura do selo de licença sem internet).
+    implementation("net.i2p.crypto:eddsa:0.3.0")
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.json:json:20240303")
 }
