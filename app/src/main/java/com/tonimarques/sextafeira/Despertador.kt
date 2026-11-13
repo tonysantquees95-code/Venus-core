@@ -350,7 +350,7 @@ class Despertador(
          * mas nada fora da música é reconhecido; para conversar, é só chamar "Vênus".
          */
         val FRASES_MUSICA = listOf(
-            "vênus", "venus", "ativar", "ativa",
+            "vênus", "venus", "ei", "ativar", "ativa",
             "pausar", "pausa", "pause", "parar", "para", "pare", "continuar", "continua", "continue", "tocar", "toca", "toque", "retomar",
             "próxima", "proxima", "próximo", "seguinte", "pula", "pular", "pule", "passa", "passar", "anterior", "volta", "voltar", "volte",
             "música", "musica", "faixa", "som", "player", "essa", "esta", "de", "a", "o", "e", "um", "uma", "pouco",
