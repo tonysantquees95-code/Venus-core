@@ -1,3 +1,4 @@
+import { ponteDesktop } from "../desktop/ponte";
 import { useEffect, useState, type FormEvent } from "react";
 import { ErroId, type AparelhoDaConta, type Licenca, type ListaDeAparelhos } from "../id/api";
 import { useId } from "../id/IdProvider";
@@ -131,6 +132,22 @@ export function Entrar() {
   );
 }
 
+/** Só no Windows: limpar os dados locais ou desinstalar (o teste grátis NÃO volta: o computador é reconhecido). */
+function ManutencaoDoWindows({ setMsg }: { setMsg: (m: string) => void }) {
+  const p = ponteDesktop();
+  if (!p) return null;
+  const rodar = async (f: () => Promise<{ ok: boolean; erro?: string }>) => { try { const r = await f(); if (!r.ok && r.erro) setMsg(r.erro); } catch (e) { setMsg(e instanceof Error ? e.message : "Não consegui."); } };
+  return (
+    <div className="space-y-2 rounded-2xl border border-white/10 p-3">
+      <p className="text-xs text-suave">Manutenção deste computador. Reinstalar ou limpar não renova o teste grátis: o computador continua reconhecido.</p>
+      <div className="flex flex-wrap gap-2">
+        <button className={botaoSuave} onClick={() => void rodar(p.limparDados)}>Limpar dados e reiniciar</button>
+        <button className={botaoSuave} onClick={() => void rodar(p.desinstalar)}>Desinstalar a Vênus</button>
+      </div>
+    </div>
+  );
+}
+
 export function ContaLogada() {
   const { sessao, sair, api } = useId();
   const [lic, setLic] = useState<Licenca | null>(null);
@@ -158,6 +175,7 @@ export function ContaLogada() {
         <button className={botaoPrimario} onClick={renovar}>{lic?.renovar || !lic?.acesso ? "Renovar licença (R$ 49,90)" : "Gerar link de pagamento"}</button>
         <button className={botaoSuave} onClick={() => void sair()}>Sair deste aparelho</button>
       </div>
+      <ManutencaoDoWindows setMsg={setMsg} />
       {msg && <p className="text-rose-300">{msg}</p>}
     </div>
   );

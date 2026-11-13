@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { criarApi, ErroId, type Aparelho, type ApiId, type Licenca, type Perfil, type Sessao } from "./api";
 import { detectarPlataforma, NOMES_DE_PLATAFORMA } from "../ajustes/logica";
-import { noDesktop } from "../desktop/ponte";
+import { noDesktop, ponteDesktop } from "../desktop/ponte";
 import { avaliar, type Estado } from "./trava";
 
 const CHAVE_SESSAO = "venus:id";
@@ -13,9 +13,9 @@ const CHAVE_VISTO = "venus:selo:visto";
 
 /** Identificador fixo deste aparelho (gerado uma vez) + plataforma detectada. */
 export function meuAparelho(): Aparelho {
-  let id = "";
+  let id = ponteDesktop()?.idDoComputador ?? ""; // no Windows o id é do computador, não do app (reinstalar não gera teste novo)
   try {
-    id = localStorage.getItem(CHAVE_APARELHO) ?? "";
+    if (!id) id = localStorage.getItem(CHAVE_APARELHO) ?? "";
     if (!id) {
       id = crypto.randomUUID();
       localStorage.setItem(CHAVE_APARELHO, id);

@@ -13,6 +13,10 @@ export interface PonteDesktop {
   /** Baixa, confere e instala a versão nova (a Vênus fecha e abre de novo). */
   instalarAtualizacao(): Promise<{ ok: boolean; erro?: string }>;
   aoProgressoDaAtualizacao(cb: (p: { baixado: number; total: number }) => void): () => void;
+  /** Identificador fixo do computador (hash): continua o mesmo depois de desinstalar ou limpar. */
+  idDoComputador: string;
+  limparDados(): Promise<{ ok: boolean; erro?: string }>;
+  desinstalar(): Promise<{ ok: boolean; erro?: string }>;
   avisarEstado(estado: { escutando?: boolean; pendencias?: number }): void;
 }
 
