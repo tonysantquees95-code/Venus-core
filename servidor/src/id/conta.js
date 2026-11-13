@@ -2,6 +2,7 @@
 import { aleatorio, iguais, sha256Hex } from "../loja/cripto.js";
 import { ErroLoja, registrarLoja } from "../loja/lojas.js";
 import { assinar, hashSenha, verificar } from "./jwt.js";
+import { canaisDisponiveis, enviarCodigo } from "./envio.js";
 
 export const MAX_DISPOSITIVOS = 3;
 export const MAX_ATIVAS = 2;
@@ -19,6 +20,13 @@ export class ErroId extends ErroLoja {
 /** O dono (administrador master) usa em quantos aparelhos e sessões quiser: sem limites. */
 const semLimites = (env, email) => String(email || "").trim().toLowerCase() === (String(env.ADMIN_EMAIL || "").trim().toLowerCase() || "vetorialtech.dev@gmail.com");
 
+/** Celular brasileiro → +55DDDNÚMERO. Aceita (51) 99999-9999, 51999999999, +5551999999999. Devolve "" se não parecer um celular. */
+export function telefoneLimpo(t) {
+  let d = String(t || "").replace(/\D/g, "");
+  if (d.startsWith("55") && d.length >= 12) d = d.slice(2);
+  return /^[1-9]\d9\d{8}$/.test(d) ? `+55${d}` : "";
+}
+
 const emailLimpo = (e) => String(e || "").trim().toLowerCase();
 
 function lerDispositivo(d) {
@@ -34,8 +42,10 @@ async function limitarTentativas(env, chave, agora) {
   if (n.n >= 8) throw new ErroId(429, "muitas_tentativas", "Muitas tentativas. Espere alguns minutos e tente de novo.");
 }
 
-export async function cadastrar(env, { email, senha, nome, dispositivo, lojaExistente }, agora = Date.now()) {
+export async function cadastrar(env, { email, senha, nome, dispositivo, lojaExistente, telefone, exigirTelefone = false }, agora = Date.now()) {
   email = emailLimpo(email);
+  const fone = telefoneLimpo(telefone);
+  if (exigirTelefone && !fone && !semLimites(env, email)) throw new ErroId(400, "telefone_invalido", "Informe um celular com DDD (ex.: 51 99999-9999). Ele serve para recuperar a senha.");
   if (!EMAIL.test(email)) throw new ErroId(400, "email_invalido", "Esse e-mail não parece certo.");
   if (String(senha || "").length < 8) throw new ErroId(400, "senha_curta", "A senha precisa ter pelo menos 8 caracteres.");
   const d = lerDispositivo(dispositivo);
@@ -48,9 +58,16 @@ export async function cadastrar(env, { email, senha, nome, dispositivo, lojaExis
   if (lojaId && (await env.DB.prepare("SELECT 1 AS x FROM usuarios WHERE loja = ?").bind(lojaId).first())) {
     throw new ErroId(409, "loja_ja_vinculada", "Essa loja já está ligada a outra conta.");
   }
-  if (!lojaId) lojaId = (await registrarLoja(env, { nome: nome || email.split("@")[0], dispositivo: d.bruto }, agora)).id;
-  await env.DB.prepare("INSERT INTO usuarios (id, email, nome, senha_hash, salt, loja, criado) VALUES (?, ?, ?, ?, ?, ?, ?)")
-    .bind(id, email, String(nome || "").trim().slice(0, 80), await hashSenha(senha, salt), salt, lojaId, agora).run();
+  if (!lojaId) {
+    const loja = await registrarLoja(env, { nome: nome || email.split("@")[0], dispositivo: d.bruto }, agora);
+    lojaId = loja.id;
+    // um teste grátis por celular: se este número já tem conta, a nova nasce sem teste
+    if (fone && !loja.testeGratisUsado && (await env.DB.prepare("SELECT 1 AS x FROM usuarios WHERE telefone = ?").bind(fone).first())) {
+      await env.DB.prepare("UPDATE lojas SET trial_fim = ?, plano = 'sem_teste' WHERE id = ?").bind(agora, lojaId).run();
+    }
+  }
+  await env.DB.prepare("INSERT INTO usuarios (id, email, nome, senha_hash, salt, loja, criado, telefone) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
+    .bind(id, email, String(nome || "").trim().slice(0, 80), await hashSenha(senha, salt), salt, lojaId, agora, fone).run();
   return entrar(env, { email, senha, dispositivo }, agora);
 }
 
@@ -226,4 +243,62 @@ export async function gravarSync(env, ctx, chave, valor, versaoBase, agora = Dat
 
 export async function limpezaDeSessoes(env, agora = Date.now()) {
   await env.DB.prepare("DELETE FROM sessoes WHERE (encerrada = 1 AND ultimo_ping < ?) OR ultimo_ping < ?").bind(agora - 7 * 86_400_000, agora - 40 * 86_400_000).run();
+}
+
+// ---------------------------------------------------------------- recuperação de senha
+const CODIGO_MS = 10 * 60_000;
+const mascarar = (c, v) => (c === "email" ? v.replace(/^(.{2}).*(@.*)$/, "$1***$2") : v.replace(/^(\+55\d{2})\d+(\d{2})$/, "$1*****$2"));
+
+export async function celularDaConta(env, email) {
+  const u = await env.DB.prepare("SELECT telefone FROM usuarios WHERE email = ?").bind(emailLimpo(email)).first();
+  return u ? u.telefone : "";
+}
+
+/** Sempre responde igual (a conta existir ou não não vaza). Só envia de verdade quando existe e o canal está ligado. */
+export async function pedirRecuperacao(env, { email, canal }, ip = "", agora = Date.now()) {
+  email = emailLimpo(email);
+  canal = canal === "sms" ? "sms" : "email";
+  const disp = canaisDisponiveis(env);
+  if (!disp[canal]) throw new ErroId(503, "canal_indisponivel", canal === "sms" ? "O envio de SMS ainda não está ligado. Use o e-mail." : "O envio de e-mail ainda não está ligado.", { canais: disp });
+  await limitarTentativas(env, `rec:${email}`, agora);
+  await limitarTentativas(env, `recip:${ip || "?"}`, agora);
+  await env.DB.prepare("INSERT INTO id_tentativas (chave, quando) VALUES (?, ?)").bind(`rec:${email}`, agora).run();
+  await env.DB.prepare("INSERT INTO id_tentativas (chave, quando) VALUES (?, ?)").bind(`recip:${ip || "?"}`, agora).run();
+  const u = await env.DB.prepare("SELECT * FROM usuarios WHERE email = ?").bind(email).first();
+  const destino = u ? (canal === "sms" ? u.telefone : u.email) : "";
+  if (u && destino) {
+    const codigo = String(crypto.getRandomValues(new Uint32Array(1))[0] % 1_000_000).padStart(6, "0");
+    await env.DB.prepare("INSERT OR REPLACE INTO id_recuperacao (usuario, codigo_hash, canal, expira, tentativas, criado) VALUES (?, ?, ?, ?, 0, ?)")
+      .bind(u.id, await sha256Hex(`rec:${u.id}:${codigo}`), canal, agora + CODIGO_MS, agora).run();
+    try { await enviarCodigo(env, canal, destino, codigo); } catch { /* o app só diz "se existir, enviamos" */ }
+  }
+  return { ok: true, mensagem: "Se existir uma conta com esse e-mail, enviamos um código.", minutos: 10 };
+}
+
+export async function confirmarRecuperacao(env, { email, codigo, novaSenha }, agora = Date.now()) {
+  email = emailLimpo(email);
+  if (String(novaSenha || "").length < 8) throw new ErroId(400, "senha_curta", "A senha precisa ter pelo menos 8 caracteres.");
+  await limitarTentativas(env, `recc:${email}`, agora);
+  const u = await env.DB.prepare("SELECT * FROM usuarios WHERE email = ?").bind(email).first();
+  const r = u ? await env.DB.prepare("SELECT * FROM id_recuperacao WHERE usuario = ?").bind(u.id).first() : null;
+  const falha = () => new ErroId(400, "codigo_invalido", "Código errado ou vencido. Peça outro.");
+  if (!u || !r || r.expira < agora || r.tentativas >= 5) throw falha();
+  if (!iguais(await sha256Hex(`rec:${u.id}:${String(codigo || "").replace(/\D/g, "")}`), r.codigo_hash)) {
+    await env.DB.prepare("UPDATE id_recuperacao SET tentativas = tentativas + 1 WHERE usuario = ?").bind(u.id).run();
+    await env.DB.prepare("INSERT INTO id_tentativas (chave, quando) VALUES (?, ?)").bind(`recc:${email}`, agora).run();
+    throw falha();
+  }
+  const salt = aleatorio(16);
+  await env.DB.prepare("UPDATE usuarios SET senha_hash = ?, salt = ? WHERE id = ?").bind(await hashSenha(novaSenha, salt), salt, u.id).run();
+  await env.DB.prepare("DELETE FROM id_recuperacao WHERE usuario = ?").bind(u.id).run();
+  await env.DB.prepare("UPDATE sessoes SET encerrada = 1, motivo = 'senha_trocada' WHERE usuario = ? AND encerrada = 0").bind(u.id).run();
+  return { ok: true };
+}
+
+/** Quem já tem conta sem celular (ou quer trocar) cadastra o número logado; vale para a recuperação por SMS. */
+export async function salvarTelefone(env, ctx, telefone) {
+  const fone = telefoneLimpo(telefone);
+  if (!fone) throw new ErroId(400, "telefone_invalido", "Informe um celular com DDD (ex.: 51 99999-9999).");
+  await env.DB.prepare("UPDATE usuarios SET telefone = ? WHERE id = ?").bind(fone, ctx.usuario.id).run();
+  return { ok: true, telefone: mascarar("sms", fone) };
 }
