@@ -1,7 +1,9 @@
 // Rotas do Vetorial ID: /id (tela de login) e /id/* (API).
 import { estadoDaAssinatura, iniciarCobranca } from "../loja/assinatura.js";
 import { ErroLoja, comPrivilegios } from "../loja/lojas.js";
-import { ErroId, cadastrar, perfilPublico, salvarPerfil, tokenDeApp, encerrarSessao, entrar, gravarSync, lerSync, listarDispositivos, reativar, removerDispositivo, renovarToken, tokenDoPedido, validarSessao } from "./conta.js";
+import { emitirSelo, chavePublicaDoSelo } from "./selo.js";
+import { canaisDisponiveis } from "./envio.js";
+import { ErroId, cadastrar, confirmarRecuperacao, pedirRecuperacao, salvarTelefone, perfilPublico, salvarPerfil, tokenDeApp, encerrarSessao, entrar, gravarSync, lerSync, listarDispositivos, reativar, removerDispositivo, renovarToken, tokenDoPedido, validarSessao } from "./conta.js";
 import { paginaDeLogin, paginaSso } from "./pagina.js";
 import { ehAdmin } from "../dev/admin.js";
 
@@ -21,14 +23,21 @@ async function corpo(req) {
   }
 }
 
-async function licenca(env, usuario, origem, gerar, gateway, pacote) {
+async function licenca(env, usuario, origem, gerar, gateway, pacote, dispositivo = "") {
   const loja = usuario.loja ? await comPrivilegios(env, await env.DB.prepare("SELECT * FROM lojas WHERE id = ?").bind(usuario.loja).first()) : null;
-  if (!loja) return { acesso: false, plano: "sem_loja" };
+  if (!loja) return { acesso: false, plano: "sem_loja", selo: await emitirSelo(env, usuario, { acesso: false }, Date.now(), dispositivo) };
   const e = await estadoDaAssinatura(env, loja);
   const vencendo = !e.emTeste && e.diasPagosRestantes <= 3 || e.emTeste && e.diasDeTesteRestantes <= 2;
-  const r = { ...e, renovar: vencendo };
+  const r = { ...e, renovar: vencendo, selo: await emitirSelo(env, usuario, e, Date.now(), dispositivo) };
   if (gerar) r.cobranca = await iniciarCobranca(env, loja, gateway || "infinitepay", origem, Date.now(), pacote);
   return r;
+}
+
+/** Toda entrada devolve junto o selo de licença assinado (o app confere offline). */
+async function comLicenca(env, r, origem) {
+  const u = await env.DB.prepare("SELECT * FROM usuarios WHERE id = ?").bind(r.usuario.id).first();
+  const l = await licenca(env, u, origem, false, undefined, undefined, r.dispositivo);
+  return { ...r, licenca: { acesso: l.acesso, emTeste: l.emTeste, diasDeTesteRestantes: l.diasDeTesteRestantes, fimDoAcesso: l.fimDoAcesso }, selo: l.selo };
 }
 
 export async function tratarId(req, env, url, caminho) {
@@ -51,27 +60,32 @@ export async function tratarId(req, env, url, caminho) {
         const { lojaDoPedido } = await import("../loja/lojas.js");
         lojaExistente = await lojaDoPedido(env, req); // quem já usa a Vênus liga a loja atual à conta
       }
-      return json(await cadastrar(env, { ...d, lojaExistente }), 201);
+      return json(await comLicenca(env, await cadastrar(env, { ...d, lojaExistente, exigirTelefone: true }), origem), 201);
     }
-    if (caminho === "/id/entrar" && req.method === "POST") return json(await entrar(env, await corpo(req)));
+    if (caminho === "/id/entrar" && req.method === "POST") return json(await comLicenca(env, await entrar(env, await corpo(req)), origem));
+    if (caminho === "/id/chave-publica" && req.method === "GET") return json({ alg: "Ed25519", x: await chavePublicaDoSelo(env) });
+    if (caminho === "/id/recuperar/canais" && req.method === "GET") return json({ canais: canaisDisponiveis(env) });
+    if (caminho === "/id/recuperar/pedir" && req.method === "POST") return json(await pedirRecuperacao(env, await corpo(req), req.headers.get("cf-connecting-ip") || ""));
+    if (caminho === "/id/recuperar/confirmar" && req.method === "POST") return json(await confirmarRecuperacao(env, await corpo(req)));
     if (caminho === "/id/reativar" && req.method === "POST") return json(await reativar(env, tokenDoPedido(req), (await corpo(req)).encerrar));
 
     const ctx = await validarSessao(env, req, {});
     if (caminho === "/id/ping" && req.method === "POST") {
-      const l = await licenca(env, ctx.usuario, origem, false);
-      return json({ ok: true, ativa: true, perfil: ctx.usuario.atualizado || 0, licenca: { acesso: l.acesso, renovar: !!l.renovar } });
+      const l = await licenca(env, ctx.usuario, origem, false, undefined, undefined, ctx.dispositivo);
+      return json({ ok: true, ativa: true, selo: l.selo, perfil: ctx.usuario.atualizado || 0, licenca: { acesso: l.acesso, renovar: !!l.renovar } });
     }
     if (caminho === "/id/verificar" && req.method === "GET") { // para o Vindex e o Vortex validarem o login
-      return json({ usuario: perfilPublico(ctx.usuario), app: null, sessao: ctx.sessao, licenca: await licenca(env, ctx.usuario, origem, false) });
+      return json({ usuario: perfilPublico(ctx.usuario), app: null, sessao: ctx.sessao, licenca: await licenca(env, ctx.usuario, origem, false, undefined, undefined, ctx.dispositivo) });
     }
     if (caminho === "/id/conta" && req.method === "GET") { // tudo para o avatar: perfil, licença e este aparelho
       const lic = await licenca(env, ctx.usuario, origem, false);
       return json({ usuario: perfilPublico(ctx.usuario), licenca: lic, sessao: ctx.sessao, dispositivo: ctx.dispositivo, admin: ehAdmin(env, ctx.usuario.email) });
     }
+    if (caminho === "/id/telefone" && req.method === "PUT") return json(await salvarTelefone(env, ctx, (await corpo(req)).telefone));
     if (caminho === "/id/perfil" && req.method === "PUT") return json({ usuario: await salvarPerfil(env, ctx, await corpo(req)) });
     if (caminho === "/id/app-token" && req.method === "POST") return json(await tokenDeApp(env, ctx, String((await corpo(req)).app || "")));
     if (caminho === "/id/eu" && req.method === "GET") return json({ id: ctx.usuario.id, email: ctx.usuario.email, nome: ctx.usuario.nome, loja: ctx.usuario.loja });
-    if (caminho === "/id/renovar" && req.method === "POST") return json({ ...(await renovarToken(env, ctx)), licenca: await licenca(env, ctx.usuario, origem, false) });
+    if (caminho === "/id/renovar" && req.method === "POST") return json({ ...(await renovarToken(env, ctx)), licenca: await licenca(env, ctx.usuario, origem, false, undefined, undefined, ctx.dispositivo) });
     if (caminho === "/id/sair" && req.method === "POST") { await encerrarSessao(env, ctx.usuario.id, ctx.sessao, "saiu"); return json({ ok: true }); }
     if (caminho === "/id/dispositivos" && req.method === "GET") return json(await listarDispositivos(env, ctx));
     let m = /^\/id\/dispositivos\/([a-f0-9]{64})$/.exec(caminho);

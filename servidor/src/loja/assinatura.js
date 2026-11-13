@@ -179,6 +179,7 @@ export async function estadoDaAssinatura(env, loja, agora = Date.now()) {
     pacote: pacoteDe(loja.pacote), apps: appsLiberados(loja, agora),
     pacotes: Object.entries(PACOTES).map(([chave, p]) => ({ chave, nome: p.nome, precoCentavos: p.centavos })),
     emTeste: agora < loja.trial_fim && agora >= (loja.ativo_ate || 0), diasDeTesteRestantes: trialRestante, diasPagosRestantes: pagoRestante,
+    fimDoAcesso: Math.max(loja.trial_fim || 0, loja.ativo_ate || 0),
     acesso: agora < Math.max(loja.trial_fim || 0, loja.ativo_ate || 0), // conta ativa (vale para o Vindex e o Vortex)
     venus: acessoLiberado(loja, agora), // a Vênus em si: pacotes sem ela não abrem a loja
     pagamentoAguardandoLiberacao: pend.n > 0, doisFatores: !!loja.totp_ativo,

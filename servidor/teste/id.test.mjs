@@ -133,7 +133,7 @@ test("sincronização: versão, conflito e leitura incremental", async () => {
 test("rotas HTTP: login, aviso 409 com opções, tela de login e CORS", async () => {
   const env = ENV();
   const post = (c, corpo, token) => tratarId(new Request(`https://v.test${c}`, { method: "POST", headers: { "content-type": "application/json", ...(token ? { authorization: `Bearer ${token}` } : {}) }, body: JSON.stringify(corpo) }), env, new URL(`https://v.test${c}`), c);
-  const r1 = await post("/id/cadastrar", { email: "a@b.co", senha: "12345678", dispositivo: disp(1) });
+  const r1 = await post("/id/cadastrar", { email: "a@b.co", senha: "12345678", telefone: "51955554444", dispositivo: disp(1) });
   assert.equal(r1.status, 201);
   const t = (await r1.json()).token;
   await post("/id/entrar", { email: "a@b.co", senha: "12345678", dispositivo: disp(2) });
@@ -217,4 +217,86 @@ test("o dono (administrador) entra em quantos aparelhos e sessões quiser", asyn
   await cadastrar(env, { email: "comum@exemplo.com", senha: "senha-forte-1", nome: "C", dispositivo: disp(11) }, T0);
   for (let n = 12; n <= 13; n++) await entrar(env, { email: "comum@exemplo.com", senha: "senha-forte-1", dispositivo: disp(n), encerrar: undefined }, T0 + n).catch(() => {});
   assert.equal((await erro(entrar(env, { email: "comum@exemplo.com", senha: "senha-forte-1", dispositivo: disp(14) }, T0 + 20))).codigo.startsWith("limite"), true);
+});
+
+// ---------------------------------------------------------------- trava: selo, telefone, recuperação
+import { conferirSelo, chavePublicaDoSelo } from "../src/id/selo.js";
+import { telefoneLimpo } from "../src/id/conta.js";
+const cadastrarConta = cadastrar, entrarConta = entrar, bd = bancoDeTeste;
+
+const D = (n) => ({ id: `aparelho-${n}-xxxxxxxx`, nome: "Cel", plataforma: "android" });
+const mundo2 = () => ({ DB: bd(), CHAVE_COFRE: "chave-de-teste-bem-longa-123" });
+const chamarId = async (env, metodo, caminho, corpo, token) => {
+  const q = new Request("https://v.test" + caminho, { method: metodo, headers: { "content-type": "application/json", ...(token ? { authorization: `Bearer ${token}` } : {}) }, body: corpo ? JSON.stringify(corpo) : undefined });
+  const r = await tratarId(q, env, new URL(q.url), new URL(q.url).pathname);
+  return { status: r.status, ...(await r.json()) };
+};
+
+test("telefone: aceita formatos comuns de celular BR e recusa o resto", () => {
+  assert.equal(telefoneLimpo("(51) 99999-9999"), "+5551999999999");
+  assert.equal(telefoneLimpo("+55 51 99999-9999"), "+5551999999999");
+  assert.equal(telefoneLimpo("5199999"), "");
+  assert.equal(telefoneLimpo("5133334444"), ""); // fixo
+});
+
+test("cadastro exige celular e devolve selo assinado que só vale com a chave certa", async () => {
+  const env = mundo2();
+  assert.equal((await chamarId(env, "POST", "/id/cadastrar", { email: "a@b.com", senha: "senha-forte-1", dispositivo: D(1) })).codigo, "telefone_invalido");
+  const r = await chamarId(env, "POST", "/id/cadastrar", { email: "a@b.com", senha: "senha-forte-1", telefone: "51999999999", dispositivo: D(1) });
+  assert.equal(r.status, 201);
+  const c = await conferirSelo(env, r.selo);
+  assert.equal(c.ac, true);
+  assert.equal(c.teste, true);
+  // adulterar o recibo (ex.: estender o fim do teste) invalida a assinatura
+  const [p, a] = r.selo.split(".");
+  const falso = JSON.parse(Buffer.from(p, "base64url").toString());
+  falso.fim += 999999999999;
+  assert.equal(await conferirSelo(env, `${Buffer.from(JSON.stringify(falso)).toString("base64url")}.${a}`), null);
+  // outro servidor (outro segredo) não assina um selo aceito por este
+  assert.notEqual(await chavePublicaDoSelo({ CHAVE_COFRE: "outra-chave-bem-longa-9999" }), await chavePublicaDoSelo(env));
+});
+
+test("depois dos 7 dias o selo vem com acesso falso", async () => {
+  const env = mundo2();
+  const T = Date.now();
+  await cadastrarConta(env, { email: "t@b.com", senha: "senha-forte-1", telefone: "51988887777", dispositivo: D(2) }, T - 8 * 86_400_000);
+  const e = await entrarConta(env, { email: "t@b.com", senha: "senha-forte-1", dispositivo: D(2) }, T);
+  const l = await chamarId(env, "GET", "/id/licenca", null, e.token);
+  assert.equal(l.acesso, false);
+  assert.equal((await conferirSelo(env, l.selo)).ac, false);
+});
+
+test("o mesmo celular em outra conta não ganha outro teste grátis", async () => {
+  const env = mundo2();
+  await chamarId(env, "POST", "/id/cadastrar", { email: "um@b.com", senha: "senha-forte-1", telefone: "51977776666", dispositivo: D(3) });
+  const r = await chamarId(env, "POST", "/id/cadastrar", { email: "dois@b.com", senha: "senha-forte-1", telefone: "(51) 97777-6666", dispositivo: D(4) });
+  assert.equal(r.licenca.acesso, false);
+});
+
+test("recuperação: código por e-mail/SMS, 5 tentativas, troca a senha e derruba as sessões", async () => {
+  const env = mundo2();
+  const enviados = [];
+  env.RESEND_API_KEY = "re_x"; env.TWILIO_SID = "AC"; env.TWILIO_TOKEN = "t"; env.TWILIO_DE = "+15550000";
+  env.fetchEnvio = async (u, o) => { enviados.push({ u: String(u), corpo: String(o.body) }); return new Response("{}"); };
+  const c = await chamarId(env, "POST", "/id/cadastrar", { email: "r@b.com", senha: "senha-forte-1", telefone: "51966665555", dispositivo: D(5) });
+  // conta que não existe recebe a mesma resposta e nada é enviado
+  assert.equal((await chamarId(env, "POST", "/id/recuperar/pedir", { email: "naoexiste@b.com", canal: "email" })).ok, true);
+  assert.equal(enviados.length, 0);
+  assert.equal((await chamarId(env, "POST", "/id/recuperar/pedir", { email: "r@b.com", canal: "sms" })).ok, true);
+  assert.match(enviados[0].u, /twilio/);
+  assert.match(decodeURIComponent(enviados[0].corpo), /To=\+5551966665555/);
+  const codigo = /código do Vetorial ID: (\d{6})/.exec(decodeURIComponent(enviados[0].corpo).replace(/\+/g, " "))[1];
+  assert.equal((await chamarId(env, "POST", "/id/recuperar/confirmar", { email: "r@b.com", codigo: "000000", novaSenha: "nova-senha-9" })).codigo, "codigo_invalido");
+  assert.equal((await chamarId(env, "POST", "/id/recuperar/confirmar", { email: "r@b.com", codigo, novaSenha: "curta" })).codigo, "senha_curta");
+  assert.equal((await chamarId(env, "POST", "/id/recuperar/confirmar", { email: "r@b.com", codigo, novaSenha: "nova-senha-9" })).ok, true);
+  assert.equal((await chamarId(env, "GET", "/id/eu", null, c.token)).status, 401); // sessão antiga caiu
+  assert.equal((await chamarId(env, "POST", "/id/entrar", { email: "r@b.com", senha: "senha-forte-1", dispositivo: D(5) })).codigo, "credenciais");
+  assert.ok((await chamarId(env, "POST", "/id/entrar", { email: "r@b.com", senha: "nova-senha-9", dispositivo: D(5) })).token);
+  // o código só vale uma vez
+  assert.equal((await chamarId(env, "POST", "/id/recuperar/confirmar", { email: "r@b.com", codigo, novaSenha: "outra-senha-9" })).codigo, "codigo_invalido");
+});
+
+test("recuperação sem provedor configurado avisa em vez de fingir", async () => {
+  const env = mundo2();
+  assert.equal((await chamarId(env, "POST", "/id/recuperar/pedir", { email: "x@b.com", canal: "sms" })).codigo, "canal_indisponivel");
 });
