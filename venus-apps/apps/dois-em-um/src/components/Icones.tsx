@@ -8,7 +8,8 @@ const estiloPacote: CSSProperties = {
   strokeWidth: "var(--icone-traco, 1.6)",
   strokeLinecap: "var(--icone-ponta, round)" as CSSProperties["strokeLinecap"],
   strokeLinejoin: "var(--icone-junta, round)" as CSSProperties["strokeLinejoin"],
-  fillOpacity: "var(--icone-preench, 0)" as unknown as number
+  fillOpacity: "var(--icone-preench, 0)" as unknown as number,
+  filter: "var(--icone-brilho, none)"
 };
 
 function Svg({ children, style, ...resto }: SVGProps<SVGSVGElement>) {

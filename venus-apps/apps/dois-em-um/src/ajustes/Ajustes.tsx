@@ -6,8 +6,9 @@ import { AvatarDeConta } from "../id/Avatar";
 import { HolographicOrb, useTema } from "../theming";
 import { Cartao, Chave, botaoSuave } from "./Controles";
 import { ContaLogada, Entrar, MeusDispositivos } from "./Conta";
-import { buscar, CATEGORIAS, MODOS, type Categoria } from "./logica";
+import { buscar, CATALOGO, CATEGORIAS, MODOS, type Categoria } from "./logica";
 import { usePreferencias } from "./Preferencias";
+import { PaginaComLateral } from "../components/PaginaComLateral";
 
 function Servidor() {
   const [estado, setEstado] = useState<{ online: boolean; ms: number | null }>({ online: false, ms: null });
@@ -63,15 +64,21 @@ function Atualizacoes() {
 }
 
 /** Ajustes: categorias, cartões de vidro, alternâncias grandes e busca rápida. */
-export function Ajustes({ aoAbrirTema }: { aoAbrirTema: () => void }) {
+export function Ajustes({ aoAbrirTema, alvo }: { aoAbrirTema: () => void; alvo?: string }) {
   const { prefs, definir } = usePreferencias();
   const { sessao } = useId();
   const { tema } = useTema();
   const [termo, setTermo] = useState("");
-  const [categoria, setCategoria] = useState<Categoria | "todas">("todas");
+  const [categoria, setCategoria] = useState<Categoria>(() => CATALOGO.find((i) => i.id === alvo)?.categoria ?? "aparencia");
   const achados = useMemo(() => new Set(buscar(termo).map((i) => i.id)), [termo]);
-  const mostra = (id: string, cat: Categoria) => achados.has(id) && (categoria === "todas" || categoria === cat || termo.trim() !== "");
+  const buscando = termo.trim() !== "";
+  const mostra = (id: string, cat: Categoria) => achados.has(id) && (buscando || categoria === cat);
   const algumNaCategoria = (cat: Categoria) => [...achados].some((id) => buscar(termo).find((i) => i.id === id)?.categoria === cat);
+
+  useEffect(() => {
+    const c = CATALOGO.find((i) => i.id === alvo)?.categoria;
+    if (c) { setCategoria(c); setTermo(""); setTimeout(() => document.getElementById(`aj-${alvo}`)?.scrollIntoView({ behavior: "smooth", block: "center" }), 200); }
+  }, [alvo]);
 
   // Busca: leva direto ao primeiro resultado.
   useEffect(() => {
@@ -82,36 +89,32 @@ export function Ajustes({ aoAbrirTema }: { aoAbrirTema: () => void }) {
 
   const Titulo = ({ cat }: { cat: Categoria }) => {
     const c = CATEGORIAS.find((x) => x.id === cat)!;
-    return algumNaCategoria(cat) && (categoria === "todas" || categoria === cat || termo.trim() !== "")
-      ? <h2 className="mt-6 flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-suave"><span aria-hidden>{c.icone}</span>{c.nome}</h2> : null;
+    return algumNaCategoria(cat) && buscando
+      ? <h2 className="mt-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-suave"><span aria-hidden>{c.icone}</span>{c.nome}</h2> : null;
   };
   const nenhum = achados.size === 0;
 
   return (
-    <section aria-label="Ajustes" className="min-h-0 flex-1 overflow-y-auto bg-[radial-gradient(900px_500px_at_15%_-10%,rgb(var(--venus-rgb)/.14),transparent),radial-gradient(700px_500px_at_100%_110%,rgb(var(--robo-rgb)/.12),transparent)]">
-      <div className="mx-auto w-full max-w-3xl px-4 pb-10 pt-4">
-        <header className="sticky top-0 z-10 -mx-4 mb-2 bg-fundo/70 px-4 pb-3 pt-2 backdrop-blur-xl">
-          <div className="flex items-center justify-between">
-            <h1 className="text-xl font-semibold">Ajustes</h1>
-            <AvatarDeConta />
-          </div>
-          <input
-            type="search"
-            value={termo}
-            onChange={(e) => setTermo(e.target.value)}
-            placeholder="Buscar: escuta contínua, notificações, tema…"
-            aria-label="Buscar nos ajustes"
-            className="mt-3 w-full rounded-2xl border border-white/15 bg-white/10 px-4 py-3 text-base outline-none placeholder:text-suave focus:border-venus"
-          />
-          <div className="mt-3 flex gap-2 overflow-x-auto pb-1" role="tablist" aria-label="Categorias">
-            {[{ id: "todas" as const, nome: "Tudo", icone: "✨" }, ...CATEGORIAS].map((c) => (
-              <button key={c.id} role="tab" aria-selected={categoria === c.id} onClick={() => { setCategoria(c.id); setTermo(""); }}
-                className={`shrink-0 rounded-full px-4 py-2 text-sm font-medium transition ${categoria === c.id ? "bg-venus text-sobre-venus" : "bg-white/10 text-suave hover:text-texto"}`}>
-                <span aria-hidden>{c.icone} </span>{c.nome}
-              </button>
-            ))}
-          </div>
-        </header>
+    <PaginaComLateral
+      titulo="Ajustes"
+      itens={CATEGORIAS.map((c) => ({ id: c.id, rotulo: c.nome, icone: c.icone }))}
+      atual={buscando ? "" : categoria}
+      aoEscolher={(id) => { setCategoria(id as Categoria); setTermo(""); }}
+      topo={
+        <input
+          type="search"
+          value={termo}
+          onChange={(e) => setTermo(e.target.value)}
+          placeholder="Buscar ajustes…"
+          aria-label="Buscar nos ajustes"
+          className="w-full rounded-xl border border-white/15 bg-white/10 px-3 py-2 text-sm outline-none placeholder:text-suave focus:border-venus"
+        />
+      }
+      rodape={<AvatarDeConta />}
+    >
+    <div className="min-h-full bg-[radial-gradient(900px_500px_at_15%_-10%,rgb(var(--venus-rgb)/.14),transparent),radial-gradient(700px_500px_at_100%_110%,rgb(var(--robo-rgb)/.12),transparent)]">
+      <div className="mx-auto w-full max-w-4xl px-4 pb-10 pt-6 md:px-8">
+        <h2 className="mb-4 text-2xl font-semibold">{buscando ? `Resultados para “${termo}”` : CATEGORIAS.find((c) => c.id === categoria)?.nome}</h2>
 
         {nenhum && <p className="mt-10 text-center text-suave">Nada encontrado para “{termo}”. Tente outra palavra.</p>}
 
@@ -120,7 +123,7 @@ export function Ajustes({ aoAbrirTema }: { aoAbrirTema: () => void }) {
           {mostra("tema", "aparencia") && (
             <Cartao id="tema" titulo="Tema, cores e orbe" descricao="Mude cores, modelo do orbe e ícones. Vale para todos os seus aparelhos.">
               <div className="flex items-center gap-4">
-                <HolographicOrb tamanho={56} />
+                <HolographicOrb tamanho={96} />
                 <div className="flex gap-2" aria-label="Cores atuais">
                   {[tema.cores.destaque, tema.cores.secundaria].map((c, i) => <span key={i} className="size-8 rounded-full ring-2 ring-white/30" style={{ background: `rgb(${c.r} ${c.g} ${c.b})` }} />)}
                 </div>
@@ -179,6 +182,7 @@ export function Ajustes({ aoAbrirTema }: { aoAbrirTema: () => void }) {
           {mostra("dispositivos", "dispositivos") && <Cartao id="dispositivos" titulo="Meus dispositivos" descricao="Onde a sua conta está conectada agora."><MeusDispositivos /></Cartao>}
         </div>
       </div>
-    </section>
+    </div>
+    </PaginaComLateral>
   );
 }

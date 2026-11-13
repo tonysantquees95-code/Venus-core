@@ -23,11 +23,19 @@ export function aplicarTema(t: Tema) {
 function lerSalvo(): Tema {
   try {
     const bruto = localStorage.getItem(CHAVE);
-    if (!bruto) return TEMA_PADRAO;
-    const t = JSON.parse(bruto) as Partial<Tema>;
+    return bruto ? validar(JSON.parse(bruto)) : TEMA_PADRAO;
+  } catch {
+    return TEMA_PADRAO;
+  }
+}
+
+export function validar(v: unknown): Tema {
+  try {
+    const t = (v ?? {}) as Partial<Tema>;
     const orbeOk = ORBES.some((o) => o.id === t.orbe);
     const iconesOk = t.icones !== undefined && t.icones in PACOTES_ICONES;
     return {
+      auto: typeof t.auto === "boolean" ? t.auto : TEMA_PADRAO.auto,
       orbe: orbeOk ? (t.orbe as OrbeId) : TEMA_PADRAO.orbe,
       icones: iconesOk ? (t.icones as PacoteIconesId) : TEMA_PADRAO.icones,
       cores: {
@@ -45,7 +53,9 @@ interface ContextoTema {
   definirOrbe: (id: OrbeId) => void;
   definirIcones: (id: PacoteIconesId) => void;
   definirCor: (alvo: AlvoCor, cor: RGB) => void;
-  aplicarPreset: (cores: Cores) => void;
+  aplicarPreset: (cores: Cores, auto?: boolean) => void;
+  /** Tema inteiro vindo da conta (valida cada campo). */
+  definirTudo: (t: unknown) => void;
   restaurar: () => void;
 }
 
@@ -70,12 +80,13 @@ export function ThemingProvider({ children }: { children: ReactNode }) {
     (alvo: AlvoCor, cor: RGB) => setTema((t) => ({ ...t, cores: { ...t.cores, [alvo]: rgbValido(cor) } })),
     []
   );
-  const aplicarPreset = useCallback((cores: Cores) => setTema((t) => ({ ...t, cores })), []);
+  const aplicarPreset = useCallback((cores: Cores, auto = false) => setTema((t) => ({ ...t, cores, auto })), []);
+  const definirTudo = useCallback((v: unknown) => setTema(validar(v)), []);
   const restaurar = useCallback(() => setTema(TEMA_PADRAO), []);
 
   const valor = useMemo(
-    () => ({ tema, definirOrbe, definirIcones, definirCor, aplicarPreset, restaurar }),
-    [tema, definirOrbe, definirIcones, definirCor, aplicarPreset, restaurar]
+    () => ({ tema, definirOrbe, definirIcones, definirCor, aplicarPreset, definirTudo, restaurar }),
+    [tema, definirOrbe, definirIcones, definirCor, aplicarPreset, definirTudo, restaurar]
   );
   return <Ctx.Provider value={valor}>{children}</Ctx.Provider>;
 }

@@ -14,6 +14,8 @@ export function ChatPanel({ aoAbrirMenu }: { aoAbrirMenu: () => void }) {
   // falou: o que foi entendido vai direto para a Vênus, como no celular
   const voz = useVoz((t) => void enviar(t));
 
+  const estadoOrbe = voz.estado === "gravando" ? "ouvindo" : enviando || voz.estado === "transcrevendo" ? "pensando" : "ocioso";
+
   useEffect(() => {
     fim.current?.scrollIntoView({ behavior: "smooth", block: "end" });
   }, [mensagens, enviando]);
@@ -30,7 +32,7 @@ export function ChatPanel({ aoAbrirMenu }: { aoAbrirMenu: () => void }) {
         <button type="button" onClick={aoAbrirMenu} aria-label="Abrir menu e histórico" className="grid size-11 place-items-center rounded-full text-suave hover:text-texto">
           <IconeMenu />
         </button>
-        <HolographicOrb tamanho={32} />
+        <HolographicOrb tamanho={64} estado={estadoOrbe} nivelVoz={0.3} className="-mx-3 -my-4" />
         <h2 className="min-w-0 flex-1 truncate text-base font-semibold">{mensagens.length === 0 ? "Nova conversa" : ativa.titulo}</h2>
         <button
           type="button"
@@ -55,7 +57,7 @@ export function ChatPanel({ aoAbrirMenu }: { aoAbrirMenu: () => void }) {
         ))}
         {mensagens.length === 0 && (
           <li className="m-auto flex max-w-xs flex-col items-center gap-4 text-center text-suave">
-            <HolographicOrb tamanho={96} />
+            <HolographicOrb tamanho={240} estado={estadoOrbe} />
             <p className="text-sm">Oi! Eu sou a Vênus. Esta é uma conversa nova: pergunte o que quiser ou peça para o Robô trabalhar por você.</p>
           </li>
         )}

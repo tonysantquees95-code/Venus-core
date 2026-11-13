@@ -13,7 +13,7 @@ const INTERVALO_MS = 15_000;
 /** Mantém tema, preferências e o cadastro da empresa iguais em todos os aparelhos da conta (consulta a cada 15 s e ao voltar para o app). */
 export function Sincronizador() {
   const { api, sessao } = useId();
-  const { tema, definirOrbe, definirIcones, aplicarPreset } = useTema();
+  const { tema, definirTudo: definirTemaTudo } = useTema();
   const { prefs, definirTodas } = usePreferencias();
   const { empresa, definirTudo } = useEmpresa();
   const versoes = useRef<Versoes>({});
@@ -35,9 +35,7 @@ export function Sincronizador() {
           versoes.current[doc.chave] = doc.versao;
           if (doc.chave === "tema" && temaValido(doc.valor)) {
             ultimoEnviado.current.tema = JSON.stringify(doc.valor);
-            definirOrbe(doc.valor.orbe as any);
-            definirIcones(doc.valor.icones as any);
-            aplicarPreset(doc.valor.cores);
+            definirTemaTudo(doc.valor);
           } else if (doc.chave === "empresa") {
             const nova = limparEmpresa(doc.valor);
             ultimoEnviado.current.empresa = JSON.stringify(nova);
