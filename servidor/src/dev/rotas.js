@@ -51,10 +51,16 @@ async function painel(env) {
     const base = { id: p.id, nome: p.nome, descricao: p.descricao, repo: repo || null, urlRepo: repo ? `https://github.com/${repo}` : null, fases, progresso: progressoDasFases(fases), fasesConcluidas: fases.filter((f) => f.status === "concluida").length };
     if (!repo) return { ...base, conectado: false, metricas: null, builds: [], estadoBuild: "desconhecido", apks: [] };
     if (!comToken) return { ...base, conectado: false, aviso: "O Worker está sem o token de leitura do GitHub (VENUS_GITHUB_LEITURA).", metricas: null, builds: [], estadoBuild: "desconhecido", apks: [] };
-    const [metricas, builds, versoes] = await Promise.all([metricasDoRepo(env, repo), buildsDoRepo(env, repo), listaDeVersoes(env, repo)]);
-    const apks = apksDoProjeto(p, versoes).map(({ _id, ...a }) => ({ ...a, baixar: a.versao ? `/dev/apk?app=${a.app}` : null }));
-    const compilando = await progressoDoBuild(env, repo, builds);
-    return { ...base, conectado: true, ...(builds ? {} : { aviso: `Não consegui ler os builds do GitHub (${falhaDosBuilds.get(repo) || "sem resposta"}).` }), metricas, builds: builds || [], estadoBuild: estadoGeral(builds), apks, compilando };
+    // o GitHub às vezes demora ou recusa na primeira chamada: nenhuma falha dele derruba o painel inteiro
+    try {
+      const [metricas, builds, versoes] = await Promise.all([metricasDoRepo(env, repo), buildsDoRepo(env, repo), listaDeVersoes(env, repo)]);
+      const apks = apksDoProjeto(p, versoes).map(({ _id, ...a }) => ({ ...a, baixar: a.versao ? `/dev/apk?app=${a.app}` : null }));
+      const compilando = await progressoDoBuild(env, repo, builds);
+      return { ...base, conectado: true, ...(builds ? {} : { aviso: `Não consegui ler os builds do GitHub (${falhaDosBuilds.get(repo) || "sem resposta"}).` }), metricas, builds: builds || [], estadoBuild: estadoGeral(builds), apks, compilando };
+    } catch (e) {
+      console.error("dev painel", p.id, e && e.message ? e.message : e);
+      return { ...base, conectado: true, aviso: "Não consegui ler o GitHub agora. Toque em atualizar.", metricas: null, builds: [], estadoBuild: "desconhecido", apks: [] };
+    }
   }));
   return { gerado: Date.now(), admin: emailAdmin(env), projetos };
 }
