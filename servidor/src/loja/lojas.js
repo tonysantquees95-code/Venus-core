@@ -3,6 +3,17 @@ import { aleatorio, sha256Hex } from "./cripto.js";
 
 export const DIAS_DE_TESTE = 7;
 export const MAX_CANAIS = 3;
+/** O teste de 7 dias vale só para quem se inscreve até esta data (1 mês depois do lançamento da trava). Dá para mudar sem publicar: env TESTE_GRATIS_ATE (ms). */
+export const TESTE_GRATIS_ATE_PADRAO = Date.parse("2026-12-13T00:00:00-03:00");
+/** Contas com teste por rede (IP): uma casa ou um escritório pode ter mais de uma pessoa. */
+export const MAX_TESTES_POR_IP = 2;
+// (o banco de mentira dos testes não tem data de corte, para os testes não quebrarem quando a janela fechar)
+export const testeGratisAte = (env) => Number(env.TESTE_GRATIS_ATE) || (env.DB && env.DB._db ? Infinity : TESTE_GRATIS_ATE_PADRAO);
+
+export async function hashDoIp(env, ip) {
+  const v = String(ip || "").trim();
+  return v ? sha256Hex(`ip:${env.CHAVE_COFRE || ""}:${v}`) : "";
+}
 const DIA = 86_400_000;
 
 export class ErroLoja extends Error {
@@ -20,7 +31,7 @@ export function slugDe(texto) {
 }
 
 /** Um teste grátis por celular: o app manda um identificador do aparelho (só o hash fica guardado). */
-export async function registrarLoja(env, { nome, slug, dispositivo }, agora = Date.now()) {
+export async function registrarLoja(env, { nome, slug, dispositivo, ip }, agora = Date.now()) {
   const id = aleatorio(8);
   const token = `vl_${aleatorio(24)}`;
   let slugFinal = slugDe(slug || nome) || `loja-${id.slice(0, 6)}`;
@@ -28,10 +39,13 @@ export async function registrarLoja(env, { nome, slug, dispositivo }, agora = Da
   if (existe) slugFinal = `${slugFinal.slice(0, 25)}-${id.slice(0, 5)}`;
   const disp = dispositivo ? await sha256Hex(`dispositivo:${String(dispositivo).slice(0, 200)}`) : "";
   const jaTeve = disp ? await env.DB.prepare("SELECT 1 AS x FROM lojas WHERE dispositivo = ?").bind(disp).first() : null;
-  const trialFim = jaTeve ? agora : agora + DIAS_DE_TESTE * DIA;
-  await env.DB.prepare("INSERT INTO lojas (id, token_hash, nome, slug, criado, trial_fim, plano, ativo_ate, dispositivo) VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?)")
-    .bind(id, await sha256Hex(token), String(nome || "").slice(0, 80), slugFinal, agora, trialFim, jaTeve ? "sem_teste" : "trial", disp).run();
-  return { id, token, slug: slugFinal, trialFim, testeGratisUsado: !!jaTeve };
+  const iph = await hashDoIp(env, ip);
+  const testesNaRede = iph ? (await env.DB.prepare("SELECT COUNT(*) AS n FROM lojas WHERE ip_hash = ? AND plano != 'sem_teste'").bind(iph).first()).n : 0;
+  const motivo = jaTeve ? "aparelho" : agora >= testeGratisAte(env) ? "fora_da_janela" : testesNaRede >= MAX_TESTES_POR_IP ? "rede" : "";
+  const trialFim = motivo ? agora : agora + DIAS_DE_TESTE * DIA;
+  await env.DB.prepare("INSERT INTO lojas (id, token_hash, nome, slug, criado, trial_fim, plano, ativo_ate, dispositivo, ip_hash) VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?)")
+    .bind(id, await sha256Hex(token), String(nome || "").slice(0, 80), slugFinal, agora, trialFim, motivo ? "sem_teste" : "trial", disp, iph).run();
+  return { id, token, slug: slugFinal, trialFim, testeGratisUsado: !!motivo, motivoSemTeste: motivo };
 }
 
 /** O dono (administrador master) nunca perde o acesso: a loja ligada ao e-mail dele vale para sempre. */

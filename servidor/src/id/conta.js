@@ -42,7 +42,7 @@ async function limitarTentativas(env, chave, agora) {
   if (n.n >= 8) throw new ErroId(429, "muitas_tentativas", "Muitas tentativas. Espere alguns minutos e tente de novo.");
 }
 
-export async function cadastrar(env, { email, senha, nome, dispositivo, lojaExistente, telefone, exigirTelefone = false }, agora = Date.now()) {
+export async function cadastrar(env, { email, senha, nome, dispositivo, lojaExistente, telefone, exigirTelefone = false, ip = "" }, agora = Date.now()) {
   email = emailLimpo(email);
   const fone = telefoneLimpo(telefone);
   if (exigirTelefone && !fone && !semLimites(env, email)) throw new ErroId(400, "telefone_invalido", "Informe um celular com DDD (ex.: 51 99999-9999). Ele serve para recuperar a senha.");
@@ -59,7 +59,7 @@ export async function cadastrar(env, { email, senha, nome, dispositivo, lojaExis
     throw new ErroId(409, "loja_ja_vinculada", "Essa loja já está ligada a outra conta.");
   }
   if (!lojaId) {
-    const loja = await registrarLoja(env, { nome: nome || email.split("@")[0], dispositivo: d.bruto }, agora);
+    const loja = await registrarLoja(env, { nome: nome || email.split("@")[0], dispositivo: d.bruto, ip }, agora);
     lojaId = loja.id;
     // um teste grátis por celular: se este número já tem conta, a nova nasce sem teste
     if (fone && !loja.testeGratisUsado && (await env.DB.prepare("SELECT 1 AS x FROM usuarios WHERE telefone = ?").bind(fone).first())) {

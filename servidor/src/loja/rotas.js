@@ -128,7 +128,7 @@ export async function tratarLoja(req, env, ctx, url, caminho) {
         const ip = req.headers.get("cf-connecting-ip") || "x";
         if (!(await env.LIMITADOR.limit({ key: `reg:${ip}` })).success) throw new ErroLoja(429, "muitas_tentativas", "Muitas tentativas. Espere um minuto.");
       }
-      return json(await registrarLoja(env, { nome: d.nome, slug: d.slug, dispositivo: d.dispositivo }), 201);
+      return json(await registrarLoja(env, { nome: d.nome, slug: d.slug, dispositivo: d.dispositivo, ip: req.headers.get("cf-connecting-ip") || "" }), 201);
     }
     let m = /^\/webhook\/([a-z]+)\/([a-f0-9]{16})\/([a-f0-9]{32})$/.exec(caminho);
     if (m && req.method === "POST") {
