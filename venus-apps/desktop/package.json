@@ -10,7 +10,7 @@
     "copiar": "node copiar.mjs",
     "teste": "node --test teste/status.test.mjs teste/computador.test.mjs teste/atualizador.test.mjs",
     "start": "npm run copiar && electron .",
-    "build:win": "npm run copiar && electron-builder --win nsis portable --publish never"
+    "build:win": "npm run copiar && electron-builder --win nsis --publish never"
   },
   "devDependencies": {
     "electron": "^33.2.0",
