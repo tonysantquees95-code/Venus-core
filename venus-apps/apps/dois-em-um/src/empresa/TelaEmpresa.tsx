@@ -1,17 +1,18 @@
 import { useState } from "react";
+import { IconeNomeado } from "../components/Icones";
 import { PaginaComLateral, type ItemLateral } from "../components/PaginaComLateral";
 import { DadosDaLoja, Historico, IdeiasDePost, IdeiasDeVideo, InstagramDaLoja, PrimeirosPassos, RegrasDeVenda, RespostasDoInstagram, StoriesDoDia } from "./secoes";
 
 const SECOES: ItemLateral[] = [
-  { id: "dados", rotulo: "Dados da loja", icone: "🏪", grupo: "Minha loja" },
-  { id: "regras", rotulo: "Regras de venda", icone: "📋", grupo: "Minha loja" },
-  { id: "passos", rotulo: "Primeiros passos", icone: "✅", grupo: "Minha loja" },
-  { id: "historico", rotulo: "Histórico de conversas", icone: "💬", grupo: "Conversas" },
-  { id: "ideias", rotulo: "Ideias de post", icone: "💡", grupo: "Instagram" },
-  { id: "videos", rotulo: "Ideias de vídeo (Reels)", icone: "🎬", grupo: "Instagram" },
-  { id: "stories", rotulo: "Stories do dia", icone: "📸", grupo: "Instagram" },
-  { id: "respostas", rotulo: "Respostas do Instagram", icone: "🤖", grupo: "Instagram" },
-  { id: "conta", rotulo: "Instagram da loja", icone: "🔗", grupo: "Instagram" }
+  { id: "dados", rotulo: "Dados da loja", icone: <IconeNomeado nome="loja" className="size-5" />, grupo: "Minha loja" },
+  { id: "regras", rotulo: "Regras de venda", icone: <IconeNomeado nome="regras" className="size-5" />, grupo: "Minha loja" },
+  { id: "passos", rotulo: "Primeiros passos", icone: <IconeNomeado nome="passos" className="size-5" />, grupo: "Minha loja" },
+  { id: "historico", rotulo: "Histórico de conversas", icone: <IconeNomeado nome="conversas" className="size-5" />, grupo: "Conversas" },
+  { id: "ideias", rotulo: "Ideias de post", icone: <IconeNomeado nome="ideia" className="size-5" />, grupo: "Instagram" },
+  { id: "videos", rotulo: "Ideias de vídeo (Reels)", icone: <IconeNomeado nome="video" className="size-5" />, grupo: "Instagram" },
+  { id: "stories", rotulo: "Stories do dia", icone: <IconeNomeado nome="story" className="size-5" />, grupo: "Instagram" },
+  { id: "respostas", rotulo: "Respostas do Instagram", icone: <IconeNomeado nome="respostas" className="size-5" />, grupo: "Instagram" },
+  { id: "conta", rotulo: "Instagram da loja", icone: <IconeNomeado nome="conta" className="size-5" />, grupo: "Instagram" }
 ];
 
 /** "Minha empresa": as mesmas opções do celular que fazem sentido no computador, numa barra lateral própria. */

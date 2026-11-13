@@ -78,6 +78,16 @@ object StoriesDoDia {
 
     private fun prefs(ctx: Context) = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
+    /** O que o computador mostra (Vetorial ID): fila de dicas e curiosidades, horários e o último story. */
+    fun paraSincronia(ctx: Context): JSONObject {
+        val proximos = JSONArray()
+        fila(ctx).take(14).forEach { proximos.put(JSONObject().put("tipo", it.tipo).put("titulo", it.titulo.take(60)).put("texto", it.texto.take(240)).put("enquete", it.enquete.take(60))) }
+        val usados = JSONArray(usados(ctx).takeLast(20))
+        return JSONObject().put("ligado", ligado(ctx)).put("manha", horaTexto(horario(ctx, "manha"))).put("tarde", horaTexto(horario(ctx, "tarde")))
+            .put("tardeInterativa", tardeInterativa(ctx)).put("ultimo", prefs(ctx).getString("ultimo", "").orEmpty().take(160))
+            .put("fila", proximos).put("usados", usados)
+    }
+
     fun ligado(ctx: Context) = prefs(ctx).getBoolean("ligado", true)
 
     fun definirLigado(ctx: Context, v: Boolean) {

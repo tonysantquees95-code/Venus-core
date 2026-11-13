@@ -229,6 +229,7 @@ internal object SincroniaId {
                 Perfil.aplicarSincronia(a, valor)
                 Perfil.paraSincronia(a)?.let { env.put("empresa", it.toString()) }
             }
+            if (chave == SincroniaMarketing.IDEIAS) SincroniaMarketing.aplicarIdeias(a, valor)
             if (chave == "preferencias") VetorialId.lerPreferencias(valor)?.let { (modo, nome, falar) ->
                 a.prefs.edit().putString(VetorialId.PREF_MODO, modo).putBoolean(VigiliaService.PREF_NOME, nome).putBoolean(MainActivity.PREF_FALAR, falar)
                     .putString(VetorialId.PREF_DOC_PREFS, valor.toString()).apply()
@@ -241,6 +242,7 @@ internal object SincroniaId {
         enviar(a, "tema", tema, ver, env)
         enviar(a, "preferencias", prefsAtuais(a), ver, env)
         Perfil.paraSincronia(a)?.let { enviar(a, "empresa", it, ver, env) }
+        SincroniaMarketing.enviarTudo(a, ver, env)
         a.prefs.edit().putString(VetorialId.PREF_VERSOES, ver.toString()).putString(VetorialId.PREF_ENVIADO, env.toString()).apply()
     }
 
@@ -249,7 +251,7 @@ internal object SincroniaId {
         return VetorialId.mesclarPreferencias(base, VetorialId.modo(a), a.prefs.getBoolean(VigiliaService.PREF_NOME, true), a.prefs.getBoolean(MainActivity.PREF_FALAR, true))
     }
 
-    private fun enviar(a: MainActivity, chave: String, valor: JSONObject, ver: JSONObject, env: JSONObject) {
+    internal fun enviar(a: MainActivity, chave: String, valor: JSONObject, ver: JSONObject, env: JSONObject) {
         if (env.optString(chave) == valor.toString()) return
         val r = Nuvem.bruto(a, "PUT", "/id/sync/$chave", JSONObject().put("valor", valor).put("versao", ver.optInt(chave, 0)), VetorialId.token(a))
         if (r.ok) { ver.put(chave, r.json.optInt("versao")); env.put(chave, valor.toString()) }

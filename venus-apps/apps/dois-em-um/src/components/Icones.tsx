@@ -136,3 +136,29 @@ export function IconeAjustes(props: SVGProps<SVGSVGElement>) {
     </Svg>
   );
 }
+
+/** Ícones das barras laterais (Ajustes e Minha empresa), escolhidos por nome e seguindo o pacote ativo. */
+const CAMINHOS: Record<string, string> = {
+  aparencia: "M12 3a9 9 0 1 0 0 18c1.4 0 2-.9 2-1.8 0-1.2-.9-1.5-.9-2.6 0-1 .8-1.6 1.8-1.6H17a4 4 0 0 0 4-4c0-4.4-4-8-9-8zM7.5 12h.01M9.5 8h.01M14.5 8h.01",
+  voz: "M12 3a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3zM5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21M9 21h6",
+  conexoes: "M3 4h2l2.2 10.2a1 1 0 0 0 1 .8h8.6a1 1 0 0 0 1-.8L19.5 8H6M9.5 19.5h.01M16.5 19.5h.01",
+  seguranca: "M12 3l7 3v5c0 4.5-3 8-7 10-4-2-7-5.5-7-10V6l7-3zM9.5 12l2 2 3.5-4",
+  dispositivos: "M8 3h8a1 1 0 0 1 1 1v16a1 1 0 0 1-1 1H8a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1zM11 18h2",
+  loja: "M4 9l1.5-5h13L20 9M4 9v11h16V9M4 9h16M9 20v-6h6v6",
+  regras: "M8 4h8l3 3v13H5V4h3zM8 11h8M8 15h8M9 4v3h6V4",
+  passos: "M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM8 12.5l2.7 2.7L16 9.5",
+  conversas: "M4 5h16v11H9l-4 4v-4H4V5z",
+  ideia: "M9 18h6M10 21h4M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2.1h5c0-.9.4-1.6 1-2.1A6 6 0 0 0 12 3z",
+  video: "M4 6h11a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1zM16 10l5-3v10l-5-3",
+  story: "M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8zM4 8a2 2 0 0 1 2-2h1.5l1.2-2h6.6l1.2 2H18a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8z",
+  respostas: "M12 3v3M5 8h14v10a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V8zM9.5 13h.01M14.5 13h.01M9 16.5h6",
+  conta: "M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"
+};
+
+export function IconeNomeado({ nome, ...props }: { nome: string } & SVGProps<SVGSVGElement>) {
+  return (
+    <Svg {...props}>
+      <path d={CAMINHOS[nome] ?? CAMINHOS.passos} {...semMiolo} />
+    </Svg>
+  );
+}

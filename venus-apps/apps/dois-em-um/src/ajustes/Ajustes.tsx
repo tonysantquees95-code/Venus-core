@@ -9,6 +9,7 @@ import { ContaLogada, Entrar, MeusDispositivos } from "./Conta";
 import { buscar, CATALOGO, CATEGORIAS, MODOS, type Categoria } from "./logica";
 import { usePreferencias } from "./Preferencias";
 import { PaginaComLateral } from "../components/PaginaComLateral";
+import { IconeNomeado } from "../components/Icones";
 
 function Servidor() {
   const [estado, setEstado] = useState<{ online: boolean; ms: number | null }>({ online: false, ms: null });
@@ -90,14 +91,14 @@ export function Ajustes({ aoAbrirTema, alvo }: { aoAbrirTema: () => void; alvo?:
   const Titulo = ({ cat }: { cat: Categoria }) => {
     const c = CATEGORIAS.find((x) => x.id === cat)!;
     return algumNaCategoria(cat) && buscando
-      ? <h2 className="mt-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-suave"><span aria-hidden>{c.icone}</span>{c.nome}</h2> : null;
+      ? <h2 className="mt-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-suave"><IconeNomeado nome={c.icone} className="size-4" />{c.nome}</h2> : null;
   };
   const nenhum = achados.size === 0;
 
   return (
     <PaginaComLateral
       titulo="Ajustes"
-      itens={CATEGORIAS.map((c) => ({ id: c.id, rotulo: c.nome, icone: c.icone }))}
+      itens={CATEGORIAS.map((c) => ({ id: c.id, rotulo: c.nome, icone: <IconeNomeado nome={c.icone} className="size-5" /> }))}
       atual={buscando ? "" : categoria}
       aoEscolher={(id) => { setCategoria(id as Categoria); setTermo(""); }}
       topo={
