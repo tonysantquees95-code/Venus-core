@@ -28,8 +28,10 @@ export async function verificarOidc(token, chaves, agora = Date.now() / 1000) {
     if (!ok) return null;
     const c = JSON.parse(texto(p));
     if (c.iss !== EMISSOR || c.aud !== PUBLICO || !(c.exp > agora) || (c.nbf && c.nbf > agora + 60)) return null;
-    if (!REPOS_PERMITIDOS.includes(c.repository) || c.ref !== "refs/heads/main" || !EVENTOS.includes(c.event_name)) return null;
-    return { repo: c.repository, ref: c.ref, evento: c.event_name };
+    // o GitHub não diferencia maiúsculas nos nomes de repositório (o nome pode vir como "Velox-..." ou "velox-..."): vale o nome da lista
+    const permitido = REPOS_PERMITIDOS.find((r) => r.toLowerCase() === String(c.repository || "").toLowerCase());
+    if (!permitido || c.ref !== "refs/heads/main" || !EVENTOS.includes(c.event_name)) return null;
+    return { repo: permitido, ref: c.ref, evento: c.event_name };
   } catch {
     return null;
   }
