@@ -52,6 +52,11 @@ object VetorialId {
         return true
     }
 
+    /** Logo depois de entrar: traz o perfil e a marca de administrador (sem isso as telas do dono ficavam escondidas até o próximo ping). */
+    private fun puxarPerfilSemErro(ctx: Context) {
+        try { atualizarPerfil(ctx) } catch (e: Exception) { /* sem rede agora: o próximo ping tenta de novo */ }
+    }
+
     fun logado(ctx: Context) = token(ctx).isNotBlank()
     fun email(ctx: Context): String = prefs(ctx).getString(PREF_EMAIL, "").orEmpty()
     fun sessao(ctx: Context): String = prefs(ctx).getString(PREF_SESSAO, "").orEmpty()
@@ -95,6 +100,7 @@ object VetorialId {
         val r = licenca(ctx, false)
         if (r.ok) {
             guardarSelo(ctx, r.json.optString("selo"))
+            if (perfilVersao(ctx) == -1L) puxarPerfilSemErro(ctx) // conta ainda sem perfil local: traz também o aviso de administrador
             // o servidor confirmou a hora: o relógio deste aparelho volta a valer
             val ag = System.currentTimeMillis()
             if (ag < prefs(ctx).getLong(PREF_VISTO, 0L)) prefs(ctx).edit().putLong(PREF_VISTO, ag).apply()
@@ -116,14 +122,14 @@ object VetorialId {
         val corpo = JSONObject().put("email", email).put("senha", senha).put("dispositivo", aparelho(ctx))
         if (encerrar != null) corpo.put("encerrar", encerrar)
         if (remover != null) corpo.put("remover", remover)
-        return Nuvem.bruto(ctx, "POST", "/id/entrar", corpo, null).also { if (it.ok) guardar(ctx, it.json) }
+        return Nuvem.bruto(ctx, "POST", "/id/entrar", corpo, null).also { if (it.ok) { guardar(ctx, it.json); puxarPerfilSemErro(ctx) } }
     }
 
     /** Cria a conta; se este celular já usa a loja (token vl_…), a loja é ligada à conta. */
     fun cadastrar(ctx: Context, email: String, senha: String, nome: String, telefone: String = ""): Nuvem.Resposta {
         val corpo = JSONObject().put("email", email).put("senha", senha).put("nome", nome).put("telefone", telefone).put("dispositivo", aparelho(ctx))
         val antigo = Nuvem.tokenDaLoja(ctx).takeIf { it.startsWith("vl_") }
-        return Nuvem.bruto(ctx, "POST", "/id/cadastrar", corpo, antigo).also { if (it.ok) guardar(ctx, it.json) }
+        return Nuvem.bruto(ctx, "POST", "/id/cadastrar", corpo, antigo).also { if (it.ok) { guardar(ctx, it.json); puxarPerfilSemErro(ctx) } }
     }
 
     fun ping(ctx: Context) = Nuvem.bruto(ctx, "POST", "/id/ping", JSONObject(), token(ctx))
