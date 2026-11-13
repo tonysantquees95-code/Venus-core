@@ -20,6 +20,7 @@ const pedir = (env, metodo, t, corpo) => tratarCi(new Request("https://x/ci/assi
 
 test("OIDC: só aceita repositório permitido, ramo main, destinatário certo, assinatura válida e dentro do prazo", async () => {
   assert.equal((await verificarOidc(await token(), [jwk], AGORA)).repo, "tonysantquees95-code/Vindex-");
+  assert.equal((await verificarOidc(await token({ repository: "tonysantquees95-code/Velox-gaming-search" }), [jwk], AGORA)).repo, "tonysantquees95-code/velox-gaming-search", "maiúsculas no nome do repositório não importam");
   assert.equal(await verificarOidc(await token({ repository: "outro/repo" }), [jwk], AGORA), null);
   assert.equal(await verificarOidc(await token({ ref: "refs/heads/teste" }), [jwk], AGORA), null);
   assert.equal(await verificarOidc(await token({ event_name: "pull_request" }), [jwk], AGORA), null);
