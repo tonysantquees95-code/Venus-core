@@ -26,6 +26,7 @@ export function App() {
   const robo = useRobo();
   const { ativa } = useConversas();
   const [menuAberto, setMenuAberto] = useState(false);
+  const [alvoAjuste, setAlvoAjuste] = useState<string | undefined>();
   useAtalhoGlobal(() => setTela("chat"));
   const { sessao } = useId();
   const [loginAberto, setLoginAberto] = useState(() => {
@@ -38,7 +39,7 @@ export function App() {
       if (t === "login") return setLoginAberto(true);
       if (t === "empresa") return setTela("empresa");
       setTela("ajustes");
-      if (alvo) setTimeout(() => document.getElementById(`aj-${alvo}`)?.scrollIntoView({ behavior: "smooth", block: "center" }), 250);
+      setAlvoAjuste(alvo ? `${alvo}` : undefined);
     };
     window.addEventListener("venus:abrir", ouvir);
     return () => window.removeEventListener("venus:abrir", ouvir);
@@ -73,7 +74,7 @@ export function App() {
         ) : tela === "tema" ? (
           <ThemingPanel />
         ) : tela === "ajustes" ? (
-          <Ajustes aoAbrirTema={() => setTela("tema")} />
+          <Ajustes aoAbrirTema={() => setTela("tema")} alvo={alvoAjuste} />
         ) : (
           <>
         <div className={`${tela === "chat" ? "flex" : "hidden"} min-w-0 flex-1 xl:flex`}>
