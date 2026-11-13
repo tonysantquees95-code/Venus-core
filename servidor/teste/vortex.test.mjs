@@ -91,3 +91,43 @@ test("ponte de voz: Vênus pede, Vortex busca e responde; Vortex fechado avisa",
   assert.equal(s.status, "concluido");
   assert.equal(s.resumo, "Abri The Legend of Zelda.");
 });
+
+test("Steam: login confere com a Steam, guarda a conta e lista os jogos (perfil público)", async () => {
+  const { env, token } = await mundo();
+  const chamadas = [];
+  env.fetchSteam = async (u, o) => {
+    chamadas.push(String(u));
+    if (o?.method === "POST") return new Response("ns:http://specs.openid.net/auth/2.0\nis_valid:true\n");
+    return new Response(`<gamesList><games><game><appID>620</appID><name><![CDATA[Portal 2]]></name><hoursOnRecord>1.5</hoursOnRecord></game><game><appID>730</appID><name>Counter-Strike 2</name></game></games></gamesList>`);
+  };
+  assert.equal((await (await chamar(env, token, "GET", "/vortex/steam")).json()).ligado, false);
+  const ini = await (await chamar(env, token, "POST", "/vortex/steam/iniciar")).json();
+  const ret = new URL(ini.url).searchParams.get("openid.return_to");
+  assert.match(ret, /^https:\/\/v\.test\/vortex\/steam\/retorno\?n=[a-f0-9]{24}$/);
+  const volta = new URL(ret);
+  const p = { "openid.ns": "http://specs.openid.net/auth/2.0", "openid.mode": "id_res", "openid.return_to": ret, "openid.claimed_id": "https://steamcommunity.com/openid/id/76561198000000001", "openid.sig": "x" };
+  for (const [k, v] of Object.entries(p)) volta.searchParams.set(k, v);
+  const rr = await tratarVortex(new Request(volta), env, volta, volta.pathname, T0 + 2000);
+  assert.match(await rr.text(), /Steam ligada/);
+  assert.equal((await (await chamar(env, token, "GET", "/vortex/steam")).json()).steamid, "76561198000000001");
+  const j = await (await chamar(env, token, "GET", "/vortex/steam/jogos")).json();
+  assert.deepEqual(j.jogos.map((x) => [x.appid, x.nome, x.minutos]), [[730, "Counter-Strike 2", 0], [620, "Portal 2", 90]].sort((a, b) => a[1].localeCompare(b[1])));
+  // o mesmo link não vale duas vezes
+  const de_novo = await tratarVortex(new Request(volta), env, volta, volta.pathname, T0 + 3000);
+  assert.match(await de_novo.text(), /vencido/);
+});
+
+test("Steam: resposta falsa (a Steam diz que não é válida) não liga a conta; perfil privado explica", async () => {
+  const { env, token } = await mundo();
+  env.fetchSteam = async () => new Response("is_valid:false\n");
+  const ini = await (await chamar(env, token, "POST", "/vortex/steam/iniciar")).json();
+  const ret = new URL(ini.url).searchParams.get("openid.return_to");
+  const volta = new URL(ret);
+  volta.searchParams.set("openid.mode", "id_res");
+  volta.searchParams.set("openid.return_to", ret);
+  volta.searchParams.set("openid.claimed_id", "https://steamcommunity.com/openid/id/76561198000000009");
+  assert.match(await (await tratarVortex(new Request(volta), env, volta, volta.pathname, T0 + 2000)).text(), /Não deu certo/);
+  assert.equal((await (await chamar(env, token, "GET", "/vortex/steam")).json()).ligado, false);
+  const sem = await chamar(env, token, "GET", "/vortex/steam/jogos");
+  assert.equal(sem.status, 409);
+});
