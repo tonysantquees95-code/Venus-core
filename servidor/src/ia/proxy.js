@@ -4,6 +4,7 @@
 //   GET  /ia/v1/models
 //   POST /ia/v1/chat/completions   (mesmo corpo da OpenAI: messages, tools, response_format…)
 import { validarSessao } from "../id/conta.js";
+import { contaComAcesso, MSG_SEM_ACESSO } from "../id/acesso.js";
 
 const GROQ = "https://api.groq.com/openai/v1";
 export const MODELOS = [
@@ -35,6 +36,7 @@ export async function tratarProxyIA(req, env, ctx, caminho, { validar = validarS
   } catch (e) {
     return erro(e?.status === 409 ? 409 : 401, e?.message || "Entre de novo com o seu Vetorial ID.");
   }
+  if (!(await contaComAcesso(env, quem.usuario))) return erro(402, MSG_SEM_ACESSO);
   if (env.LIMITADOR) {
     const { success } = await env.LIMITADOR.limit({ key: `ia:${quem.usuario.id}` });
     if (!success) return erro(429, "Muitas perguntas seguidas. Espere um instante.");

@@ -1,6 +1,7 @@
 // Rotas do Vetorial ID: /id (tela de login) e /id/* (API).
 import { estadoDaAssinatura, iniciarCobranca } from "../loja/assinatura.js";
 import { ErroLoja, comPrivilegios } from "../loja/lojas.js";
+import { contaComAcesso, MSG_SEM_ACESSO } from "./acesso.js";
 import { emitirSelo, chavePublicaDoSelo } from "./selo.js";
 import { canaisDisponiveis } from "./envio.js";
 import { ErroId, cadastrar, confirmarRecuperacao, pedirRecuperacao, salvarTelefone, perfilPublico, salvarPerfil, tokenDeApp, encerrarSessao, entrar, gravarSync, lerSync, listarDispositivos, reativar, removerDispositivo, renovarToken, tokenDoPedido, validarSessao } from "./conta.js";
@@ -99,6 +100,7 @@ export async function tratarId(req, env, url, caminho) {
       const g = url.searchParams.get("gerar") === "1";
       return json(await licenca(env, ctx.usuario, origem, g, url.searchParams.get("gateway"), url.searchParams.get("pacote") || "venus"));
     }
+    if (caminho.startsWith("/id/sync") && !(await contaComAcesso(env, ctx.usuario))) throw new ErroId(402, "teste_acabou", MSG_SEM_ACESSO);
     if (caminho === "/id/sync" && req.method === "GET") return json(await lerSync(env, ctx, Number(url.searchParams.get("desde")) || 0));
     m = /^\/id\/sync\/([a-z]{3,20})$/.exec(caminho);
     if (m && req.method === "PUT") {

@@ -49,17 +49,22 @@ input{width:100%;padding:12px 14px;border-radius:12px;border:1px solid #ffffff2a
 <div class="abas" role="tablist"><button id="tEntrar" role="tab" aria-selected="true">Entrar</button><button id="tCriar" role="tab" aria-selected="false">Criar conta</button></div>
 <form id="f" autocomplete="on">
 <div id="cNome" hidden><label for="nome">Nome da loja ou seu nome</label><input id="nome" autocomplete="organization"></div>
+<div id="cFone" hidden><label for="fone">Celular com DDD (para recuperar a senha)</label><input id="fone" type="tel" autocomplete="tel" placeholder="51 99999-9999"></div>
 <label for="email">E-mail</label><input id="email" type="email" required autocomplete="username">
 <label for="senha">Senha</label><input id="senha" type="password" required minlength="8" autocomplete="current-password">
 <button class="go" id="ok" type="submit">Entrar</button></form>
 <div id="msg" role="status" aria-live="polite"></div><div id="extra"></div>
+<p class="s" style="text-align:center"><a href="#" id="esqueci">Esqueci minha senha</a></p>
+<form id="rec" hidden><label for="rcanal">Receber o código por</label><select id="rcanal"><option value="email">E-mail</option><option value="sms">SMS</option></select>
+<button class="go" id="rpedir" type="button">Enviar código</button>
+<div id="rcod" hidden><label for="rc">Código de 6 dígitos</label><input id="rc" inputmode="numeric" maxlength="6" autocomplete="one-time-code"><label for="rn">Nova senha</label><input id="rn" type="password" minlength="8" autocomplete="new-password"><button class="go" id="rok" type="submit">Trocar a senha</button></div></form>
 <div class="rod">Até 3 aparelhos vinculados, 2 usando ao mesmo tempo.</div></main>
 <script>
 const CFG=${cfg};
 const $=(i)=>document.getElementById(i);
 const q=new URLSearchParams(location.search);
 let criar=false,pendente=null;
-function aba(c){criar=c;$("tEntrar").setAttribute("aria-selected",!c);$("tCriar").setAttribute("aria-selected",c);$("cNome").hidden=!c;$("ok").textContent=c?"Criar conta":"Entrar";$("senha").autocomplete=c?"new-password":"current-password";}
+function aba(c){criar=c;$("tEntrar").setAttribute("aria-selected",!c);$("tCriar").setAttribute("aria-selected",c);$("cNome").hidden=!c;$("cFone").hidden=!c;$("fone").required=c;$("rec").hidden=true;$("ok").textContent=c?"Criar conta":"Entrar";$("senha").autocomplete=c?"new-password":"current-password";}
 $("tEntrar").onclick=()=>aba(false);$("tCriar").onclick=()=>aba(true);
 function aparelho(){let id="";try{id=localStorage.getItem("vid_aparelho")||"";if(!id){id=crypto.randomUUID();localStorage.setItem("vid_aparelho",id);}}catch(e){id=crypto.randomUUID();}
 const ua=navigator.userAgent;const ios=/iPhone|iPad/.test(ua);const win=/Windows/.test(ua);const and=/Android/.test(ua);
@@ -78,8 +83,8 @@ const h=document.createElement("h2");h.textContent=titulo;d.appendChild(h);const
 for(const it of itens){const li=document.createElement("li");const s=document.createElement("span");s.textContent=it.nome+" ("+it.plataforma+")";const b=document.createElement("button");b.textContent=rotulo;b.onclick=()=>acao(it);li.append(s,b);ul.appendChild(li);}
 d.appendChild(ul);const c=document.createElement("button");c.className="cancel";c.textContent="Cancelar login neste aparelho";c.onclick=()=>{e.textContent="";msg("Login cancelado.");};d.appendChild(c);e.appendChild(d);}
 async function enviar(extra){msg("");$("ok").disabled=true;
-try{const corpo={email:$("email").value,senha:$("senha").value,nome:$("nome").value,dispositivo:aparelho(),...extra};
-const r=await fetch(criar&&!extra?"/id/cadastrar":"/id/entrar",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(corpo)});
+try{const corpo={email:$("email").value,senha:$("senha").value,nome:$("nome").value,telefone:$("fone").value,dispositivo:aparelho(),...extra};
+const r=await fetch(criar&&!extra.encerrar&&!extra.remover?"/id/cadastrar":"/id/entrar",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(corpo)});
 const d=await r.json();
 if(r.ok){$("extra").textContent="";pronto(d);}
 else if(d.codigo==="limite_simultaneo"){listaAviso("Já há 2 aparelhos usando a conta agora. Encerre um para entrar aqui:",d.ativas.map(a=>({nome:a.nome,plataforma:a.plataforma,id:a.sessao})),"Encerrar",(a)=>{criar=false;enviar({encerrar:a.id});});}
@@ -88,6 +93,10 @@ else msg(d.error||"Não deu certo. Tente de novo.");
 }catch(e){msg("Sem conexão. Tente de novo.");}
 $("ok").disabled=false;}
 $("f").onsubmit=(e)=>{e.preventDefault();enviar({});};
+$("esqueci").onclick=(e)=>{e.preventDefault();$("rec").hidden=!$("rec").hidden;};
+async function rec(caminho,corpo){const r=await fetch(caminho,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(corpo)});return{ok:r.ok,d:await r.json()};}
+$("rpedir").onclick=async()=>{msg("");try{const x=await rec("/id/recuperar/pedir",{email:$("email").value,canal:$("rcanal").value});if(x.ok){$("rcod").hidden=false;msg(x.d.mensagem);}else msg(x.d.error||"Não consegui enviar.");}catch(e){msg("Sem conexão. Tente de novo.");}};
+$("rec").onsubmit=async(e)=>{e.preventDefault();msg("");try{const x=await rec("/id/recuperar/confirmar",{email:$("email").value,codigo:$("rc").value,novaSenha:$("rn").value});if(x.ok){$("rec").hidden=true;msg("Senha trocada. Entre com a nova senha.");}else msg(x.d.error||"Não deu certo.");}catch(e){msg("Sem conexão. Tente de novo.");}};
 </script></body></html>`;
 }
 

@@ -300,3 +300,16 @@ test("recuperação sem provedor configurado avisa em vez de fingir", async () =
   const env = mundo2();
   assert.equal((await chamarId(env, "POST", "/id/recuperar/pedir", { email: "x@b.com", canal: "sms" })).codigo, "canal_indisponivel");
 });
+
+test("trava no servidor: com o teste vencido, sincronização e IA respondem 402; o login e a licença continuam", async () => {
+  const env = mundo2();
+  const T = Date.now();
+  await cadastrarConta(env, { email: "v@b.com", senha: "senha-forte-1", telefone: "51944443333", dispositivo: D(9) }, T - 9 * 86_400_000);
+  const e = await entrarConta(env, { email: "v@b.com", senha: "senha-forte-1", dispositivo: D(9) }, T);
+  assert.equal((await chamarId(env, "GET", "/id/sync", null, e.token)).status, 402);
+  assert.equal((await chamarId(env, "PUT", "/id/sync/tema", { valor: {}, versao: 0 }, e.token)).codigo, "teste_acabou");
+  assert.equal((await chamarId(env, "GET", "/id/licenca", null, e.token)).acesso, false);
+  const { tratarProxyIA } = await import("../src/ia/proxy.js");
+  const q = new Request("https://v.test/ia/v1/models", { headers: { authorization: `Bearer ${e.token}` } });
+  assert.equal((await tratarProxyIA(q, env, {}, "/ia/v1/models")).status, 402);
+});
