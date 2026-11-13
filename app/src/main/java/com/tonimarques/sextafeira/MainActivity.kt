@@ -72,6 +72,8 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
     internal var tecladoAberto = false
     internal var animacaoOrbe: android.animation.ValueAnimator? = null
     internal lateinit var ferramentas: Ferramentas
+    /** Trava de segurança ativa: esta tela só repassa para a TravaActivity e não monta nada. */
+    private var travada = false
 
     internal val cerebro = Cerebro()
     internal val principal = Handler(Looper.getMainLooper())
@@ -125,6 +127,13 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
     // ------------------------------------------------------------ ciclo de vida
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // Trava de segurança: sem Vetorial ID e licença válida (teste de 7 dias ou plano) a Vênus não abre.
+        if (VetorialId.estado(this) !is Selo.Estado.Livre) {
+            travada = true
+            startActivity(Intent(this, TravaActivity::class.java))
+            finish()
+            return
+        }
         ferramentas = Ferramentas(this, memoria)
         // A busca no Google roda numa thread de fundo, chamada pela ferramenta buscar_na_internet.
         ferramentas.buscador = { pergunta -> gemini?.buscarNaInternet(pergunta) ?: SegundaIA.pesquisar(pergunta) }
@@ -198,11 +207,15 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
+        if (travada) return
         tratarIntent(intent)
     }
 
     override fun onResume() {
         super.onResume()
+        // o teste pode acabar com o app aberto: confere de novo ao voltar para a tela
+        if (travada) return
+        if (VetorialId.estado(this) !is Selo.Estado.Livre) { travada = true; startActivity(Intent(this, TravaActivity::class.java)); finish(); return }
         naTela = true
         conferirLicenca()
         continuarStoryNoWhatsApp()
@@ -244,6 +257,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
     }
 
     override fun onPause() {
+        if (travada) { super.onPause(); return }
         naTela = false
         if (whatsappDepois != null) saiuParaOInstagram = true
         interruptor?.parar()
@@ -264,6 +278,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
 
     override fun onStart() {
         super.onStart()
+        if (travada) return
         if (javaClass == MainActivity::class.java) BatimentoId.iniciar(this)
         if (javaClass != MainActivity::class.java || saiuEm == 0L) return
         val fora = android.os.SystemClock.elapsedRealtime() - saiuEm
@@ -278,6 +293,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
     }
 
     override fun onStop() {
+        if (travada) { super.onStop(); return }
         if (javaClass == MainActivity::class.java) BatimentoId.parar()
         if (!isChangingConfigurations) saiuEm = android.os.SystemClock.elapsedRealtime()
         super.onStop()
@@ -310,6 +326,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
     }
 
     override fun onDestroy() {
+        if (travada) { super.onDestroy(); return }
         if (javaClass == MainActivity::class.java && isFinishing) sessaoViva = false
         principal.removeCallbacksAndMessages(null)
         despertador?.parar()
