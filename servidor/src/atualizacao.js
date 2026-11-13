@@ -5,6 +5,7 @@
 export const REPO_DA_VENUS = "tonysantquees95-code/Venus-core";
 export const REPO_DO_VINDEX = "tonysantquees95-code/Vindex-";
 export const REPO_DO_VORTEX = "tonysantquees95-code/Vortex";
+export const REPO_DO_VELOX = "tonysantquees95-code/velox-gaming-search";
 
 const APPS = {
   venus: { repo: REPO_DA_VENUS, tag: /^v?1\.(\d+)$/, arquivo: (n) => /\.apk$/i.test(n) && !/robo/i.test(n) },
@@ -14,6 +15,8 @@ const APPS = {
   "vindex-windows": { repo: REPO_DO_VINDEX, tag: /^v?1\.(\d+)$/, arquivo: (n) => /\.exe$/i.test(n), publico: true },
   "vortex-android": { repo: REPO_DO_VORTEX, tag: /^v?1\.(\d+)$/, arquivo: (n) => /\.apk$/i.test(n), publico: true },
   "vortex-windows": { repo: REPO_DO_VORTEX, tag: /^v?1\.(\d+)$/, arquivo: (n) => /\.exe$/i.test(n), publico: true },
+  "velox-android": { repo: REPO_DO_VELOX, tag: /^v?1\.(\d+)$/, arquivo: (n) => /^Velox\.apk$/i.test(n), publico: true },
+  "velox-windows": { repo: REPO_DO_VELOX, tag: /^v?1\.(\d+)$/, arquivo: (n) => /^VeloxSetup\.exe$/i.test(n), publico: true },
 };
 
 export const appConhecido = (app) => Object.prototype.hasOwnProperty.call(APPS, app) ? APPS[app] : null;
