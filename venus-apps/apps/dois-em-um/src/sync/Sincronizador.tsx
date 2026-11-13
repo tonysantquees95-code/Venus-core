@@ -6,6 +6,7 @@ import { useEmpresa } from "../empresa/EmpresaProvider";
 import { empresaPreenchida, limparEmpresa } from "../empresa/logica";
 import { useTema } from "../theming";
 import { docDeIdeias, lerDocIdeias } from "../empresa/marketing";
+import { definirTokenIA } from "../ia/cliente";
 import { useMarketing } from "../empresa/MarketingProvider";
 import { prefsParaEnviar, prefsRecebidas } from "../ajustes/logica";
 import { decidirRemoto, temaValido, type Versoes } from "./mesclar";
@@ -26,6 +27,8 @@ export function Sincronizador() {
   atual.current = { tema, prefs, empresa, ideias: mk.todasAsIdeias };
   const receberMk = useRef(mk.receber);
   receberMk.current = mk.receber;
+
+  definirTokenIA(sessao?.token);
 
   // puxar
   useEffect(() => {

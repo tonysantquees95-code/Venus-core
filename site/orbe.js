@@ -3,7 +3,7 @@
   const c = document.getElementById("orbe");
   if (!c) return;
   const ctx = c.getContext("2d");
-  const reduz = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const reduz = false; // a orbe sempre se move (o "reduzir animações" do Windows a deixava parada)
   const N = innerWidth < 600 ? 150 : 240;
   const pts = Array.from({ length: N }, (_, i) => {
     const y = 1 - (i / (N - 1)) * 2, r = Math.sqrt(1 - y * y), t = i * 2.399963;

@@ -152,6 +152,10 @@ const CAMINHOS: Record<string, string> = {
   video: "M4 6h11a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1zM16 10l5-3v10l-5-3",
   story: "M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8zM4 8a2 2 0 0 1 2-2h1.5l1.2-2h6.6l1.2 2H18a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8z",
   respostas: "M12 3v3M5 8h14v10a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V8zM9.5 13h.01M14.5 13h.01M9 16.5h6",
+  qr: "M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h2v2h-2zM18 14h2v2h-2zM14 18h2v2h-2zM18 18h2v2h-2z",
+  cartao: "M3 6h18v12H3zM6.5 10h5M6.5 13.5h3M15 10h2.5v3.5H15z",
+  panfleto: "M6 3h12v18H6zM9 7h6M9 11h6M9 15h3",
+  vitrine: "M3 9l2-5h14l2 5M3 9a3 3 0 0 0 6 0 3 3 0 0 0 6 0 3 3 0 0 0 6 0M5 12v8h14v-8",
   conta: "M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"
 };
 

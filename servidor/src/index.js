@@ -25,6 +25,7 @@ import { ehRotaVortex, tratarVortex } from "./vortex/saves.js";
 import { ehRotaCi, tratarCi } from "./ci/assinatura.js";
 import { chat, chatPreflight } from "./chat.js";
 import { tratarIA } from "./ia/rotas.js";
+import { comCors, preflight } from "./ia/cors.js";
 import { ehRotaDaIA, tratarProxyIA } from "./ia/proxy.js";
 import { ehRotaDaLoja, tratarLoja } from "./loja/rotas.js";
 import { ehRotaDoId, tratarId } from "./id/rotas.js";
@@ -59,7 +60,12 @@ export default {
       if (canal && req.method === "GET") return await avisosDesde(canal[1], url, env);
       if (caminho === "/cobranca/aviso" && req.method === "POST") return await cobrancaAviso(req, env);
       if (caminho === "/cobranca/status" && req.method === "GET") return await cobrancaStatus(url, env);
-      if (ehRotaDaIA(caminho)) return await tratarProxyIA(req, env, ctx, caminho);
+      if (ehRotaDaIA(caminho)) {
+        // o app do Windows/navegador também usa a IA da conta: precisa do CORS (o celular fala direto e não precisa)
+        const origem = req.headers.get("origin");
+        if (req.method === "OPTIONS") return preflight(origem, env);
+        return comCors(await tratarProxyIA(req, env, ctx, caminho), origem, env);
+      }
       if (caminho.startsWith("/v1/")) return await tratarIA(req, env, ctx);
       if (ehRotaDoId(caminho)) return await tratarId(req, env, url, caminho);
       if (ehRotaCi(caminho)) return await tratarCi(req, env, url, caminho);
