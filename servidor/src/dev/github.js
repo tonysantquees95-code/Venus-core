@@ -3,6 +3,7 @@
 export const REPO_VENUS = "tonysantquees95-code/Venus-core";
 export const REPO_VINDEX = "tonysantquees95-code/Vindex-";
 export const REPO_VORTEX = "tonysantquees95-code/Vortex";
+export const REPO_VELOX = "tonysantquees95-code/velox-gaming-search";
 export const REPO_DEV_CENTER = "tonysantquees95-code/vetorial-dev-center";
 
 /** Projetos do ecossistema. Vindex e Vortex ganham repositório pelo painel (dev_config "repo:<id>") ou pela variável do Worker. */
@@ -31,6 +32,9 @@ export const PROJETOS = [
   { id: "vortex", nome: "Vortex · Game Space", repo: REPO_VORTEX, descricao: "Game Space: launcher de jogos retrô com Modo Jogo, saves na nuvem e voz da Vênus (Windows e Android).", apks: [
       { app: "vortex-android", rotulo: "Vortex (Android)", tag: /^v?1\.(\d+)$/, arquivo: (n) => /^Vortex\.apk$/i.test(n) },
       { app: "vortex-windows", rotulo: "Vortex (Windows)", tag: /^v?1\.(\d+)$/, arquivo: (n) => /^VortexSetup\.exe$/i.test(n) },
+    ] },  { id: "velox", nome: "Velox Search", repo: REPO_VELOX, descricao: "Navegador gamer da Vetorial Tech: abas, bloqueio de anúncios, temas e downloads (Android e Windows).", apks: [
+      { app: "velox-android", rotulo: "Velox (Android)", tag: /^v?1\.(\d+)$/, arquivo: (n) => /^Velox\.apk$/i.test(n) },
+      { app: "velox-windows", rotulo: "Velox (Windows)", tag: /^v?1\.(\d+)$/, arquivo: (n) => /^VeloxSetup\.exe$/i.test(n) },
     ] },
 ];
 
