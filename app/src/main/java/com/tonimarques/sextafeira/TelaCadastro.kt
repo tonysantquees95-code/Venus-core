@@ -311,27 +311,6 @@ internal fun MainActivity.cadastroGuiado(etapaInicial: Int = 0) {
     f.mostrar()
 }
 
-/** Confere a chave do Gemini listando os modelos (não gasta cota). Null = funcionou; senão, o motivo. Bloqueante. */
-internal fun conferirChaveGemini(chave: String): String? {
-    var c: HttpURLConnection? = null
-    return try {
-        c = (URL("https://generativelanguage.googleapis.com/v1beta/models?pageSize=1&key=" + Uri.encode(chave)).openConnection() as HttpURLConnection).apply {
-            connectTimeout = 10_000
-            readTimeout = 15_000
-        }
-        when (c.responseCode) {
-            in 200..299 -> null
-            400, 401, 403 -> "O Google recusou essa chave. Confira se copiou inteira (começa com AIza)."
-            429 -> null // existe, só está no limite agora
-            else -> "O Google respondeu ${c.responseCode}. Tente de novo em instantes."
-        }
-    } catch (e: Exception) {
-        "Sem conexão com o Google agora. Confira a internet e tente de novo."
-    } finally {
-        c?.disconnect()
-    }
-}
-
 /** Na primeira abertura: quem ainda não concluiu o cadastro e não tem nenhuma IA configurada. */
 internal fun MainActivity.precisaDoCadastro(): Boolean =
     !prefs.getBoolean("cadastro_concluido", false) && chave().isBlank() && !SegundaIA.configurada(this)
