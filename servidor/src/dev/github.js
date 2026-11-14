@@ -5,6 +5,7 @@ export const REPO_VINDEX = "tonysantquees95-code/Vindex-";
 export const REPO_VORTEX = "tonysantquees95-code/Vortex";
 export const REPO_VELOX = "tonysantquees95-code/velox-gaming-search";
 export const REPO_DRIVE = "tonysantquees95-code/vetorial-drive";
+export const REPO_VOXIX = "tonysantquees95-code/voxix";
 export const REPO_DEV_CENTER = "tonysantquees95-code/vetorial-dev-center";
 
 /** Projetos do ecossistema. Vindex e Vortex ganham repositório pelo painel (dev_config "repo:<id>") ou pela variável do Worker. */
@@ -40,6 +41,10 @@ export const PROJETOS = [
     ] },
   { id: "drive", nome: "Vetorial Drive", repo: REPO_DRIVE, descricao: "Nuvem da conta Vetorial ID para documentos e ROMs (2 GB por arquivo): app Android; o Vortex usa o mesmo espaço.", apks: [
       { app: "drive-android", rotulo: "Vetorial Drive (Android)", tag: /^v?1\.(\d+)$/, arquivo: (n) => /^VetorialDrive\.apk$/i.test(n) },
+    ] },
+  { id: "voxix", nome: "Voxix · Chat para gamers", repo: REPO_VOXIX, descricao: "Chat para gamers: conversas privadas ao vivo com apelido, bloqueio, denúncia e ditado por microfone (Android e Windows).", apks: [
+      { app: "voxix-android", rotulo: "Voxix (Android)", tag: /^v?1\.(\d+)$/, arquivo: (n) => /^Voxix\.apk$/i.test(n) },
+      { app: "voxix-windows", rotulo: "Voxix (Windows)", tag: /^v?1\.(\d+)$/, arquivo: (n) => /^VoxixSetup\.exe$/i.test(n) },
     ] },
 ];
 
