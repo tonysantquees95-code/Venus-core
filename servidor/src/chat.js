@@ -12,13 +12,13 @@
  */
 const GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
 // mesma ordem de preferência do app (SegundaIA); os dois aceitam Tool Calling
-const GROQ_MODELOS = ["openai/gpt-oss-120b", "llama-3.3-70b-versatile"];
+const GROQ_MODELOS = ["llama-3.3-70b-versatile", "openai/gpt-oss-120b"]; // o rápido primeiro: resposta em ~1s
 const TAVILY_URL = "https://api.tavily.com/search";
 // gemini-2.5-flash não está disponível para chaves novas (ver CLAUDE.md)
 const GEMINI_MODELOS = ["gemini-3.8-flash", "gemini-flash-lite-latest"];
 const geminiUrl = (modelo) => `https://generativelanguage.googleapis.com/v1beta/models/${modelo}:generateContent`;
 
-const TEMPO_MAXIMO_MS = 25000;
+const TEMPO_MAXIMO_MS = 12000;
 const TEMPO_TAVILY_MS = 15000;
 const MAX_RODADAS = 3;
 
