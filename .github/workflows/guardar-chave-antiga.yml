@@ -1,0 +1,23 @@
+name: Guardar a chave antiga nos segredos
+
+# Manual, uma vez só. Copia o arquivo app/sexta.keystore para o segredo ASSINATURA_ANTIGA_BASE64 do repositório.
+# Depois que o segredo existir e um APK novo sair certo, o arquivo pode ser tirado do repositório.
+on: workflow_dispatch
+
+permissions:
+  contents: read
+
+jobs:
+  guardar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Guardar
+        env:
+          GH_TOKEN: ${{ secrets.SEGREDOS_TOKEN }}
+        run: |
+          set -euo pipefail
+          test -f app/sexta.keystore
+          test -n "$GH_TOKEN"
+          base64 -w0 app/sexta.keystore | gh secret set ASSINATURA_ANTIGA_BASE64 --repo "$GITHUB_REPOSITORY"
+          echo "Segredo ASSINATURA_ANTIGA_BASE64 guardado."

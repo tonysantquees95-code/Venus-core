@@ -35,6 +35,20 @@ jobs:
           if [ -z "$TOKEN" ]; then echo "::error::Falta o segredo SEGREDOS_TOKEN."; exit 1; fi
           if [ -n "$JA_EXISTE" ]; then echo "::error::A chave nova já foi criada (existe ASSINATURA_LINHAGEM). Não vou trocar de novo."; exit 1; fi
 
+      # A chave antiga vem do segredo ASSINATURA_ANTIGA_BASE64 (rode "Guardar a chave antiga nos segredos" uma vez);
+      # enquanto ele não existir, usa o arquivo que ainda está no repositório.
+      - name: Chave antiga
+        env:
+          ANTIGA_B64: ${{ secrets.ASSINATURA_ANTIGA_BASE64 }}
+        run: |
+          if [ -n "$ANTIGA_B64" ]; then
+            echo "$ANTIGA_B64" | base64 -d > "$RUNNER_TEMP/antiga.keystore"
+            echo "ANTIGA=$RUNNER_TEMP/antiga.keystore" >> "$GITHUB_ENV"
+            echo "ASSINATURA_ARQUIVO=$RUNNER_TEMP/antiga.keystore" >> "$GITHUB_ENV"
+          else
+            echo "ANTIGA=app/sexta.keystore" >> "$GITHUB_ENV"
+          fi
+
       - name: Criar a chave nova e a linhagem
         env:
           SENHA: ${{ secrets.ASSINATURA_SENHA }}
@@ -45,7 +59,7 @@ jobs:
             -dname "CN=Venus, O=Toni Marques, L=Porto Alegre, ST=RS, C=BR" > /dev/null 2>&1
           BT=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -n 1)
           "$BT/apksigner" rotate --out "$RUNNER_TEMP/linhagem.bin" \
-            --old-signer --ks app/sexta.keystore --ks-pass pass:sextafeira --ks-key-alias sexta --key-pass pass:sextafeira \
+            --old-signer --ks "$ANTIGA" --ks-pass pass:sextafeira --ks-key-alias sexta --key-pass pass:sextafeira \
             --new-signer --ks "$RUNNER_TEMP/nova.keystore" --ks-pass env:SENHA --ks-key-alias venus --key-pass env:SENHA
           "$BT/apksigner" lineage --in "$RUNNER_TEMP/linhagem.bin" --print-certs | grep -i "SHA-256" || true
 
