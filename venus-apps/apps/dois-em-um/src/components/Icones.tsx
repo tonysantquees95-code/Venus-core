@@ -131,8 +131,8 @@ export function IconeEmpresa(props: SVGProps<SVGSVGElement>) {
 export function IconeAjustes(props: SVGProps<SVGSVGElement>) {
   return (
     <Svg {...props}>
-      <circle cx="12" cy="12" r="3.2" {...semMiolo} />
-      <path d="M12 2.8v2.4M12 18.8v2.4M2.8 12h2.4M18.8 12h2.4M5.5 5.5l1.7 1.7M16.8 16.8l1.7 1.7M5.5 18.5l1.7-1.7M16.8 7.2l1.7-1.7" {...semMiolo} />
+      <path d="M10.32 5.00 L10.87 2.47 L13.13 2.47 L13.68 5.00 L15.76 5.86 L17.94 4.46 L19.54 6.06 L18.14 8.24 L19.00 10.32 L21.53 10.87 L21.53 13.13 L19.00 13.68 L18.14 15.76 L19.54 17.94 L17.94 19.54 L15.76 18.14 L13.68 19.00 L13.13 21.53 L10.87 21.53 L10.32 19.00 L8.24 18.14 L6.06 19.54 L4.46 17.94 L5.86 15.76 L5.00 13.68 L2.47 13.13 L2.47 10.87 L5.00 10.32 L5.86 8.24 L4.46 6.06 L6.06 4.46 L8.24 5.86 Z" strokeLinejoin="round" {...semMiolo} />
+      <circle cx="12" cy="12" r="3.1" {...semMiolo} />
     </Svg>
   );
 }
