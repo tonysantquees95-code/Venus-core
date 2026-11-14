@@ -11,6 +11,7 @@
  *   POST /v1/chat, POST /v1/ocr, GET /v1/rotas → roteador de IA por função (Groq / DeepSeek / Gemini só multimodal), CORS e cache vetorial — ver ia/
  *   POST /ia/v1/chat/completions, GET /ia/v1/models → IA para os apps (compatível com a OpenAI), só com Vetorial ID — ver ia/proxy.js
  *  /id, /id/*                           → Vetorial ID: login único (JWT), dispositivos (3) e sessões (2 ativas), sincronização — ver id/
+ *  /voxix/*                             → Voxix (chat para gamers): perfis, mensagens, bloqueio, denúncia e ditado — ver voxix/
  *  /dev/*                               → Painel Dev da Vetorial Tech (só o superadministrador) — ver dev/
  *  /loja/*, /canais*, /produtos, /pedidos, /webhook/*, /oauth/* → lojistas, canais de venda (Nuvemshop, Mercado Livre, site próprio) e estoque central — ver loja/
  *
@@ -19,6 +20,7 @@
  */
 import { ehAtalho, responderAtalho } from "./atalhos.js";
 import { ehRotaVindex, tratarVindex } from "./vindex/rotas.js";
+import { ehRotaVoxix, tratarVoxix } from "./voxix/rotas.js";
 import { ehRotaCofre, tratarCofre } from "./vindex/cofre.js";
 import { ehRotaIcone, tratarIcone } from "./icone.js";
 import { ehRotaVortex, tratarVortex } from "./vortex/saves.js";
@@ -36,6 +38,8 @@ import { ehRotaDev, tratarDev } from "./dev/rotas.js";
 import { limparTrafego, registrarTrafego, registrarUso } from "./dev/uso.js";
 import { publicarVencidos } from "./loja/publicar.js";
 import { appConhecido, escolherVersao } from "./atualizacao.js";
+
+export { CaixaVoxix } from "./voxix/caixa.js";
 
 const REPO = "tonysantquees95-code/Venus-core";
 const CABECALHOS = { "content-type": "application/json; charset=utf-8", "access-control-allow-origin": "*" };
@@ -77,6 +81,7 @@ export default {
       if (ehRotaVortex(caminho)) return await tratarVortex(req, env, url, caminho);
       if (ehRotaDrive(caminho)) return await tratarDrive(req, env, url, caminho);
       if (ehRotaVindex(caminho)) return await tratarVindex(req, env, url, caminho);
+      if (ehRotaVoxix(caminho)) return await tratarVoxix(req, env, url, caminho);
       if (ehRotaCofre(caminho)) return await tratarCofre(req, env, url, caminho);
       if (ehRotaIcone(caminho) && req.method === "GET") return await tratarIcone(req, url, caminho);
       if (ehRotaDev(caminho)) return await tratarDev(req, env, url, caminho);
