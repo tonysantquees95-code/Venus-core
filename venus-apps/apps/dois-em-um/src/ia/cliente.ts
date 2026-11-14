@@ -6,7 +6,8 @@ let tokenDaConta = "";
 /** O Sincronizador avisa aqui quem está logado: com o Vetorial ID a IA é a mesma do celular. */
 export function definirTokenIA(t: string | undefined) { tokenDaConta = t ?? ""; }
 
-const MODELOS = ["llama-3.3-70b-versatile", "openai/gpt-oss-20b"];
+// mesma ordem do celular: o llama-3.3 pode não estar liberado na Groq (404), por isso é o último
+const MODELOS = ["openai/gpt-oss-120b", "openai/gpt-oss-20b", "llama-3.3-70b-versatile"];
 
 async function pelaConta(sistema: string | undefined, mensagens: MensagemIA[]): Promise<string> {
   let ultimo = "";
@@ -26,7 +27,7 @@ async function pelaConta(sistema: string | undefined, mensagens: MensagemIA[]): 
       continue;
     }
     ultimo = String(r.status);
-    if (r.status !== 429 && r.status < 500) break;
+    if (r.status !== 429 && r.status !== 404 && r.status !== 400 && r.status < 500) break; // modelo não liberado: tenta o próximo
   }
   throw new Error(`ia:${ultimo}`);
 }
