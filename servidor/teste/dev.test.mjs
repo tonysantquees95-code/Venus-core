@@ -221,12 +221,14 @@ test("GitHub: estimativa pela árvore, estado geral dos builds e APK mais novo p
     { tag_name: "v1.190", html_url: "u1", published_at: "2026-11-11T00:00:00Z", assets: [{ id: 1, name: "Venus.apk", size: 10 }] },
     { tag_name: "v1.191", html_url: "u2", published_at: "2026-11-12T00:00:00Z", assets: [{ id: 2, name: "Venus.apk", size: 11 }] },
     { tag_name: "win-1.5", html_url: "u3", assets: [{ id: 3, name: "Venus Setup.exe", size: 5 }] },
+    { tag_name: "mac-1.3", html_url: "u6", assets: [{ id: 6, name: "Venus-Mac-1.3.0-universal.dmg", size: 9 }] },
     { tag_name: "dev-1.2", html_url: "u4", assets: [{ id: 4, name: "VenusDev.apk", size: 7 }] },
     { tag_name: "metricas", assets: [{ id: 5, name: "metricas.json" }] },
   ];
   const apks = apksDoProjeto(PROJETOS[0], lista);
   assert.equal(apks.find((x) => x.app === "venus").versao.numero, 191);
   assert.equal(apks.find((x) => x.app === "windows").versao.numero, 5);
+  assert.equal(apks.find((x) => x.app === "mac").versao.numero, 3);
   assert.equal(apks.some((x) => x.app === "robo"), false);
   const dev = apksDoProjeto(PROJETOS.find((p) => p.id === "devcenter"), lista);
   assert.equal(dev.find((x) => x.app === "dev").versao.tag, "dev-1.2");
@@ -241,6 +243,11 @@ test("atalhos curtos: /venus, /venus/android, /venus/windows e /paineldev", asyn
   assert.equal(responderAtalho(u, "/venus/windows").headers.get("location"), "https://v.test/atualizacao?app=windows&baixar=1");
   assert.equal(responderAtalho(u, "/venus/android").headers.get("location"), "https://v.test/atualizacao?app=venus&baixar=1");
   assert.match(await responderAtalho(u, "/venus").text(), /Baixar para Windows/);
+  assert.equal(ehAtalho("/venus/mac"), true);
+  assert.equal(ehAtalho("/vindex/mac"), false);
+  assert.equal(responderAtalho(u, "/venus/mac").headers.get("location"), "https://v.test/atualizacao?app=mac&baixar=1");
+  assert.match(await responderAtalho(u, "/venus").text(), /Baixar para Mac/);
+  assert.doesNotMatch(await responderAtalho(u, "/vindex").text(), /Mac/);
 });
 
 test("atalho /venus/web leva à Vênus web (iPhone)", () => {

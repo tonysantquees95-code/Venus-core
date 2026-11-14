@@ -5,7 +5,7 @@ import { useId } from "../id/IdProvider";
 import { botaoPrimario, botaoSuave, campo } from "./Controles";
 import { haQuantoTempo, NOMES_DE_PLATAFORMA } from "./logica";
 
-const ICONE: Record<string, string> = { android: "🤖", ios: "📱", windows: "🖥️", web: "🌐" };
+const ICONE: Record<string, string> = { android: "🤖", ios: "📱", windows: "🖥️", mac: "💻", web: "🌐" };
 
 /** Entrar ou criar conta, com o aviso inteligente de aparelhos (3 vinculados, 2 ativos). */
 /** Recuperação de senha: pede o código (e-mail ou SMS), confirma e define a nova senha. */

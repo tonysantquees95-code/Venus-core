@@ -2,7 +2,7 @@
   "name": "venus-desktop",
   "version": "1.0.0",
   "private": true,
-  "description": "Vênus para Windows (Vetorial Tech): dashboard completo com bandeja do sistema, atalho global e notificações nativas.",
+  "description": "Vênus para Windows e Mac (Vetorial Tech): dashboard completo com bandeja do sistema, atalho global e notificações nativas.",
   "author": "Vetorial Tech",
   "license": "UNLICENSED",
   "main": "main.js",
@@ -10,7 +10,8 @@
     "copiar": "node copiar.mjs",
     "teste": "node --test teste/status.test.mjs teste/computador.test.mjs teste/atualizador.test.mjs",
     "start": "npm run copiar && electron .",
-    "build:win": "npm run copiar && electron-builder --win nsis --publish never"
+    "build:win": "npm run copiar && electron-builder --win nsis --publish never",
+    "build:mac": "npm run copiar && electron-builder --mac --publish never"
   },
   "devDependencies": {
     "electron": "^33.2.0",
@@ -19,9 +20,57 @@
   "build": {
     "appId": "tech.vetorial.venus",
     "productName": "Vênus",
-    "directories": { "output": "dist", "buildResources": "build" },
-    "files": ["main.js", "preload.js", "status.mjs", "computador.mjs", "atualizador.mjs", "app/**", "build/tray.png"],
-    "win": { "icon": "build/icon.ico", "target": ["nsis"], "artifactName": "Venus-Windows-${version}.${ext}" },
-    "nsis": { "oneClick": false, "perMachine": false, "allowToChangeInstallationDirectory": true, "shortcutName": "Vênus", "createDesktopShortcut": "always", "createStartMenuShortcut": true, "installerIcon": "build/icon.ico", "uninstallerIcon": "build/icon.ico", "installerHeaderIcon": "build/icon.ico", "runAfterFinish": true }
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "status.mjs",
+      "computador.mjs",
+      "atualizador.mjs",
+      "app/**",
+      "build/tray.png"
+    ],
+    "win": {
+      "icon": "build/icon.ico",
+      "target": [
+        "nsis"
+      ],
+      "artifactName": "Venus-Windows-${version}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "shortcutName": "Vênus",
+      "createDesktopShortcut": "always",
+      "createStartMenuShortcut": true,
+      "installerIcon": "build/icon.ico",
+      "uninstallerIcon": "build/icon.ico",
+      "installerHeaderIcon": "build/icon.ico",
+      "runAfterFinish": true
+    },
+    "mac": {
+      "icon": "build/icon.png",
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "universal"
+          ]
+        }
+      ],
+      "category": "public.app-category.productivity",
+      "identity": null,
+      "artifactName": "Venus-Mac-${version}.${ext}",
+      "extendInfo": {
+        "NSMicrophoneUsageDescription": "A Vênus usa o microfone para você falar com ela."
+      }
+    },
+    "dmg": {
+      "title": "Vênus"
+    }
   }
 }

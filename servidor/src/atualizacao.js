@@ -1,5 +1,5 @@
 // Qual é a versão mais nova de cada app, a partir da lista de publicações do GitHub.
-// Vênus (privado, Venus-core): tags 1.N (APK), win-1.N (instalador Windows), robo-1.N.
+// Vênus (privado, Venus-core): tags 1.N (APK), win-1.N (instalador Windows), mac-1.N (instalador Mac), robo-1.N.
 // Vindex (público, Vindex-): tags 1.N com Vindex.apk e VindexSetup.exe.
 
 export const REPO_DA_VENUS = "tonysantquees95-code/Venus-core";
@@ -11,6 +11,7 @@ export const REPO_DO_VELOX = "tonysantquees95-code/velox-gaming-search";
 const APPS = {
   venus: { repo: REPO_DA_VENUS, tag: /^v?1\.(\d+)$/, arquivo: (n) => /\.apk$/i.test(n) && !/robo/i.test(n) },
   windows: { repo: REPO_DA_VENUS, tag: /^win-1\.(\d+)$/, arquivo: (n) => /\.exe$/i.test(n) },
+  mac: { repo: REPO_DA_VENUS, tag: /^mac-1\.(\d+)$/, arquivo: (n) => /\.dmg$/i.test(n) },
   robo: { repo: REPO_DA_VENUS, tag: /^robo-1\.(\d+)$/, arquivo: (n) => /^venusrobo\.apk$/i.test(n) },
   "vindex-android": { repo: REPO_DO_VINDEX, tag: /^v?1\.(\d+)$/, arquivo: (n) => /\.apk$/i.test(n), publico: true },
   "vindex-windows": { repo: REPO_DO_VINDEX, tag: /^v?1\.(\d+)$/, arquivo: (n) => /\.exe$/i.test(n), publico: true },

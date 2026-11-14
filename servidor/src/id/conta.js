@@ -17,7 +17,7 @@ export function appDeLogin(app) {
   return n;
 }
 const comLimite = (env, email, app) => APPS_COM_LIMITE.has(app) && !semLimites(env, email);
-const PLATAFORMAS = new Set(["android", "ios", "windows", "web"]);
+const PLATAFORMAS = new Set(["android", "ios", "windows", "mac", "web"]);
 const EMAIL = /^[^\s@]{1,64}@[^\s@]{1,190}\.[^\s@]{2,}$/;
 
 export class ErroId extends ErroLoja {
