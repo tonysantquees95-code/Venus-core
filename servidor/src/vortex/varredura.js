@@ -93,3 +93,43 @@ export async function faxina(env, corpo, ia = executar) {
   const v = validarFaxina(r.texto, pedido);
   return v ? { ...v, provedor: r.provedor } : { duplicados: [], corrompidos: [], observacoes: "A IA não respondeu num formato válido." };
 }
+
+// ---- Perfil por jogo (Dolphin: GameCube e Wii): a IA escolhe ajustes seguros para o aparelho ----
+export const AJUSTES = Object.freeze({
+  "GFX.Settings.InternalResolution": { min: 1, max: 6 },
+  "GFX.Settings.MSAA": { valores: [1, 2, 4, 8] },
+  "GFX.Enhancements.MaxAnisotropy": { min: 0, max: 4 },
+  "GFX.Settings.ShaderCompilationMode": { min: 0, max: 3 },
+  "GFX.Settings.WaitForShadersBeforeStarting": { bool: true },
+  "GFX.Hardware.VSync": { bool: true },
+  "GFX.Settings.BackendMultithreading": { bool: true },
+  "Dolphin.Core.CPUThread": { bool: true },
+  "Dolphin.Core.SyncOnSkipIdle": { bool: true },
+});
+const SISTEMA_PERFIL =
+  "Você configura o emulador Dolphin (GameCube/Wii) para um jogo e um computador. Responda SOMENTE com JSON válido: " +
+  '{"ajustes":{"<chave>":<valor>},"motivo":"<até 120 caracteres>"}. Use apenas as chaves permitidas e valores dentro das faixas. ' +
+  "InternalResolution: 1 = nativa, 2 = 2x (720p), 3 = 3x (1080p), 4 = 4x. Computador fraco: resolução 1 ou 2, sem MSAA, CPUThread true. Potente: 3 ou 4, anisotropia 2-4. Na dúvida, escolha o seguro. Não invente chaves.";
+
+export function validarAjustes(obj) {
+  const saida = {};
+  for (const [k, v] of Object.entries(obj && typeof obj === "object" ? obj : {})) {
+    const r = AJUSTES[k];
+    if (!r) continue;
+    if (r.bool) { if (typeof v === "boolean") saida[k] = v; continue; }
+    const n = Number(v);
+    if (!Number.isInteger(n)) continue;
+    if (r.valores ? r.valores.includes(n) : n >= r.min && n <= r.max) saida[k] = n;
+  }
+  return saida;
+}
+
+export async function perfilJogo(env, corpo, ia = executar) {
+  const entrada = { titulo: texto(corpo?.titulo, 120), plataforma: texto(corpo?.plataforma, 24), aparelho: montarPedido({ aparelho: corpo?.aparelho }).aparelho, permitidas: AJUSTES };
+  if (!entrada.titulo || !["gamecube", "wii"].includes(entrada.plataforma)) return { ajustes: {}, motivo: "" };
+  const r = await ia(env, ["deepseek", "groq"], { tarefa: "relatorio", sistema: SISTEMA_PERFIL, mensagens: [{ papel: "user", texto: JSON.stringify(entrada) }], temperatura: 0.1, maxTokens: 600 });
+  const m = /\{[\s\S]*\}/.exec(String(r.texto));
+  let j;
+  try { j = JSON.parse(m ? m[0] : ""); } catch { return { ajustes: {}, motivo: "" }; }
+  return { ajustes: validarAjustes(j?.ajustes), motivo: texto(j?.motivo, 120), provedor: r.provedor };
+}
