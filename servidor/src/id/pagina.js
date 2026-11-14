@@ -67,9 +67,9 @@ let criar=false,pendente=null;
 function aba(c){criar=c;$("tEntrar").setAttribute("aria-selected",!c);$("tCriar").setAttribute("aria-selected",c);$("cNome").hidden=!c;$("cFone").hidden=!c;$("fone").required=c;$("rec").hidden=true;$("ok").textContent=c?"Criar conta":"Entrar";$("senha").autocomplete=c?"new-password":"current-password";}
 $("tEntrar").onclick=()=>aba(false);$("tCriar").onclick=()=>aba(true);
 function aparelho(){let id="";try{id=localStorage.getItem("vid_aparelho")||"";if(!id){id=crypto.randomUUID();localStorage.setItem("vid_aparelho",id);}}catch(e){id=crypto.randomUUID();}
-const ua=navigator.userAgent;const ios=/iPhone|iPad/.test(ua);const win=/Windows/.test(ua);const and=/Android/.test(ua);
-const plataforma=q.get("plataforma")||(ios?"ios":and?"android":win?"windows":"web");
-return{id,plataforma,nome:q.get("nome")||(ios?"iPhone":and?"Android":win?"Windows":"Navegador")};}
+const ua=navigator.userAgent;const ios=/iPhone|iPad/.test(ua);const win=/Windows/.test(ua);const mac=/Macintosh/.test(ua)&&!ios;const and=/Android/.test(ua);
+const plataforma=q.get("plataforma")||(ios?"ios":and?"android":win?"windows":mac?"mac":"web");
+return{id,plataforma,nome:q.get("nome")||(ios?"iPhone":and?"Android":win?"Windows":mac?"Mac":"Navegador")};}
 function msg(t,ok){$("msg").textContent=t||"";$("msg").className=ok?"ok":"";}
 function destinoOk(u){try{const x=new URL(u);return x.origin===location.origin||CFG.origens.includes(x.origin)||x.hostname==="vetorial.tech"||x.hostname.endsWith(".vetorial.tech");}catch(e){return false;}}
 async function pronto(r){try{localStorage.setItem("vid_token",r.token);}catch(e){}

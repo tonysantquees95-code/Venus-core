@@ -17,7 +17,7 @@ export interface Aparelho {
   nome: string;
   plataforma: Plataforma;
 }
-export type Plataforma = "android" | "ios" | "windows" | "web";
+export type Plataforma = "android" | "ios" | "windows" | "mac" | "web";
 
 export interface Sessao {
   token: string;

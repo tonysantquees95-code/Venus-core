@@ -131,3 +131,57 @@ jobs:
           arq=$(ls exe/*.exe | head -n 1)
           cp "$arq" "exe/VenusSetup.exe"
           gh release create "win-1.${{ github.run_number }}" exe/VenusSetup.exe --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --prerelease --title "Vênus para Windows 1.${{ github.run_number }}" --notes "Instalador da Vênus para Windows."
+
+  mac:
+    # App Mac (Electron): .dmg universal (Apple Silicon e Intel), sem assinatura da Apple.
+    needs: verificar
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: venus-apps/package-lock.json
+      - name: Chave pública do selo de licença (embutida no aplicativo)
+        shell: bash
+        run: |
+          x=$(curl -fsS --retry 5 --retry-delay 5 https://venus-servidor.tonysantquees95.workers.dev/id/chave-publica | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const j=JSON.parse(s);if(!/^[A-Za-z0-9_-]{43}$/.test(j.x))process.exit(1);console.log(j.x)})')
+          echo "VITE_SELO_CHAVE=$x" >> "$GITHUB_ENV"
+      - name: Instalar e gerar o app web (modo desktop)
+        working-directory: venus-apps
+        run: |
+          npm ci
+          npm run build:desktop -w @venus/dois-em-um
+      - name: Gerar o instalador do Mac
+        working-directory: venus-apps/desktop
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+        run: |
+          npm pkg set version=1.${{ github.run_number }}.0
+          npm install --no-audit --no-fund
+          npm run build:mac
+      - uses: actions/upload-artifact@v4
+        with:
+          name: venus-mac
+          path: venus-apps/desktop/dist/*.dmg
+
+  publicar-mac:
+    # Publica o .dmg numa versão "mac-1.N": é o que o link /venus/mac e o Painel Dev entregam.
+    needs: mac
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: venus-mac
+          path: dmg
+      - name: Publicar a versão
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ls -la dmg
+          arq=$(ls dmg/*.dmg | head -n 1)
+          cp "$arq" "dmg/Venus.dmg"
+          gh release create "mac-1.${{ github.run_number }}" dmg/Venus.dmg --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --prerelease --title "Vênus para Mac 1.${{ github.run_number }}" --notes "Instalador da Vênus para Mac (universal, sem assinatura da Apple: na primeira vez, clique com o botão direito e escolha Abrir)."

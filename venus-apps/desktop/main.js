@@ -9,7 +9,9 @@ const { spawn } = require("node:child_process");
 const { pathToFileURL } = require("node:url");
 
 const SERVIDOR = (process.env.VENUS_SERVIDOR || "https://venus-servidor.tonysantquees95.workers.dev").replace(/\/+$/, "");
+const MAC = process.platform === "darwin";
 const ATALHO = "CommandOrControl+Alt+V";
+const NOME_ATALHO = ATALHO.replace("CommandOrControl", MAC ? "Cmd" : "Ctrl");
 const INTERVALO_MS = 15_000;
 const RAIZ_APP = path.join(__dirname, "app");
 
@@ -42,7 +44,7 @@ function criarJanela(oculta) {
   janela = new BrowserWindow({
     width: 1280, height: 820, minWidth: 420, minHeight: 600,
     show: !oculta, backgroundColor: "#08080F", title: "Vênus", autoHideMenuBar: true,
-    icon: path.join(__dirname, "build", "icon.ico"),
+    ...(MAC ? {} : { icon: path.join(__dirname, "build", "icon.ico") }),
     webPreferences: { preload: path.join(__dirname, "preload.js"), contextIsolation: true, nodeIntegration: false, sandbox: true, webSecurity: true },
   });
   // só o microfone (para falar com a Vênus) e as notificações; o resto é negado
@@ -69,12 +71,12 @@ function atualizarMenu() {
   const iniciar = app.getLoginItemSettings().openAtLogin;
   bandeja.setContextMenu(Menu.buildFromTemplate([
     { label: "Abrir a Vênus", click: mostrar },
-    { label: `Chamar de qualquer tela: ${ATALHO.replace("CommandOrControl", "Ctrl")}`, enabled: false },
+    { label: `Chamar de qualquer tela: ${NOME_ATALHO}`, enabled: false },
     { type: "separator" },
     { label: statusModulo.textoDoStatus(ultimoStatus), enabled: false },
     ...(novaVersao ? [{ label: `Atualizar a Vênus para a versão 1.${novaVersao.numero}`, click: () => void instalarAtualizacao() }] : []),
     { label: "Verificar atualizações", click: () => void conferirAtualizacao(true) },
-    { label: "Iniciar com o Windows", type: "checkbox", checked: iniciar, click: (i) => definirIniciar(i.checked) },
+    { label: MAC ? "Iniciar com o Mac" : "Iniciar com o Windows", type: "checkbox", checked: iniciar, click: (i) => definirIniciar(i.checked) },
     { type: "separator" },
     { label: "Sair", click: () => { saindo = true; app.quit(); } },
   ]));
@@ -131,7 +133,7 @@ app.whenReady().then(async () => {
   montarBandeja();
 
   if (!globalShortcut.register(ATALHO, () => { mostrar(); if (janela) janela.webContents.send("venus:atalho"); })) {
-    notificar("Atalho indisponível", `${ATALHO.replace("CommandOrControl", "Ctrl")} já é usado por outro programa.`);
+    notificar("Atalho indisponível", `${NOME_ATALHO} já é usado por outro programa.`);
   }
 
   const monitor = statusModulo.criarMonitor();
@@ -150,7 +152,7 @@ async function infoDoServidor() {
   const ctl = new AbortController();
   const timer = setTimeout(() => ctl.abort(), 15_000);
   try {
-    const r = await fetch(`${SERVIDOR}/atualizacao?app=windows`, { signal: ctl.signal, cache: "no-store" });
+    const r = await fetch(`${SERVIDOR}/atualizacao?app=${MAC ? "mac" : "windows"}`, { signal: ctl.signal, cache: "no-store" });
     if (!r.ok) return null;
     return atualizador.lerInfo(await r.json());
   } finally { clearTimeout(timer); }
@@ -174,6 +176,10 @@ async function verificarAtualizacao() {
 /** Baixa o instalador (conferindo tamanho e hash), roda em modo silencioso e fecha a Vênus para ela ser trocada. */
 async function instalarAtualizacao() {
   if (instalando) return { ok: false, erro: "Já estou atualizando." };
+  if (MAC) { // sem assinatura da Apple não dá para trocar o app sozinha: abre o download e a pessoa arrasta para Aplicativos
+    void shell.openExternal(`${SERVIDOR}/venus/mac`);
+    return { ok: true };
+  }
   instalando = true;
   const avisar = (p) => { if (janela) janela.webContents.send("venus:atualizacao-progresso", p); };
   try {
@@ -225,9 +231,9 @@ async function conferirAtualizacao(manual) {
   jaPerguntou = novaVersao.numero;
   const alvo = janela && janela.isVisible() ? janela : undefined;
   const { response } = await dialog.showMessageBox(alvo, {
-    type: "question", title: "Atualização da Vênus", buttons: ["Atualizar agora", "Depois"], defaultId: 0, cancelId: 1,
+    type: "question", title: "Atualização da Vênus", buttons: [MAC ? "Baixar agora" : "Atualizar agora", "Depois"], defaultId: 0, cancelId: 1,
     message: `Tem uma versão nova da Vênus (${r.nova}).`,
-    detail: (r.notas ? r.notas + "\n\n" : "") + "A Vênus fecha, atualiza sozinha e abre de novo em alguns segundos.",
+    detail: (r.notas ? r.notas + "\n\n" : "") + (MAC ? "Vou abrir o download. Depois de baixar, abra o arquivo e arraste a Vênus para a pasta Aplicativos, trocando a antiga." : "A Vênus fecha, atualiza sozinha e abre de novo em alguns segundos."),
   });
   if (response === 0) {
     const i = await instalarAtualizacao();
@@ -252,7 +258,7 @@ function executar(exec) {
 
 /** "abrir calculadora", "aumentar volume", "desligar"… Devolve { tratado:false } quando é conversa comum. */
 ipcMain.handle("venus:comando", (_e, texto) => {
-  if (!computador || typeof texto !== "string") return { tratado: false };
+  if (MAC || !computador || typeof texto !== "string") return { tratado: false }; // os comandos do computador (programas, volume, bloquear) ainda são só do Windows
   if (pendente && Date.now() > pendente.expira) pendente = null;
   if (pendente) {
     const p = pendente;
@@ -280,8 +286,13 @@ function idDoComputador() {
   const crypto = require("node:crypto");
   let base = "";
   try {
+    if (MAC) {
+      const out = require("node:child_process").execFileSync("ioreg", ["-rd1", "-c", "IOPlatformExpertDevice"], { encoding: "utf8", timeout: 4000 });
+      base = (/"IOPlatformUUID"\s*=\s*"([^"]+)"/.exec(out) || [])[1] || "";
+    } else {
     const out = require("node:child_process").execFileSync("reg", ["query", "HKLM\\SOFTWARE\\Microsoft\\Cryptography", "/v", "MachineGuid"], { encoding: "utf8", windowsHide: true, timeout: 4000 });
     base = (/MachineGuid\s+REG_SZ\s+(\S+)/.exec(out) || [])[1] || "";
+    }
   } catch { /* fora do Windows ou sem permissão */ }
   if (!base) base = `${require("node:os").hostname()}|${(require("node:os").cpus()[0] || {}).model || ""}`;
   return "pc-" + crypto.createHash("sha256").update(`venus-pc:${base}`).digest("hex").slice(0, 40);
@@ -307,6 +318,7 @@ ipcMain.handle("venus:limpar-dados", async () => {
 ipcMain.handle("venus:desinstalar", async () => {
   const { response } = await dialog.showMessageBox({ type: "warning", title: "Vênus", message: "Desinstalar a Vênus deste computador?", detail: "Para instalar de novo depois, baixe o instalador no Painel Dev ou no site. Sua conta e seus dados na nuvem não são apagados.", buttons: ["Desinstalar", "Cancelar"], defaultId: 1, cancelId: 1 });
   if (response !== 0) return { ok: false };
+  if (MAC) return { ok: false, erro: "No Mac, feche a Vênus e arraste o app da pasta Aplicativos para a Lixeira." };
   const pasta = require("node:path").dirname(process.execPath);
   const alvo = require("node:fs").readdirSync(pasta).find((f) => /^Uninstall .*\.exe$/i.test(f));
   if (!alvo) return { ok: false, erro: "Não achei o desinstalador. Use Configurações do Windows → Aplicativos → Vênus → Desinstalar." };
@@ -333,3 +345,4 @@ app.on("before-quit", () => { saindo = true; });
 app.on("will-quit", () => globalShortcut.unregisterAll());
 // com a janela escondida na bandeja o app continua vivo: não sai quando todas as janelas fecham
 app.on("window-all-closed", () => {});
+app.on("activate", () => mostrar()); // clique no ícone do Dock

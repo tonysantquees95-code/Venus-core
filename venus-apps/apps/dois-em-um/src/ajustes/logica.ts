@@ -63,7 +63,7 @@ export const CATALOGO: ItemDeAjuste[] = [
   { id: "falarRespostas", categoria: "comportamento", titulo: "Falar as respostas", descricao: "Lê em voz alta o que a Vênus responde.", palavras: ["falar", "voz", "audio", "som", "leitura"] },
   { id: "notificacoes", categoria: "comportamento", titulo: "Notificações", descricao: "Avisos do sistema para pedidos, estoque e lembretes.", palavras: ["notificacao", "aviso", "alerta", "push"] },
   { id: "alertasDaLoja", categoria: "comportamento", titulo: "Alertas da loja", descricao: "Pedido novo, estoque baixo e pagamentos.", palavras: ["loja", "pedido", "estoque", "pagamento", "alerta"] },
-  { id: "iniciarComOSistema", categoria: "comportamento", titulo: "Iniciar com o sistema", descricao: "No Windows, abre junto com o computador, na bandeja.", palavras: ["windows", "bandeja", "iniciar", "boot", "tray"] },
+  { id: "iniciarComOSistema", categoria: "comportamento", titulo: "Iniciar com o sistema", descricao: "No Windows e no Mac, abre junto com o computador, na bandeja.", palavras: ["windows", "mac", "bandeja", "iniciar", "boot", "tray"] },
   { id: "atualizacoes", categoria: "comportamento", titulo: "Atualizações", descricao: "No Windows: versão instalada e botão para verificar e instalar a versão nova.", palavras: ["atualizar", "atualizacao", "versao", "nova", "verificar", "update", "baixar"] },
   { id: "servidor", categoria: "conexoes", titulo: "Conexão com o servidor", descricao: "Estado do servidor da Vênus (Workers).", palavras: ["servidor", "worker", "conexao", "status", "online", "internet"] },
   { id: "canais", categoria: "conexoes", titulo: "Canais de venda", descricao: "Nuvemshop, Mercado Livre e site próprio (até 3) são conectados na Central da loja do app.", palavras: ["nuvemshop", "mercado livre", "site", "canal", "loja", "ecommerce", "estoque"] },
@@ -85,15 +85,15 @@ export function buscar(termo: string, itens: ItemDeAjuste[] = CATALOGO): ItemDeA
   });
 }
 
-export type Plataforma = "android" | "ios" | "windows" | "web";
+export type Plataforma = "android" | "ios" | "windows" | "mac" | "web";
 export function detectarPlataforma(ua: string, opcoes: { desktop?: boolean; nativoAndroid?: boolean } = {}): Plataforma {
-  if (opcoes.desktop) return "windows";
+  if (opcoes.desktop) return /Macintosh|Mac OS X/i.test(ua) ? "mac" : "windows";
   if (opcoes.nativoAndroid || /Android/i.test(ua)) return "android";
   if (/iPhone|iPad|iPod/i.test(ua) || (/Macintosh/i.test(ua) && /Mobile/i.test(ua))) return "ios";
   if (/Windows/i.test(ua)) return "windows";
   return "web";
 }
-export const NOMES_DE_PLATAFORMA: Record<Plataforma, string> = { android: "Android", ios: "iPhone", windows: "Windows", web: "Navegador" };
+export const NOMES_DE_PLATAFORMA: Record<Plataforma, string> = { android: "Android", ios: "iPhone", windows: "Windows", mac: "Mac", web: "Navegador" };
 
 /** Em quanto tempo o aparelho "sumiu" (texto curto para a lista de dispositivos). */
 export function haQuantoTempo(quando: number, agora = Date.now()): string {

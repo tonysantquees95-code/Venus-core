@@ -31,6 +31,8 @@ test("plataforma é detectada para cada aparelho", () => {
   assert.equal(detectarPlataforma("Mozilla/5.0 (Linux; Android 14)"), "android");
   assert.equal(detectarPlataforma("Mozilla/5.0 (Windows NT 10.0)"), "windows");
   assert.equal(detectarPlataforma("qualquer", { desktop: true }), "windows");
+  assert.equal(detectarPlataforma("Mozilla/5.0 (Macintosh; Intel Mac OS X 14_0)", { desktop: true }), "mac");
+  assert.equal(detectarPlataforma("Mozilla/5.0 (Macintosh; Intel Mac OS X 14_0)"), "web");
   assert.equal(detectarPlataforma("Mozilla/5.0 (X11; Linux x86_64)"), "web");
   assert.equal(haQuantoTempo(1000, 1000 + 5 * 60_000), "há 5 min");
   assert.equal(haQuantoTempo(0, 10_000), "agora");

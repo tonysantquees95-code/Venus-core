@@ -156,7 +156,7 @@ export function Ajustes({ aoAbrirTema, alvo }: { aoAbrirTema: () => void; alvo?:
             if (v && !noDesktop() && typeof Notification !== "undefined" && Notification.permission === "default") void Notification.requestPermission();
           }} />}
           {mostra("alertasDaLoja", "comportamento") && <Chave id="alertasDaLoja" titulo="Alertas da loja" descricao="Pedido novo, estoque baixo e pagamentos." ligado={prefs.alertasDaLoja} aoMudar={(v) => definir("alertasDaLoja", v)} />}
-          {mostra("iniciarComOSistema", "comportamento") && noDesktop() && <Chave id="iniciarComOSistema" titulo="Iniciar com o sistema" descricao="Abre junto com o Windows, escondida na bandeja. Vale só neste computador." ligado={prefs.iniciarComOSistema} aoMudar={(v) => definir("iniciarComOSistema", v)} />}
+          {mostra("iniciarComOSistema", "comportamento") && noDesktop() && <Chave id="iniciarComOSistema" titulo="Iniciar com o sistema" descricao="Abre junto com o computador, escondida na bandeja. Vale só neste computador." ligado={prefs.iniciarComOSistema} aoMudar={(v) => definir("iniciarComOSistema", v)} />}
 
           {mostra("atualizacoes", "comportamento") && noDesktop() && <Cartao id="atualizacoes" titulo="Atualizações"><Atualizacoes /></Cartao>}
 

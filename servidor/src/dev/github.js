@@ -15,6 +15,7 @@ export const PROJETOS = [
     apks: [
       { app: "venus", rotulo: "Vênus (Android)", tag: /^v?1\.(\d+)$/, arquivo: (n) => /\.apk$/i.test(n) && !/robo|dev/i.test(n) },
       { app: "windows", rotulo: "Vênus (Windows)", tag: /^win-1\.(\d+)$/, arquivo: (n) => /\.exe$/i.test(n) },
+      { app: "mac", rotulo: "Vênus (Mac)", tag: /^mac-1\.(\d+)$/, arquivo: (n) => /\.dmg$/i.test(n) },
     ],
   },
   {
