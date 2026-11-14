@@ -22,7 +22,7 @@ import { ehRotaVindex, tratarVindex } from "./vindex/rotas.js";
 import { ehRotaCofre, tratarCofre } from "./vindex/cofre.js";
 import { ehRotaIcone, tratarIcone } from "./icone.js";
 import { ehRotaVortex, tratarVortex } from "./vortex/saves.js";
-import { ehRotaDrive, tratarDrive } from "./drive/drive.js";
+import { ehRotaDrive, tratarDrive, limparDrive } from "./drive/drive.js";
 import { ehRotaCi, tratarCi } from "./ci/assinatura.js";
 import { chat, chatPreflight } from "./chat.js";
 import { tratarIA } from "./ia/rotas.js";
@@ -101,6 +101,7 @@ export default {
     await env.DB.prepare("DELETE FROM avisos WHERE criado < ?").bind(Date.now() - 7 * 86400000).run();
     await limpezaDeSessoes(env);
     await limparTrafego(env);
+    try { await limparDrive(env); } catch (e) { console.error("drive limpeza", e); }
     await env.DB.prepare("DELETE FROM cobranca_avisos WHERE criado < ?").bind(Date.now() - 30 * 86400000).run();
   },
 };
