@@ -5,7 +5,7 @@
 import { cifrar, decifrar } from "../loja/cripto.js";
 
 export const ehRotaCi = (c) => c === "/ci/assinatura";
-export const REPOS_PERMITIDOS = ["tonysantquees95-code/vetorial-dev-center", "tonysantquees95-code/Vindex-", "tonysantquees95-code/Vortex", "tonysantquees95-code/velox-gaming-search"];
+export const REPOS_PERMITIDOS = ["tonysantquees95-code/vetorial-dev-center", "tonysantquees95-code/Vindex-", "tonysantquees95-code/Vortex", "tonysantquees95-code/velox-gaming-search", "tonysantquees95-code/Vetorial-Drive"];
 export const EMISSOR = "https://token.actions.githubusercontent.com";
 export const PUBLICO = "venus-assinatura";
 const EVENTOS = ["push", "workflow_dispatch", "schedule"];

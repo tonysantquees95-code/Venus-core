@@ -32,7 +32,8 @@ const limites = (env) => ({
 async function liberado(env, usuario, agora) {
   if (!usuario.loja) return false;
   const loja = await env.DB.prepare("SELECT * FROM lojas WHERE id = ?").bind(usuario.loja).first();
-  return !!loja && !!appsLiberados(loja, agora).vortex;
+  const a = !!loja && appsLiberados(loja, agora);
+  return !!a && !!(a.vortex || a.vindex);
 }
 
 async function listar(env, raiz) {
@@ -66,7 +67,7 @@ export async function tratarDrive(req, env, url, caminho, agora = Date.now()) {
   if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: CORS });
   try {
     const ctx = await validarSessao(env, req, { agora });
-    if (!(await liberado(env, ctx.usuario, agora))) throw new ErroId(402, "drive_nao_liberado", "O Vetorial Drive vem com o Vortex, que não está liberado para esta conta.");
+    if (!(await liberado(env, ctx.usuario, agora))) throw new ErroId(402, "drive_nao_liberado", "O Vetorial Drive vem com o Vortex e o Vindex, e nenhum deles está liberado para esta conta.");
     if (!env.SAVES) throw new ErroId(503, "nuvem_indisponivel", "O armazenamento na nuvem ainda não está ligado no servidor.");
     const raiz = `drive/${ctx.usuario.id}/`;
     const { cota, maxArquivo } = limites(env);

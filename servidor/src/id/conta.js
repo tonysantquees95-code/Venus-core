@@ -9,7 +9,7 @@ export const MAX_ATIVAS = 2;
 export const TTL_ATIVA_MS = 5 * 60_000; // sem ping por 5 minutos = sessão inativa
 /** Cada aplicativo tem os seus próprios limites. O Velox é gratuito e público: não entra na conta de limites. */
 export const APPS_COM_LIMITE = new Set(["venus", "vindex", "vortex"]);
-const APPS_DE_LOGIN = new Set([...APPS_COM_LIMITE, "velox"]);
+const APPS_DE_LOGIN = new Set([...APPS_COM_LIMITE, "velox", "drive"]);
 export function appDeLogin(app) {
   const a = String(app || "venus").trim().toLowerCase();
   const n = a === "venus-windows" || a === "venus-ios" ? "venus" : a;
