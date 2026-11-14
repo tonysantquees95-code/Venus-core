@@ -125,7 +125,7 @@ export async function buildsDoRepo(env, repo) {
         }
         const vistos = new Map();
         for (const x of (await r.json()).workflow_runs || []) {
-          if (!vistos.has(x.name)) vistos.set(x.name, { id: x.id, workflow: x.name, estado: x.status, resultado: x.conclusion, numero: x.run_number, commit: String(x.head_sha || "").slice(0, 7), quando: Date.parse(x.updated_at) || 0, url: x.html_url });
+          if (!vistos.has(x.name)) vistos.set(x.name, { id: x.id, workflow: x.name, estado: x.status, resultado: x.conclusion, numero: x.run_number, commit: String(x.head_sha || "").slice(0, 7), quando: Date.parse(x.updated_at) || 0, url: x.html_url, manual: x.event === "workflow_dispatch" });
         }
         falhaDosBuilds.delete(repo);
         return [...vistos.values()];
@@ -168,10 +168,11 @@ export async function progressoDoBuild(env, repo, builds) {
   });
 }
 
-/** Resume a lista de builds num único estado: falhou > rodando > ok. */
+/** Resume a lista de builds num único estado: falhou > rodando > ok.
+ *  Falha de uma execução manual (ferramentas como "Guardar a chave antiga") continua aparecendo na lista, mas não marca o projeto inteiro como "Build falhou". */
 export function estadoGeral(builds) {
   if (!builds || !builds.length) return "desconhecido";
-  if (builds.some((b) => b.estado === "completed" && ["failure", "timed_out", "startup_failure"].includes(b.resultado))) return "falhou";
+  if (builds.some((b) => !b.manual && b.estado === "completed" && ["failure", "timed_out", "startup_failure"].includes(b.resultado))) return "falhou";
   if (builds.some((b) => b.estado !== "completed")) return "rodando";
   return "ok";
 }

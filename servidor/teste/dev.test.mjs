@@ -217,6 +217,8 @@ test("GitHub: estimativa pela árvore, estado geral dos builds e APK mais novo p
   assert.equal(estadoGeral([{ estado: "completed", resultado: "success" }]), "ok");
   assert.equal(estadoGeral([{ estado: "completed", resultado: "success" }, { estado: "in_progress", resultado: null }]), "rodando");
   assert.equal(estadoGeral([{ estado: "in_progress" }, { estado: "completed", resultado: "failure" }]), "falhou");
+  assert.equal(estadoGeral([{ estado: "completed", resultado: "success" }, { estado: "completed", resultado: "failure", manual: true }]), "ok", "ferramenta manual que falhou não derruba o projeto");
+  assert.equal(estadoGeral([{ estado: "completed", resultado: "failure", manual: false }]), "falhou");
   const lista = [
     { tag_name: "v1.190", html_url: "u1", published_at: "2026-11-11T00:00:00Z", assets: [{ id: 1, name: "Venus.apk", size: 10 }] },
     { tag_name: "v1.191", html_url: "u2", published_at: "2026-11-12T00:00:00Z", assets: [{ id: 2, name: "Venus.apk", size: 11 }] },
