@@ -16,3 +16,16 @@
 ## Modelos do Gemini
 - `gemini-2.5-flash` não está disponível para chaves novas; reserva atual: `gemini-3.8-flash` e `gemini-flash-lite-latest`.
 - Embeddings: `EmbeddingsGemini` tenta `gemini-embedding-2`, `-2-preview`, `gemini-embedding-001` (768 dimensões).
+
+## Regra de ouro: toda mudança de função vai para "O que há de novo"
+- Qualquer melhoria que mude o que o app faz ou como se usa (função nova, fluxo melhorado, correção de erro visível) ganha uma linha **nos dois lugares**:
+  - Android: `app/src/main/java/com/tonimarques/sextafeira/Novidades.kt` (`LISTA`).
+  - Windows/web: `venus-apps/apps/dois-em-um/src/apresentacao/dados.ts` (`NOVIDADES`).
+- `id` = o maior id existente + 1; `tipo` = `novo`, `melhoria` ou `correcao`; `titulo` curto; `texto` em português simples, dizendo o que mudou para a pessoa (não o que mudou no código).
+- A tela aparece sozinha depois da atualização e mostra só o que a pessoa ainda não viu (não depende do número da versão). Na primeira instalação ela não aparece: quem explica é o Guia do primeiro acesso.
+- Testes: `NovidadesTest.kt` (Android) e `teste/novidades.test.mjs` (Windows/web) conferem ids, tipos e textos.
+
+## Apresentação da primeira abertura
+- Android: `Onboarding.kt` (guia de permissões, cada uma explicada antes de pedir) → `TelaCadastro.kt` (termos em `Termos.kt`; mudou o texto: suba `Termos.VERSAO`).
+- Windows/web: `apresentacao/Apresentacao.tsx` + `dados.ts` (tour → permissões → termos; mudou o texto: suba `VERSAO_DOS_TERMOS`).
+- Função nova: acrescente ou ajuste um passo do tour. Permissão nova: explique o porquê ANTES de pedir.
