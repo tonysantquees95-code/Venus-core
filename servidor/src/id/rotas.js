@@ -102,7 +102,7 @@ export async function tratarId(req, env, url, caminho) {
     }
     if (caminho.startsWith("/id/sync") && !(await contaComAcesso(env, ctx.usuario))) throw new ErroId(402, "teste_acabou", MSG_SEM_ACESSO);
     if (caminho === "/id/sync" && req.method === "GET") return json(await lerSync(env, ctx, Number(url.searchParams.get("desde")) || 0));
-    m = /^\/id\/sync\/([a-z]{3,20})$/.exec(caminho);
+    m = /^\/id\/sync\/([a-z-]{3,20})$/.exec(caminho);
     if (m && req.method === "PUT") {
       const d = await corpo(req);
       return json(await gravarSync(env, ctx, m[1], d.valor, d.versao ?? 0));
