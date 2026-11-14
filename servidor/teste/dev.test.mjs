@@ -310,6 +310,15 @@ test("cofre de chaves: senha forte, valores nunca voltam, trava por tentativas e
   assert.equal(await lerSegredo(env, "GROQ_API_KEY"), CHAVE);
   assert.equal(await lerSegredo({ ...env, GEMINI_API_KEY: "do-ambiente-123" }, "GEMINI_API_KEY"), "do-ambiente-123");
 
+  // as rotas de IA recebem as chaves do cofre no `env` (o cofre vale mais que o ambiente; sem cofre, fica o ambiente)
+  const { comChavesDoCofre, esquecerChavesGuardadas } = await import("../src/dev/cofre.js");
+  esquecerChavesGuardadas();
+  const comCofre = await comChavesDoCofre({ ...env, GROQ_API_KEY: "do-ambiente", TAVILY_API_KEY: "tav-ambiente" });
+  assert.equal(comCofre.GROQ_API_KEY, CHAVE);
+  assert.equal(comCofre.TAVILY_API_KEY, "tav-ambiente");
+  assert.equal(comCofre.DB, env.DB);
+  assert.equal((await comChavesDoCofre({ GROQ_API_KEY: "so-ambiente" })).GROQ_API_KEY, "so-ambiente"); // sem banco
+
   // trocar a chave e apagar
   await chamar(env, adm.token, "/dev/cofre/guardar", "POST", { senha: SENHA, nome: "GROQ_API_KEY", valor: "gsk_NOVA_CHAVE_9999" });
   assert.equal(await lerSegredo(env, "GROQ_API_KEY"), "gsk_NOVA_CHAVE_9999");
