@@ -13,6 +13,8 @@ import { falar } from "../voz/useVoz";
 import { ponteDesktop } from "../desktop/ponte";
 import { abrirNoApp } from "../id/Avatar";
 import { useCatalogo } from "../empresa/CatalogoProvider";
+import { useFormulariosDaLoja } from "../empresa/FormulariosDaLoja";
+import { intencaoDaLoja } from "../empresa/lojaAdmin";
 import { contextoDeCatalogo, perguntaDeProduto, respostaDeProduto } from "../empresa/catalogo";
 
 const novoId = () => crypto.randomUUID();
@@ -26,6 +28,7 @@ export function useChat() {
   const mk = useMarketing();
   const { prefs } = usePreferencias();
   const cat = useCatalogo();
+  const forms = useFormulariosDaLoja();
 
   const enviar = useCallback(
     async (texto: string) => {
@@ -44,6 +47,14 @@ export function useChat() {
           anexar(id, resposta(local.texto));
           if (prefs.falarRespostas) falar(local.texto);
           if (local.abrir) abrirNoApp(local.abrir);
+          return;
+        }
+        // "cadastrar produto" / "atualizar produto": abre a janelinha (como no celular) em vez de virar conversa
+        const intencao = intencaoDaLoja(limpo);
+        if (intencao) {
+          const aviso = intencao === "cadastrar" ? "Abri a janelinha para cadastrar o produto." : "Abri a janelinha para atualizar o produto.";
+          anexar(id, resposta(aviso));
+          forms.abrir(intencao, (t) => { anexar(id, resposta(t)); if (prefs.falarRespostas) falar(t); });
           return;
         }
         // no Windows, "abrir calculadora", "aumentar volume", "bloquear a tela"… a Vênus faz no próprio computador
@@ -77,7 +88,7 @@ export function useChat() {
         marcarEnviando(id, false);
       }
     },
-    [ativa, anexar, estaEnviando, marcarEnviando, conta, empresa, mk.todasAsIdeias, mk.postsDoCelular, mk.storiesDoCelular, mk.resumoInstagram, cat, prefs.falarRespostas]
+    [ativa, anexar, estaEnviando, marcarEnviando, conta, empresa, mk.todasAsIdeias, mk.postsDoCelular, mk.storiesDoCelular, mk.resumoInstagram, cat, forms, prefs.falarRespostas]
   );
 
   return { mensagens: ativa.mensagens, enviando, enviar };

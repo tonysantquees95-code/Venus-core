@@ -1,6 +1,6 @@
 // Vênus para Windows: janela do dashboard + bandeja do sistema + atalho global + notificações nativas
 // + monitor de conexão com os Workers. A interface é o mesmo app React (Dois em Um) dos outros aparelhos.
-const { app, BrowserWindow, Tray, Menu, Notification, globalShortcut, ipcMain, nativeImage, protocol, net, shell, dialog, session } = require("electron");
+const { app, BrowserWindow, Tray, Menu, Notification, globalShortcut, ipcMain, nativeImage, protocol, net, shell, dialog, session, safeStorage } = require("electron");
 const fs = require("node:fs");
 const crypto = require("node:crypto");
 const os = require("node:os");
@@ -256,6 +256,24 @@ ipcMain.handle("venus:catalogo", async (_e, site) => {
     return corpo;
   } finally { clearTimeout(timer); }
 });
+// ---- administração da loja (cadastrar e atualizar produtos): a senha fica cifrada pelo Windows e nunca vai para a janela
+const { criarLoja } = require("./loja.js");
+const arquivoDaLoja = () => path.join(app.getPath("userData"), "loja.bin");
+const loja = criarLoja({
+  fetchFn: (url, init) => net.fetch(url, { ...init, signal: AbortSignal.timeout(30000) }),
+  ler: () => { try { return fs.readFileSync(arquivoDaLoja(), "utf8"); } catch { return null; } },
+  gravar: (v) => { try { if (v == null) fs.rmSync(arquivoDaLoja(), { force: true }); else fs.writeFileSync(arquivoDaLoja(), v); } catch { /* sem disco */ } },
+  cifrar: (t) => { if (!safeStorage.isEncryptionAvailable()) throw new Error("O Windows não liberou a proteção de senhas neste usuário."); return safeStorage.encryptString(t).toString("base64"); },
+  decifrar: (s) => safeStorage.decryptString(Buffer.from(s, "base64")),
+});
+const daLoja = (fn) => async (_e, ...a) => { try { return { ok: true, dado: await fn(...a) }; } catch (e) { return { ok: false, erro: e && e.message ? String(e.message).slice(0, 300) : "Falhou." }; } };
+ipcMain.handle("venus:loja-estado", daLoja(() => loja.estado()));
+ipcMain.handle("venus:loja-entrar", daLoja((site, email, senha) => loja.conectar(String(site).slice(0, 200), String(email).slice(0, 200), String(senha).slice(0, 200))));
+ipcMain.handle("venus:loja-sair", daLoja(() => loja.sair()));
+ipcMain.handle("venus:loja-produtos", daLoja(() => loja.produtos()));
+ipcMain.handle("venus:loja-salvar", daLoja((corpo) => loja.salvarProduto(corpo && typeof corpo === "object" ? corpo : {})));
+ipcMain.handle("venus:loja-estoque", daLoja((id, qtd) => loja.definirEstoque(id, qtd)));
+ipcMain.handle("venus:loja-foto", daLoja((base64) => loja.enviarFoto(String(base64).slice(0, 12_000_000))));
 ipcMain.handle("venus:atualizacao-verificar", () => verificarAtualizacao());
 ipcMain.handle("venus:atualizacao-instalar", () => instalarAtualizacao());
 
