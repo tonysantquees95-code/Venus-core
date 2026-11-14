@@ -5,10 +5,12 @@ import { useChat } from "../../hooks/useChat";
 import { useConversas } from "../../sessao/ConversasProvider";
 import { useVoz } from "../../voz/useVoz";
 import { AvatarDeConta } from "../../id/Avatar";
+import { useCatalogo } from "../../empresa/CatalogoProvider";
 
 export function ChatPanel({ aoAbrirMenu }: { aoAbrirMenu: () => void }) {
   const { mensagens, enviando, enviar } = useChat();
   const { ativa, novaConversa } = useConversas();
+  const catalogo = useCatalogo();
   const [texto, setTexto] = useState("");
   const fim = useRef<HTMLDivElement>(null);
   // falou: o que foi entendido vai direto para a Vênus, como no celular
@@ -44,6 +46,10 @@ export function ChatPanel({ aoAbrirMenu }: { aoAbrirMenu: () => void }) {
         </button>
         <AvatarDeConta />
       </header>
+
+      {catalogo.estado === "atualizando" && catalogo.produtos.length === 0 && (
+        <p role="status" className="border-b border-borda px-4 py-1.5 text-center text-xs text-suave">Buscando os produtos e preços da loja…</p>
+      )}
 
       <ol className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-4 py-4" aria-live="polite">
         {mensagens.map((m) => (
