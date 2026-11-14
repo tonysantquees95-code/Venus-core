@@ -22,6 +22,7 @@ import { ehRotaVindex, tratarVindex } from "./vindex/rotas.js";
 import { ehRotaCofre, tratarCofre } from "./vindex/cofre.js";
 import { ehRotaIcone, tratarIcone } from "./icone.js";
 import { ehRotaVortex, tratarVortex } from "./vortex/saves.js";
+import { ehRotaDrive, tratarDrive } from "./drive/drive.js";
 import { ehRotaCi, tratarCi } from "./ci/assinatura.js";
 import { chat, chatPreflight } from "./chat.js";
 import { tratarIA } from "./ia/rotas.js";
@@ -70,6 +71,7 @@ export default {
       if (ehRotaDoId(caminho)) return await tratarId(req, env, url, caminho);
       if (ehRotaCi(caminho)) return await tratarCi(req, env, url, caminho);
       if (ehRotaVortex(caminho)) return await tratarVortex(req, env, url, caminho);
+      if (ehRotaDrive(caminho)) return await tratarDrive(req, env, url, caminho);
       if (ehRotaVindex(caminho)) return await tratarVindex(req, env, url, caminho);
       if (ehRotaCofre(caminho)) return await tratarCofre(req, env, url, caminho);
       if (ehRotaIcone(caminho) && req.method === "GET") return await tratarIcone(req, url, caminho);
