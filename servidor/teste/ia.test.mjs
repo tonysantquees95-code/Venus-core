@@ -263,3 +263,28 @@ test("/ia/gemini: Vetorial ID obrigatório, só rotas permitidas, chave do Googl
   mockFetch({ "v1beta/models?pageSize=200": () => new Response(JSON.stringify({ models: [] }), { status: 200 }) });
   assert.equal((await pedir("/ia/gemini/models", logado, null, "GET")).status, 200);
 });
+
+import { ordemDeTentativas } from "../src/ia/roteador.js";
+import { executar } from "../src/ia/provedores.js";
+test("texto: Groq e DeepSeek se revezam e o Gemini é a última reserva; anexo é só Gemini", () => {
+  assert.deepEqual(ordemDeTentativas("groq"), ["groq", "deepseek", "gemini"]);
+  assert.deepEqual(ordemDeTentativas("deepseek"), ["deepseek", "groq", "gemini"]);
+  assert.deepEqual(ordemDeTentativas("gemini"), ["gemini"]);
+});
+
+test("limite no Groq e saldo esgotado (402) no DeepSeek caem no Gemini em vez de dar 502", async () => {
+  const original = globalThis.fetch;
+  globalThis.fetch = async (url) => {
+    const u = String(url);
+    if (u.includes("groq.com")) return new Response("{}", { status: 429 });
+    if (u.includes("deepseek.com")) return new Response("{}", { status: 402 });
+    return new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: "olá" }] } }] }), { status: 200 });
+  };
+  try {
+    const env = { GROQ_API_KEY: "g", DEEPSEEK_API_KEY: "d", GEMINI_API_KEY: "m" };
+    const r = await executar(env, ["groq", "deepseek", "gemini"], { sistema: "", mensagens: [{ papel: "user", texto: "oi" }], temperatura: 0.5, maxTokens: 50, tarefa: "conversa" });
+    assert.equal(r.provedor, "gemini");
+    assert.equal(r.texto, "olá");
+    assert.equal(r.fallback, true);
+  } finally { globalThis.fetch = original; }
+});

@@ -1,7 +1,7 @@
 // Roteador: decide, de forma determinística, qual provedor atende cada função.
 //   Groq     -> velocidade e textos
 //   DeepSeek -> lógica pesada, relatórios de BI e código
-//   Gemini   -> ESTRITAMENTE multimodal e OCR (nunca recebe texto puro)
+//   Gemini   -> multimodal e OCR; em texto só entra como última reserva quando Groq e DeepSeek falham
 export const TABELA = Object.freeze({
   conversa: "groq",
   rapida: "groq",
@@ -63,9 +63,10 @@ export function decidir({ tarefa, textoFinal, temAnexos }) {
   return { tarefa: auto, provedor: TABELA[auto], motivo: "automatica" };
 }
 
-/** Ordem de tentativas. Gemini não tem reserva fora da família Gemini (uso estrito). */
+/** Ordem de tentativas. Texto: Groq e DeepSeek se revezam e o Gemini é a última reserva (sem ela, limite ou saldo
+ *  esgotado nos dois derrubava a conversa). Anexos: só o Gemini lê, sem reserva. */
 export function ordemDeTentativas(provedor) {
-  if (provedor === "groq") return ["groq", "deepseek"];
-  if (provedor === "deepseek") return ["deepseek", "groq"];
+  if (provedor === "groq") return ["groq", "deepseek", "gemini"];
+  if (provedor === "deepseek") return ["deepseek", "groq", "gemini"];
   return ["gemini"];
 }

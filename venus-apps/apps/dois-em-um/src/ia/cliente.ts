@@ -36,7 +36,11 @@ async function pelaRota(sistema: string | undefined, mensagens: MensagemIA[]): P
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ sistema: sistema?.slice(0, 3900) || undefined, mensagens })
   });
-  if (!r.ok) throw new Error(`rota:${r.status}`);
+  if (!r.ok) {
+    let codigo = "";
+    try { codigo = String(((await r.json()) as { erro?: { codigo?: string } }).erro?.codigo ?? "").slice(0, 40); } catch { /* sem corpo */ }
+    throw new Error(`rota:${r.status}${codigo ? `:${codigo}` : ""}`);
+  }
   const d = (await r.json()) as { resposta?: string };
   if (!d.resposta) throw new Error("rota:vazia");
   return d.resposta;

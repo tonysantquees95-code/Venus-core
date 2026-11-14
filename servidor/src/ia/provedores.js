@@ -15,7 +15,8 @@ class ErroProvedor extends Error {
   }
 }
 
-const STATUS_RECUPERAVEIS = new Set([401, 403, 404, 408, 409, 425, 429]);
+// 402 = saldo esgotado no provedor (DeepSeek): tenta o próximo em vez de derrubar a conversa
+const STATUS_RECUPERAVEIS = new Set([401, 402, 403, 404, 408, 409, 425, 429]);
 
 async function postar(provedor, url, cabecalhos, corpo, ms) {
   let r;
