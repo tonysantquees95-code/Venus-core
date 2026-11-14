@@ -48,14 +48,30 @@ async function pelaRota(sistema: string | undefined, mensagens: MensagemIA[]): P
   return d.resposta;
 }
 
+const seg = (ms: number) => `${(ms / 1000).toFixed(1).replace(".", ",")}s`;
+const motivo = (e: unknown) => (e instanceof DOMException && (e.name === "TimeoutError" || e.name === "AbortError") ? "tempo esgotado" : e instanceof Error ? e.message.slice(0, 40) : "erro");
+
 /** Pergunta à Vênus. Logado: pela IA da conta (a do celular); se falhar (ou sem conta), pela rota pública. */
 export async function perguntarIA(sistema: string | undefined, mensagens: MensagemIA[]): Promise<string> {
+  return (await perguntarIAcomDetalhe(sistema, mensagens)).texto;
+}
+
+/** Igual ao perguntarIA, mas devolve também o caminho e os tempos de cada tentativa (ex.: "conta: 429 em 0,4s → rota: ok em 2,1s"). */
+export async function perguntarIAcomDetalhe(sistema: string | undefined, mensagens: MensagemIA[]): Promise<{ texto: string; detalhe: string }> {
   const recentes = mensagens.slice(-20);
+  const passos: string[] = [];
   if (tokenDaConta) {
-    try { return await pelaConta(sistema, recentes); } catch { /* tenta a outra */ }
-  }
+    const t0 = performance.now();
+    try {
+      const texto = await pelaConta(sistema, recentes);
+      return { texto, detalhe: `conta: ok em ${seg(performance.now() - t0)}` };
+    } catch (e) { passos.push(`conta: ${motivo(e)} em ${seg(performance.now() - t0)}`); }
+  } else passos.push("sem login na conta");
+  const t1 = performance.now();
   try {
-    return await pelaRota(sistema, recentes);
+    const texto = await pelaRota(sistema, recentes);
+    passos.push(`rota: ok em ${seg(performance.now() - t1)}`);
+    return { texto, detalhe: passos.join(" → ") };
   } catch (e) {
     const detalhe = e instanceof Error ? e.message : "";
     throw new Error(/rota:(401|403)/.test(detalhe) ? "Entre com o seu Vetorial ID (em Ajustes) para a Vênus responder." : navigator.onLine === false ? "Sem internet." : `Não consegui falar com o servidor agora${detalhe ? ` (${detalhe})` : ""}. Tente de novo em instantes.`);

@@ -5,6 +5,8 @@ export interface Mensagem {
   autor: "eu" | "venus";
   texto: string;
   quando: number;
+  /** Só nas respostas da IA: por onde veio e quanto demorou (ajuda a achar lentidão). */
+  detalhe?: string;
 }
 
 export interface Automacao {

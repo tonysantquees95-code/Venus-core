@@ -1,5 +1,5 @@
 import { useCallback } from "react";
-import { perguntarIA } from "../ia/cliente";
+import { perguntarIAcomDetalhe } from "../ia/cliente";
 import { useMarketing } from "../empresa/MarketingProvider";
 import { contextoDeMarketing } from "../empresa/marketing";
 import type { Mensagem } from "../tipos";
@@ -36,7 +36,7 @@ export function useChat() {
       const historico = [...ativa.mensagens, minha];
       anexar(id, minha);
       marcarEnviando(id, true);
-      const resposta = (texto: string): Mensagem => ({ id: novoId(), autor: "venus", texto, quando: Date.now() });
+      const resposta = (texto: string, detalhe?: string): Mensagem => ({ id: novoId(), autor: "venus", texto, quando: Date.now(), ...(detalhe ? { detalhe } : {}) });
       try {
         // comandos de conta ("status da minha conta", "sair da minha conta aqui"…) a Vênus resolve sozinha
         const local = await responderComandoDeConta(limpo, conta);
@@ -65,11 +65,11 @@ export function useChat() {
             return;
           }
         }
-        const texto2 = await perguntarIA(
+        const { texto: texto2, detalhe } = await perguntarIAcomDetalhe(
           [contextoDaEmpresa(empresa), contextoDeCatalogo(produtos, limpo), contextoDeMarketing(mk.todasAsIdeias, mk.postsDoCelular, mk.storiesDoCelular, Date.now(), mk.resumoInstagram)].filter(Boolean).join("\n\n") || undefined,
           historico.map((m) => ({ papel: m.autor === "eu" ? ("user" as const) : ("assistant" as const), texto: m.texto }))
         );
-        anexar(id, resposta(texto2));
+        anexar(id, resposta(texto2, detalhe));
         if (prefs.falarRespostas) falar(texto2);
       } catch (e) {
         anexar(id, resposta(e instanceof Error && e.message ? e.message : "Não consegui falar com o servidor agora. Tente de novo em instantes."));
