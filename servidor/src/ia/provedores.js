@@ -2,7 +2,7 @@
 import { ErroHttp } from "./roteador.js";
 import { lerSegredo } from "../dev/cofre.js";
 
-const TEMPO_PADRAO = 30_000;
+const TEMPO_PADRAO = 12_000; // conversa normal responde em 1-3 s; passou disso, vai logo para o provedor de reserva
 const TEMPO_RACIOCINIO = 110_000;
 
 /** Erro de provedor; `recuperavel` diz se vale tentar o provedor de reserva. */
@@ -107,7 +107,7 @@ export async function gemini(env, p) {
         `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(modelo)}:generateContent`,
         { "x-goog-api-key": env.GEMINI_API_KEY }, // chave em cabeçalho: não aparece em URL/log
         corpo,
-        TEMPO_PADRAO * 2
+        20_000
       );
       const texto = (dados?.candidates?.[0]?.content?.parts ?? []).map((x) => x.text ?? "").join("").trim();
       if (!texto) throw new ErroProvedor("gemini", 502, true, dados?.promptFeedback?.blockReason ? "bloqueado" : "resposta_vazia");
