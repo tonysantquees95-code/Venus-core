@@ -13,6 +13,8 @@ interface Ctx {
   tirarIdeia: (id: string) => void;
   postsDoCelular: PostProgramado[];
   storiesDoCelular: StoriesDoCelular | null;
+  /** Resumo do Instagram que o celular mandou (seguidores, últimos posts). */
+  resumoInstagram: string;
   /** Chegou da conta (Sincronizador). */
   receber: (chave: string, valor: unknown) => void;
 }
@@ -24,6 +26,8 @@ export function MarketingProvider({ children }: { children: ReactNode }) {
   const [brutas, setBrutas] = usePersistido<IdeiaDePost[]>("venus:ideias-post", []);
   const [posts, setPosts] = usePersistido<PostProgramado[]>("venus:posts-celular", []);
   const [stories, setStories] = usePersistido<StoriesDoCelular | null>("venus:stories-celular", null);
+
+  const [resumoIg, setResumoIg] = usePersistido<string>("venus:resumo-instagram", "");
 
   const ideias = useMemo(() => brutas.filter((i) => !i.removida), [brutas]);
   const marca = (i: IdeiaDePost): IdeiaDePost => ({ id: i.id, titulo: i.titulo, formato: "feed", legenda: "", quando: "", usada: false, removida: true, ts: Date.now() });
@@ -46,10 +50,11 @@ export function MarketingProvider({ children }: { children: ReactNode }) {
     if (chave === "ideiaspost") setBrutas(lerDocIdeias(valor));
     else if (chave === "postagens") setPosts(lerDocPosts(valor));
     else if (chave === "stories") setStories(lerDocStories(valor));
-  }, [setBrutas, setPosts, setStories]);
+    else if (chave === "instagram") setResumoIg(typeof (valor as any)?.resumo === "string" ? (valor as any).resumo.slice(0, 1500) : "");
+  }, [setBrutas, setPosts, setStories, setResumoIg]);
 
-  const v = useMemo(() => ({ ideias, todasAsIdeias: brutas, trocarIdeias, juntarIdeias, atualizarIdeia, tirarIdeia, postsDoCelular: posts, storiesDoCelular: stories, receber }),
-    [ideias, brutas, trocarIdeias, juntarIdeias, atualizarIdeia, tirarIdeia, posts, stories, receber]);
+  const v = useMemo(() => ({ ideias, todasAsIdeias: brutas, trocarIdeias, juntarIdeias, atualizarIdeia, tirarIdeia, postsDoCelular: posts, storiesDoCelular: stories, resumoInstagram: resumoIg, receber }),
+    [ideias, brutas, trocarIdeias, juntarIdeias, atualizarIdeia, tirarIdeia, posts, stories, resumoIg, receber]);
   return <C.Provider value={v}>{children}</C.Provider>;
 }
 

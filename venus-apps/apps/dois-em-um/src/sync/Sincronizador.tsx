@@ -44,7 +44,7 @@ export function Sincronizador() {
           if (doc.chave === "tema" && temaValido(doc.valor)) {
             ultimoEnviado.current.tema = JSON.stringify(doc.valor);
             definirTemaTudo(doc.valor);
-          } else if (doc.chave === "ideiaspost" || doc.chave === "postagens" || doc.chave === "stories") {
+          } else if (doc.chave === "ideiaspost" || doc.chave === "postagens" || doc.chave === "stories" || doc.chave === "instagram") {
             if (doc.chave === "ideiaspost") ultimoEnviado.current.ideiaspost = JSON.stringify(docDeIdeias(lerDocIdeias(doc.valor)));
             receberMk.current(doc.chave, doc.valor);
           } else if (doc.chave === "empresa") {
