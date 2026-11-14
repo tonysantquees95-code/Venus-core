@@ -5,6 +5,8 @@ import { useId } from "../id/IdProvider";
 import { AvatarDeConta } from "../id/Avatar";
 import { HolographicOrb, useTema } from "../theming";
 import { Cartao, Chave, botaoSuave } from "./Controles";
+import { Novidades, Termos, Tour } from "../apresentacao/Apresentacao";
+import { NOVIDADES, novasDesde } from "../apresentacao/dados";
 import { ContaLogada, Entrar, MeusDispositivos } from "./Conta";
 import { buscar, CATALOGO, CATEGORIAS, MODOS, type Categoria } from "./logica";
 import { usePreferencias } from "./Preferencias";
@@ -66,6 +68,7 @@ function Atualizacoes() {
 
 /** Ajustes: categorias, cartões de vidro, alternâncias grandes e busca rápida. */
 export function Ajustes({ aoAbrirTema, alvo }: { aoAbrirTema: () => void; alvo?: string }) {
+  const [sobre, setSobre] = useState<"" | "tour" | "termos" | "novidades">("");
   const { prefs, definir } = usePreferencias();
   const { sessao } = useId();
   const { tema } = useTema();
@@ -181,6 +184,16 @@ export function Ajustes({ aoAbrirTema, alvo }: { aoAbrirTema: () => void; alvo?:
 
           <Titulo cat="dispositivos" />
           {mostra("dispositivos", "dispositivos") && <Cartao id="dispositivos" titulo="Meus dispositivos" descricao="Onde a sua conta está conectada agora."><MeusDispositivos /></Cartao>}
+          <Cartao id="sobre" titulo="Sobre a Vênus" descricao="Rever a apresentação das funções, ler os termos que você aceitou ou ver tudo o que já mudou.">
+            <div className="flex flex-wrap gap-2">
+              <button type="button" className={botaoSuave} onClick={() => setSobre("tour")}>Rever a apresentação</button>
+              <button type="button" className={botaoSuave} onClick={() => setSobre("termos")}>Termos de uso</button>
+              <button type="button" className={botaoSuave} onClick={() => setSobre("novidades")}>O que há de novo</button>
+            </div>
+          </Cartao>
+          {sobre === "tour" && <div className="fixed inset-0 z-50 flex flex-col bg-fundo"><div className="mx-auto flex min-h-0 w-full max-w-lg flex-1 flex-col px-5 pb-4 pt-6"><Tour aoTerminar={() => setSobre("")} aoFechar={() => setSobre("")} rotuloFinal="Fechar" /></div></div>}
+          {sobre === "termos" && <Termos aoFechar={() => setSobre("")} />}
+          {sobre === "novidades" && <Novidades itens={novasDesde(0, NOVIDADES)} aoFechar={() => setSobre("")} />}
         </div>
       </div>
     </div>

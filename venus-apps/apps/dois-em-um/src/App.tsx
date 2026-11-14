@@ -16,6 +16,8 @@ import { TelaLogin } from "./id/TelaLogin";
 import { TelaBloqueio, TelaValidando } from "./id/TelaBloqueio";
 import { useRobo } from "./hooks/useRobo";
 import type { Tela } from "./tipos";
+import { Apresentacao, Novidades } from "./apresentacao/Apresentacao";
+import { lerVisto, novasDesde, precisaApresentar, type Novidade } from "./apresentacao/dados";
 
 /**
  * Uma interface só:
@@ -42,6 +44,8 @@ export function App() {
     window.addEventListener("venus:abrir", ouvir);
     return () => window.removeEventListener("venus:abrir", ouvir);
   }, []);
+  const [apresentar, setApresentar] = useState(() => precisaApresentar());
+  const [novidades, setNovidades] = useState<Novidade[]>(() => { const v = lerVisto(); return v === null ? [] : novasDesde(v); });
   const inicioToque = useRef<{ x: number; y: number } | null>(null);
 
   // Trocou, abriu ou criou conversa (inclui reabrir o app): volta para o chat e recolhe a gaveta.
@@ -61,6 +65,9 @@ export function App() {
     inicioToque.current = null;
     if (t && i && t.clientX - i.x > 60 && Math.abs(t.clientY - i.y) < 50) setMenuAberto(true);
   };
+
+  // primeira abertura: tour, o que o app usa e termos (antes mesmo do login)
+  if (apresentar) return <Apresentacao aoConcluir={() => { setNovidades([]); setApresentar(false); }} />;
 
   // Trava de segurança: sem Vetorial ID e sem selo de licença válido o aplicativo não abre.
   if (!sessao) return <TelaLogin />;
@@ -92,6 +99,7 @@ export function App() {
       <Sincronizador />
       <AvisoDeConflito />
       <InstalarIOS />
+      {novidades.length > 0 && <Novidades itens={novidades} aoFechar={() => setNovidades([])} />}
     </div>
   );
 }
