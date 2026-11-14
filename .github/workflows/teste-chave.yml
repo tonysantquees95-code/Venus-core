@@ -16,6 +16,20 @@ jobs:
         with:
           distribution: temurin
           java-version: "17"
+      # A chave antiga vem do segredo ASSINATURA_ANTIGA_BASE64 (rode "Guardar a chave antiga nos segredos" uma vez);
+      # enquanto ele não existir, usa o arquivo que ainda está no repositório.
+      - name: Chave antiga
+        env:
+          ANTIGA_B64: ${{ secrets.ASSINATURA_ANTIGA_BASE64 }}
+        run: |
+          if [ -n "$ANTIGA_B64" ]; then
+            echo "$ANTIGA_B64" | base64 -d > "$RUNNER_TEMP/antiga.keystore"
+            echo "ANTIGA=$RUNNER_TEMP/antiga.keystore" >> "$GITHUB_ENV"
+            echo "ASSINATURA_ARQUIVO=$RUNNER_TEMP/antiga.keystore" >> "$GITHUB_ENV"
+          else
+            echo "ANTIGA=app/sexta.keystore" >> "$GITHUB_ENV"
+          fi
+
       - name: Ensaiar
         env:
           GH_TOKEN: ${{ github.token }}
@@ -29,11 +43,11 @@ jobs:
           BT=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -n 1)
           echo "build-tools: $BT"
           "$BT/apksigner" rotate --out "$RUNNER_TEMP/linhagem.bin" \
-            --old-signer --ks app/sexta.keystore --ks-pass pass:sextafeira --ks-key-alias sexta --key-pass pass:sextafeira \
+            --old-signer --ks "$ANTIGA" --ks-pass pass:sextafeira --ks-key-alias sexta --key-pass pass:sextafeira \
             --new-signer --ks "$RUNNER_TEMP/nova.keystore" --ks-pass env:SENHA --ks-key-alias venus --key-pass env:SENHA
           "$BT/apksigner" lineage --in "$RUNNER_TEMP/linhagem.bin" --print-certs | grep -iE "signer|SHA-256" || true
           "$BT/apksigner" sign \
-            --ks app/sexta.keystore --ks-pass pass:sextafeira --ks-key-alias sexta --key-pass pass:sextafeira \
+            --ks "$ANTIGA" --ks-pass pass:sextafeira --ks-key-alias sexta --key-pass pass:sextafeira \
             --next-signer --ks "$RUNNER_TEMP/nova.keystore" --ks-pass env:SENHA --ks-key-alias venus --key-pass env:SENHA \
             --lineage "$RUNNER_TEMP/linhagem.bin" --rotation-min-sdk-version 28 "$RUNNER_TEMP/Venus.apk"
           "$BT/apksigner" verify --verbose --print-certs "$RUNNER_TEMP/Venus.apk" | grep -E "Verified using|Signer|certificate SHA-256|Number of signers" | head -20

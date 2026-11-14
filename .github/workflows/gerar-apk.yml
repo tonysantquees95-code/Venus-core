@@ -37,6 +37,20 @@ jobs:
         with:
           gradle-version: "8.11.1"
 
+      # A chave antiga vem do segredo ASSINATURA_ANTIGA_BASE64 (rode "Guardar a chave antiga nos segredos" uma vez);
+      # enquanto ele não existir, usa o arquivo que ainda está no repositório.
+      - name: Chave antiga
+        env:
+          ANTIGA_B64: ${{ secrets.ASSINATURA_ANTIGA_BASE64 }}
+        run: |
+          if [ -n "$ANTIGA_B64" ]; then
+            echo "$ANTIGA_B64" | base64 -d > "$RUNNER_TEMP/antiga.keystore"
+            echo "ANTIGA=$RUNNER_TEMP/antiga.keystore" >> "$GITHUB_ENV"
+            echo "ASSINATURA_ARQUIVO=$RUNNER_TEMP/antiga.keystore" >> "$GITHUB_ENV"
+          else
+            echo "ANTIGA=app/sexta.keystore" >> "$GITHUB_ENV"
+          fi
+
       # O Gradle assina sempre com a chave antiga do repositório; se já existir a chave nova (segredos criados pela
       # rotina "Criar chave nova"), os APKs são assinados de novo, depois, com a chave nova + a linhagem.
       - name: Chave nova (segredos do GitHub)
@@ -95,7 +109,7 @@ jobs:
           BT=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -n 1)
           for apk in Venus.apk; do
             "$BT/apksigner" sign \
-              --ks app/sexta.keystore --ks-pass pass:sextafeira --ks-key-alias sexta --key-pass pass:sextafeira \
+              --ks "$ANTIGA" --ks-pass pass:sextafeira --ks-key-alias sexta --key-pass pass:sextafeira \
               --next-signer --ks "$RUNNER_TEMP/nova.keystore" --ks-pass env:SENHA --ks-key-alias venus --key-pass env:SENHA \
               --lineage "$RUNNER_TEMP/linhagem.bin" --rotation-min-sdk-version 28 "$apk"
             "$BT/apksigner" verify --verbose "$apk" | grep -E "Verified using|Number of signers" || true
