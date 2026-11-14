@@ -94,22 +94,19 @@ export async function faxina(env, corpo, ia = executar) {
   return v ? { ...v, provedor: r.provedor } : { duplicados: [], corrompidos: [], observacoes: "A IA não respondeu num formato válido." };
 }
 
-// ---- Perfil por jogo (Dolphin: GameCube e Wii): a IA escolhe ajustes seguros para o aparelho ----
+// ---- Perfil por jogo: ajustes neutros que o Vortex traduz para cada emulador (Dolphin, PPSSPP, RetroArch) ----
 export const AJUSTES = Object.freeze({
-  "GFX.Settings.InternalResolution": { min: 1, max: 6 },
-  "GFX.Settings.MSAA": { valores: [1, 2, 4, 8] },
-  "GFX.Enhancements.MaxAnisotropy": { min: 0, max: 4 },
-  "GFX.Settings.ShaderCompilationMode": { min: 0, max: 3 },
-  "GFX.Settings.WaitForShadersBeforeStarting": { bool: true },
-  "GFX.Hardware.VSync": { bool: true },
-  "GFX.Settings.BackendMultithreading": { bool: true },
-  "Dolphin.Core.CPUThread": { bool: true },
-  "Dolphin.Core.SyncOnSkipIdle": { bool: true },
+  resolucao: { min: 1, max: 6 }, // múltiplo da resolução original do console
+  msaa: { valores: [0, 2, 4, 8] }, // 0 = desligado
+  anisotropia: { min: 0, max: 4 }, // 0 = desligado, 4 = 16x
+  vsync: { bool: true },
+  sombreadores: { min: 0, max: 3 }, // só Dolphin: modo de compilação (0 = síncrono ... 3 = assíncrono sem travadas)
 });
+export const PLATAFORMAS_PERFIL = ["gamecube", "wii", "psp"];
 const SISTEMA_PERFIL =
-  "Você configura o emulador Dolphin (GameCube/Wii) para um jogo e um computador. Responda SOMENTE com JSON válido: " +
+  "Você escolhe ajustes gráficos de emulador para um jogo e um computador. Responda SOMENTE com JSON válido: " +
   '{"ajustes":{"<chave>":<valor>},"motivo":"<até 120 caracteres>"}. Use apenas as chaves permitidas e valores dentro das faixas. ' +
-  "InternalResolution: 1 = nativa, 2 = 2x (720p), 3 = 3x (1080p), 4 = 4x. Computador fraco: resolução 1 ou 2, sem MSAA, CPUThread true. Potente: 3 ou 4, anisotropia 2-4. Na dúvida, escolha o seguro. Não invente chaves.";
+  "resolucao: 1 = nativa, 2 = 2x, 3 = 3x, 4 = 4x. Computador fraco (pouca RAM ou poucos núcleos): resolucao 1 ou 2, msaa 0, anisotropia 0. Potente: resolucao 3 ou 4, anisotropia 2-4. Na dúvida, escolha o seguro. Não invente chaves.";
 
 export function validarAjustes(obj) {
   const saida = {};
@@ -125,8 +122,8 @@ export function validarAjustes(obj) {
 }
 
 export async function perfilJogo(env, corpo, ia = executar) {
-  const entrada = { titulo: texto(corpo?.titulo, 120), plataforma: texto(corpo?.plataforma, 24), aparelho: montarPedido({ aparelho: corpo?.aparelho }).aparelho, permitidas: AJUSTES };
-  if (!entrada.titulo || !["gamecube", "wii"].includes(entrada.plataforma)) return { ajustes: {}, motivo: "" };
+  const entrada = { titulo: texto(corpo?.titulo, 120), plataforma: texto(corpo?.plataforma, 24), emulador: texto(corpo?.emulador, 24), aparelho: montarPedido({ aparelho: corpo?.aparelho }).aparelho, permitidas: AJUSTES };
+  if (!entrada.titulo || !PLATAFORMAS_PERFIL.includes(entrada.plataforma)) return { ajustes: {}, motivo: "" };
   const r = await ia(env, ["deepseek", "groq"], { tarefa: "relatorio", sistema: SISTEMA_PERFIL, mensagens: [{ papel: "user", texto: JSON.stringify(entrada) }], temperatura: 0.1, maxTokens: 600 });
   const m = /\{[\s\S]*\}/.exec(String(r.texto));
   let j;
