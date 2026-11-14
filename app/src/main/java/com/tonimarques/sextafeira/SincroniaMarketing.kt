@@ -17,6 +17,11 @@ internal object SincroniaMarketing {
     const val IDEIAS = "ideiaspost"
     const val POSTAGENS = "postagens"
     const val STORIES = "stories"
+    /** Resumo do Instagram (seguidores e últimos posts) já pronto, para o computador responder sem chamar a Meta. */
+    const val INSTAGRAM = "instagram"
+    private const val PREF_RESUMO_IG = "mkt_resumo_ig"
+    private const val PREF_RESUMO_IG_T = "mkt_resumo_ig_t"
+    private const val VALIDADE_RESUMO_MS = 15L * 60_000L
 
     private const val MAX_IDEIAS = 40
     private const val MAX_MARCAS = 60
@@ -101,6 +106,21 @@ internal object SincroniaMarketing {
         return JSONObject().put("itens", arr)
     }
 
+    /** Resumo do Instagram guardado por 15 minutos; só chama a Meta quando venceu (e só se o Instagram estiver conectado). */
+    private fun resumoDoInstagram(a: MainActivity): JSONObject? {
+        if (!Instagram.conectado(a)) return null
+        val agora = System.currentTimeMillis()
+        var texto = a.prefs.getString(PREF_RESUMO_IG, "").orEmpty()
+        if (texto.isBlank() || agora - a.prefs.getLong(PREF_RESUMO_IG_T, 0) > VALIDADE_RESUMO_MS) {
+            texto = try { Instagram.resumo(a) } catch (e: Exception) { texto }
+            if (texto.isNotBlank()) a.prefs.edit().putString(PREF_RESUMO_IG, texto).putLong(PREF_RESUMO_IG_T, agora).apply()
+        }
+        if (texto.isBlank()) return null
+        // "t" só muda quando o texto muda, para não gerar envio à toa
+        val t = a.prefs.getLong(PREF_RESUMO_IG_T, agora)
+        return JSONObject().put("resumo", texto.take(1500)).put("t", t)
+    }
+
     /** Envia o que mudou aqui: ideias, posts programados e a fila de stories. */
     fun enviarTudo(a: MainActivity, ver: JSONObject, env: JSONObject) {
         try {
@@ -113,6 +133,10 @@ internal object SincroniaMarketing {
             }
         } catch (e: Exception) {
             // sem memória ou sem conexão: tenta de novo no próximo ciclo
+        }
+        try {
+            resumoDoInstagram(a)?.let { SincroniaId.enviar(a, INSTAGRAM, it, ver, env) }
+        } catch (e: Exception) {
         }
         try {
             SincroniaId.enviar(a, POSTAGENS, postagensParaSincronia(a), ver, env)

@@ -52,7 +52,7 @@ export function useChat() {
           return;
         }
         const texto2 = await perguntarIA(
-          [contextoDaEmpresa(empresa), contextoDeMarketing(mk.todasAsIdeias, mk.postsDoCelular, mk.storiesDoCelular)].filter(Boolean).join("\n\n") || undefined,
+          [contextoDaEmpresa(empresa), contextoDeMarketing(mk.todasAsIdeias, mk.postsDoCelular, mk.storiesDoCelular, Date.now(), mk.resumoInstagram)].filter(Boolean).join("\n\n") || undefined,
           historico.map((m) => ({ papel: m.autor === "eu" ? ("user" as const) : ("assistant" as const), texto: m.texto }))
         );
         anexar(id, resposta(texto2));
@@ -63,7 +63,7 @@ export function useChat() {
         marcarEnviando(id, false);
       }
     },
-    [ativa, anexar, estaEnviando, marcarEnviando, conta, empresa, mk.todasAsIdeias, mk.postsDoCelular, mk.storiesDoCelular, prefs.falarRespostas]
+    [ativa, anexar, estaEnviando, marcarEnviando, conta, empresa, mk.todasAsIdeias, mk.postsDoCelular, mk.storiesDoCelular, mk.resumoInstagram, prefs.falarRespostas]
   );
 
   return { mensagens: ativa.mensagens, enviando, enviar };

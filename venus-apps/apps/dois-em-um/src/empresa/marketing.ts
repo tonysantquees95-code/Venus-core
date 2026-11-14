@@ -206,11 +206,12 @@ export function docDeIdeias(l: IdeiaDePost[]) {
 }
 
 /** Resumo curto do que já existe nas publicações (celular e computador), para a Vênus responder "como está o Instagram?". */
-export function contextoDeMarketing(ideias: IdeiaDePost[], posts: PostProgramado[], stories: StoriesDoCelular | null, agora = Date.now()): string {
+export function contextoDeMarketing(ideias: IdeiaDePost[], posts: PostProgramado[], stories: StoriesDoCelular | null, agora = Date.now(), resumoInstagram = ""): string {
   const vivas = ideias.filter((i) => !i.removida);
   const futuros = posts.filter((p) => p.quando > agora).sort((a, b) => a.quando - b.quando).slice(0, 8);
   const dia = (ms: number) => new Date(ms).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
   const linhas = [
+    resumoInstagram ? `Desempenho atual do Instagram (enviado pelo celular): ${resumoInstagram}` : "",
     vivas.length ? `Ideias de post (${vivas.length}, ${vivas.filter((i) => i.usada).length} já postadas): ${vivas.slice(0, 10).map((i) => `${i.titulo}${i.usada ? " (postada)" : ""}`).join("; ")}.` : "",
     futuros.length ? `Posts programados no celular: ${futuros.map((p) => `${dia(p.quando)} ${p.tipo} "${p.legenda.slice(0, 50)}"`).join("; ")}.` : posts.length ? "Nenhum post programado pela frente." : "",
     stories ? `Stories automáticos ${stories.ligado ? "ligados" : "desligados"}${stories.manha ? `, manhã ${stories.manha}` : ""}${stories.tarde ? `, tarde ${stories.tarde}` : ""}; ${stories.fila.length} dicas na fila${stories.ultimo ? `; último: ${stories.ultimo}` : ""}.` : ""
