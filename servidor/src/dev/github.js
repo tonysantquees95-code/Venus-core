@@ -4,6 +4,7 @@ export const REPO_VENUS = "tonysantquees95-code/Venus-core";
 export const REPO_VINDEX = "tonysantquees95-code/Vindex-";
 export const REPO_VORTEX = "tonysantquees95-code/Vortex";
 export const REPO_VELOX = "tonysantquees95-code/velox-gaming-search";
+export const REPO_DRIVE = "tonysantquees95-code/vetorial-drive";
 export const REPO_DEV_CENTER = "tonysantquees95-code/vetorial-dev-center";
 
 /** Projetos do ecossistema. Vindex e Vortex ganham repositório pelo painel (dev_config "repo:<id>") ou pela variável do Worker. */
@@ -35,6 +36,9 @@ export const PROJETOS = [
     ] },  { id: "velox", nome: "Velox Search", repo: REPO_VELOX, descricao: "Navegador gamer da Vetorial Tech: abas, bloqueio de anúncios, temas e downloads (Android e Windows).", apks: [
       { app: "velox-android", rotulo: "Velox (Android)", tag: /^v?1\.(\d+)$/, arquivo: (n) => /^Velox\.apk$/i.test(n) },
       { app: "velox-windows", rotulo: "Velox (Windows)", tag: /^windows-1\.(\d+)$/, arquivo: (n) => /^Velox-Instalador-.*\.exe$/i.test(n) },
+    ] },
+  { id: "drive", nome: "Vetorial Drive", repo: REPO_DRIVE, descricao: "Nuvem da conta Vetorial ID para documentos e ROMs (2 GB por arquivo): app Android; o Vortex usa o mesmo espaço.", apks: [
+      { app: "drive-android", rotulo: "Vetorial Drive (Android)", tag: /^v?1\.(\d+)$/, arquivo: (n) => /^VetorialDrive\.apk$/i.test(n) },
     ] },
 ];
 
