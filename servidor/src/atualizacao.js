@@ -7,6 +7,7 @@ export const REPO_DO_VINDEX = "tonysantquees95-code/Vindex-";
 export const REPO_DO_VORTEX = "tonysantquees95-code/Vortex";
 export const REPO_DO_DRIVE = "tonysantquees95-code/vetorial-drive";
 export const REPO_DO_VELOX = "tonysantquees95-code/velox-gaming-search";
+export const REPO_DO_VOXIX = "tonysantquees95-code/voxix";
 
 const APPS = {
   venus: { repo: REPO_DA_VENUS, tag: /^v?1\.(\d+)$/, arquivo: (n) => /\.apk$/i.test(n) && !/robo/i.test(n) },
@@ -18,6 +19,8 @@ const APPS = {
   "vortex-android": { repo: REPO_DO_VORTEX, tag: /^v?1\.(\d+)$/, arquivo: (n) => /\.apk$/i.test(n), publico: true },
   "vortex-windows": { repo: REPO_DO_VORTEX, tag: /^v?1\.(\d+)$/, arquivo: (n) => /\.exe$/i.test(n), publico: true },
   "drive-android": { repo: REPO_DO_DRIVE, tag: /^v?1\.(\d+)$/, arquivo: (n) => /^VetorialDrive\.apk$/i.test(n) },
+  "voxix-android": { repo: REPO_DO_VOXIX, tag: /^v?1\.(\d+)$/, arquivo: (n) => /^Voxix\.apk$/i.test(n) },
+  "voxix-windows": { repo: REPO_DO_VOXIX, tag: /^v?1\.(\d+)$/, arquivo: (n) => /^VoxixSetup\.exe$/i.test(n) },
   "velox-android": { repo: REPO_DO_VELOX, tag: /^v?1\.(\d+)$/, arquivo: (n) => /^Velox\.apk$/i.test(n), publico: true },
   "velox-windows": { repo: REPO_DO_VELOX, tag: /^windows-1\.(\d+)$/, arquivo: (n) => /^Velox-Instalador-.*\.exe$/i.test(n), publico: true },
 };
