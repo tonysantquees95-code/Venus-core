@@ -13,7 +13,7 @@ async function pelaConta(sistema: string | undefined, mensagens: MensagemIA[]): 
   for (const model of MODELOS) {
     const r = await fetch(`${URL_API}/ia/v1/chat/completions`, {
       method: "POST",
-      signal: AbortSignal.timeout(12_000),
+      signal: AbortSignal.timeout(8_000),
       headers: { "content-type": "application/json", authorization: `Bearer ${tokenDaConta}` },
       body: JSON.stringify({ model, messages: [...(sistema ? [{ role: "system", content: sistema }] : []), ...mensagens.map((m) => ({ role: m.papel, content: m.texto }))] })
     });
@@ -34,7 +34,7 @@ async function pelaConta(sistema: string | undefined, mensagens: MensagemIA[]): 
 async function pelaRota(sistema: string | undefined, mensagens: MensagemIA[]): Promise<string> {
   const r = await fetch(`${URL_API}/v1/chat`, {
     method: "POST",
-    signal: AbortSignal.timeout(20_000),
+    signal: AbortSignal.timeout(15_000),
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ sistema: sistema?.slice(0, 3900) || undefined, mensagens })
   });
