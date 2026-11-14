@@ -335,3 +335,31 @@ test("teste grátis: fora da janela promocional, ou a 3ª conta da mesma rede, o
   await cad(6, {}, "");
   assert.equal(await acesso(6), true);
 });
+
+test("limites por aplicativo: Vênus, Vindex e Vortex contam separados; o Velox não tem limite", async () => {
+  const env = ENV();
+  await conta(env);
+  // cada login acontece 10 minutos depois do anterior, para não bater no limite de uso simultâneo
+  const logar = (n, app) => entrar(env, { email: "toni@exemplo.com", senha: "senha-forte-1", dispositivo: disp(n), app }, T0 + n * 600_000);
+  for (const n of [11, 12, 13]) await logar(n, "vindex"); // 3 aparelhos no Vindex não ocupam vaga da Vênus (que já tem o aparelho 1)
+  assert.equal((await erro(logar(14, "vindex"))).codigo, "limite_dispositivos");
+  await logar(2, "venus");
+  await logar(3, "venus");
+  assert.equal((await erro(logar(4, "venus"))).codigo, "limite_dispositivos");
+  await logar(21, "vortex"); // o Vortex tem a sua própria lista
+  for (const n of [31, 32, 33, 34, 35]) await logar(n, "velox"); // Velox: sem limite nenhum
+  assert.equal((await erro(logar(1, "windows-xyz"))).codigo, "app_invalido");
+});
+
+test("limite de uso simultâneo vale por aplicativo", async () => {
+  const env = ENV();
+  await conta(env);
+  const logar = (n, app, extra = {}) => entrar(env, { email: "toni@exemplo.com", senha: "senha-forte-1", dispositivo: disp(n), app, ...extra }, T0 + 10);
+  await logar(1, "venus"); // já existia (cadastro) — reentra no mesmo aparelho
+  await logar(2, "venus");
+  assert.equal((await erro(logar(3, "venus"))).codigo, "limite_simultaneo");
+  // Vindex tem as suas 2 vagas livres, apesar de a Vênus estar cheia
+  await logar(3, "vindex");
+  await logar(4, "vindex");
+  assert.equal((await erro(logar(5, "vindex"))).codigo, "limite_simultaneo");
+});
