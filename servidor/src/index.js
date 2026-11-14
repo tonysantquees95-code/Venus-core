@@ -25,6 +25,7 @@ import { ehRotaVortex, tratarVortex } from "./vortex/saves.js";
 import { ehRotaDrive, tratarDrive, limparDrive } from "./drive/drive.js";
 import { ehRotaCi, tratarCi } from "./ci/assinatura.js";
 import { chat, chatPreflight } from "./chat.js";
+import { comChavesDoCofre } from "./dev/cofre.js";
 import { tratarIA } from "./ia/rotas.js";
 import { comCors, preflight } from "./ia/cors.js";
 import { ehRotaDaIA, tratarProxyIA } from "./ia/proxy.js";
@@ -61,13 +62,16 @@ export default {
       if (canal && req.method === "GET") return await avisosDesde(canal[1], url, env);
       if (caminho === "/cobranca/aviso" && req.method === "POST") return await cobrancaAviso(req, env);
       if (caminho === "/cobranca/status" && req.method === "GET") return await cobrancaStatus(url, env);
+      const ehChat = caminho === "/chat" && (req.method === "POST" || req.method === "OPTIONS");
+      // as chaves de IA vêm do cofre do Vindex (guardadas 5 min); sem cofre, valem as variáveis do Worker
+      const envIA = ehRotaDaIA(caminho) || caminho.startsWith("/v1/") || ehChat ? await comChavesDoCofre(env) : env;
       if (ehRotaDaIA(caminho)) {
         // o app do Windows/navegador também usa a IA da conta: precisa do CORS (o celular fala direto e não precisa)
         const origem = req.headers.get("origin");
         if (req.method === "OPTIONS") return preflight(origem, env);
-        return comCors(await tratarProxyIA(req, env, ctx, caminho), origem, env);
+        return comCors(await tratarProxyIA(req, envIA, ctx, caminho), origem, env);
       }
-      if (caminho.startsWith("/v1/")) return await tratarIA(req, env, ctx);
+      if (caminho.startsWith("/v1/")) return await tratarIA(req, envIA, ctx);
       if (ehRotaDoId(caminho)) return await tratarId(req, env, url, caminho);
       if (ehRotaCi(caminho)) return await tratarCi(req, env, url, caminho);
       if (ehRotaVortex(caminho)) return await tratarVortex(req, env, url, caminho);
@@ -81,7 +85,7 @@ export default {
       }
       if (caminho === "/chat" && req.method === "OPTIONS") return chatPreflight();
       if (caminho === "/chat" && req.method === "POST") {
-        const r = await chat(req, env);
+        const r = await chat(req, envIA);
         if (env.DB && r.ok) ctx.waitUntil(r.clone().json().then((d) => registrarUso(env, { provedor: d.provider, tarefa: "conversa", uso: null })).catch(() => {}));
         return r;
       }

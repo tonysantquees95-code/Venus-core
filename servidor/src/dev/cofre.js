@@ -87,6 +87,7 @@ export async function listar(env, agora = Date.now()) {
 }
 
 export async function guardar(env, { nome, valor, rotulo }, agora = Date.now()) {
+  esquecerChavesGuardadas();
   const n = String(nome ?? "").trim().toUpperCase();
   if (!NOME_VALIDO.test(n)) throw new ErroLoja(400, "nome_invalido", "O nome da chave usa letras maiúsculas, números e _ (ex.: GROQ_API_KEY).");
   const v = String(valor ?? "").trim();
@@ -101,6 +102,7 @@ export async function guardar(env, { nome, valor, rotulo }, agora = Date.now()) 
 }
 
 export async function apagar(env, nome, agora = Date.now()) {
+  esquecerChavesGuardadas();
   const n = String(nome ?? "").trim().toUpperCase();
   const r = await env.DB.prepare("DELETE FROM cofre_chaves WHERE nome = ?").bind(n).run();
   await registrar(env, "apagar", n, r.meta.changes > 0, agora);
@@ -129,6 +131,36 @@ export async function lerSegredo(env, nome) {
   return env[nome] || "";
 }
 
+const CHAVES_DE_IA = ["GROQ_API_KEY", "GEMINI_API_KEY", "DEEPSEEK_API_KEY", "TAVILY_API_KEY"];
+const VALIDADE_CHAVES_MS = 5 * 60_000;
+let cacheChaves = { ate: 0, valores: null };
+
+/**
+ * Entrega o `env` com as chaves de IA que estão no cofre do Vindex (o cofre vale mais que a variável do Worker).
+ * Uma só consulta ao banco, guardada por 5 minutos na memória do Worker: as rotas de IA continuam lendo `env.GROQ_API_KEY` etc.
+ * Se o cofre não estiver legível ou não tiver a chave, fica a variável de ambiente, como antes.
+ */
+export async function comChavesDoCofre(env, agora = Date.now()) {
+  if (!env.DB) return env;
+  if (!cacheChaves.valores || agora > cacheChaves.ate) {
+    const valores = {};
+    try {
+      const marcas = CHAVES_DE_IA.map(() => "?").join(",");
+      const { results } = await env.DB.prepare(`SELECT nome, valor FROM cofre_chaves WHERE nome IN (${marcas})`).bind(...CHAVES_DE_IA).all();
+      for (const l of results ?? []) {
+        try { const v = (await decifrar(env, l.valor)).v; if (v) valores[l.nome] = v; } catch { /* esta chave não abriu: usa a do ambiente */ }
+      }
+      cacheChaves = { ate: agora + VALIDADE_CHAVES_MS, valores };
+    } catch {
+      return env; // cofre ilegível: não guarda o fracasso, tenta de novo na próxima
+    }
+  }
+  return Object.keys(cacheChaves.valores).length ? { ...env, ...cacheChaves.valores } : env;
+}
+
+/** Esquece as chaves guardadas (usar quando o cofre muda uma chave, para valer na hora). */
+export function esquecerChavesGuardadas() { cacheChaves = { ate: 0, valores: null }; }
+
 export async function historico(env, limite = 30) {
   const { results } = await env.DB.prepare("SELECT quando, acao, nome, ok FROM cofre_log ORDER BY id DESC LIMIT ?").bind(Math.min(100, limite)).all();
   return results;
@@ -152,6 +184,7 @@ export async function gerarCodigo(env, agora = Date.now()) {
  * Chaves que já estão no cofre NÃO são sobrescritas (a menos que `sobrescrever` venha true).
  */
 export async function importar(env, codigo, segredos, { sobrescrever = false, origem = "" } = {}, agora = Date.now()) {
+  esquecerChavesGuardadas();
   const h = await sha(String(codigo ?? ""));
   const c = await env.DB.prepare("SELECT expira, usado FROM cofre_codigos WHERE hash = ?").bind(h).first();
   if (!c || c.usado || c.expira < agora) throw new ErroLoja(403, "codigo_invalido", "Código de importação inválido ou vencido. Gere outro no Painel.");
