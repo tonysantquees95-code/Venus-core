@@ -8,7 +8,7 @@
   "main": "main.js",
   "scripts": {
     "copiar": "node copiar.mjs",
-    "teste": "node --test teste/status.test.mjs teste/computador.test.mjs teste/atualizador.test.mjs teste/loja.test.mjs",
+    "teste": "node --test teste/status.test.mjs teste/computador.test.mjs teste/atualizador.test.mjs teste/painel-comercio.test.mjs",
     "start": "npm run copiar && electron .",
     "build:win": "npm run copiar && electron-builder --win nsis --publish never",
     "build:mac": "npm run copiar && electron-builder --mac --publish never"
@@ -30,7 +30,7 @@
       "status.mjs",
       "computador.mjs",
       "atualizador.mjs",
-      "loja.js",
+      "painel-comercio.js",
       "app/**",
       "build/tray.png"
     ],

@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
-const { criarLoja, origemDoSite } = createRequire(import.meta.url)("../loja.js");
+const { criarLoja, origemDoSite } = createRequire(import.meta.url)("../painel-comercio.js");
 
 function mundo(respostas) {
   const chamadas = [];
@@ -17,7 +17,7 @@ function mundo(respostas) {
   const loja = criarLoja({ fetchFn, ler: () => guardado, gravar: (v) => { guardado = v; }, cifrar: (t) => "x:" + Buffer.from(t).toString("base64"), decifrar: (s) => Buffer.from(s.slice(2), "base64").toString() });
   return { loja, chamadas, guardado: () => guardado };
 }
-const LOGIN = { em: "/_api/auth/login_with_password", metodo: "POST", cookies: ["floot_built_app_session=abc123; Path=/; HttpOnly"], corpo: { json: { user: { role: "admin" } } } };
+const LOGIN = { em: "/_api/auth/login_with_password", metodo: "POST", cookies: ["app_session=abc123; Path=/; HttpOnly"], corpo: { json: { user: { role: "admin" } } } };
 
 test("origem do site: só https, só a origem", () => {
   assert.equal(origemDoSite("minhaloja.com.br/loja?x=1"), "https://minhaloja.com.br");
@@ -39,7 +39,7 @@ test("lê produtos com o cookie e entra de novo quando a sessão vence", async (
   const lista = await m.loja.produtos();
   assert.equal(lista[0].name, "Gel");
   assert.equal(m.chamadas.filter((c) => c.url.includes("login_with_password")).length, 2);
-  assert.equal(m.chamadas.at(-1).headers.cookie, "floot_built_app_session=abc123");
+  assert.equal(m.chamadas.at(-1).headers.cookie, "app_session=abc123");
 });
 test("só endereços permitidos e salvar manda o corpo em { json }", async () => {
   const m = mundo([LOGIN, { em: "/_api/admin/product_save", metodo: "POST", corpo: { json: { ok: true } } }, { em: "/_api/admin/stock_update", metodo: "POST", corpo: {} }]);
