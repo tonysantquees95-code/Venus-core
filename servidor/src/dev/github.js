@@ -34,7 +34,7 @@ export const PROJETOS = [
       { app: "vortex-windows", rotulo: "Vortex (Windows)", tag: /^v?1\.(\d+)$/, arquivo: (n) => /^VortexSetup\.exe$/i.test(n) },
     ] },  { id: "velox", nome: "Velox Search", repo: REPO_VELOX, descricao: "Navegador gamer da Vetorial Tech: abas, bloqueio de anúncios, temas e downloads (Android e Windows).", apks: [
       { app: "velox-android", rotulo: "Velox (Android)", tag: /^v?1\.(\d+)$/, arquivo: (n) => /^Velox\.apk$/i.test(n) },
-      { app: "velox-windows", rotulo: "Velox (Windows)", tag: /^v?1\.(\d+)$/, arquivo: (n) => /^VeloxSetup\.exe$/i.test(n) },
+      { app: "velox-windows", rotulo: "Velox (Windows)", tag: /^windows-1\.(\d+)$/, arquivo: (n) => /^Velox-Instalador-.*\.exe$/i.test(n) },
     ] },
 ];
 

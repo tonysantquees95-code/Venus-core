@@ -7,6 +7,16 @@ import { canaisDisponiveis, enviarCodigo } from "./envio.js";
 export const MAX_DISPOSITIVOS = 3;
 export const MAX_ATIVAS = 2;
 export const TTL_ATIVA_MS = 5 * 60_000; // sem ping por 5 minutos = sessão inativa
+/** Cada aplicativo tem os seus próprios limites. O Velox é gratuito e público: não entra na conta de limites. */
+export const APPS_COM_LIMITE = new Set(["venus", "vindex", "vortex"]);
+const APPS_DE_LOGIN = new Set([...APPS_COM_LIMITE, "velox"]);
+export function appDeLogin(app) {
+  const a = String(app || "venus").trim().toLowerCase();
+  const n = a === "venus-windows" || a === "venus-ios" ? "venus" : a;
+  if (!APPS_DE_LOGIN.has(n)) throw new ErroId(400, "app_invalido", "Aplicativo desconhecido.");
+  return n;
+}
+const comLimite = (env, email, app) => APPS_COM_LIMITE.has(app) && !semLimites(env, email);
 const PLATAFORMAS = new Set(["android", "ios", "windows", "web"]);
 const EMAIL = /^[^\s@]{1,64}@[^\s@]{1,190}\.[^\s@]{2,}$/;
 
@@ -42,7 +52,7 @@ async function limitarTentativas(env, chave, agora) {
   if (n.n >= 8) throw new ErroId(429, "muitas_tentativas", "Muitas tentativas. Espere alguns minutos e tente de novo.");
 }
 
-export async function cadastrar(env, { email, senha, nome, dispositivo, lojaExistente, telefone, exigirTelefone = false, ip = "" }, agora = Date.now()) {
+export async function cadastrar(env, { email, senha, nome, dispositivo, app, lojaExistente, telefone, exigirTelefone = false, ip = "" }, agora = Date.now()) {
   email = emailLimpo(email);
   const fone = telefoneLimpo(telefone);
   if (exigirTelefone && !fone && !semLimites(env, email)) throw new ErroId(400, "telefone_invalido", "Informe um celular com DDD (ex.: 51 99999-9999). Ele serve para recuperar a senha.");
@@ -68,25 +78,25 @@ export async function cadastrar(env, { email, senha, nome, dispositivo, lojaExis
   }
   await env.DB.prepare("INSERT INTO usuarios (id, email, nome, senha_hash, salt, loja, criado, telefone) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
     .bind(id, email, String(nome || "").trim().slice(0, 80), await hashSenha(senha, salt), salt, lojaId, agora, fone).run();
-  return entrar(env, { email, senha, dispositivo }, agora);
+  return entrar(env, { email, senha, dispositivo, app }, agora);
 }
 
-export async function sessoesAtivas(env, usuario, agora = Date.now()) {
+export async function sessoesAtivas(env, usuario, agora = Date.now(), app = "venus") {
   const { results } = await env.DB.prepare(
     `SELECT s.id AS sessao, s.dispositivo, s.criado, s.ultimo_ping AS ultimoPing, d.nome, d.plataforma
        FROM sessoes s JOIN dispositivos d ON d.id = s.dispositivo
-      WHERE s.usuario = ? AND s.encerrada = 0 AND s.ultimo_ping > ? ORDER BY s.ultimo_ping DESC`,
-  ).bind(usuario, agora - TTL_ATIVA_MS).all();
+      WHERE s.usuario = ? AND s.app = ? AND s.encerrada = 0 AND s.ultimo_ping > ? ORDER BY s.ultimo_ping DESC`,
+  ).bind(usuario, app, agora - TTL_ATIVA_MS).all();
   return results;
 }
 
-const AVISO_LIMITE = "Já há 2 aparelhos usando a conta agora. Encerre um deles para entrar aqui, ou cancele.";
+const AVISO_LIMITE = "Já há 2 aparelhos usando este aplicativo agora. Encerre um deles para entrar aqui, ou cancele.";
 
 /** Garante uma vaga entre as 2 sessões ativas; sem vaga, devolve o aviso com as opções. */
-async function abrirVaga(env, usuario, dispositivo, encerrar, agora) {
+async function abrirVaga(env, usuario, dispositivo, encerrar, agora, app = "venus") {
   const dono = await env.DB.prepare("SELECT email FROM usuarios WHERE id = ?").bind(usuario).first();
-  if (dono && semLimites(env, dono.email)) return;
-  let ativas = (await sessoesAtivas(env, usuario, agora)).filter((s) => s.dispositivo !== dispositivo);
+  if (dono && !comLimite(env, dono.email, app)) return;
+  let ativas = (await sessoesAtivas(env, usuario, agora, app)).filter((s) => s.dispositivo !== dispositivo);
   if (ativas.length >= MAX_ATIVAS) {
     const alvo = encerrar && ativas.find((s) => s.sessao === encerrar);
     if (!alvo) {
@@ -101,8 +111,9 @@ export async function encerrarSessao(env, usuario, sessao, motivo = "encerrada")
   return r.meta.changes > 0;
 }
 
-export async function entrar(env, { email, senha, dispositivo, encerrar, remover }, agora = Date.now()) {
+export async function entrar(env, { email, senha, dispositivo, encerrar, remover, app: appPedido }, agora = Date.now()) {
   email = emailLimpo(email);
+  const app = appDeLogin(appPedido);
   const d = lerDispositivo(dispositivo);
   await limitarTentativas(env, `login:${email}`, agora);
   const u = await env.DB.prepare("SELECT * FROM usuarios WHERE email = ?").bind(email).first();
@@ -111,26 +122,27 @@ export async function entrar(env, { email, senha, dispositivo, encerrar, remover
     await env.DB.prepare("INSERT INTO id_tentativas (chave, quando) VALUES (?, ?)").bind(`login:${email}`, agora).run();
     throw new ErroId(401, "credenciais", "E-mail ou senha incorretos.");
   }
-  const devId = await sha256Hex(`vid:${u.id}:${d.bruto}`);
+  // no Vênus o identificador continua o mesmo de antes (contas antigas); nos outros apps ele leva o nome do app
+  const devId = await sha256Hex(app === "venus" ? `vid:${u.id}:${d.bruto}` : `vid:${u.id}:${app}:${d.bruto}`);
   const jaTem = await env.DB.prepare("SELECT 1 AS x FROM dispositivos WHERE id = ? AND usuario = ?").bind(devId, u.id).first();
   if (!jaTem) {
-    const { results } = await env.DB.prepare("SELECT id, nome, plataforma, ultimo FROM dispositivos WHERE usuario = ? ORDER BY ultimo DESC").bind(u.id).all();
-    if (results.length >= MAX_DISPOSITIVOS && !semLimites(env, u.email)) {
+    const { results } = await env.DB.prepare("SELECT id, nome, plataforma, ultimo FROM dispositivos WHERE usuario = ? AND app = ? ORDER BY ultimo DESC").bind(u.id, app).all();
+    if (results.length >= MAX_DISPOSITIVOS && comLimite(env, u.email, app)) {
       if (!remover || !results.some((x) => x.id === remover)) {
-        throw new ErroId(409, "limite_dispositivos", "Você já tem 3 aparelhos vinculados. Remova um para vincular este, ou cancele.", { dispositivos: results, opcoes: ["remover_dispositivo", "cancelar"], maxDispositivos: MAX_DISPOSITIVOS });
+        throw new ErroId(409, "limite_dispositivos", "Você já tem 3 aparelhos vinculados a este aplicativo. Remova um para vincular este, ou cancele.", { dispositivos: results, opcoes: ["remover_dispositivo", "cancelar"], maxDispositivos: MAX_DISPOSITIVOS, app });
       }
       await removerDispositivo(env, u.id, remover);
     }
-    await env.DB.prepare("INSERT INTO dispositivos (id, usuario, nome, plataforma, criado, ultimo) VALUES (?, ?, ?, ?, ?, ?)").bind(devId, u.id, d.nome, d.plataforma, agora, agora).run();
+    await env.DB.prepare("INSERT INTO dispositivos (id, usuario, nome, plataforma, criado, ultimo, app) VALUES (?, ?, ?, ?, ?, ?, ?)").bind(devId, u.id, d.nome, d.plataforma, agora, agora, app).run();
   } else {
     await env.DB.prepare("UPDATE dispositivos SET nome = ?, plataforma = ?, ultimo = ? WHERE id = ?").bind(d.nome, d.plataforma, agora, devId).run();
   }
   await env.DB.prepare("UPDATE sessoes SET encerrada = 1, motivo = 'novo_login' WHERE usuario = ? AND dispositivo = ? AND encerrada = 0").bind(u.id, devId).run();
-  await abrirVaga(env, u.id, devId, encerrar, agora);
+  await abrirVaga(env, u.id, devId, encerrar, agora, app);
   const sid = aleatorio(12);
-  await env.DB.prepare("INSERT INTO sessoes (id, usuario, dispositivo, criado, ultimo_ping) VALUES (?, ?, ?, ?, ?)").bind(sid, u.id, devId, agora, agora).run();
+  await env.DB.prepare("INSERT INTO sessoes (id, usuario, dispositivo, criado, ultimo_ping, app) VALUES (?, ?, ?, ?, ?, ?)").bind(sid, u.id, devId, agora, agora, app).run();
   const token = await assinar(env, { sub: u.id, sid, dev: devId }, { agora });
-  return { token, sessao: sid, dispositivo: devId, usuario: { id: u.id, email: u.email, nome: u.nome } };
+  return { token, sessao: sid, dispositivo: devId, app, usuario: { id: u.id, email: u.email, nome: u.nome } };
 }
 
 export async function removerDispositivo(env, usuario, dispositivo) {
@@ -180,14 +192,14 @@ export async function validarSessao(env, req, { agora = Date.now(), ping = true 
   const u = await env.DB.prepare("SELECT * FROM usuarios WHERE id = ?").bind(dados.sub).first();
   if (!u) throw new ErroId(401, "sessao_inexistente", "Conta não encontrada.");
   if (agora - s.ultimo_ping > TTL_ATIVA_MS) {
-    const ativas = (await sessoesAtivas(env, u.id, agora)).filter((x) => x.sessao !== s.id);
-    if (ativas.length >= MAX_ATIVAS && !semLimites(env, u.email)) throw new ErroId(409, "limite_simultaneo", AVISO_LIMITE, { ativas, opcoes: ["encerrar_sessao", "cancelar"], maxAtivas: MAX_ATIVAS, sessaoAtual: s.id });
+    const ativas = (await sessoesAtivas(env, u.id, agora, s.app)).filter((x) => x.sessao !== s.id);
+    if (ativas.length >= MAX_ATIVAS && comLimite(env, u.email, s.app)) throw new ErroId(409, "limite_simultaneo", AVISO_LIMITE, { ativas, opcoes: ["encerrar_sessao", "cancelar"], maxAtivas: MAX_ATIVAS, sessaoAtual: s.id });
   }
   if (ping && agora - s.ultimo_ping > 15_000) {
     await env.DB.prepare("UPDATE sessoes SET ultimo_ping = ? WHERE id = ?").bind(agora, s.id).run();
     await env.DB.prepare("UPDATE dispositivos SET ultimo = ? WHERE id = ?").bind(agora, s.dispositivo).run();
   }
-  return { usuario: u, sessao: s.id, dispositivo: s.dispositivo };
+  return { usuario: u, sessao: s.id, dispositivo: s.dispositivo, app: s.app };
 }
 
 /** Reativa uma sessão parada, encerrando a escolhida para abrir vaga (resposta ao aviso 409). */
@@ -196,7 +208,7 @@ export async function reativar(env, ctxToken, encerrar, agora = Date.now()) {
   if (!dados) throw new ErroId(401, "token_invalido", "Entre de novo com o seu Vetorial ID.");
   const s = await env.DB.prepare("SELECT * FROM sessoes WHERE id = ? AND usuario = ? AND encerrada = 0").bind(dados.sid, dados.sub).first();
   if (!s) throw new ErroId(401, "sessao_encerrada", "Esta sessão foi encerrada. Entre de novo.");
-  await abrirVaga(env, dados.sub, s.dispositivo, encerrar, agora);
+  await abrirVaga(env, dados.sub, s.dispositivo, encerrar, agora, s.app);
   await env.DB.prepare("UPDATE sessoes SET ultimo_ping = ? WHERE id = ?").bind(agora, s.id).run();
   return { ok: true };
 }
@@ -206,8 +218,8 @@ export async function renovarToken(env, ctx, agora = Date.now()) {
 }
 
 export async function listarDispositivos(env, ctx, agora = Date.now()) {
-  const { results } = await env.DB.prepare("SELECT id, nome, plataforma, criado, ultimo FROM dispositivos WHERE usuario = ? ORDER BY ultimo DESC").bind(ctx.usuario.id).all();
-  const ativas = await sessoesAtivas(env, ctx.usuario.id, agora);
+  const { results } = await env.DB.prepare("SELECT id, nome, plataforma, criado, ultimo FROM dispositivos WHERE usuario = ? AND app = ? ORDER BY ultimo DESC").bind(ctx.usuario.id, ctx.app || "venus").all();
+  const ativas = await sessoesAtivas(env, ctx.usuario.id, agora, ctx.app || "venus");
   return {
     maxDispositivos: MAX_DISPOSITIVOS, maxAtivas: MAX_ATIVAS,
     dispositivos: results.map((d) => {
