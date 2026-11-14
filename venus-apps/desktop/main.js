@@ -257,7 +257,7 @@ ipcMain.handle("venus:catalogo", async (_e, site) => {
   } finally { clearTimeout(timer); }
 });
 // ---- administração da loja (cadastrar e atualizar produtos): a senha fica cifrada pelo Windows e nunca vai para a janela
-const { criarLoja } = require("./loja.js");
+const { criarLoja } = require("./painel-comercio.js");
 const arquivoDaLoja = () => path.join(app.getPath("userData"), "loja.bin");
 const loja = criarLoja({
   fetchFn: (url, init) => net.fetch(url, { ...init, signal: AbortSignal.timeout(30000) }),

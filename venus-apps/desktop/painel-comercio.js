@@ -1,6 +1,7 @@
-// Administração da loja (site no Floot) pelo Windows: entra com o e-mail/senha de administrador, guarda a senha cifrada
+// Administração da loja (painel do site) pelo Windows: entra com o e-mail/senha de administrador, guarda a senha cifrada
 // pelo Windows (safeStorage) e fala só com os endereços permitidos abaixo. O que a janela vê nunca inclui a senha nem o cookie.
-const COOKIE = "floot_built_app_session";
+// o site abre a sessão por um cookie com "session" no nome
+const ehCookieDeSessao = (h) => /^[^=;\s]*session[^=;\s]*=/i.test(h);
 const GET_OK = new Set(["/_api/admin/products"]);
 const POST_OK = new Set(["/_api/admin/product_save", "/_api/admin/stock_update", "/_api/admin/upload"]);
 
@@ -39,7 +40,7 @@ function criarLoja({ fetchFn, ler, gravar, cifrar, decifrar }) {
     if (r.status === 401 || r.status === 429) throw new ErroDaLoja(dados(texto).message || "E-mail ou senha incorretos.");
     if (r.status < 200 || r.status > 299) throw new ErroDaLoja(`O site respondeu com erro ${r.status}.`);
     const cabecalhos = typeof r.headers.getSetCookie === "function" ? r.headers.getSetCookie() : [r.headers.get("set-cookie") || ""];
-    const achado = cabecalhos.flatMap((h) => String(h).split(/,(?=\s*[A-Za-z0-9_]+=)/)).map((h) => h.trim()).find((h) => h.startsWith(`${COOKIE}=`));
+    const achado = cabecalhos.flatMap((h) => String(h).split(/,(?=\s*[A-Za-z0-9_]+=)/)).map((h) => h.trim()).find(ehCookieDeSessao);
     if (!achado) throw new ErroDaLoja("O site não abriu a sessão.");
     cookie = achado.split(";")[0];
     const papel = (dados(texto).user || {}).role;
