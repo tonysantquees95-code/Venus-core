@@ -54,15 +54,22 @@ function extrairOpenAI(provedor, dados) {
 
 export async function groq(env, p) {
   if (!env.GROQ_API_KEY) throw new ErroProvedor("groq", 0, true, "sem_chave");
-  const modelo = p.tarefa === "rapida" ? env.MODELO_GROQ_RAPIDO || "llama-3.1-8b-instant" : env.MODELO_GROQ || "llama-3.3-70b-versatile";
-  const dados = await postar(
-    "groq",
-    "https://api.groq.com/openai/v1/chat/completions",
-    { authorization: `Bearer ${env.GROQ_API_KEY}` },
-    { model: modelo, messages: paraOpenAI(p.sistema, p.mensagens), temperature: p.temperatura, max_tokens: p.maxTokens },
-    TEMPO_PADRAO
-  );
-  return { ...extrairOpenAI("groq", dados), modelo };
+  // o modelo configurado primeiro; se a Groq disser que ele não existe/não está liberado (404), tenta os seguintes sem sair da Groq
+  const preferido = p.tarefa === "rapida" ? env.MODELO_GROQ_RAPIDO || "openai/gpt-oss-20b" : env.MODELO_GROQ || "openai/gpt-oss-120b";
+  const modelos = [...new Set([preferido, "openai/gpt-oss-120b", "openai/gpt-oss-20b", "llama-3.3-70b-versatile"])];
+  let ultimo;
+  for (const modelo of modelos) {
+    try {
+      const corpo = { model: modelo, messages: paraOpenAI(p.sistema, p.mensagens), temperature: p.temperatura, max_tokens: p.maxTokens };
+      if (modelo.startsWith("openai/gpt-oss")) corpo.reasoning_effort = "low"; // sem "pensar" demais: resposta em ~1 s e sem gastar o limite de saída
+      const dados = await postar("groq", "https://api.groq.com/openai/v1/chat/completions", { authorization: `Bearer ${env.GROQ_API_KEY}` }, corpo, TEMPO_PADRAO);
+      return { ...extrairOpenAI("groq", dados), modelo };
+    } catch (e) {
+      ultimo = e;
+      if (!(e instanceof ErroProvedor) || e.status !== 404) throw e; // só "modelo não existe": 400 é pedido ruim e não adianta repetir
+    }
+  }
+  throw ultimo;
 }
 
 export async function deepseek(env, p) {
