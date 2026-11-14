@@ -5,7 +5,7 @@
 //   PUT    /vortex/saves/<jogo>/<arquivo>       → envia (corpo = bytes; cabeçalho x-base = versão que o aparelho tinha)
 //   DELETE /vortex/saves/<jogo>/<arquivo>
 // Conflito: se a nuvem já tem uma versão mais nova que a "x-base" do aparelho, devolve 409 e quem decide é o jogador.
-import { varredura } from "./varredura.js";
+import { varredura, faxina } from "./varredura.js";
 import { ErroId as ErroLoja } from "../id/conta.js";
 import { validarSessao } from "../id/conta.js";
 import { appsLiberados } from "../loja/assinatura.js";
@@ -56,6 +56,13 @@ export async function tratarVortex(req, env, url, caminho, agora = Date.now()) {
       let corpo;
       try { corpo = JSON.parse(bruto); } catch { throw new ErroLoja(400, "json_invalido", "JSON inválido."); }
       return json(await varredura(env, corpo));
+    }
+    if (caminho === "/vortex/ia/faxina" && req.method === "POST") {
+      const bruto = await req.text();
+      if (bruto.length > 200_000) throw new ErroLoja(413, "grande_demais", "Resumo grande demais.");
+      let corpo;
+      try { corpo = JSON.parse(bruto); } catch { throw new ErroLoja(400, "json_invalido", "JSON inválido."); }
+      return json(await faxina(env, corpo));
     }
     // ponte de voz Vênus ↔ Vortex
     if (caminho === "/vortex/presenca" && req.method === "GET") return json(await vortexOnline(env, ctx.usuario.id, agora));

@@ -53,3 +53,43 @@ export async function varredura(env, corpo, ia = executar) {
   if (!v) return { pastas: [], perfil: "equilibrado", observacoes: "A IA não respondeu num formato válido." };
   return { ...v, provedor: r.provedor };
 }
+
+// ---- Faxina: a IA opina sobre nomes parecidos (duplicados) e arquivos pequenos demais (corrompidos) ----
+const SISTEMA_FAXINA =
+  "Você ajuda a limpar uma biblioteca de jogos retrô. Recebe grupos de jogos com nomes parecidos e arquivos suspeitos por serem pequenos. Responda SOMENTE com JSON válido: " +
+  '{"duplicados":[{"manter":"<id>","remover":["<id>"],"motivo":"<até 80 caracteres>"}],"corrompidos":[{"id":"<id>","motivo":"<até 80 caracteres>"}]}. ' +
+  "Só marque como duplicados jogos que são claramente o MESMO jogo (outra grafia, idioma, 'The', região); sequências como 2, 3 ou títulos diferentes NÃO são duplicados. Prefira manter a versão em português/Brasil ou EUA, sem beta/demo. " +
+  "Só marque corrompido quando o tamanho for incompatível com o console. Na dúvida, não marque.";
+
+const ITEM = (i) => ({ id: texto(i?.id, 40), titulo: texto(i?.titulo, 120), plataforma: texto(i?.plataforma, 24), bytes: Number(i?.bytes) || 0, arquivo: texto(i?.arquivo, 120) });
+
+export function montarPedidoFaxina(corpo) {
+  const parecidos = (Array.isArray(corpo?.parecidos) ? corpo.parecidos : []).slice(0, 40).map((g) => (Array.isArray(g) ? g.slice(0, 10).map(ITEM) : [])).filter((g) => g.length > 1);
+  const suspeitos = (Array.isArray(corpo?.suspeitos) ? corpo.suspeitos : []).slice(0, 40).map(ITEM);
+  return { parecidos, suspeitos };
+}
+
+export function validarFaxina(bruto, pedido) {
+  const m = /\{[\s\S]*\}/.exec(String(bruto));
+  let j;
+  try { j = JSON.parse(m ? m[0] : ""); } catch { return null; }
+  const grupos = pedido.parecidos.map((g) => new Set(g.map((i) => i.id)));
+  const susp = new Set(pedido.suspeitos.map((i) => i.id));
+  const duplicados = [];
+  for (const d of Array.isArray(j?.duplicados) ? j.duplicados : []) {
+    const g = grupos.find((x) => x.has(d?.manter));
+    if (!g) continue;
+    const remover = (Array.isArray(d.remover) ? d.remover : []).filter((id) => g.has(id) && id !== d.manter);
+    if (remover.length) duplicados.push({ manter: d.manter, remover, motivo: texto(d.motivo, 80) });
+  }
+  const corrompidos = (Array.isArray(j?.corrompidos) ? j.corrompidos : []).filter((c) => susp.has(c?.id)).map((c) => ({ id: c.id, motivo: texto(c.motivo, 80) }));
+  return { duplicados, corrompidos };
+}
+
+export async function faxina(env, corpo, ia = executar) {
+  const pedido = montarPedidoFaxina(corpo);
+  if (!pedido.parecidos.length && !pedido.suspeitos.length) return { duplicados: [], corrompidos: [] };
+  const r = await ia(env, ["deepseek", "groq"], { tarefa: "relatorio", sistema: SISTEMA_FAXINA, mensagens: [{ papel: "user", texto: JSON.stringify(pedido) }], temperatura: 0.1, maxTokens: 1800 });
+  const v = validarFaxina(r.texto, pedido);
+  return v ? { ...v, provedor: r.provedor } : { duplicados: [], corrompidos: [], observacoes: "A IA não respondeu num formato válido." };
+}
