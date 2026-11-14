@@ -241,6 +241,21 @@ async function conferirAtualizacao(manual) {
   }
 }
 
+// Catálogo público da loja: só https, só o caminho /_api/catalog, com limite de tempo e de tamanho.
+ipcMain.handle("venus:catalogo", async (_e, site) => {
+  let alvo;
+  try { alvo = new URL(String(site)); } catch { throw new Error("site inválido"); }
+  if (alvo.protocol !== "https:") throw new Error("site precisa ser https");
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), 15000);
+  try {
+    const r = await net.fetch(`${alvo.origin}/_api/catalog`, { signal: ctl.signal });
+    if (!r.ok) throw new Error(`catalogo ${r.status}`);
+    const corpo = await r.text();
+    if (corpo.length > 3_000_000) throw new Error("catalogo grande demais");
+    return corpo;
+  } finally { clearTimeout(timer); }
+});
 ipcMain.handle("venus:atualizacao-verificar", () => verificarAtualizacao());
 ipcMain.handle("venus:atualizacao-instalar", () => instalarAtualizacao());
 

@@ -13,6 +13,8 @@ export interface PonteDesktop {
   /** Baixa, confere e instala a versão nova (a Vênus fecha e abre de novo). */
   instalarAtualizacao(): Promise<{ ok: boolean; erro?: string }>;
   aoProgressoDaAtualizacao(cb: (p: { baixado: number; total: number }) => void): () => void;
+  /** Busca o catálogo público da loja (`/_api/catalog`) pelo Windows, sem depender de CORS. Devolve o texto da resposta. */
+  buscarCatalogo?(site: string): Promise<string>;
   /** Identificador fixo do computador (hash): continua o mesmo depois de desinstalar ou limpar. */
   idDoComputador: string;
   limparDados(): Promise<{ ok: boolean; erro?: string }>;

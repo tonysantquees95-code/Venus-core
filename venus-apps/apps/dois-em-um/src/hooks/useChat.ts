@@ -12,6 +12,8 @@ import { usePreferencias } from "../ajustes/Preferencias";
 import { falar } from "../voz/useVoz";
 import { ponteDesktop } from "../desktop/ponte";
 import { abrirNoApp } from "../id/Avatar";
+import { useCatalogo } from "../empresa/CatalogoProvider";
+import { contextoDeCatalogo, perguntaDeProduto, respostaDeProduto } from "../empresa/catalogo";
 
 const novoId = () => crypto.randomUUID();
 
@@ -23,6 +25,7 @@ export function useChat() {
   const { empresa } = useEmpresa();
   const mk = useMarketing();
   const { prefs } = usePreferencias();
+  const cat = useCatalogo();
 
   const enviar = useCallback(
     async (texto: string) => {
@@ -51,8 +54,19 @@ export function useChat() {
           if (prefs.falarRespostas) falar(t);
           return;
         }
+        // preço e estoque vêm direto do site (catálogo guardado, renovado se tiver mais de 2 min): rápido e sem inventar
+        let produtos = cat.produtos;
+        if (perguntaDeProduto(limpo)) {
+          produtos = await cat.garantir(120_000);
+          const direta = respostaDeProduto(produtos, limpo);
+          if (direta) {
+            anexar(id, resposta(direta));
+            if (prefs.falarRespostas) falar(direta);
+            return;
+          }
+        }
         const texto2 = await perguntarIA(
-          [contextoDaEmpresa(empresa), contextoDeMarketing(mk.todasAsIdeias, mk.postsDoCelular, mk.storiesDoCelular, Date.now(), mk.resumoInstagram)].filter(Boolean).join("\n\n") || undefined,
+          [contextoDaEmpresa(empresa), contextoDeCatalogo(produtos, limpo), contextoDeMarketing(mk.todasAsIdeias, mk.postsDoCelular, mk.storiesDoCelular, Date.now(), mk.resumoInstagram)].filter(Boolean).join("\n\n") || undefined,
           historico.map((m) => ({ papel: m.autor === "eu" ? ("user" as const) : ("assistant" as const), texto: m.texto }))
         );
         anexar(id, resposta(texto2));
@@ -63,7 +77,7 @@ export function useChat() {
         marcarEnviando(id, false);
       }
     },
-    [ativa, anexar, estaEnviando, marcarEnviando, conta, empresa, mk.todasAsIdeias, mk.postsDoCelular, mk.storiesDoCelular, mk.resumoInstagram, prefs.falarRespostas]
+    [ativa, anexar, estaEnviando, marcarEnviando, conta, empresa, mk.todasAsIdeias, mk.postsDoCelular, mk.storiesDoCelular, mk.resumoInstagram, cat, prefs.falarRespostas]
   );
 
   return { mensagens: ativa.mensagens, enviando, enviar };
