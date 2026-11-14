@@ -8,6 +8,7 @@ import { IdProvider } from "./id/IdProvider";
 import { EmpresaProvider } from "./empresa/EmpresaProvider";
 import { MarketingProvider } from "./empresa/MarketingProvider";
 import { CatalogoProvider } from "./empresa/CatalogoProvider";
+import { FormulariosDaLojaProvider } from "./empresa/FormulariosDaLoja";
 import { PreferenciasProvider } from "./ajustes/Preferencias";
 
 // iOS/Safari: pede armazenamento persistente para o histórico e as preferências não serem apagados pelo sistema.
@@ -26,7 +27,9 @@ createRoot(document.getElementById("app")!).render(
           <MarketingProvider>
           <CatalogoProvider>
             <ConversasProvider>
-              <App />
+              <FormulariosDaLojaProvider>
+                <App />
+              </FormulariosDaLojaProvider>
             </ConversasProvider>
           </CatalogoProvider>
           </MarketingProvider>
