@@ -59,6 +59,7 @@ export function ChatPanel({ aoAbrirMenu }: { aoAbrirMenu: () => void }) {
               ${m.autor === "eu" ? "self-end bg-venus text-sobre-venus" : "self-start border border-borda bg-painel"}`}
           >
             {m.texto}
+            {m.autor === "venus" && m.detalhe && <span className="mt-1 block text-[10px] leading-tight text-suave/60">{m.detalhe}</span>}
           </li>
         ))}
         {mensagens.length === 0 && (
