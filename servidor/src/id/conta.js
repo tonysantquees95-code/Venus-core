@@ -218,7 +218,7 @@ export async function listarDispositivos(env, ctx, agora = Date.now()) {
 }
 
 // ------------------------------------------------------------------ sincronização (última escrita vence, com versão)
-export const CHAVES_SYNC = new Set(["tema", "preferencias", "modo", "sessoes", "catalogo", "marketing", "empresa", "ideiaspost", "postagens", "stories"]);
+export const CHAVES_SYNC = new Set(["tema", "preferencias", "modo", "sessoes", "catalogo", "marketing", "empresa", "ideiaspost", "postagens", "stories", "velox"]);
 const MAX_DOC = 64_000;
 
 export async function lerSync(env, ctx, desde = 0) {
