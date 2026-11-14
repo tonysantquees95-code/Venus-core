@@ -152,7 +152,7 @@ export async function removerDispositivo(env, usuario, dispositivo) {
 }
 
 // ------------------------------------------------------------------ perfil e tokens por aplicativo
-export const APPS_DA_SUITE = new Set(["venus", "venus-windows", "venus-ios", "vindex", "vortex", "portal"]);
+export const APPS_DA_SUITE = new Set(["venus", "venus-windows", "venus-ios", "vindex", "vortex", "voxix", "portal"]);
 const FOTO_MAX = 70_000;
 export const fotoValida = (f) =>
   f === "" || (typeof f === "string" && f.length <= FOTO_MAX && (/^https:\/\/[^\s"'<>]{4,400}$/.test(f) || /^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/.test(f)));
