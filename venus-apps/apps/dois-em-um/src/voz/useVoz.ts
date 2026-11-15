@@ -1,18 +1,63 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { URL_API } from "@venus/nucleo";
 import { escolherMime, limparParaFalar } from "./logica";
+import { ESTILOS, LIMITE_SEGURO, neuralAtiva, ssml, type ConfigVoz } from "./config";
+import { lerConfigVoz, somarUso, usoDoMes } from "./armazem";
 
 export type EstadoVoz = "parado" | "gravando" | "transcrevendo";
 
-/** Lê o texto em voz alta com a voz em português do sistema. */
-export function falar(texto: string, aoTerminar?: () => void) {
+let ordem = 0;
+let audioAtual: HTMLAudioElement | null = null;
+const guardados = new Map<string, Blob>();
+
+function pararAudio() {
+  if (audioAtual) { try { audioAtual.pause(); } catch { /* ok */ } audioAtual.src = ""; audioAtual = null; }
+}
+
+/** Voz da Microsoft (Azure Speech), a mesma do Android. Null se não der: aí usa a voz do Windows. */
+export async function sintetizarNeural(texto: string, c: ConfigVoz = lerConfigVoz(), tempoMs = 6000): Promise<Blob | null> {
+  const limpo = texto.trim().slice(0, 3000);
+  if (!limpo || !c.neural.chave) return null;
+  const estilo = ESTILOS.find((e) => e.id === c.neural.estilo) ?? ESTILOS[0]!;
+  const corpo = ssml(limpo, c.neural.voz, estilo, c.velocidade, c.tom);
+  const guardado = guardados.get(corpo);
+  if (guardado) return guardado;
+  if (usoDoMes() + limpo.length > LIMITE_SEGURO) return null;
+  const ctl = new AbortController();
+  const t = setTimeout(() => ctl.abort(), tempoMs);
   try {
-    const t = limparParaFalar(texto);
-    if (!t || typeof speechSynthesis === "undefined") return;
+    const r = await fetch(`https://${c.neural.regiao}.tts.speech.microsoft.com/cognitiveservices/v1`, {
+      method: "POST", signal: ctl.signal,
+      headers: { "Ocp-Apim-Subscription-Key": c.neural.chave, "Content-Type": "application/ssml+xml", "X-Microsoft-OutputFormat": "audio-24khz-48kbitrate-mono-mp3" },
+      body: corpo,
+    });
+    if (!r.ok) return null;
+    const blob = await r.blob();
+    if (!blob.size) return null;
+    somarUso(limpo.length);
+    guardados.set(corpo, blob);
+    if (guardados.size > 40) guardados.delete(guardados.keys().next().value as string);
+    return blob;
+  } catch { return null; } finally { clearTimeout(t); }
+}
+
+/** As vozes em português que o sistema tem (a primeira leitura às vezes vem vazia: o navegador carrega depois). */
+export function vozesDoSistema(): SpeechSynthesisVoice[] {
+  try {
+    return speechSynthesis.getVoices().filter((v) => v.lang?.toLowerCase().startsWith("pt")).sort((a, b) => Number(b.lang.toLowerCase() === "pt-br") - Number(a.lang.toLowerCase() === "pt-br") || a.name.localeCompare(b.name));
+  } catch { return []; }
+}
+
+function falarComVozDoSistema(t: string, c: ConfigVoz, aoTerminar?: () => void) {
+  try {
+    if (typeof speechSynthesis === "undefined") { aoTerminar?.(); return; }
     speechSynthesis.cancel();
     const u = new SpeechSynthesisUtterance(t);
     u.lang = "pt-BR";
-    const voz = speechSynthesis.getVoices().find((v) => v.lang?.toLowerCase().startsWith("pt-br")) ?? speechSynthesis.getVoices().find((v) => v.lang?.toLowerCase().startsWith("pt"));
+    u.rate = c.velocidade;
+    u.pitch = c.tom;
+    const todas = speechSynthesis.getVoices();
+    const voz = todas.find((v) => v.name === c.vozSistema) ?? todas.find((v) => v.lang?.toLowerCase().startsWith("pt-br")) ?? todas.find((v) => v.lang?.toLowerCase().startsWith("pt"));
     if (voz) u.voice = voz;
     if (aoTerminar) { u.onend = aoTerminar; u.onerror = aoTerminar; }
     speechSynthesis.speak(u);
@@ -22,15 +67,38 @@ export function falar(texto: string, aoTerminar?: () => void) {
   }
 }
 
+/** Lê o texto em voz alta: voz neural da Microsoft se estiver ligada (com a chave), senão a voz do Windows. */
+export function falar(texto: string, aoTerminar?: () => void) {
+  const t = limparParaFalar(texto);
+  if (!t) return;
+  calar();
+  const minha = ordem;
+  const c = lerConfigVoz();
+  if (!neuralAtiva(c, usoDoMes())) { falarComVozDoSistema(t, c, aoTerminar); return; }
+  void sintetizarNeural(t, c).then((blob) => {
+    if (minha !== ordem) return; // outra fala começou ou foi calada
+    if (!blob) { falarComVozDoSistema(t, c, aoTerminar); return; }
+    const url = URL.createObjectURL(blob);
+    const a = new Audio(url);
+    const fim = () => { URL.revokeObjectURL(url); if (audioAtual === a) audioAtual = null; aoTerminar?.(); };
+    a.onended = fim;
+    a.onerror = () => { URL.revokeObjectURL(url); if (audioAtual === a) audioAtual = null; falarComVozDoSistema(t, c, aoTerminar); };
+    audioAtual = a;
+    void a.play().catch(() => falarComVozDoSistema(t, c, aoTerminar));
+  });
+}
+
 export function pausarFala() {
-  try { speechSynthesis?.pause(); } catch { /* ok */ }
+  try { audioAtual?.pause(); speechSynthesis?.pause(); } catch { /* ok */ }
 }
 
 export function continuarFala() {
-  try { speechSynthesis?.resume(); } catch { /* ok */ }
+  try { void audioAtual?.play(); speechSynthesis?.resume(); } catch { /* ok */ }
 }
 
 export function calar() {
+  ordem++;
+  pararAudio();
   try { speechSynthesis?.cancel(); } catch { /* ok */ }
 }
 

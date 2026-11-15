@@ -61,6 +61,20 @@ object VozNeural {
         Diario.anotar(ctx, "conexao", if (chave.isBlank() || !ligada) "Voz neural desligada" else "Voz neural: ${VOZES.firstOrNull { it.id == voz }?.nome ?: voz}", "voz")
     }
 
+    /** O que segue a conta: voz neural (chave, região, voz, jeito de falar, ligada). */
+    fun paraSincronia(ctx: Context): org.json.JSONObject = org.json.JSONObject()
+        .put("ligada", prefs(ctx).getBoolean("ligada", true)).put("chave", chave(ctx)).put("regiao", regiao(ctx))
+        .put("voz", voz(ctx).id).put("estilo", estilo(ctx).id)
+
+    /** Recebe da conta. Uma conta sem chave não apaga a chave que já está neste aparelho. */
+    fun aplicarSincronia(ctx: Context, j: org.json.JSONObject) {
+        val novaChave = j.optString("chave").trim().ifBlank { chave(ctx) }
+        val vozId = j.optString("voz").takeIf { id -> VOZES.any { it.id == id } } ?: voz(ctx).id
+        val estiloId = j.optString("estilo").takeIf { id -> ESTILOS.any { it.id == id } } ?: estilo(ctx).id
+        val reg = j.optString("regiao").ifBlank { regiao(ctx) }
+        salvar(ctx, novaChave, reg, vozId, estiloId, j.optBoolean("ligada", true))
+    }
+
     fun definirLigada(ctx: Context, v: Boolean) = prefs(ctx).edit().putBoolean("ligada", v).apply()
 
     private fun mes() = SimpleDateFormat("yyyy-MM", Locale.US).format(Date())
