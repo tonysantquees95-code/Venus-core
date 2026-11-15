@@ -235,6 +235,10 @@ internal object SincroniaId {
                 Perfil.aplicarSincronia(a, valor)
                 Perfil.paraSincronia(a)?.let { env.put("empresa", it.toString()) }
             }
+            if (chave == "voz" && valor != null) {
+                aplicarVoz(a, valor)
+                vozAtual(a)?.let { env.put("voz", it.toString()) }
+            }
             if (chave == SincroniaMarketing.IDEIAS) SincroniaMarketing.aplicarIdeias(a, valor)
             if (chave == "preferencias") VetorialId.lerPreferencias(valor)?.let { (modo, nome, falar) ->
                 a.prefs.edit().putString(VetorialId.PREF_MODO, modo).putBoolean(VigiliaService.PREF_NOME, nome).putBoolean(MainActivity.PREF_FALAR, falar)
@@ -248,8 +252,28 @@ internal object SincroniaId {
         enviar(a, "tema", tema, ver, env)
         enviar(a, "preferencias", prefsAtuais(a), ver, env)
         Perfil.paraSincronia(a)?.let { enviar(a, "empresa", it, ver, env) }
+        vozAtual(a)?.let { enviar(a, "voz", it, ver, env) }
         SincroniaMarketing.enviarTudo(a, ver, env)
         a.prefs.edit().putString(VetorialId.PREF_VERSOES, ver.toString()).putString(VetorialId.PREF_ENVIADO, env.toString()).apply()
+    }
+
+    private fun arredonda(x: Float) = Math.round(x * 100) / 100.0
+
+    /** Voz da Vênus (neural + velocidade e tom). Só vai para a conta depois de configurada: o padrão não apaga o que está em outro aparelho. */
+    private fun vozAtual(a: MainActivity): JSONObject? {
+        val mexeu = VozNeural.chave(a).isNotBlank() || a.prefs.contains(MainActivity.PREF_VELOCIDADE) || a.prefs.contains(MainActivity.PREF_TOM)
+        if (!mexeu) return null
+        return JSONObject().put("velocidade", arredonda(a.prefs.getFloat(MainActivity.PREF_VELOCIDADE, 1.0f)))
+            .put("tom", arredonda(a.prefs.getFloat(MainActivity.PREF_TOM, 1.0f))).put("neural", VozNeural.paraSincronia(a))
+    }
+
+    private fun aplicarVoz(a: MainActivity, j: JSONObject) {
+        val ed = a.prefs.edit()
+        if (j.has("velocidade")) ed.putFloat(MainActivity.PREF_VELOCIDADE, j.optDouble("velocidade", 1.0).toFloat().coerceIn(0.5f, 1.5f))
+        if (j.has("tom")) ed.putFloat(MainActivity.PREF_TOM, j.optDouble("tom", 1.0).toFloat().coerceIn(0.5f, 1.5f))
+        ed.apply()
+        j.optJSONObject("neural")?.let { VozNeural.aplicarSincronia(a, it) }
+        Handler(Looper.getMainLooper()).post { a.aplicarVozSalva() }
     }
 
     private fun prefsAtuais(a: MainActivity): JSONObject {

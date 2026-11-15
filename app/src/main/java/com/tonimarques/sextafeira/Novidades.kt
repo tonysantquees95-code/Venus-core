@@ -28,6 +28,7 @@ internal object Novidades {
         Item(9, "2026-11-15", "melhoria", "Ela já abre ouvindo", "Ao chamar, a Vênus escreve a saudação e já abre o microfone, sem ficar falando antes. Assim o pedido sai mais rápido."),
         Item(10, "2026-11-15", "novo", "Ouvir, compartilhar e guardar", "Embaixo de cada resposta há três botões: Ouvir (com pausa e continuar), Compartilhar e Guardar. O texto guardado vai para a pasta Download › Vênus."),
         Item(11, "2026-11-15", "melhoria", "Só fala quando você fala", "Se você digita, a Vênus responde só por escrito. Ela responde em voz alta quando você pediu falando. Para ouvir uma resposta escrita, use o botão Ouvir."),
+        Item(12, "2026-11-15", "novo", "Voz igual no computador", "A voz que você escolheu aqui (voz neural da Microsoft, jeito de falar, velocidade e tom) agora acompanha a sua conta Vetorial ID e aparece sozinha na Vênus do Windows. Se mudar no computador, muda aqui também."),
     )
 
     fun rotulo(tipo: String): String = when (tipo) { "novo" -> "Novo"; "melhoria" -> "Melhorou"; "correcao" -> "Corrigido"; else -> tipo }

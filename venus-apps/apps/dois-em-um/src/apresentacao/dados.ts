@@ -42,6 +42,7 @@ export const NOVIDADES: Novidade[] = [
   { id: 3, data: "2026-11-15", tipo: "melhoria", titulo: "Conversa com mais personalidade", texto: "Em papo solto (como você está, tudo bem, só queria conversar) a Vênus agora responde de verdade, lendo a conversa, em vez de repetir a mesma resposta. Ela reage ao que você disse e puxa o assunto quando faz sentido, com mais humor e jeito próprio." },
   { id: 4, data: "2026-11-15", tipo: "novo", titulo: "Ouvir, compartilhar e guardar", texto: "Embaixo de cada resposta da Vênus há três botões: Ouvir (com pausa e continuar), Compartilhar e Guardar o texto." },
   { id: 5, data: "2026-11-15", tipo: "melhoria", titulo: "Só fala quando você fala", texto: "Se você digita, a Vênus responde só por escrito. Ela responde em voz alta quando você pediu falando. Para ouvir uma resposta escrita, use o botão Ouvir." },
+  { id: 6, data: "2026-11-15", tipo: "novo", titulo: "Escolha a voz da Vênus", texto: "Em Ajustes › Comportamento, agora dá para escolher a voz, a velocidade e o tom, e usar a voz neural da Microsoft (Francisca, Thalita e outras), igual ao celular. O que você já ajustou no celular aparece aqui sozinho pela sua conta." },
 ];
 
 export const ROTULO: Record<TipoNovidade, string> = { novo: "Novo", melhoria: "Melhorou", correcao: "Corrigido" };

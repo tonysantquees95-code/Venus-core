@@ -9,6 +9,8 @@ import { docDeIdeias, lerDocIdeias } from "../empresa/marketing";
 import { definirTokenIA } from "../ia/cliente";
 import { useMarketing } from "../empresa/MarketingProvider";
 import { prefsParaEnviar, prefsRecebidas } from "../ajustes/logica";
+import { CONFIG_VOZ_PADRAO, configParaEnviar, configRecebida } from "../voz/config";
+import { gravarConfigVoz, lerConfigVoz, useConfigVoz } from "../voz/armazem";
 import { decidirRemoto, temaValido, type Versoes } from "./mesclar";
 
 const INTERVALO_MS = 15_000;
@@ -20,11 +22,12 @@ export function Sincronizador() {
   const { prefs, definirTodas } = usePreferencias();
   const { empresa, definirTudo } = useEmpresa();
   const mk = useMarketing();
+  const [configVoz] = useConfigVoz();
   const versoes = useRef<Versoes>({});
   const desde = useRef(0);
   const ultimoEnviado = useRef<Record<string, string>>({});
-  const atual = useRef({ tema, prefs, empresa, ideias: mk.todasAsIdeias });
-  atual.current = { tema, prefs, empresa, ideias: mk.todasAsIdeias };
+  const atual = useRef({ tema, prefs, empresa, ideias: mk.todasAsIdeias, voz: configVoz });
+  atual.current = { tema, prefs, empresa, ideias: mk.todasAsIdeias, voz: configVoz };
   const receberMk = useRef(mk.receber);
   receberMk.current = mk.receber;
 
@@ -51,6 +54,10 @@ export function Sincronizador() {
             const nova = limparEmpresa(doc.valor);
             ultimoEnviado.current.empresa = JSON.stringify(nova);
             definirTudo(nova);
+          } else if (doc.chave === "voz") {
+            const nova = configRecebida(lerConfigVoz(), doc.valor);
+            ultimoEnviado.current.voz = JSON.stringify(configParaEnviar(nova));
+            gravarConfigVoz(nova);
           } else if (doc.chave === "preferencias") {
             const nova = prefsRecebidas(atual.current.prefs, doc.valor);
             ultimoEnviado.current.preferencias = JSON.stringify(prefsParaEnviar(nova));
@@ -77,7 +84,10 @@ export function Sincronizador() {
   useEffect(() => {
     if (!sessao) return;
     const espera = setTimeout(async () => {
-      const itens: [string, unknown][] = [["tema", atual.current.tema], ["preferencias", prefsParaEnviar(atual.current.prefs)]];
+      const itens: [string, unknown][] = [["tema", atual.current.tema], ["preferencias", prefsParaEnviar(atual.current.prefs)]]; 
+      // a voz só vai para a conta depois de mexer nela (ou se já veio de outro aparelho): o padrão não apaga o que está no celular
+      const vozTexto = JSON.stringify(configParaEnviar(atual.current.voz));
+      if (versoes.current.voz || vozTexto !== JSON.stringify(configParaEnviar(CONFIG_VOZ_PADRAO))) itens.push(["voz", configParaEnviar(atual.current.voz)]);
       if (empresaPreenchida(atual.current.empresa)) itens.push(["empresa", atual.current.empresa]);
       if (atual.current.ideias.length) itens.push(["ideiaspost", docDeIdeias(atual.current.ideias)]);
       for (const [chave, valor] of itens) {
@@ -93,7 +103,7 @@ export function Sincronizador() {
       }
     }, 1500);
     return () => clearTimeout(espera);
-  }, [api, sessao?.token, tema, prefs, empresa, mk.todasAsIdeias]);
+  }, [api, sessao?.token, tema, prefs, empresa, mk.todasAsIdeias, configVoz]);
 
   return null;
 }

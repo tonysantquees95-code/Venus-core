@@ -10,6 +10,7 @@ import { NOVIDADES, novasDesde } from "../apresentacao/dados";
 import { ContaLogada, Entrar, MeusDispositivos } from "./Conta";
 import { buscar, CATALOGO, CATEGORIAS, MODOS, type Categoria } from "./logica";
 import { usePreferencias } from "./Preferencias";
+import { CartaoVoz } from "./CartaoVoz";
 import { PaginaComLateral } from "../components/PaginaComLateral";
 import { IconeNomeado } from "../components/Icones";
 
@@ -154,6 +155,7 @@ export function Ajustes({ aoAbrirTema, alvo }: { aoAbrirTema: () => void; alvo?:
           {mostra("escutaContinua", "comportamento") && <Chave id="escutaContinua" titulo="Escuta contínua" descricao="A Vênus fica ouvindo o seu chamado. No Android aparece o ícone verde do microfone na barra de status; gasta um pouco mais de bateria. Vale só neste aparelho." ligado={prefs.escutaContinua} aoMudar={(v) => definir("escutaContinua", v)} />}
           {mostra("acionarPeloNome", "comportamento") && <Chave id="acionarPeloNome" titulo="Acionar só dizendo o nome" descricao="Dizer “Vênus” já abre o orbe ouvindo." ligado={prefs.acionarPeloNome} aoMudar={(v) => definir("acionarPeloNome", v)} />}
           {mostra("falarRespostas", "comportamento") && <Chave id="falarRespostas" titulo="Falar as respostas" descricao="Lê em voz alta o que a Vênus responde." ligado={prefs.falarRespostas} aoMudar={(v) => definir("falarRespostas", v)} />}
+          {mostra("voz", "comportamento") && <Cartao id="voz" titulo="Voz da Vênus" descricao="Escolha a voz, a velocidade e o tom, como no celular."><CartaoVoz /></Cartao>}
           {mostra("notificacoes", "comportamento") && <Chave id="notificacoes" titulo="Notificações" descricao="Avisos do sistema para pedidos, estoque e lembretes." ligado={prefs.notificacoes} aoMudar={(v) => {
             definir("notificacoes", v);
             if (v && !noDesktop() && typeof Notification !== "undefined" && Notification.permission === "default") void Notification.requestPermission();
