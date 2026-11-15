@@ -25,6 +25,10 @@ class MemoriaEWebTest {
         assertEquals(Pedido.ApagarTudo, ComandosMemoria.interpretar("apaga todas as memórias"))
         assertEquals(Pedido.Lembrar("eu adoro pizza", "gosto"), ComandosMemoria.interpretar("eu adoro pizza"))
         assertNull(ComandosMemoria.interpretar("eu amo você"))
+        // um papel não é um nome: "eu sou o administrador" não vira apelido
+        assertNull(ComandosMemoria.interpretar("eu sou o administrador"))
+        assertNull(ComandosMemoria.interpretar("eu sou a dona da loja"))
+        assertEquals(Pedido.Definir("apelido", "Toni"), ComandosMemoria.interpretar("eu sou o toni"))
         assertNull(ComandosMemoria.interpretar("liga a lanterna"))
         assertNull(ComandosMemoria.interpretar("esquece tudo"))
     }

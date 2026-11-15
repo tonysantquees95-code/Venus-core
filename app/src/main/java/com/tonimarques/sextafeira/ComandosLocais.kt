@@ -157,6 +157,8 @@ object ComandosLocais {
     private fun clima(f: Frase): Resultado? {
         val c = f.chave
         if (!CLIMA.containsMatchIn(c)) return null
+        // "qual a temperatura mais fria da Antártica?": pergunta de conhecimento, não é a previsão do tempo daqui
+        if (Regex("\\b(?:mais (?:fri[oa]s?|quentes?|chuvos[oa]s?|sec[oa]s?|umid[oa]s?)|recordes?|historic[oa]s?|(?:maior|menor) temperatura|temperatura (?:minima|maxima) (?:ja )?registrada)\\b").containsMatchIn(c)) return null
         if (Regex("\\b(timer|alarme|temporizador|cronometro|minutos?|segundos?)\\b").containsMatchIn(c)) return null
         val amanha = Regex("\\bamanha\\b").containsMatchIn(c)
         val dia = when {

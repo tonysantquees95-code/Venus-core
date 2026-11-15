@@ -106,6 +106,11 @@ class ComandosLocaisTest {
         assertNull(ComandosLocais.interpretar("abre o YouTube e toca um rock"))
         assertNull(ComandosLocais.interpretar("qual a capital da Austrália?"))
         assertNull(ComandosLocais.interpretar("me conta uma piada"))
+        // pergunta de conhecimento sobre temperatura: não é a previsão do tempo de onde a pessoa está
+        for (f in listOf("qual a temperatura mais fria da antártica", "qual o lugar mais quente do mundo", "qual foi a maior temperatura já registrada")) {
+            val r = ComandosLocais.interpretar(f)
+            assertTrue("\"$f\" não deve virar previsão do tempo", r !is Acao || r.nome != "previsao_do_tempo")
+        }
         assertNull(ComandosLocais.interpretar("como vai a vida"))
         assertNull(ComandosLocais.interpretar("manda mensagem pra Maria"))
         assertNull(ComandosLocais.interpretar("sexta-feira"))
