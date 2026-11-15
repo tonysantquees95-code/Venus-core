@@ -929,6 +929,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         }
         pararVigilia()
         respostaAtrasada = 0
+        Tempos.comecar()
         var pedido = entrada
 
         // "Sexta-feira, ativar" (sozinho ou seguido de um pedido)
@@ -1037,6 +1038,25 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         }
     }
 
+    /** Roda [bloco] com prazo: passou de [ms], devolve null e deixa a tarefa terminar sozinha em segundo plano. */
+    private fun <T> comPrazo(ms: Long, bloco: () -> T?): T? {
+        val tarefa = java.util.concurrent.FutureTask<T?> { try { bloco() } catch (e: Exception) { null } }
+        Thread(tarefa).start()
+        return try {
+            tarefa.get(ms, java.util.concurrent.TimeUnit.MILLISECONDS)
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    private val VERBO_DE_COMANDO = Regex("\\b(?:abr\\w*|lig\\w*|desl\\w*|toc\\w*|mand\\w*|envi\\w*|program\\w*|post\\w*|cadastr\\w*|lembr\\w*|cri\\w*|anot\\w*|salv\\w*|pesquis\\w*|procur\\w*|coloc\\w*|mud\\w*|troc\\w*|paus\\w*|pul\\w*|aument\\w*|diminu\\w*|tir\\w*|apag\\w*|edit\\w*|calcul\\w*|lev\\w*|ench\\w*|ativ\\w*|compartilh\\w*|grav\\w*|fotograf\\w*|ajust\\w*|conect\\w*|alarme|timer|lembrete)\\b")
+
+    /** Pergunta de informação, sem nenhum verbo de comando: não precisa passar pelo "isso é uma ação?". */
+    internal fun ehPerguntaDeInformacao(pedido: String): Boolean {
+        val c = ComandosLocais.limpar(pedido).chave
+        return Cerebro.ehPergunta(c) && !VERBO_DE_COMANDO.containsMatchIn(ComandosLocais.normalizar(pedido))
+    }
+
     /**
      * As regras não entenderam: primeiro vê se já aprendeu essa frase; senão o Gemini só interpreta qual ação é
      * (a Vênus executa no celular). Se for conversa ou pergunta geral, segue o caminho de sempre.
@@ -1061,22 +1081,23 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         val contexto = Contexto.descrever()
         comTempoLimite("ENTENDENDO…") {
             // 1) memória vetorial no celular: mesmo sentido do que ela já aprendeu? resolve sem o modelo principal
-            val sentido = try {
-                Semantica.entender(memoria, k, pedido, soRespostas = pensar)
-            } catch (e: Exception) {
-                null
-            }
+            // com um prazo: se o serviço de embeddings estiver lento, segue sem a memória em vez de deixar você esperando
+            val sentido = comPrazo(1_500) { Semantica.entender(memoria, k, pedido, soRespostas = pensar) }
+            Tempos.marcar("memória")
             if (sentido != null) {
                 memoria.contarUso(sentido.id)
                 val porSentido: () -> Unit = { aplicarSentido(sentido, pedido) }
                 return@comTempoLimite porSentido
             }
-            if (pensar) {
+            // pergunta de informação ("como funciona...", "o que é...") não é comando: vai direto a quem responde,
+            // sem a chamada que só serviria para descobrir que não é uma ação
+            if (pensar || ehPerguntaDeInformacao(pedido)) {
                 val pergunta: () -> Unit = { responderPergunta(pedido) }
                 return@comTempoLimite pergunta
             }
             // 2) o Gemini só interpreta qual ação é
             val rota = Roteador.rotear(k, m, pedido, contexto)
+            Tempos.marcar("interpretar")
             // frases que dependem do assunto anterior ("e o dele?") não viram regra fixa
             val dependeDoContexto = contexto.isNotBlank() &&
                 Regex("\\b(?:ele|ela|dele|dela|nele|nela|mesmo|esse|essa|este|esta|aquele|aquela|isso)\\b|^e ").containsMatchIn(Roteador.chave(pedido))
@@ -1618,6 +1639,39 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
             }
         }, if (pensarMais) LIMITE_IA_PROFUNDO_MS else LIMITE_IA_MS)
 
+        // O balão vai crescendo enquanto a IA escreve (nas que respondem em fluxo); no fim ele recebe o texto completo.
+        var vivo: TextView? = null
+        val aoTexto: (String) -> Unit = { parcial ->
+            runOnUiThread {
+                if (id == pedidoAtual && ocupado) {
+                    val b = vivo
+                    if (b == null) {
+                        vivo = adicionarMensagem(parcial, false, salvar = false)
+                        Tempos.marcar("1ª palavra")
+                    } else {
+                        b.text = parcial
+                        rolarParaBaixo()
+                    }
+                }
+            }
+        }
+        fun tirarBalaoVivo() {
+            vivo?.let { (it.parent as? ViewGroup)?.removeView(it) }
+            vivo = null
+        }
+        fun entregar(texto: String) {
+            val b = vivo
+            if (b == null) { responder(texto); return }
+            b.text = texto
+            try {
+                Calculadora.lembrar(texto)
+                memoria.salvarMensagem(false, texto, topicoAtual)
+            } catch (e: Exception) {
+            }
+            rolarParaBaixo()
+            falar(texto)
+        }
+
         Thread {
             val resposta = try {
                 // decisão de negócio: vai junto o retrato da loja em números (sem dados de clientes)
@@ -1627,7 +1681,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
                 } catch (e: Exception) {
                     pedido
                 } else pedido
-                assistente.enviar(comDados, pensarMais)
+                assistente.enviar(comDados, pensarMais, aoTexto)
             } catch (e: Exception) {
                 Gemini.RespostaIA(false, "Algo deu errado: ${e.message}")
             }
@@ -1637,18 +1691,21 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
                     if (respostaAtrasada == id && !ocupado && resposta.ok) {
                         respostaAtrasada = 0
                         if (reserva == null) aprenderComResposta(pedido, resposta)
-                        responder(resposta.texto)
+                        entregar(resposta.texto)
                         mostrarFontes(ferramentas.ultimasFontes)
-                    }
+                    } else tirarBalaoVivo()
                     return@runOnUiThread
                 }
                 pedidoAtual++
                 ocupado = false
                 if (resposta.ok) {
                     if (reserva == null) aprenderComResposta(pedido, resposta) // papo solto não vira memória: senão a resposta repetiria
-                    responder(resposta.texto)
+                    Tempos.marcar("resposta")
+                    Tempos.terminar(pedido)
+                    entregar(resposta.texto)
                     mostrarFontes(ferramentas.ultimasFontes)
                 } else {
+                    tirarBalaoVivo()
                     Registro.anotar(this, "ia", resposta.texto, pedido)
                     // Gemini fora do ar: no papo solto vale a frase pronta; no resto a Vênus pesquisa sozinha antes de desistir.
                     if (reserva != null) responder(reserva) else pesquisarSozinha(pedido, amplo = true, depoisIA = false, motivo = "Essa eu ainda não sei sozinha, e o Gemini não respondeu agora.")

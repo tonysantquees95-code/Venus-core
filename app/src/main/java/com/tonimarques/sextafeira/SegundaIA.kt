@@ -150,16 +150,23 @@ object SegundaIA {
      * Responde um pedido no formato do Gemini. Null se não houver reserva configurada ou ela também falhar.
      * Bloqueante: chame fora da thread principal.
      */
-    fun responder(corpoGemini: JSONObject, tempo: Int = 30_000, esforco: String = "low"): JSONObject? {
+    fun responder(corpoGemini: JSONObject, tempo: Int = 30_000, esforco: String = "low", aoTexto: ((String) -> Unit)? = null): JSONObject? {
         val cadeia = cadeia()
         if (cadeia.isEmpty()) return null
         val pedido = paraOpenAI(corpoGemini) ?: return null
-        for ((p, chave) in cadeia) responderCom(p, chave, pedido, tempo, esforco)?.let { return it }
+        // quem falhou há pouco fica de fora por um tempo (não espera de novo uma IA que travou); se todas estão de molho, tenta todas
+        val agora = System.currentTimeMillis()
+        val ativas = cadeia.filter { (p, _) -> agora >= (pausadoAte[p.id] ?: 0L) }.ifEmpty { cadeia }
+        for ((p, chave) in ativas) responderCom(p, chave, pedido, tempo, esforco, aoTexto)?.let { return it }
         return null
     }
 
+    /** Até quando cada provedor fica de molho depois de uma falha ou de estourar o limite. */
+    private val pausadoAte = java.util.concurrent.ConcurrentHashMap<String, Long>()
+    private fun pausar(id: String, ms: Long) { pausadoAte[id] = System.currentTimeMillis() + ms }
+
     /** Tenta os modelos de um provedor (o que respondeu por último primeiro). */
-    private fun responderCom(p: Provedor, chave: String, pedido: JSONObject, tempo: Int, esforco: String): JSONObject? {
+    private fun responderCom(p: Provedor, chave: String, pedido: JSONObject, tempo: Int, esforco: String, aoTexto: ((String) -> Unit)? = null): JSONObject? {
         // com foto: só modelos que enxergam (na Groq, os Llama 4)
         val comFoto = temFoto(pedido)
         val modelos = if (comFoto) (VISAO[p.id] ?: return null) else p.modelos
@@ -168,10 +175,12 @@ object SegundaIA {
         val ordem = (listOfNotNull(modeloQueFunciona[chaveDoModelo]) + modelos).distinct()
         var tentouAlgum = false
         for (modelo in ordem) {
-            when (val r = chamar(p, chave, modelo, pedido, tempo, esforco = esforco)) {
+            when (val r = chamar(p, chave, modelo, pedido, tempo, esforco = esforco, aoTexto = aoTexto)) {
                 is Resultado.Ok -> {
                     modeloQueFunciona[chaveDoModelo] = modelo
                     ultimaVez = System.currentTimeMillis()
+                    pausadoAte.remove(p.id)
+                    Tempos.quem("${p.nome.substringBefore(" (")}/${modelo.substringAfterLast('/')}")
                     return paraGemini(r.json)
                 }
                 Resultado.ModeloNaoExiste -> continue
@@ -180,10 +189,16 @@ object SegundaIA {
                     tentouAlgum = true
                     continue
                 }
-                Resultado.Falhou -> return null
+                Resultado.Falhou -> {
+                    pausar(p.id, 45_000)
+                    return null
+                }
             }
         }
-        if (tentouAlgum) return null
+        if (tentouAlgum) {
+            pausar(p.id, 60_000)
+            return null
+        }
         // nenhum dos modelos conhecidos existe mais: pergunta a lista ao provedor e usa o melhor
         val melhor = listarModelos(p, chave).firstOrNull { preferencia.containsMatchIn(it) } ?: return null
         val r = chamar(p, chave, melhor, pedido, tempo, esforco = esforco) as? Resultado.Ok ?: return null
@@ -308,30 +323,35 @@ object SegundaIA {
         object Falhou : Resultado()
     }
 
-    private fun chamar(p: Provedor, chave: String, modelo: String, pedido: JSONObject, tempo: Int, ajuste: Boolean = true, esforco: String = "low"): Resultado {
+    private fun chamar(p: Provedor, chave: String, modelo: String, pedido: JSONObject, tempo: Int, ajuste: Boolean = true, esforco: String = "low", aoTexto: ((String) -> Unit)? = null): Resultado {
         val corpo = JSONObject(pedido.toString()).put("model", modelo)
+        if (aoTexto != null) corpo.put("stream", true)
         if (ajuste && modelo.contains("gpt-oss")) corpo.put("reasoning_effort", esforco)
         var c: HttpURLConnection? = null
         return try {
             c = (URL("${p.endereco}/chat/completions").openConnection() as HttpURLConnection).apply {
                 requestMethod = "POST"
                 connectTimeout = 8_000
-                readTimeout = tempo
+                // em fluxo, o tempo é entre um pedaço e outro: pergunta comum desiste de uma IA muda em 15 s (e não em 25)
+                readTimeout = if (aoTexto != null && tempo <= 30_000) 15_000 else tempo
                 doOutput = true
                 setRequestProperty("Content-Type", "application/json; charset=utf-8")
                 setRequestProperty("Authorization", "Bearer $chave")
             }
             c.outputStream.use { it.write(corpo.toString().toByteArray(Charsets.UTF_8)) }
             val codigo = c.responseCode
+            if (codigo in 200..299 && aoTexto != null && c.contentType.orEmpty().contains("event-stream", true)) {
+                return Resultado.Ok(lerFluxo(c.inputStream, aoTexto))
+            }
             val texto = (if (codigo in 200..299) c.inputStream else c.errorStream)?.bufferedReader()?.use { it.readText() }.orEmpty()
             when {
                 codigo in 200..299 -> Resultado.Ok(JSONObject(texto))
                 codigo == 404 || (codigo == 400 && texto.contains("model", true) && (texto.contains("not found", true) || texto.contains("does not exist", true) || texto.contains("decommissioned", true))) -> Resultado.ModeloNaoExiste
                 codigo == 429 || codigo == 413 || texto.contains("allocation", true) -> Resultado.Limite
                 // modelo que não aceitou o ajuste de raciocínio: tenta sem ele
-                codigo == 400 && corpo.has("reasoning_effort") -> chamar(p, chave, modelo, pedido, tempo, ajuste = false)
+                codigo == 400 && corpo.has("reasoning_effort") -> chamar(p, chave, modelo, pedido, tempo, ajuste = false, aoTexto = aoTexto)
                 // modelo que não aceitou o formato JSON obrigatório: o pedido já diz para responder em JSON
-                codigo == 400 && pedido.has("response_format") -> chamar(p, chave, modelo, JSONObject(pedido.toString()).apply { remove("response_format") }, tempo, ajuste, esforco)
+                codigo == 400 && pedido.has("response_format") -> chamar(p, chave, modelo, JSONObject(pedido.toString()).apply { remove("response_format") }, tempo, ajuste, esforco, aoTexto)
                 else -> {
                     ultimoErro = "erro $codigo: ${texto.take(160)}"
                     ctx?.let { Registro.anotar(it, "erro", "IA reserva ${p.nome} → $codigo ${texto.take(200)}") }
@@ -343,6 +363,60 @@ object SegundaIA {
         } finally {
             c?.disconnect()
         }
+    }
+
+    /**
+     * Lê a resposta em fluxo (SSE da OpenAI/Groq): manda o texto que já chegou para [aoTexto] enquanto o resto vem,
+     * e devolve o mesmo JSON de uma resposta comum, para o resto do app não perceber a diferença.
+     */
+    internal fun lerFluxo(entrada: java.io.InputStream, aoTexto: (String) -> Unit): JSONObject {
+        val texto = StringBuilder()
+        val chamadas = java.util.TreeMap<Int, JSONObject>()
+        var ultimoAviso = 0L
+        entrada.bufferedReader(Charsets.UTF_8).use { leitor ->
+            while (true) {
+                val linha = leitor.readLine() ?: break
+                if (!linha.startsWith("data:")) continue
+                val dados = linha.substring(5).trim()
+                if (dados.isEmpty()) continue
+                if (dados == "[DONE]") break
+                val j = try { JSONObject(dados) } catch (e: Exception) { continue }
+                val delta = j.optJSONArray("choices")?.optJSONObject(0)?.optJSONObject("delta") ?: continue
+                if (!delta.isNull("content")) {
+                    val pedaco = delta.optString("content")
+                    if (pedaco.isNotEmpty()) {
+                        texto.append(pedaco)
+                        val agora = System.currentTimeMillis()
+                        // só mostra texto puro (quando vem ferramenta, a resposta final é outra) e sem inundar a tela
+                        if (chamadas.isEmpty() && (ultimoAviso == 0L || agora - ultimoAviso >= 70)) {
+                            ultimoAviso = agora
+                            aoTexto(texto.toString())
+                        }
+                    }
+                }
+                delta.optJSONArray("tool_calls")?.let { tc ->
+                    for (i in 0 until tc.length()) {
+                        val d = tc.optJSONObject(i) ?: continue
+                        val acumulado = chamadas.getOrPut(d.optInt("index", i)) { JSONObject().put("id", "").put("name", "").put("arguments", "") }
+                        if (d.has("id") && !d.isNull("id")) acumulado.put("id", d.optString("id"))
+                        d.optJSONObject("function")?.let { f ->
+                            if (f.has("name") && !f.isNull("name")) acumulado.put("name", acumulado.optString("name") + f.optString("name"))
+                            if (f.has("arguments") && !f.isNull("arguments")) acumulado.put("arguments", acumulado.optString("arguments") + f.optString("arguments"))
+                        }
+                    }
+                }
+            }
+        }
+        val mensagem = JSONObject().put("role", "assistant").put("content", if (texto.isEmpty()) JSONObject.NULL else texto.toString())
+        if (chamadas.isNotEmpty()) {
+            val lista = JSONArray()
+            for (d in chamadas.values) lista.put(
+                JSONObject().put("id", d.optString("id")).put("type", "function")
+                    .put("function", JSONObject().put("name", d.optString("name")).put("arguments", d.optString("arguments").ifBlank { "{}" }))
+            )
+            mensagem.put("tool_calls", lista)
+        }
+        return JSONObject().put("choices", JSONArray().put(JSONObject().put("message", mensagem)))
     }
 
     private fun listarModelos(p: Provedor, chave: String): List<String> = try {

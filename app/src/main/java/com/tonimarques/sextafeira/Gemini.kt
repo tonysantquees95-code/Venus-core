@@ -44,8 +44,13 @@ class Gemini(
     @Volatile
     private var profundo = false
 
-    fun enviar(pedido: String, pensarMais: Boolean = false): RespostaIA {
+    /** Recebe o texto que já chegou enquanto a IA ainda escreve (só nas IAs que respondem em fluxo, como a Groq). */
+    @Volatile
+    private var aoTextoAtual: ((String) -> Unit)? = null
+
+    fun enviar(pedido: String, pensarMais: Boolean = false, aoTexto: ((String) -> Unit)? = null): RespostaIA {
         profundo = pensarMais
+        aoTextoAtual = aoTexto
         val inicio = historico.length()
         val usadas = mutableListOf<Pair<String, JSONObject>>()
         historico.put(
@@ -261,7 +266,7 @@ class Gemini(
         var groqTentou = false
         if (SegundaIA.principal()) {
             groqTentou = true
-            SegundaIA.responder(corpo, if (profundo) 60_000 else 25_000, esforco = if (profundo) "medium" else "low")?.let { return 200 to it }
+            SegundaIA.responder(corpo, if (profundo) 60_000 else 25_000, esforco = if (profundo) "medium" else "low", aoTexto = aoTextoAtual)?.let { return 200 to it }
         }
 
         // Passou para a reserva há mais de 10 minutos: tenta de novo o modelo principal.
@@ -275,7 +280,10 @@ class Gemini(
                         modelosSemAjuste += modeloUsado
                         resposta = enviarRequisicao(modeloUsado, semAjuste)
                     }
-                    if (!sobrecarregado(resposta.first, resposta.second)) return resposta
+                    if (!sobrecarregado(resposta.first, resposta.second)) {
+                        Tempos.quem(modeloUsado)
+                        return resposta
+                    }
                     ultimaResposta = resposta
                 } catch (e: IOException) {
                     ultimoErro = e

@@ -47,6 +47,7 @@ object Diagnostico {
             linhas += testar("${5 + i}. Reserva $reserva", "$BASE/models/$reserva:generateContent", "POST", chave, comFerramentas)
         }
 
+        linhas += Tempos.relatorio()
         return linhas.joinToString("\n\n")
     }
 
