@@ -45,8 +45,8 @@ internal object Onboarding {
                 Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
         },
         Passo(
-            "5. Aparecer sobre outros apps",
-            "Permita \"Exibir sobre outros apps\" para o orbe abrir num pop-up quando você me chamar de qualquer tela.",
+            "5. Aparecer sobre outros apps (opcional)",
+            "Só se quiser o orbe abrindo num pop-up quando me chamar de qualquer tela. Alguns bancos bloqueiam o Pix com essa permissão ligada: se o seu bloquear, desligue em Ajustes do Android › Apps › $n › Exibir sobre outros apps.",
             "Abrir permissão",
         ) { abrir(it, Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:${it.packageName}"))) },
         Passo(
