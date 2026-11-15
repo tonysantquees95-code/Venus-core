@@ -1029,6 +1029,9 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         val naoEntendeuLoja = decisao is Cerebro.Decisao.Responder && decisao.texto.startsWith("Sobre a loja eu entendo")
         if (decisao is Cerebro.Decisao.Incerto || naoEntendeuLoja) {
             rotearOuPerguntar(pedido)
+        } else if (decisao is Cerebro.Decisao.Responder && cerebro.ultimaFoiPapo && obterGemini() != null) {
+            // papo solto: com IA, ela responde lendo a conversa (a frase pronta só entra se a IA falhar)
+            consultarIA(pedido, reserva = decisao.texto)
         } else {
             mostrarDecisao(decisao, pedido)
         }
@@ -1595,7 +1598,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
     }
 
     /** Envia para o Gemini, com tempo limite: se ele travar ou falhar, o cérebro local assume. */
-    internal fun consultarIA(pedido: String) {
+    internal fun consultarIA(pedido: String, reserva: String? = null) {
         val assistente = obterGemini()
             ?: return pesquisarSozinha(pedido, amplo = true, depoisIA = false, motivo = null)
         ocupado = true
@@ -1647,8 +1650,8 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
                     mostrarFontes(ferramentas.ultimasFontes)
                 } else {
                     Registro.anotar(this, "ia", resposta.texto, pedido)
-                    // Gemini fora do ar: a Vênus pesquisa sozinha antes de desistir.
-                    pesquisarSozinha(pedido, amplo = true, depoisIA = false, motivo = "Essa eu ainda não sei sozinha, e o Gemini não respondeu agora.")
+                    // Gemini fora do ar: no papo solto vale a frase pronta; no resto a Vênus pesquisa sozinha antes de desistir.
+                    if (reserva != null) responder(reserva) else pesquisarSozinha(pedido, amplo = true, depoisIA = false, motivo = "Essa eu ainda não sei sozinha, e o Gemini não respondeu agora.")
                 }
             }
         }.start()

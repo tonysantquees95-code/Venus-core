@@ -21,6 +21,7 @@ internal object Novidades {
         Item(2, "2026-11-15", "correcao", "Respostas mais certas", "Perguntar a temperatura mais fria de um lugar (como a Antártica) agora busca a resposta, em vez de mostrar o clima daí onde você está. E dizer \"eu sou o administrador\" ou \"eu sou a dona da loja\" não vira mais o seu apelido. Além disso, a conta de administrador agora é reconhecida sozinha, sem precisar sair e entrar de novo."),
         Item(3, "2026-11-15", "melhoria", "Aviso sobre o Pix no guia", "No guia do primeiro acesso, o passo de aparecer sobre outros apps agora é opcional e avisa que alguns bancos bloqueiam o Pix com essa permissão ligada, dizendo onde desligar."),
         Item(4, "2026-11-15", "correcao", "Cadastro da loja volta sozinho", "Depois de reinstalar a Vênus e entrar no Vetorial ID, o nome, a loja, o site e as regras de venda voltam sozinhos da sua conta, em vez de aparecerem como \"Falta fazer\"."),
+        Item(5, "2026-11-15", "melhoria", "Conversa com mais personalidade", "Em papo solto (como você está, tudo bem, obrigado, sim, não) a Vênus agora responde de verdade, lendo a conversa, em vez de soltar uma frase pronta. Ela reage ao que você disse, não repete a mesma resposta e puxa o assunto quando faz sentido, com mais humor e jeito próprio."),
     )
 
     fun rotulo(tipo: String): String = when (tipo) { "novo" -> "Novo"; "melhoria" -> "Melhorou"; "correcao" -> "Corrigido"; else -> tipo }
