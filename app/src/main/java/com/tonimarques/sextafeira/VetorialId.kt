@@ -183,6 +183,9 @@ object VetorialId {
     /** O que fazer com um documento que chegou do servidor. */
     fun deveAplicar(versaoRemota: Int, versaoConhecida: Int) = versaoRemota > versaoConhecida
 
+    /** O backup do Google devolve as versões já sincronizadas, mas não o cadastro da loja: sem dados aqui e com versão guardada, baixa tudo de novo da conta. */
+    fun cadastroPerdido(temCadastroAqui: Boolean, versaoConhecida: Int) = !temCadastroAqui && versaoConhecida > 0
+
     /** Preferências compartilhadas: mexe só nas chaves que o Android conhece e preserva as do web. */
     fun mesclarPreferencias(base: JSONObject?, modo: String, acionarPeloNome: Boolean, falar: Boolean): JSONObject {
         val j = JSONObject(base?.toString() ?: "{}")

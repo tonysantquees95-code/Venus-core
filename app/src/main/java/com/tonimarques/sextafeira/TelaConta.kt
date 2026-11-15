@@ -214,7 +214,11 @@ internal object SincroniaId {
 
     fun rodar(a: MainActivity) {
         val ver = versoes(a); val env = enviados(a)
-        val desde = a.prefs.getLong("vid_desde", 0L)
+        var desde = a.prefs.getLong("vid_desde", 0L)
+        val perfilLocal = a.getSharedPreferences("perfil", android.content.Context.MODE_PRIVATE)
+        if (VetorialId.cadastroPerdido(perfilLocal.contains("dono") || perfilLocal.contains("regras_json"), ver.optInt("empresa", 0))) {
+            ver.remove("empresa"); env.remove("empresa"); desde = 0L // reinstalou e o Android só devolveu as versões: busca o cadastro da conta de novo
+        }
         val r = Nuvem.bruto(a, "GET", "/id/sync?desde=$desde", null, VetorialId.token(a))
         if (!r.ok) return
         for (doc in r.json.optJSONArray("docs").itens()) {
