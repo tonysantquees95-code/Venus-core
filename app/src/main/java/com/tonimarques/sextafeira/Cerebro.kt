@@ -70,8 +70,13 @@ class Cerebro(
     var ultimaCorrecao: String? = null
         private set
 
+    /** A última decisão foi uma resposta pronta de papo (como vai, obrigado, sim/não...): com IA, quem responde é ela, lendo a conversa. */
+    var ultimaFoiPapo = false
+        private set
+
     fun responder(entrada: String): Decisao {
         ultimaCorrecao = null
+        ultimaFoiPapo = false
         val frase = ComandosLocais.limpar(entrada)
         val chave = frase.chave
         val bruto = ComandosLocais.normalizar(entrada).replace(Regex("[^a-z0-9 ]"), " ").trim().replace(Regex("\\s+"), " ")
@@ -93,8 +98,8 @@ class Cerebro(
         // Memória: "lembra que...", "meu nome é...", "o que você sabe sobre mim"...
         ComandosMemoria.interpretar(entrada)?.let { return Decisao.Memoria(it) }
 
-        if (SIM.matches(chave) || SIM.matches(bruto)) return Decisao.Responder("Certo! Precisa de mais alguma coisa?")
-        if (NAO.matches(chave) || NAO.matches(bruto)) return Decisao.Responder("Tudo bem. É só chamar quando precisar.")
+        if (SIM.matches(chave) || SIM.matches(bruto)) { ultimaFoiPapo = true; return Decisao.Responder("Certo! Precisa de mais alguma coisa?") }
+        if (NAO.matches(chave) || NAO.matches(bruto)) { ultimaFoiPapo = true; return Decisao.Responder("Tudo bem. É só chamar quando precisar.") }
         // "Oi, Sexta-feira" fica vazio depois da limpeza: usa a frase inteira para entender o cumprimento.
         val alvo = if (chave.isBlank()) bruto else chave
         if (conceitos(alvo).isEmpty()) return Decisao.Responder(sortear(listOf("Sim? Estou ouvindo.", "Pode falar.", "Estou aqui.")))
@@ -248,10 +253,15 @@ class Cerebro(
             Decisao.Perguntar(i.pede[0].second)
         }
         i.acao != null -> Decisao.Executar(i.acao, i.args)
-        else -> Decisao.Responder(preencher(sortear(i.respostas)))
+        else -> {
+            ultimaFoiPapo = i.id in PAPO
+            Decisao.Responder(preencher(sortear(i.respostas)))
+        }
     }
 
     // ------------------------------------------------------------- respostas
+    private val PAPO = setOf("saudacao", "boa_tarde", "boa_noite", "como_vai", "estou_bem", "quem_e", "quem_criou", "obrigado", "elogio", "tchau", "desculpa")
+
     private fun sortear(opcoes: List<String>): String = if (opcoes.isEmpty()) "Certo." else opcoes[sorteio.nextInt(opcoes.size)]
 
     private fun preencher(texto: String): String {

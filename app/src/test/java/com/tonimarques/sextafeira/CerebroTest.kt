@@ -129,4 +129,15 @@ class CerebroTest {
         assertNull(Cerebro.restoDepoisDaAtivacao("abre o WhatsApp"))
         assertNull(Cerebro.restoDepoisDaAtivacao("hoje é sexta-feira"))
     }
+
+    @Test
+    fun papoSoltoFicaParaAIA() {
+        val c = Cerebro()
+        for (frase in listOf("como você está", "tudo bem", "estou bem", "obrigado", "sim")) {
+            c.responder(frase)
+            assertTrue("$frase deveria ir para a IA", c.ultimaFoiPapo)
+        }
+        c.responder("que horas são")
+        assertTrue(!c.ultimaFoiPapo) // comando de verdade não é papo
+    }
 }
