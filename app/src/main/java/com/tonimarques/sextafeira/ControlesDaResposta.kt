@@ -38,8 +38,8 @@ internal fun MainActivity.colocarControles(balao: TextView) {
         orientation = LinearLayout.HORIZONTAL
         val espaco = LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { rightMargin = dp(8) }
         addView(botao(ROTULO_OUVIR) { b -> alternarLeitura(balao.text.toString(), b) }, espaco)
-        addView(botao("Compartilhar") { compartilharTexto(balao.text.toString()) }, espaco)
-        addView(botao("Guardar") { guardarTexto(balao.text.toString()) }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+        addView(botao("Compartilhar") { compartilharResposta(balao.text.toString()) }, espaco)
+        addView(botao("Guardar") { guardarResposta(balao.text.toString()) }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
     }
     val params = LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
         gravity = Gravity.START
@@ -96,7 +96,7 @@ internal fun MainActivity.encerrarLeitura() {
     }
 }
 
-internal fun MainActivity.compartilharTexto(texto: String) {
+internal fun MainActivity.compartilharResposta(texto: String) {
     val envio = Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, texto.trim())
     try {
         startActivity(Intent.createChooser(envio, "Compartilhar resposta").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
@@ -105,7 +105,7 @@ internal fun MainActivity.compartilharTexto(texto: String) {
     }
 }
 
-internal fun MainActivity.guardarTexto(texto: String) {
+internal fun MainActivity.guardarResposta(texto: String) {
     val onde = Guardados.guardar(this, texto.trim())
     Toast.makeText(
         this,
