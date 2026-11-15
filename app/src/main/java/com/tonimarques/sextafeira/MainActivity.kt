@@ -1636,7 +1636,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
                     // Chegou depois do tempo limite: mostra, se nada novo foi pedido enquanto isso.
                     if (respostaAtrasada == id && !ocupado && resposta.ok) {
                         respostaAtrasada = 0
-                        aprenderComResposta(pedido, resposta)
+                        if (reserva == null) aprenderComResposta(pedido, resposta)
                         responder(resposta.texto)
                         mostrarFontes(ferramentas.ultimasFontes)
                     }
@@ -1645,7 +1645,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
                 pedidoAtual++
                 ocupado = false
                 if (resposta.ok) {
-                    aprenderComResposta(pedido, resposta)
+                    if (reserva == null) aprenderComResposta(pedido, resposta) // papo solto não vira memória: senão a resposta repetiria
                     responder(resposta.texto)
                     mostrarFontes(ferramentas.ultimasFontes)
                 } else {
