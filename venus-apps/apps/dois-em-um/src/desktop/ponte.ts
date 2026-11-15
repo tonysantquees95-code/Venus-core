@@ -11,8 +11,10 @@ export interface PonteDesktop {
   /** Pergunta ao servidor se tem versão nova da Vênus para Windows. */
   verificarAtualizacao(): Promise<{ atual: string; disponivel: boolean; nova?: string; notas?: string; erro?: string }>;
   /** Baixa, confere e instala a versão nova (a Vênus fecha e abre de novo). */
+  baixarAtualizacao(): Promise<{ ok: boolean; erro?: string; pronta?: boolean; aberto?: boolean }>;
+  /** Instala o que já foi baixado (a Vênus fecha e abre de novo). */
   instalarAtualizacao(): Promise<{ ok: boolean; erro?: string }>;
-  aoProgressoDaAtualizacao(cb: (p: { baixado: number; total: number }) => void): () => void;
+  aoProgressoDaAtualizacao(cb: (p: { baixado: number; total: number; pronta?: boolean }) => void): () => void;
   /** Busca o catálogo público da loja (`/_api/catalog`) pelo Windows, sem depender de CORS. Devolve o texto da resposta. */
   buscarCatalogo?(site: string): Promise<string>;
   /** Administração da loja (só no Windows): a senha fica cifrada no computador. Toda resposta vem como { ok, dado } ou { ok:false, erro }. */

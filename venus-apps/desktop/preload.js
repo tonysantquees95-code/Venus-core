@@ -20,6 +20,7 @@ contextBridge.exposeInMainWorld("venusDesktop", {
   lerIniciarComOSistema: () => ipcRenderer.invoke("venus:ler-iniciar-com-sistema"),
   comando: (texto) => ipcRenderer.invoke("venus:comando", String(texto).slice(0, 300)),
   verificarAtualizacao: () => ipcRenderer.invoke("venus:atualizacao-verificar"),
+  baixarAtualizacao: () => ipcRenderer.invoke("venus:atualizacao-baixar"),
   instalarAtualizacao: () => ipcRenderer.invoke("venus:atualizacao-instalar"),
   aoProgressoDaAtualizacao: (cb) => ouvir("venus:atualizacao-progresso", cb),
   buscarCatalogo: (site) => ipcRenderer.invoke("venus:catalogo", String(site).slice(0, 200)),
