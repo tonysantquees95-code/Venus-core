@@ -43,6 +43,7 @@ export const NOVIDADES: Novidade[] = [
   { id: 4, data: "2026-11-15", tipo: "novo", titulo: "Ouvir, compartilhar e guardar", texto: "Embaixo de cada resposta da Vênus há três botões: Ouvir (com pausa e continuar), Compartilhar e Guardar o texto." },
   { id: 5, data: "2026-11-15", tipo: "melhoria", titulo: "Só fala quando você fala", texto: "Se você digita, a Vênus responde só por escrito. Ela responde em voz alta quando você pediu falando. Para ouvir uma resposta escrita, use o botão Ouvir." },
   { id: 6, data: "2026-11-15", tipo: "novo", titulo: "Escolha a voz da Vênus", texto: "Em Ajustes › Comportamento, agora dá para escolher a voz, a velocidade e o tom, e usar a voz neural da Microsoft (Francisca, Thalita e outras), igual ao celular. O que você já ajustou no celular aparece aqui sozinho pela sua conta." },
+  { id: 7, data: "2026-11-15", tipo: "melhoria", titulo: "Atualização com barra e instalação por escolha", texto: "No Windows, ao achar uma versão nova a Vênus baixa mostrando a barra de andamento e, quando termina, você escolhe a hora de tocar em Instalar agora. É o mesmo jeito do celular." },
 ];
 
 export const ROTULO: Record<TipoNovidade, string> = { novo: "Novo", melhoria: "Melhorou", correcao: "Corrigido" };

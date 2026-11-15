@@ -74,7 +74,7 @@ function atualizarMenu() {
     { label: `Chamar de qualquer tela: ${NOME_ATALHO}`, enabled: false },
     { type: "separator" },
     { label: statusModulo.textoDoStatus(ultimoStatus), enabled: false },
-    ...(novaVersao ? [{ label: `Atualizar a Vênus para a versão 1.${novaVersao.numero}`, click: () => void instalarAtualizacao() }] : []),
+    ...(novaVersao ? [{ label: `Atualizar a Vênus para a versão 1.${novaVersao.numero}`, click: () => void conferirAtualizacao(true) }] : []),
     { label: "Verificar atualizações", click: () => void conferirAtualizacao(true) },
     { label: MAC ? "Iniciar com o Mac" : "Iniciar com o Windows", type: "checkbox", checked: iniciar, click: (i) => definirIniciar(i.checked) },
     { type: "separator" },
@@ -173,18 +173,21 @@ async function verificarAtualizacao() {
   }
 }
 
-/** Baixa o instalador (conferindo tamanho e hash), roda em modo silencioso e fecha a Vênus para ela ser trocada. */
-async function instalarAtualizacao() {
-  if (instalando) return { ok: false, erro: "Já estou atualizando." };
+let baixada = null; // { arquivo, numero } quando o instalador já foi baixado e conferido
+
+/** Etapa 1: baixa o instalador (conferindo tamanho e hash) mostrando o andamento. Não instala: a pessoa escolhe a hora. */
+async function baixarAtualizacao() {
+  if (instalando) return { ok: false, erro: "Já estou baixando." };
   if (MAC) { // sem assinatura da Apple não dá para trocar o app sozinha: abre o download e a pessoa arrasta para Aplicativos
     void shell.openExternal(`${SERVIDOR}/venus/mac`);
-    return { ok: true };
+    return { ok: true, aberto: true };
   }
   instalando = true;
   const avisar = (p) => { if (janela) janela.webContents.send("venus:atualizacao-progresso", p); };
   try {
     const info = await infoDoServidor(); // o link do GitHub vale poucos minutos: pede de novo na hora de baixar
     if (!info || !atualizador.temNovaVersao(app.getVersion(), info.numero)) return { ok: false, erro: "A Vênus já está na versão mais nova." };
+    if (baixada && baixada.numero === info.numero && fs.existsSync(baixada.arquivo)) return { ok: true, pronta: true };
     const arquivo = path.join(os.tmpdir(), `VenusSetup-${info.numero}.exe`);
     const r = await net.fetch(info.url);
     if (!r.ok || !r.body) return { ok: false, erro: "O download não começou. Tente de novo em instantes." };
@@ -207,17 +210,25 @@ async function instalarAtualizacao() {
       fs.rmSync(arquivo, { force: true });
       return { ok: false, erro: "O arquivo baixado não confere. Não instalei, por segurança." };
     }
-    const filho = spawn(arquivo, atualizador.argsDoInstalador(), { detached: true, stdio: "ignore" });
-    filho.on("error", () => {});
-    filho.unref();
-    saindo = true;
-    setTimeout(() => app.quit(), 800); // solta os arquivos para o instalador trocar
-    return { ok: true };
+    baixada = { arquivo, numero: info.numero };
+    avisar({ baixado, total: baixado, pronta: true });
+    return { ok: true, pronta: true };
   } catch {
-    return { ok: false, erro: "Não consegui atualizar agora. Tente de novo mais tarde." };
+    return { ok: false, erro: "Não consegui baixar agora. Tente de novo mais tarde." };
   } finally {
     instalando = false;
   }
+}
+
+/** Etapa 2: roda o instalador já baixado em modo silencioso e fecha a Vênus para ela ser trocada. */
+function instalarBaixada() {
+  if (!baixada || !fs.existsSync(baixada.arquivo)) return { ok: false, erro: "Ainda não há atualização baixada." };
+  const filho = spawn(baixada.arquivo, atualizador.argsDoInstalador(), { detached: true, stdio: "ignore" });
+  filho.on("error", () => {});
+  filho.unref();
+  saindo = true;
+  setTimeout(() => app.quit(), 800); // solta os arquivos para o instalador trocar
+  return { ok: true };
 }
 
 /** [manual]: o botão "Verificar atualizações" (sempre responde). Sozinha: pergunta uma vez por versão. */
@@ -231,13 +242,20 @@ async function conferirAtualizacao(manual) {
   jaPerguntou = novaVersao.numero;
   const alvo = janela && janela.isVisible() ? janela : undefined;
   const { response } = await dialog.showMessageBox(alvo, {
-    type: "question", title: "Atualização da Vênus", buttons: [MAC ? "Baixar agora" : "Atualizar agora", "Depois"], defaultId: 0, cancelId: 1,
+    type: "question", title: "Atualização da Vênus", buttons: ["Baixar agora", "Depois"], defaultId: 0, cancelId: 1,
     message: `Tem uma versão nova da Vênus (${r.nova}).`,
-    detail: (r.notas ? r.notas + "\n\n" : "") + (MAC ? "Vou abrir o download. Depois de baixar, abra o arquivo e arraste a Vênus para a pasta Aplicativos, trocando a antiga." : "A Vênus fecha, atualiza sozinha e abre de novo em alguns segundos."),
+    detail: (r.notas ? r.notas + "\n\n" : "") + (MAC ? "Vou abrir o download. Depois de baixar, abra o arquivo e arraste a Vênus para a pasta Aplicativos, trocando a antiga." : "Vou baixar agora, mostrando o andamento em Ajustes › Atualizações. Quando terminar, você escolhe a hora de instalar."),
   });
   if (response === 0) {
-    const i = await instalarAtualizacao();
-    if (!i.ok) void dialog.showMessageBox({ type: "warning", title: "Vênus", message: i.erro, buttons: ["OK"] });
+    const i = await baixarAtualizacao();
+    if (!i.ok) { void dialog.showMessageBox({ type: "warning", title: "Vênus", message: i.erro, buttons: ["OK"] }); return; }
+    if (i.pronta) {
+      const { response: r2 } = await dialog.showMessageBox(janela && janela.isVisible() ? janela : undefined, {
+        type: "question", title: "Atualização da Vênus", buttons: ["Instalar agora", "Depois"], defaultId: 0, cancelId: 1,
+        message: `A Vênus ${r.nova} está pronta para instalar.`, detail: "A Vênus fecha, atualiza sozinha e abre de novo em alguns segundos.",
+      });
+      if (r2 === 0) instalarBaixada();
+    }
   }
 }
 
@@ -275,7 +293,8 @@ ipcMain.handle("venus:loja-salvar", daLoja((corpo) => loja.salvarProduto(corpo &
 ipcMain.handle("venus:loja-estoque", daLoja((id, qtd) => loja.definirEstoque(id, qtd)));
 ipcMain.handle("venus:loja-foto", daLoja((base64) => loja.enviarFoto(String(base64).slice(0, 12_000_000))));
 ipcMain.handle("venus:atualizacao-verificar", () => verificarAtualizacao());
-ipcMain.handle("venus:atualizacao-instalar", () => instalarAtualizacao());
+ipcMain.handle("venus:atualizacao-baixar", () => baixarAtualizacao());
+ipcMain.handle("venus:atualizacao-instalar", () => instalarBaixada());
 
 /** Executa uma ação já validada pelo computador.mjs (sempre de uma lista fixa, sem shell com texto do usuário). */
 function executar(exec) {

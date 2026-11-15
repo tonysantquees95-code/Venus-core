@@ -39,29 +39,40 @@ function Servidor() {
 /** Só no Windows: versão instalada, botão "Verificar atualizações" e instalação com um toque. */
 function Atualizacoes() {
   const ponte = ponteDesktop();
-  const [estado, setEstado] = useState<{ texto: string; nova?: string; ocupado: boolean }>({ texto: "", ocupado: false });
-  useEffect(() => ponte?.aoProgressoDaAtualizacao(({ baixado, total }) => {
-    const pct = total > 0 ? Math.min(100, Math.round((baixado / total) * 100)) : 0;
-    setEstado((e) => ({ ...e, ocupado: true, texto: total > 0 ? `Baixando… ${pct}%` : "Baixando…" }));
+  const [estado, setEstado] = useState<{ texto: string; nova?: string; ocupado: boolean; pct: number | null; pronta: boolean }>({ texto: "", ocupado: false, pct: null, pronta: false });
+  useEffect(() => ponte?.aoProgressoDaAtualizacao(({ baixado, total, pronta }) => {
+    const pct = pronta ? 100 : total > 0 ? Math.min(100, Math.round((baixado / total) * 100)) : null;
+    setEstado((e) => ({ ...e, ocupado: !pronta, pronta: !!pronta, pct, texto: pronta ? "Pronta para instalar." : total > 0 ? `Baixando… ${pct}%` : "Baixando…" }));
   }), [ponte]);
   if (!ponte) return null;
   const verificar = async () => {
-    setEstado({ texto: "Consultando…", ocupado: true });
+    setEstado({ texto: "Consultando…", ocupado: true, pct: null, pronta: false });
     const r = await ponte.verificarAtualizacao();
-    setEstado(r.erro ? { texto: r.erro, ocupado: false } : r.disponivel ? { texto: `Tem uma versão nova: ${r.nova}.`, nova: r.nova, ocupado: false } : { texto: `A Vênus já está na versão mais nova (${r.atual}).`, ocupado: false });
+    setEstado(r.erro ? { texto: r.erro, ocupado: false, pct: null, pronta: false } : r.disponivel ? { texto: `Tem uma versão nova: ${r.nova}.`, nova: r.nova, ocupado: false, pct: null, pronta: false } : { texto: `A Vênus já está na versão mais nova (${r.atual}).`, ocupado: false, pct: null, pronta: false });
+  };
+  const baixar = async () => {
+    setEstado((e) => ({ ...e, texto: "Baixando…", ocupado: true, pct: 0 }));
+    const r = await ponte.baixarAtualizacao();
+    setEstado((e) => r.ok ? (r.pronta ? { ...e, ocupado: false, pronta: true, pct: 100, texto: "Pronta para instalar." } : { ...e, ocupado: false, pct: null, texto: "Abri o download no navegador." }) : { ...e, ocupado: false, pct: null, texto: r.erro ?? "Não consegui baixar." });
   };
   const instalar = async () => {
-    setEstado((e) => ({ ...e, texto: "Baixando…", ocupado: true }));
+    setEstado((e) => ({ ...e, ocupado: true, texto: "Atualizando… a Vênus abre de novo em instantes." }));
     const r = await ponte.instalarAtualizacao();
-    setEstado((e) => ({ ...e, ocupado: false, texto: r.ok ? "Atualizando… a Vênus abre de novo em instantes." : r.erro ?? "Não consegui atualizar." }));
+    if (!r.ok) setEstado((e) => ({ ...e, ocupado: false, texto: r.erro ?? "Não consegui atualizar." }));
   };
   return (
     <div className="space-y-3">
-      <p className="text-sm text-slate-300">Versão instalada: {ponte.versao}. A Vênus confere sozinha a cada poucas horas e pergunta antes de atualizar.</p>
+      <p className="text-sm text-slate-300">Versão instalada: {ponte.versao}. A Vênus confere sozinha a cada poucas horas e pergunta antes de baixar. Depois de baixar, você escolhe a hora de instalar.</p>
       <div className="flex flex-wrap gap-2">
         <button className={botaoSuave} disabled={estado.ocupado} onClick={() => void verificar()}>Verificar atualizações</button>
-        {estado.nova && <button className={botaoSuave} disabled={estado.ocupado} onClick={() => void instalar()}>Atualizar agora</button>}
+        {estado.nova && !estado.pronta && <button className={botaoSuave} disabled={estado.ocupado} onClick={() => void baixar()}>Baixar {estado.nova}</button>}
+        {estado.pronta && <button className={botaoSuave} disabled={estado.ocupado} onClick={() => void instalar()}>Instalar agora</button>}
       </div>
+      {estado.pct !== null && (
+        <div className="h-2 overflow-hidden rounded-full bg-white/10" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={estado.pct}>
+          <div className="h-full rounded-full bg-gradient-to-r from-violet-400 to-cyan-300 transition-all" style={{ width: `${estado.pct}%` }} />
+        </div>
+      )}
       {estado.texto && <p className="text-sm" role="status">{estado.texto}</p>}
     </div>
   );
