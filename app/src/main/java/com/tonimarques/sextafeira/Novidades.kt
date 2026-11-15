@@ -23,6 +23,7 @@ internal object Novidades {
         Item(4, "2026-11-15", "correcao", "Cadastro da loja volta sozinho", "Depois de reinstalar a Vênus e entrar no Vetorial ID, o nome, a loja, o site e as regras de venda voltam sozinhos da sua conta, em vez de aparecerem como \"Falta fazer\"."),
         Item(5, "2026-11-15", "melhoria", "Conversa com mais personalidade", "Em papo solto (como você está, tudo bem, obrigado, sim, não) a Vênus agora responde de verdade, lendo a conversa, em vez de soltar uma frase pronta. Ela reage ao que você disse, não repete a mesma resposta e puxa o assunto quando faz sentido, com mais humor e jeito próprio."),
         Item(6, "2026-11-15", "melhoria", "Janelinhas no visual novo", "As janelas de pergunta e confirmação (QR Code do plano, atualização, escolher destino, liberar microfone e outras permissões, entre muitas) agora seguem o visual atual da Vênus: usam a cor que você escolheu, os cantos arredondados e os botões iguais aos das telas de Ajustes, em vez do roxo e do formato antigo."),
+        Item(7, "2026-11-15", "melhoria", "Respostas mais rápidas", "A resposta agora aparece enquanto a Vênus ainda está escrevendo, em vez de só no fim. Perguntas de informação (como funciona, o que é, quem foi) vão direto a quem responde, sem uma etapa a mais. A memória tem prazo, e se uma IA travar ou estourar o limite a Vênus passa para a próxima sem esperar de novo."),
     )
 
     fun rotulo(tipo: String): String = when (tipo) { "novo" -> "Novo"; "melhoria" -> "Melhorou"; "correcao" -> "Corrigido"; else -> tipo }
