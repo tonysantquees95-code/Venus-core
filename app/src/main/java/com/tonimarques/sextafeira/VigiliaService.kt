@@ -20,7 +20,7 @@ import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
 
 /**
- * Escuta "Vênus, ativar" com o app fechado (celular desbloqueado).
+ * Escuta "Ei Vênus" com o app fechado (celular desbloqueado).
  * Roda como serviço em primeiro plano, com notificação fixa, como o Android exige.
  * Quando ouve a frase, abre o pop-up do orbe por cima do que estiver na tela.
  * Fica em pausa enquanto a tela do app ou o pop-up estão abertos (eles mesmos escutam).
@@ -138,8 +138,8 @@ class VigiliaService : Service() {
             .setContentTitle(if (escutaLigada()) "${Marca.nome} está ouvindo" else "${Marca.nome} está pronta")
             .setContentText(
                 when {
-                    escutaLigada() && gestoLigado() -> "Diga “${Marca.nome}, ativar” ou torça o pulso 2 vezes"
-                    escutaLigada() -> "Diga “${Marca.nome}, ativar”"
+                    escutaLigada() && gestoLigado() -> "Diga “Ei ${Marca.nome}” ou torça o pulso 2 vezes"
+                    escutaLigada() -> "Diga “Ei ${Marca.nome}”"
                     else -> "Torça o pulso 2 vezes para chamar"
                 }
             )
@@ -187,9 +187,9 @@ class VigiliaService : Service() {
         if (falhasOffline < 5 && ModeloDeVoz.pronto(this)) {
             val d = despertador ?: Despertador(
                 this,
-                aoOuvir = {
+                aoOuvir = { resto ->
                     falhasOffline = 0
-                    abrirPopup("")
+                    abrirPopup(resto)
                 },
                 aoFalhar = {
                     falhasOffline++

@@ -69,7 +69,7 @@ android {
 }
 
 dependencies {
-    // Reconhecimento de voz offline (Vosk), usado só para ouvir "Vênus, ativar" sem ficar ligando e desligando o microfone.
+    // Reconhecimento de voz offline (Vosk), usado só para ouvir "Ei Vênus" sem ficar ligando e desligando o microfone.
     implementation("net.java.dev.jna:jna:5.13.0@aar")
     implementation("com.alphacephei:vosk-android:0.3.47@aar")
     // Recorte do produto na foto (trocar o fundo), feito no próprio celular.

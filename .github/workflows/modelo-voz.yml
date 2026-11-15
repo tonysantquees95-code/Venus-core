@@ -37,6 +37,6 @@ jobs:
         with:
           tag_name: voz-pt
           name: Voz offline (português)
-          body: Modelo de reconhecimento de voz usado pela Vênus para ouvir "Vênus, ativar" sem a internet. Não precisa baixar manualmente.
+          body: Modelo de reconhecimento de voz usado pela Vênus para ouvir "Ei Vênus" sem a internet. Não precisa baixar manualmente.
           files: vosk-model-small-pt-0.3.zip
           make_latest: false

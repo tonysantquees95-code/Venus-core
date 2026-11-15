@@ -6,6 +6,8 @@ import { useConversas } from "../../sessao/ConversasProvider";
 import { useVoz } from "../../voz/useVoz";
 import { AvatarDeConta } from "../../id/Avatar";
 import { useCatalogo } from "../../empresa/CatalogoProvider";
+import { AcoesDaResposta } from "./AcoesDaResposta";
+import { merecemAcoes } from "../../voz/logica";
 
 export function ChatPanel({ aoAbrirMenu }: { aoAbrirMenu: () => void }) {
   const { mensagens, enviando, enviar } = useChat();
@@ -14,7 +16,7 @@ export function ChatPanel({ aoAbrirMenu }: { aoAbrirMenu: () => void }) {
   const [texto, setTexto] = useState("");
   const fim = useRef<HTMLDivElement>(null);
   // falou: o que foi entendido vai direto para a Vênus, como no celular
-  const voz = useVoz((t) => void enviar(t));
+  const voz = useVoz((t) => void enviar(t, true));
 
   const estadoOrbe = voz.estado === "gravando" ? "ouvindo" : enviando || voz.estado === "transcrevendo" ? "pensando" : "ocioso";
 
@@ -59,6 +61,7 @@ export function ChatPanel({ aoAbrirMenu }: { aoAbrirMenu: () => void }) {
               ${m.autor === "eu" ? "self-end bg-venus text-sobre-venus" : "self-start border border-borda bg-painel"}`}
           >
             {m.texto}
+            {m.autor === "venus" && merecemAcoes(m.texto) && <AcoesDaResposta texto={m.texto} />}
             {m.autor === "venus" && m.detalhe && <span className="mt-1 block text-[10px] leading-tight text-suave/60">{m.detalhe}</span>}
           </li>
         ))}

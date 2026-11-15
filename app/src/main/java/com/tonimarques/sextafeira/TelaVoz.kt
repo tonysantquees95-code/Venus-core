@@ -360,7 +360,7 @@ internal fun MainActivity.oferecerVozOffline(forcar: Boolean = false) {
     CaixaBuilder(this)
         .setTitle("Microfone sem piscar")
         .setMessage(
-            "Para esperar \"${Marca.nome}, ativar\", ela liga e desliga o microfone o tempo todo, e o ícone fica piscando ao lado da bateria. " +
+            "Para esperar \"Ei ${Marca.nome}\", ela liga e desliga o microfone o tempo todo, e o ícone fica piscando ao lado da bateria. " +
                 "Com a voz offline (31 MB, baixa uma vez só), o microfone fica aberto direto: só o pontinho verde, sem piscar, e funciona até sem internet."
         )
         .setPositiveButton("Baixar agora") { _, _ -> baixarVozOffline() }

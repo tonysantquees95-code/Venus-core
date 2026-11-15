@@ -94,6 +94,8 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
     internal var pedidoAtual = 0
     internal var ultimaFoiVoz = false
     internal var forcarEscuta = false
+    /** O botão "Ouvir" da resposta que está sendo lida em voz alta agora (null = nenhuma). */
+    internal var botaoDeLeitura: TextView? = null
     internal var ouvirAposPermissao = false
     internal var naTela = false
     internal var corAtual = Color.parseColor("#36D6FF")
@@ -341,7 +343,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         super.onDestroy()
     }
 
-    internal open fun mensagemInicial(): String? = "Olá! Diga \"${Marca.nome}, ativar\", toque no orbe ou digite abaixo."
+    internal open fun mensagemInicial(): String? = "Olá! Diga \"Ei ${Marca.nome}\", toque no orbe ou digite abaixo."
 
     /** Quando a conversa termina e não há mais nada a ouvir. Na tela principal, volta a esperar a ativação. */
     internal open fun aoFicarOcioso() {
@@ -875,6 +877,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
             if (doUsuario) leftMargin = dp(56) else rightMargin = dp(40)
         }
         mensagens.addView(balao, params)
+        if (!doUsuario && salvar && merecemControles(texto)) colocarControles(balao)
         if (pensava && orbe.estado == Orbe.Estado.PENSANDO) mostrarPensando()
         rolarParaBaixo()
         return balao
@@ -932,7 +935,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         Tempos.comecar()
         var pedido = entrada
 
-        // "Sexta-feira, ativar" (sozinho ou seguido de um pedido)
+        // "Ei Vênus" (sozinho ou seguido de um pedido)
         restoDepoisDaAtivacao(pedido)?.let { resto ->
             if (resto.isBlank()) {
                 topicoAtual = "Conversa"
@@ -1668,6 +1671,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
                 memoria.salvarMensagem(false, texto, topicoAtual)
             } catch (e: Exception) {
             }
+            if (merecemControles(texto)) colocarControles(b)
             rolarParaBaixo()
             falar(texto)
         }
@@ -1746,7 +1750,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         forcarEscuta = true
         // a saudação fica só escrita: ela não fala, já começa a ouvir (o som de ativação avisa que está pronta)
         adicionarMensagem(cerebro.saudacaoDeAtivacao(), false, salvar = false)
-        principal.postDelayed({ if (!falando && !ocupado) aposFala() }, 450)
+        principal.postDelayed({ if (!falando && !ocupado) aposFala() }, 200)
     }
 
     internal fun restoDepoisDaAtivacao(texto: String): String? = Cerebro.restoDepoisDaAtivacao(texto)
@@ -1778,9 +1782,18 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         }
     }
 
-    internal fun falar(texto: String) {
+    /**
+     * Só fala quando a pessoa falou (ultimaFoiVoz): quem digita quer ler, não ouvir.
+     * [forcar] = o botão "Ouvir" embaixo da resposta: lê mesmo com o texto digitado e com a voz desligada nos ajustes.
+     */
+    internal fun falar(texto: String, forcar: Boolean = false) {
+        if (!forcar && !ultimaFoiVoz) {
+            principal.post { aposFala() }
+            return
+        }
+        val falaLigada = forcar || prefs.getBoolean(PREF_FALAR, true)
         pararVigilia()
-        if (!ttsPronto && prefs.getBoolean(PREF_FALAR, true) && tts != null) {
+        if (!ttsPronto && falaLigada && tts != null) {
             // A voz ainda está carregando (app acabou de abrir): fala assim que ficar pronta.
             falaPendente = texto
             falando = true
@@ -1792,7 +1805,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
             }, 4000)
             return
         }
-        if (!ttsPronto || !prefs.getBoolean(PREF_FALAR, true)) {
+        if (!ttsPronto || !falaLigada) {
             principal.post { aposFala() }
             return
         }
@@ -1800,7 +1813,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         val limpo = texto.replace(Regex("[*#_`>]"), "")
         if (VozNeural.ativa(this)) falarComVozNeural(limpo)
         else tts?.speak(limpo, TextToSpeech.QUEUE_FLUSH, null, "resposta")
-        if (naTela && prefs.getBoolean(PREF_INTERROMPER, true) && temMicrofone()) {
+        if (!forcar && naTela && prefs.getBoolean(PREF_INTERROMPER, true) && temMicrofone()) {
             val i = interruptor ?: Interruptor(this) { interromperFala() }.also { interruptor = it }
             i.iniciar(limpo)
         }
@@ -1884,13 +1897,17 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         principal.postDelayed({ if (!ocupado && escuta == Escuta.NADA && !falando) ouvirComando() }, 300)
     }
 
-    /** Depois de responder: volta a ouvir (conversa) ou volta a esperar "Sexta-feira, ativar". */
+    /** Depois de responder: volta a ouvir (conversa) ou volta a esperar "Ei Vênus". */
     internal fun aposFala() {
         falando = false
+        // terminou a leitura pedida pelo botão "Ouvir": o botão volta ao normal e ela não reabre o microfone sozinha
+        val leituraManual = botaoDeLeitura != null
+        botaoDeLeitura?.text = ROTULO_OUVIR
+        botaoDeLeitura = null
         val estavaOuvindo = interruptor?.ativo == true
         interruptor?.parar()
         mudarEstadoOcioso()
-        val continuar = ultimaFoiVoz && naTela && !ocupado &&
+        val continuar = !leituraManual && ultimaFoiVoz && naTela && !ocupado &&
             (forcarEscuta || cerebro.aguardandoResposta || prefs.getBoolean(PREF_CONTINUA, true))
         if (continuar) {
             // Fica uns 12 segundos esperando você responder (tentando de novo se o reconhecedor desistir antes)
@@ -1928,18 +1945,25 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         principal.postDelayed(tarefaVigilia, atraso)
     }
 
-    /** Fica ouvindo em silêncio, esperando "Sexta-feira, ativar". Só com o app aberto na tela. */
+    /** Fica ouvindo em silêncio, esperando "Ei Vênus". Só com o app aberto na tela. */
     internal fun iniciarVigilia() {
         if (!vigiliaLigada() || !naTela || ocupado || falando || escuta != Escuta.NADA || !temMicrofone()) return
         // Voz offline instalada: microfone aberto direto, sem o ícone piscando na barra de status.
         if (ModeloDeVoz.pronto(this)) {
             val d = despertador ?: Despertador(
                 this,
-                aoOuvir = {
+                aoOuvir = { resto ->
                     if (escuta == Escuta.VIGILIA) {
                         escuta = Escuta.NADA
                         errosSeguidos = 0
-                        ativar()
+                        if (resto.isBlank()) ativar()
+                        else {
+                            // "Ei Vênus, toca pagode": o pedido já veio na mesma frase, não precisa repetir
+                            Som.ativacao()
+                            orbe.pulsar()
+                            ultimaFoiVoz = true
+                            processar(resto)
+                        }
                     }
                 },
                 aoFalhar = {
@@ -2050,7 +2074,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
             when (escuta) {
                 Escuta.COMANDO -> mostrarParcial(texto)
                 Escuta.VIGILIA -> {
-                    // Responde rápido: "Sexta-feira, ativar" já reconhecido antes de terminar a frase.
+                    // Responde rápido: "Ei Vênus" já reconhecido antes de terminar a frase.
                     if (restoDepoisDaAtivacao(texto)?.isBlank() == true) {
                         escuta = Escuta.NADA
                         reconhecedor?.cancel()
@@ -2437,7 +2461,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         internal const val ID_AMOSTRA = "amostra"
         internal const val MODELO_PADRAO = "gemini-flash-latest"
         internal const val STATUS_PADRAO = "TOQUE NO ORBE PARA FALAR"
-        internal val STATUS_VIGILIA = "DIGA “${Marca.nomeMaiusculo}, ATIVAR”"
+        internal val STATUS_VIGILIA = "DIGA “EI ${Marca.nomeMaiusculo}”"
 
         internal const val PREF_CHAVE = "chave"
         internal const val PREF_MODELO = "modelo"

@@ -9,7 +9,7 @@ import java.util.zip.ZipInputStream
 
 /**
  * O "ouvido offline" da Vênus: um modelo de reconhecimento de voz em português (Vosk, ~31 MB)
- * baixado uma vez e guardado no celular. Com ele, a Vênus espera "Vênus, ativar" mantendo o
+ * baixado uma vez e guardado no celular. Com ele, a Vênus espera "Ei Vênus" mantendo o
  * microfone aberto de forma contínua, sem ficar ligando e desligando (o que fazia o ícone
  * do microfone piscar na barra de status).
  */
