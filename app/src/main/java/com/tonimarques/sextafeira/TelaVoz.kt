@@ -119,7 +119,7 @@ internal fun MainActivity.configurarVozNeural() {
         estilo = id - 9300
         ouvir()
     }
-    AlertDialog.Builder(this)
+    CaixaBuilder(this)
         .setTitle("Voz neural (Microsoft)")
         .setMessage("Bem mais natural que a voz do celular. Grátis até ${"%,d".format(VozNeural.LIMITE_GRATIS).replace(',', '.')} caracteres por mês; perto do limite ela volta sozinha para a voz do celular.")
         .setView(android.widget.ScrollView(this).apply { addView(caixa) })
@@ -211,7 +211,7 @@ internal fun MainActivity.escolherVoz() {
         "Voz ${i + 1} — $qualidade$rede$pais"
     }.toTypedArray()
 
-    AlertDialog.Builder(this)
+    CaixaBuilder(this)
         .setTitle("Voz da ${Marca.nome}")
         .setSingleChoiceItems(nomes, marcada) { _, qual ->
             marcada = qual
@@ -277,7 +277,7 @@ internal fun MainActivity.ajustarVoz() {
     velocidade.setOnSeekBarChangeListener(ouvinteBarra)
     tom.setOnSeekBarChangeListener(ouvinteBarra)
 
-    AlertDialog.Builder(this)
+    CaixaBuilder(this)
         .setTitle("Velocidade e tom da voz")
         .setView(layout)
         .setPositiveButton("Salvar") { _, _ ->
@@ -304,7 +304,7 @@ internal fun MainActivity.descricaoVozOffline(): String = progressoVozOffline ?:
 internal fun MainActivity.tratarVozOffline() {
     if (ModeloDeVoz.baixando) return
     if (ModeloDeVoz.pronto(this)) {
-        AlertDialog.Builder(this)
+        CaixaBuilder(this)
             .setTitle("Remover a voz offline?")
             .setMessage("Libera uns 50 MB. A ${Marca.nome} volta a usar o reconhecimento do Google para esperar a frase, e o ícone do microfone volta a piscar.")
             .setPositiveButton("Remover") { _, _ ->
@@ -357,7 +357,7 @@ internal fun MainActivity.oferecerVozOffline(forcar: Boolean = false) {
     if (!forcar && prefs.getBoolean(PREF_OFERECEU_VOZ, false)) return
     if (!vigiliaLigada() && !prefs.getBoolean(PREF_FUNDO, false)) return
     prefs.edit().putBoolean(PREF_OFERECEU_VOZ, true).apply()
-    AlertDialog.Builder(this)
+    CaixaBuilder(this)
         .setTitle("Microfone sem piscar")
         .setMessage(
             "Para esperar \"${Marca.nome}, ativar\", ela liga e desliga o microfone o tempo todo, e o ícone fica piscando ao lado da bateria. " +

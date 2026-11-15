@@ -112,7 +112,7 @@ class TravaActivity : Activity() {
 
     private fun escolher(titulo: String, itens: List<Pair<String, () -> Unit>>) {
         val nomes = (itens.map { it.first } + "Cancelar").toTypedArray()
-        android.app.AlertDialog.Builder(this).setTitle(titulo).setItems(nomes) { _, i -> if (i < itens.size) itens[i].second() }.show()
+        CaixaBuilder(this).setTitle(titulo).setItems(nomes) { _, i -> if (i < itens.size) itens[i].second() }.show()
     }
 
     // ------------------------------------------------------------------ recuperação de senha

@@ -288,11 +288,11 @@ internal fun MainActivity.listarPosts() {
     val itens = lista.map { p ->
         "${Lembretes.quandoFalado(p.quando)} · ${if (p.ehStory) "Story" else "Feed"}" + (if (p.legenda.isNotBlank()) "\n" + p.legenda.take(60) else "")
     }
-    AlertDialog.Builder(this)
+    CaixaBuilder(this)
         .setTitle("Posts programados")
         .setItems(itens.toTypedArray()) { _, i ->
             val p = lista[i]
-            AlertDialog.Builder(this)
+            CaixaBuilder(this)
                 .setTitle(if (p.ehStory) "Story" else "Post")
                 .setMessage(p.legenda.ifBlank { "(sem legenda)" })
                 .setPositiveButton("Postar agora") { _, _ -> postarAgora(p.id) }
@@ -766,7 +766,7 @@ internal fun MainActivity.conectarInstagram() {
         "3. Em Permissões, adicione: instagram_basic, instagram_content_publish, instagram_manage_comments, pages_show_list, pages_read_engagement e business_management.\n" +
         "4. Toque em Generate Access Token, escolha a página e a conta do Instagram da loja e confirme.\n" +
         "5. Copie o token, abra developers.facebook.com/tools/debug/accesstoken, cole, toque em Depurar e, embaixo, em Estender token de acesso. Copie o token novo e cole aqui."
-    val d = AlertDialog.Builder(this)
+    val d = CaixaBuilder(this)
         .setTitle(if (usuario != null) "Instagram: @$usuario" else "Conectar o Instagram")
         .setMessage((if (usuario != null) "Conectado. Para trocar, cole um token novo.\n\n" else "") + passos)
         .setView(campo)
@@ -788,6 +788,7 @@ internal fun MainActivity.conectarInstagram() {
         }
         .create()
     d.setOnShowListener {
+        Caixa.estilizar(d)
         d.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
             val token = campo.text.toString()
             if (token.isBlank()) {
@@ -839,7 +840,7 @@ internal fun MainActivity.comentariosInstagram() {
 
 internal fun MainActivity.escolherComentario(lista: List<Instagram.Comentario>) {
     val itens = lista.map { c -> "@${c.usuario}: ${c.texto.take(120)}\n· ${Instagram.resumirLegenda(c.legendaDoPost)}" }
-    AlertDialog.Builder(this)
+    CaixaBuilder(this)
         .setTitle("Comentários sem resposta")
         .setItems(itens.toTypedArray()) { _, i -> sugerirRespostaComentario(lista, i) }
         .setNegativeButton("Fechar", null)
@@ -869,7 +870,7 @@ internal fun MainActivity.sugerirRespostaComentario(lista: List<Instagram.Coment
                 setPadding(dp(24), dp(16), dp(24), dp(16))
             }
             responder(if (sugestao != null) "Sugeri uma resposta para @${c.usuario}. Confira e toque em Responder." else "Escreva a resposta para @${c.usuario}.")
-            AlertDialog.Builder(this)
+            CaixaBuilder(this)
                 .setTitle("Responder @${c.usuario}")
                 .setMessage("“${c.texto.take(300)}”")
                 .setView(campo)

@@ -359,7 +359,7 @@ internal fun MainActivity.editarFundo(fotoInicial: ByteArray?, aoUsar: ((ByteArr
     tirar.setOnClickListener { pedirFotoCamera() }
     galeria.setOnClickListener { pedirFotoGaleria() }
 
-    val dialogo = AlertDialog.Builder(this)
+    val dialogo = CaixaBuilder(this)
         .setTitle("Trocar o fundo")
         .setView(ScrollView(this).apply { addView(caixa) })
         .setPositiveButton(if (aoUsar != null) "Usar esta foto" else "Salvar na galeria", null)
@@ -368,6 +368,7 @@ internal fun MainActivity.editarFundo(fotoInicial: ByteArray?, aoUsar: ((ByteArr
         .create()
     dialogo.setOnDismissListener { cadastroFoto = anterior }
     dialogo.setOnShowListener {
+        Caixa.estilizar(dialogo)
         dialogo.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
             val r = pronta ?: run {
                 Toast.makeText(this, "Escolha um fundo antes.", Toast.LENGTH_SHORT).show()
@@ -420,7 +421,7 @@ internal fun MainActivity.mostrarImagem(titulo: String, imagem: android.graphics
         adjustViewBounds = true
         setPadding(dp(8), dp(8), dp(8), dp(8))
     }
-    AlertDialog.Builder(this)
+    CaixaBuilder(this)
         .setTitle(titulo)
         .setView(ScrollView(this).apply { addView(vista) })
         .setPositiveButton("Compartilhar") { _, _ -> compartilharFoto(jpeg) }
@@ -493,7 +494,7 @@ internal fun MainActivity.abrirNoLens(bytes: ByteArray) {
 
 /** Foto recebida pelo "Compartilhar" de outro app. */
 internal fun MainActivity.fotoCompartilhada(uri: Uri) {
-    AlertDialog.Builder(this)
+    CaixaBuilder(this)
         .setTitle("O que fazer com a foto?")
         .setItems(arrayOf("Ler nota de compra (custo e estoque)", "Trocar o fundo", "Cadastrar produto com esta foto")) { _, qual ->
             when (qual) {

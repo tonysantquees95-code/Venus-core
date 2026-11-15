@@ -214,7 +214,7 @@ private fun MainActivity.definirTaxa(id: String, tela: TelaDeAjustes?) {
 }
 
 private fun MainActivity.desconectarCanal(id: String, nome: String, tela: TelaDeAjustes?) {
-    AlertDialog.Builder(this).setTitle("Desconectar $nome?")
+    CaixaBuilder(this).setTitle("Desconectar $nome?")
         .setMessage("O estoque deste canal deixa de ser atualizado pela ${Marca.nome}. Os produtos continuam no catálogo.")
         .setPositiveButton("Desconectar") { _, _ -> pedirNuvem("DELETE", "/canais/$id") { aviso("Canal desconectado."); abrirCanais(tela) } }
         .setNegativeButton("Cancelar", null).show()
@@ -226,7 +226,7 @@ private fun MainActivity.mostrarMovimentos() {
         val linhas = json.optJSONArray("eventos").lista().take(40).joinToString("\n") {
             "${quando(it.optLong("criado"))} · ${nomes[it.optString("tipo")] ?: it.optString("tipo")} · ${it.optInt("quantidade")} un."
         }
-        AlertDialog.Builder(this).setTitle("Movimentos de estoque").setMessage(linhas.ifBlank { "Nenhum movimento ainda." }).setPositiveButton("Ok", null).show()
+        CaixaBuilder(this).setTitle("Movimentos de estoque").setMessage(linhas.ifBlank { "Nenhum movimento ainda." }).setPositiveButton("Ok", null).show()
     }
 }
 
@@ -249,7 +249,7 @@ internal fun MainActivity.abrirAuditoria() {
         secao("Sem preço definido", "sem_preco")
         val carac = j.optJSONArray("caracteristicas").lista()
         if (carac.isNotEmpty()) txt.append("\n\nCaracterísticas mapeadas:\n").append(carac.take(10).joinToString("\n") { "• ${it.optString("nome")}: ${it.optInt("produtos")} produtos" })
-        AlertDialog.Builder(this).setTitle("Auditoria do catálogo").setMessage(txt.toString())
+        CaixaBuilder(this).setTitle("Auditoria do catálogo").setMessage(txt.toString())
             .setPositiveButton("Ok", null).setNeutralButton("Painel ao vivo") { _, _ -> abrirPainel() }.show()
     }
 }
@@ -354,7 +354,7 @@ private fun MainActivity.ativar2fa(tela: TelaDeAjustes?) {
     pedirNuvem("POST", "/seguranca/2fa/iniciar", JSONObject(), "Preparando…") { j ->
         val segredo = j.optString("segredo")
         val uri = j.optString("otpauth")
-        AlertDialog.Builder(this).setTitle("Ativar duas etapas")
+        CaixaBuilder(this).setTitle("Ativar duas etapas")
             .setMessage("1. Abra seu app autenticador (Google Authenticator, Microsoft Authenticator…).\n2. Adicione uma conta com esta chave:\n\n$segredo\n\n3. Digite o código de 6 números que ele mostrar.")
             .setPositiveButton("Já adicionei") { _, _ ->
                 perguntar("Código de 6 números", listOf("Código" to ""), "Confirmar", numerico = true) { v ->

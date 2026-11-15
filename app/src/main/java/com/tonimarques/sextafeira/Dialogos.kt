@@ -51,7 +51,7 @@ internal fun MainActivity.perguntar(
             coluna.addView(this)
         }
     }
-    AlertDialog.Builder(this).setTitle(titulo).setView(coluna)
+    CaixaBuilder(this).setTitle(titulo).setView(coluna)
         .setPositiveButton(ok) { _, _ -> resposta(entradas.map { it.text.toString().trim() }) }
         .setNegativeButton("Cancelar", null).show()
 }

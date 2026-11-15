@@ -56,7 +56,7 @@ internal fun MainActivity.mostrarAprendizado() {
             if (contagem.isEmpty()) return@runOnUiThread responder("Minha memória ainda está vazia.")
             val tipos = contagem.entries.sortedByDescending { it.value.first }.map { it.key }
             val total = contagem.values.sumOf { it.first }
-            AlertDialog.Builder(this)
+            CaixaBuilder(this)
                 .setTitle("O que eu aprendi ($total)")
                 .setItems(tipos.map { "${NOMES_DO_APRENDIZADO[it] ?: it}: ${contagem[it]?.first ?: 0}" }.toTypedArray()) { _, i -> listarAprendizado(tipos[i]) }
                 .setNegativeButton("Fechar", null)
@@ -79,7 +79,7 @@ internal fun MainActivity.listarAprendizado(tipo: String) {
                 !x.acao.isNullOrBlank() -> "\n→ ${x.acao}"
                 else -> ""
             }
-            AlertDialog.Builder(this)
+            CaixaBuilder(this)
                 .setTitle("${NOMES_DO_APRENDIZADO[tipo] ?: tipo} (últimos ${itens.size})")
                 .setItems(itens.map { linha(it) }.toTypedArray()) { _, i -> verAprendizado(itens[i]) }
                 .setPositiveButton("Voltar") { _, _ -> mostrarAprendizado() }
@@ -93,7 +93,7 @@ internal fun MainActivity.verAprendizado(item: Memoria.Item) {
     val texto = item.texto + (item.resposta?.takeIf { it.isNotBlank() }?.let { "\n\nResposta: $it" } ?: "") +
         (item.acao?.takeIf { it.isNotBlank() }?.let { "\n\nAção: $it ${item.args.orEmpty()}" } ?: "") +
         (item.fonte?.takeIf { it.isNotBlank() }?.let { "\n\nDe onde veio: $it" } ?: "")
-    AlertDialog.Builder(this)
+    CaixaBuilder(this)
         .setTitle(NOMES_DO_APRENDIZADO[item.tipo] ?: item.tipo)
         .setMessage(texto)
         .setPositiveButton("Voltar") { _, _ -> listarAprendizado(item.tipo) }

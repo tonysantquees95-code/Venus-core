@@ -72,7 +72,7 @@ internal object Onboarding {
         val lista = passos(Marca.nome)
         val p = lista[indice]
         val ultimo = indice == lista.lastIndex
-        val b = AlertDialog.Builder(a)
+        val b = CaixaBuilder(a)
             .setTitle(p.titulo)
             .setMessage(p.texto)
             .setCancelable(false)

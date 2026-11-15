@@ -39,7 +39,7 @@ private fun MainActivity.formularioDeConta(criar: Boolean, email0: String = "", 
     val email = campo("E-mail", InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS, email0)
     val senha = campo("Senha (8 ou mais caracteres)", InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD)
     val pendente = VetorialId.pegarAviso(this)
-    AlertDialog.Builder(this)
+    CaixaBuilder(this)
         .setTitle(if (criar) "Criar conta Vetorial ID" else "Entrar com o Vetorial ID")
         .setMessage(pendente.ifBlank { "Um login só para a Vênus (celular, Windows e iPhone), o Vindex e o Vortex." })
         .setView(coluna)
@@ -120,7 +120,7 @@ internal fun MainActivity.abrirLicenca() {
                 j.optBoolean("emTeste") -> "Teste grátis: ${j.optInt("diasDeTesteRestantes")} dia(s) restantes."
                 else -> "Plano Fundadores ativo: ${j.optInt("diasPagosRestantes")} dia(s) restantes."
             }
-            AlertDialog.Builder(this).setTitle("Licença").setMessage("$estado\n\nPlano Fundadores: R$ 49,90 por mês. Ao pagar, a licença é renovada sozinha por mais 30 dias.")
+            CaixaBuilder(this).setTitle("Licença").setMessage("$estado\n\nPlano Fundadores: R$ 49,90 por mês. Ao pagar, a licença é renovada sozinha por mais 30 dias.")
                 .setPositiveButton("Gerar link de pagamento") { _, _ ->
                     emFundo({ VetorialId.licenca(this, true) }) { r2 ->
                         r2.onFailure { aviso(it.mensagemAmigavel()) }
@@ -151,7 +151,7 @@ internal fun MainActivity.mostrarConflitoDeSessao(ativas: List<JSONObject>) {
     if (isFinishing || BatimentoId.conflitoAberto) return
     BatimentoId.conflitoAberto = true
     val nomes = ativas.map { "Encerrar ${it.optString("nome")}" }.toTypedArray()
-    AlertDialog.Builder(this).setTitle("Aparelhos demais usando a conta")
+    CaixaBuilder(this).setTitle("Aparelhos demais usando a conta")
         .setMessage("Já há 2 aparelhos conectados agora. Encerre um deles para continuar aqui, ou cancele.")
         .setItems(nomes) { _, i ->
             BatimentoId.conflitoAberto = false

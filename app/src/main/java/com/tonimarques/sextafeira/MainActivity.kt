@@ -634,7 +634,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         if (prefs.getBoolean("robo_acesso_perguntado", false)) return
         if (com.tonimarques.sextafeira.robo.OuvinteRobo.temAcesso(this)) return
         prefs.edit().putBoolean("robo_acesso_perguntado", true).apply()
-        AlertDialog.Builder(this)
+        CaixaBuilder(this)
             .setTitle("Ligar o Robô de atendimento")
             .setMessage("O Robô agora faz parte da ${Marca.nome}: ele responde as clientes no WhatsApp Business com as regras e produtos da sua loja. Para isso preciso do acesso às notificações. Quer liberar agora?")
             .setPositiveButton("Liberar") { _, _ -> abrirRobo() }
@@ -1344,7 +1344,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
     /** Mostra Confirmar/Cancelar na tela; também dá para responder "sim" ou "não" falando. */
     internal fun mostrarConfirmacaoLoja(pergunta: String) {
         fecharConfirmacaoLoja()
-        dialogoLoja = AlertDialog.Builder(this)
+        dialogoLoja = CaixaBuilder(this)
             .setTitle(if (ferramentas.lojaPendente != null) "Confirmar mudança na loja" else if (ferramentas.ligacaoPendente != null) "Confirmar ligação" else "Confirmar resposta")
             .setMessage(pergunta.replace(" Diga sim para confirmar ou não para cancelar.", ""))
             .setPositiveButton("Confirmar") { _, _ ->
@@ -1584,7 +1584,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
             }
             if (site.isNotBlank() && !f.titulo.contains(site, ignoreCase = true)) "${f.titulo}\n$site" else f.titulo
         }.toTypedArray()
-        AlertDialog.Builder(this)
+        CaixaBuilder(this)
             .setTitle("Fontes consultadas")
             .setItems(nomes) { _, i ->
                 try {
@@ -2175,7 +2175,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
     // ----------------------------------------------------------- responder clientes
     /** Texto recebido pelo "Compartilhar" (ex.: mensagem de uma cliente no WhatsApp). */
     internal fun textoCompartilhado(texto: String) {
-        AlertDialog.Builder(this)
+        CaixaBuilder(this)
             .setTitle("O que fazer com o texto?")
             .setMessage(texto.take(300))
             .setPositiveButton("Responder a cliente") { _, _ -> responderCliente(texto) }
@@ -2200,7 +2200,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
                 inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE
                 setPadding(dp(24), dp(16), dp(24), dp(16))
             }
-            AlertDialog.Builder(this)
+            CaixaBuilder(this)
                 .setTitle("Responder cliente")
                 .setMessage("Dica: no WhatsApp, segure a mensagem da cliente, toque em Compartilhar e escolha a ${Marca.nome}.")
                 .setView(campo)
@@ -2243,7 +2243,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
                         setPadding(dp(24), dp(16), dp(24), dp(16))
                     }
                     responder("Escrevi uma resposta para a cliente. Confira na tela, copie e cole no WhatsApp.")
-                    AlertDialog.Builder(this)
+                    CaixaBuilder(this)
                         .setTitle("Resposta para a cliente")
                         .setView(campo)
                         .setPositiveButton("Copiar") { _, _ ->

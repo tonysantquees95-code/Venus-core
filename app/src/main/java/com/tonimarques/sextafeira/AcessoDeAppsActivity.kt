@@ -29,7 +29,7 @@ class AcessoDeAppsActivity : Activity() {
                 terminar(RESULT_CANCELED, "sem_login")
                 startActivity(Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
             }
-            else -> AlertDialog.Builder(this).setTitle("Entrar com o Vetorial ID")
+            else -> CaixaBuilder(this).setTitle("Entrar com o Vetorial ID")
                 .setMessage("O ${app.replaceFirstChar { it.uppercase() }} quer entrar com a conta ${VetorialId.email(this)}. Permitir?")
                 .setPositiveButton("Permitir") { _, _ -> entregar(app) }
                 .setNegativeButton("Negar") { _, _ -> terminar(RESULT_CANCELED, "negado") }
