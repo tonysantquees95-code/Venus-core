@@ -18,6 +18,7 @@ internal object Novidades {
 
     val LISTA = listOf(
         Item(1, "2026-11-14", "novo", "O que há de novo", "Depois de cada atualização, esta tela conta o que mudou, o que melhorou e o que foi corrigido. Você também a encontra em Menu › O que há de novo."),
+        Item(2, "2026-11-15", "correcao", "Respostas mais certas", "Perguntar a temperatura mais fria de um lugar (como a Antártica) agora busca a resposta, em vez de mostrar o clima daí onde você está. E dizer \"eu sou o administrador\" ou \"eu sou a dona da loja\" não vira mais o seu apelido."),
     )
 
     fun rotulo(tipo: String): String = when (tipo) { "novo" -> "Novo"; "melhoria" -> "Melhorou"; "correcao" -> "Corrigido"; else -> tipo }

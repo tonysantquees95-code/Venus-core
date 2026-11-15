@@ -37,7 +37,7 @@ object ComandosMemoria {
             val trecho = f.trecho(m.groups[1]) ?: f.trecho(m.groups[2])
             if (!trecho.isNullOrBlank()) return Pedido.Esquecer(trecho.trimEnd('.', '!'))
         }
-        APELIDO.matchEntire(c)?.let { m ->
+        APELIDO.matchEntire(c)?.takeIf { !PAPEL.containsMatchIn(it.groupValues[1]) }?.let { m ->
             val nome = f.trecho(m.groups[1])?.trimEnd('.', '!')?.let { capitalizar(it) }
             if (!nome.isNullOrBlank() && nome.split(" ").size <= 4) return Pedido.Definir("apelido", nome)
         }
@@ -154,6 +154,11 @@ object ComandosMemoria {
     )
     private val APELIDO = Regex(
         "^(?:meu nome e|meu nome eh|me chamo|me chama de|pode me chamar de|me chame de|quero que me chame de|eu sou o|eu sou a)\\s+(.+)$"
+    )
+    /** "eu sou o administrador / a dona da loja": é um papel, não um nome (não vira apelido). */
+    private val PAPEL = Regex(
+        "^(?:o |a )?(?:administrador|administradora|admin|dono|dona|criador|criadora|chefe|desenvolvedor|desenvolvedora|programador|programadora|" +
+            "proprietari[oa]|lojista|gerente|responsavel|usuario|cliente|suporte)\\b"
     )
     private val CIDADE = Regex(
         "^(?:minha cidade e|eu moro em|moro em|eu moro no|moro no|eu moro na|moro na|minha cidade agora e)\\s+(.+)$"
