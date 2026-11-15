@@ -52,7 +52,7 @@ internal fun MainActivity.editarPostagem(p: JSONObject, depois: () -> Unit) {
             .put("hashtags", JSONArray(hashtagsDoTexto(hashtags.text.toString()))).put("imagem", imagem.text.toString().trim())
         pedirNuvem("POST", "/marketing/fila/$id/editar", corpo) { aoSalvar() }
     }
-    AlertDialog.Builder(this).setTitle(p.optString("produto_nome").ifBlank { "Editar postagem" }).setView(android.widget.ScrollView(this).apply { addView(coluna) })
+    CaixaBuilder(this).setTitle(p.optString("produto_nome").ifBlank { "Editar postagem" }).setView(android.widget.ScrollView(this).apply { addView(coluna) })
         .setPositiveButton("Salvar") { _, _ -> salvar { aviso("Postagem atualizada."); depois() } }
         .setNeutralButton("Aprovar e agendar") { _, _ -> salvar { agendarPostagem(id, ajustesDeMarketing) } }
         .setNegativeButton("Cancelar", null).show()
@@ -65,7 +65,7 @@ internal fun MainActivity.excluirEmLote(fila: List<JSONObject>, depois: () -> Un
     val editaveis = fila.filter { it.optString("status") != "publicando" }
     if (editaveis.isEmpty()) return aviso("Não há postagens para excluir.")
     val marcadas = BooleanArray(editaveis.size)
-    AlertDialog.Builder(this).setTitle("Excluir postagens")
+    CaixaBuilder(this).setTitle("Excluir postagens")
         .setMultiChoiceItems(editaveis.map { it.optString("copy").ifBlank { it.optString("produto_nome") }.take(60) }.toTypedArray(), marcadas) { _, i, v -> marcadas[i] = v }
         .setPositiveButton("Excluir selecionadas") { _, _ ->
             val ids = JSONArray(editaveis.filterIndexed { i, _ -> marcadas[i] }.map { it.optInt("id") })
@@ -104,7 +104,7 @@ internal fun MainActivity.abrirDestinos() {
                 perguntar("Webhook (https)", listOf("Endereço do webhook" to "")) { v ->
                     pedirNuvem("PUT", "/marketing/destinos/webhook", JSONObject().put("url", v[0])) { r ->
                         val seg = r.optString("segredo")
-                        AlertDialog.Builder(this).setTitle("Webhook conectado").setMessage("Cada envio vem assinado (cabeçalho x-venus-assinatura, HMAC-SHA256 do corpo) com este segredo. Guarde-o no Robô:\n\n$seg")
+                        CaixaBuilder(this).setTitle("Webhook conectado").setMessage("Cada envio vem assinado (cabeçalho x-venus-assinatura, HMAC-SHA256 do corpo) com este segredo. Guarde-o no Robô:\n\n$seg")
                             .setPositiveButton("Copiar segredo") { _, _ -> copiar("Segredo do webhook", seg) }.setNegativeButton("Fechar", null).show()
                     }
                 }

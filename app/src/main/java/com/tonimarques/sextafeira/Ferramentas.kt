@@ -946,7 +946,7 @@ class Ferramentas(private val activity: Activity, private val memoria: Memoria? 
             "dispositivos" -> { naTela { abrirDispositivos() }; "Abrindo os dispositivos da sua conta." }
             else -> {
                 naTela {
-                    android.app.AlertDialog.Builder(this).setTitle("Sair da conta?").setMessage("Você vai sair do Vetorial ID só neste aparelho (${VetorialId.email(this)}).")
+                    CaixaBuilder(this).setTitle("Sair da conta?").setMessage("Você vai sair do Vetorial ID só neste aparelho (${VetorialId.email(this)}).")
                         .setPositiveButton("Sair") { _, _ -> emFundo({ VetorialId.sair(this) }) { aviso("Você saiu do Vetorial ID neste aparelho."); gaveta?.atualizarPerfil() } }
                         .setNegativeButton("Cancelar", null).show()
                 }

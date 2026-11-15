@@ -204,7 +204,7 @@ internal fun MainActivity.editarProdutoInterno(p: Loja.Produto) {
     val mostrar = f.interruptor("Mostrar para as clientes (robô e catálogo)", p.ativo)
     f.adicionar(mostrar, 10)
     f.adicionar(f.botao("Apagar este produto") {
-        AlertDialog.Builder(this).setTitle("Apagar ${p.nome}?").setMessage("Some do catálogo. As vendas já registradas continuam nos relatórios.")
+        CaixaBuilder(this).setTitle("Apagar ${p.nome}?").setMessage("Some do catálogo. As vendas já registradas continuam nos relatórios.")
             .setPositiveButton("Apagar") { _, _ ->
                 cat.apagar(p.id)
                 Diario.anotar(this, "loja", "Produto apagado do catálogo: ${p.nome}", "tela")
@@ -330,7 +330,7 @@ internal fun MainActivity.gerarCatalogoPdf(produtos: List<Loja.Produto>) {
                 Diario.anotar(this, "loja", "Catálogo em PDF gerado (${arquivo.length() / 1024} KB)", "tela")
                 val uri = Uri.parse("content://${FotoProvider.AUTORIDADE}/${arquivo.name}")
                 responder("Catálogo pronto (${arquivo.length() / 1024} KB). Toque em Compartilhar para mandar no WhatsApp ou no Direct.")
-                AlertDialog.Builder(this).setTitle("Catálogo em PDF").setMessage("O que você quer fazer com o catálogo?")
+                CaixaBuilder(this).setTitle("Catálogo em PDF").setMessage("O que você quer fazer com o catálogo?")
                     .setPositiveButton("Compartilhar") { _, _ ->
                         val i = Intent(Intent.ACTION_SEND).setType("application/pdf").putExtra(Intent.EXTRA_STREAM, uri).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                         i.clipData = android.content.ClipData.newRawUri("catalogo", uri)

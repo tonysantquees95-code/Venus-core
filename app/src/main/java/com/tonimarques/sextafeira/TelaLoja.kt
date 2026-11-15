@@ -75,7 +75,7 @@ internal fun MainActivity.editarPerfil() {
     val cidade = campo(Perfil.cidade + if (Perfil.uf.isNotBlank()) ", ${Perfil.uf}" else "", "Cidade e estado (ex.: Porto Alegre, RS)")
     val sobre = campoDeDialogo(Perfil.sobre, "Uma frase sobre você (ex.: trabalho num hotel)")
     listOf(dono, loja, cidade, sobre).forEach { caixa.addView(it) }
-    AlertDialog.Builder(this)
+    CaixaBuilder(this)
         .setTitle("Perfil do dono e da loja")
         .setMessage("A ${Marca.nome} usa esses dados para falar com você, escrever para as clientes e estudar.")
         .setView(caixa)
@@ -157,7 +157,7 @@ internal fun MainActivity.editarDadosDaLoja() {
         setPadding(dp(24), dp(16), dp(24), dp(16))
         caixa.addView(this)
     }
-    AlertDialog.Builder(this)
+    CaixaBuilder(this)
         .setTitle("Site, ramo e regras de venda")
         // a área dos campos tem altura fixa e rola por dentro: assim Salvar e Cancelar ficam sempre à vista
         .setView(LinearLayout(this).apply {
@@ -241,7 +241,7 @@ internal fun MainActivity.configurarPlataforma(t: Plataformas.Tipo) {
     caixa.addView(chave)
     if (t.id == "woocommerce") caixa.addView(segredo)
     if (t.id == "nuvemshop") caixa.addView(lojaId)
-    AlertDialog.Builder(this)
+    CaixaBuilder(this)
         .setTitle(t.nome)
         .setMessage(t.ajuda)
         .setView(caixa)
@@ -276,7 +276,7 @@ internal fun MainActivity.configurarPlataforma(t: Plataformas.Tipo) {
 internal fun MainActivity.conectarLoja() {
     val loja = ferramentas.loja
     if (loja.conectada) {
-        AlertDialog.Builder(this)
+        CaixaBuilder(this)
             .setTitle("Desconectar a loja?")
             .setMessage("A ${Marca.nome} deixa de consultar vendas, pedidos e estoque até você conectar de novo.")
             .setPositiveButton("Desconectar") { _, _ ->
@@ -300,7 +300,7 @@ internal fun MainActivity.conectarLoja() {
     }
     caixa.addView(email)
     caixa.addView(senha)
-    AlertDialog.Builder(this)
+    CaixaBuilder(this)
         .setTitle("Conectar à loja")
         .setMessage("Use o mesmo login do painel do site (conta de administrador).")
         .setView(caixa)

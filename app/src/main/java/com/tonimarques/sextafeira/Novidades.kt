@@ -22,6 +22,7 @@ internal object Novidades {
         Item(3, "2026-11-15", "melhoria", "Aviso sobre o Pix no guia", "No guia do primeiro acesso, o passo de aparecer sobre outros apps agora é opcional e avisa que alguns bancos bloqueiam o Pix com essa permissão ligada, dizendo onde desligar."),
         Item(4, "2026-11-15", "correcao", "Cadastro da loja volta sozinho", "Depois de reinstalar a Vênus e entrar no Vetorial ID, o nome, a loja, o site e as regras de venda voltam sozinhos da sua conta, em vez de aparecerem como \"Falta fazer\"."),
         Item(5, "2026-11-15", "melhoria", "Conversa com mais personalidade", "Em papo solto (como você está, tudo bem, obrigado, sim, não) a Vênus agora responde de verdade, lendo a conversa, em vez de soltar uma frase pronta. Ela reage ao que você disse, não repete a mesma resposta e puxa o assunto quando faz sentido, com mais humor e jeito próprio."),
+        Item(6, "2026-11-15", "melhoria", "Janelinhas no visual novo", "As janelas de pergunta e confirmação (QR Code do plano, atualização, escolher destino, liberar microfone e outras permissões, entre muitas) agora seguem o visual atual da Vênus: usam a cor que você escolheu, os cantos arredondados e os botões iguais aos das telas de Ajustes, em vez do roxo e do formato antigo."),
     )
 
     fun rotulo(tipo: String): String = when (tipo) { "novo" -> "Novo"; "melhoria" -> "Melhorou"; "correcao" -> "Corrigido"; else -> tipo }
@@ -49,7 +50,7 @@ internal object Novidades {
             val p = (20 * a.resources.displayMetrics.density).toInt()
             setPadding(p, p / 2, p, p / 2)
         }
-        AlertDialog.Builder(a)
+        CaixaBuilder(a)
             .setTitle("O que há de novo" + if (versao.isNotBlank()) " · $versao" else "")
             .setView(ScrollView(a).apply { addView(t as View) })
             .setPositiveButton("Entendi") { _, _ -> a.prefs.edit().putInt(PREF_VISTAS, ultimoId()).apply() }

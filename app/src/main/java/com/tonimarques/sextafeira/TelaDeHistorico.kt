@@ -382,7 +382,7 @@ class TelaDeHistorico(
 
     private fun confirmarApagar() {
         val conversa = conversaAberta
-        AlertDialog.Builder(activity)
+        CaixaBuilder(activity)
             .setTitle(if (conversa != null) "Apagar esta conversa?" else "Apagar todo o histórico?")
             .setMessage(
                 if (conversa != null) "As mensagens desta conversa serão apagadas. As memórias continuam."

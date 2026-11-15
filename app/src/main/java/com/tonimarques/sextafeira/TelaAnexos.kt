@@ -479,7 +479,7 @@ internal fun MainActivity.abrirDocumento(uri: Uri, avisado: Boolean = false) {
         return
     }
     if (!avisado && !prefs.getBoolean(PREF_AVISO_ARQUIVOS, false)) {
-        AlertDialog.Builder(this)
+        CaixaBuilder(this)
             .setTitle("Ler arquivo")
             .setMessage("Para ler o arquivo, a ${Marca.nome} envia o conteúdo ao Google (Gemini). Evite documentos com senhas ou dados muito sensíveis.")
             .setPositiveButton("Ler") { _, _ -> abrirDocumento(uri, true) }
@@ -605,7 +605,7 @@ internal fun MainActivity.lerNota(uri: Uri?) {
             cadastroFoto = anterior
             lerNota(u)
         }
-        AlertDialog.Builder(this)
+        CaixaBuilder(this)
             .setTitle("Nota de compra")
             .setMessage("Tire uma foto da nota ou escolha o print na galeria.")
             .setPositiveButton("Tirar foto") { _, _ -> pedirFotoCamera() }
@@ -691,7 +691,7 @@ internal fun MainActivity.confirmarCompra(itens: List<Loja.ItemDeCompra>, produt
     caixa.addView(salvar)
     val reconhecidos = itens.count { it.produto != null }
     responder("Li ${itens.size} ${if (itens.size == 1) "item" else "itens"} na nota e reconheci $reconhecidos. Confira na tela antes de salvar.")
-    AlertDialog.Builder(this)
+    CaixaBuilder(this)
         .setTitle("Compra lida da nota")
         .setView(ScrollView(this).apply { addView(caixa) })
         .setPositiveButton("Salvar") { _, _ ->

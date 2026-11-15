@@ -76,7 +76,7 @@ internal fun MainActivity.pedirIAReserva() {
     caixa.addView(grupo)
     val entrada = campoSecreto(SegundaIA.chave(this), "Cole aqui a chave")
     caixa.addView(entrada)
-    AlertDialog.Builder(this)
+    CaixaBuilder(this)
         .setTitle("IA reserva")
         .setMessage("Quando o Gemini travar ou ficar sem cota, a ${Marca.nome} pergunta para esta IA. A Groq é grátis (cerca de 1.000 pedidos por dia): crie a chave em console.groq.com.")
         .setView(caixa)
@@ -127,7 +127,7 @@ internal fun MainActivity.pedirCodigoDeLiberacao(obrigatorio: Boolean) {
     licencaAberta = true
     val id = Licenca.instalacao(this)
     val campo = campoDeDialogo("", "Cole aqui o código (VENUS-…)")
-    val d = AlertDialog.Builder(this)
+    val d = CaixaBuilder(this)
         .setTitle(if (obrigatorio) "Período de testes encerrado" else "Licença da ${Marca.nome}")
         .setMessage(
             (if (obrigatorio) "Os ${Licenca.DIAS_DE_TESTE} dias de teste terminaram. A conversa com IA, o estudo, as publicações e o robô estão pausados; " +
@@ -144,6 +144,7 @@ internal fun MainActivity.pedirCodigoDeLiberacao(obrigatorio: Boolean) {
         }
         .create()
     d.setOnShowListener {
+        Caixa.estilizar(d)
         d.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
             val erro = Licenca.aplicarCodigo(this, campo.text.toString())
             if (erro != null) Toast.makeText(this, erro, Toast.LENGTH_LONG).show()
@@ -170,7 +171,7 @@ internal fun MainActivity.administrarLicencas() {
     if (publica == null || publica != Licenca.CHAVE_PUBLICA) {
         val msg = if (publica == null) "Primeiro, crie a chave que assina os códigos. Ela fica só no chip de segurança deste celular e nunca sai dele."
         else "A chave já existe neste celular, mas ainda não está embutida no app. Copie a chave pública (não é segredo) e mande para o Claude embutir na próxima versão."
-        AlertDialog.Builder(this)
+        CaixaBuilder(this)
             .setTitle("Licenças de teste")
             .setMessage(msg + (publica?.let { "\n\nChave pública:\n$it" } ?: ""))
             .setPositiveButton(if (publica == null) "Criar a chave" else "Copiar a chave pública") { _, _ ->
@@ -197,7 +198,7 @@ internal fun MainActivity.administrarLicencas() {
     val dias = campoDeDialogo("30", "Liberar por quantos dias (0 = sem prazo)").apply { inputType = InputType.TYPE_CLASS_NUMBER }
     caixa.addView(id)
     caixa.addView(dias)
-    AlertDialog.Builder(this)
+    CaixaBuilder(this)
         .setTitle("Gerar código de liberação")
         .setMessage("O lojista vê o código da instalação na tela de teste encerrado (ou em Ajustes → Licença).")
         .setView(caixa)
@@ -227,7 +228,7 @@ internal fun MainActivity.pedirCloudflare() {
     caixa.addView(conta)
     caixa.addView(chave)
     val primeira = SegundaIA.provedor(this).nome.substringBefore(" (")
-    AlertDialog.Builder(this)
+    CaixaBuilder(this)
         .setTitle("Segunda reserva: Cloudflare")
         .setMessage("Quando a $primeira atingir o limite do dia, a ${Marca.nome} pergunta para a Cloudflare antes de ir ao Gemini. Grátis todo dia, sem cartão.\n\n" +
             "No site da Cloudflare: crie a conta → menu AI → Workers AI → Use REST API. Lá aparece o código da conta; toque em Create a Workers AI API Token e copie a chave.")
@@ -264,7 +265,7 @@ internal fun MainActivity.pedirCloudflare() {
 internal fun MainActivity.pedirChave() {
     if (negarSeNaoForAdmin()) return
     val entrada = campoSecreto(Cofre.ler(prefs, PREF_CHAVE), "Cole aqui sua chave")
-    AlertDialog.Builder(this)
+    CaixaBuilder(this)
         .setTitle("Chave do Gemini")
         .setMessage(
             "Crie uma chave grátis em aistudio.google.com/apikey, copie e cole aqui. " +
@@ -290,7 +291,7 @@ internal fun MainActivity.pedirChave() {
 internal fun MainActivity.pedirModelo() {
     if (negarSeNaoForAdmin()) return
     val entrada = campoDeDialogo(modelo(), MODELO_PADRAO)
-    AlertDialog.Builder(this)
+    CaixaBuilder(this)
         .setTitle("Modelo do Gemini")
         .setMessage("Padrão: $MODELO_PADRAO (sempre o Flash mais recente).")
         .setView(entrada)

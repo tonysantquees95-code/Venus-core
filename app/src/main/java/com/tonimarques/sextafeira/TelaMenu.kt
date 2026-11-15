@@ -97,7 +97,7 @@ internal fun MainActivity.resumoDaMemoria(): String {
 
 internal fun MainActivity.confirmarApagarMemorias() {
     responder("Tem certeza? Confirme na tela.")
-    AlertDialog.Builder(this)
+    CaixaBuilder(this)
         .setTitle("Apagar todas as memórias?")
         .setMessage("A ${Marca.nome} vai esquecer seu nome, sua cidade, seus favoritos, o que aprendeu e o que você mais usa. O histórico de conversas continua.")
         .setPositiveButton("Apagar") { _, _ ->
@@ -333,7 +333,7 @@ internal fun MainActivity.tratarMenu(id: Int): Boolean {
                 mudarEstadoOcioso()
             }
             if (ligado && !prefs.getBoolean("avisou_microfone", false)) {
-                AlertDialog.Builder(this)
+                CaixaBuilder(this)
                     .setTitle("Escuta contínua")
                     .setMessage("Com a escuta ligada, o Android mostra o ícone verde do microfone na barra de status enquanto a ${Marca.nome} espera o seu chamado. " +
                         "É normal e é uma proteção do sistema. A escuta é feita no próprio celular (voz offline) e gasta um pouco mais de bateria. Você pode desligar aqui quando quiser.")
@@ -414,11 +414,11 @@ internal fun MainActivity.mostrarMemorias() {
         }
         "$rotulo: ${f.texto}"
     }.toTypedArray()
-    AlertDialog.Builder(this)
+    CaixaBuilder(this)
         .setTitle("O que eu sei sobre você")
         .setItems(nomes) { _, qual ->
             val f = fatos[qual]
-            AlertDialog.Builder(this)
+            CaixaBuilder(this)
                 .setTitle("Esquecer isto?")
                 .setMessage(f.texto)
                 .setPositiveButton("Esquecer") { _, _ ->
@@ -451,7 +451,7 @@ internal fun MainActivity.alternarTelaApagada() {
         }
         return
     }
-    AlertDialog.Builder(this)
+    CaixaBuilder(this)
         .setTitle("Tela apagada")
         .setMessage(explicacao)
         .setPositiveButton("Permitir") { _, _ ->
@@ -480,7 +480,7 @@ internal fun MainActivity.alternarGesto() {
         return
     }
     if (!podeSobrepor()) {
-        AlertDialog.Builder(this)
+        CaixaBuilder(this)
             .setTitle("Uma permissão a mais")
             .setMessage("Para a ${Marca.nome} abrir por cima de outros apps quando você torcer o pulso, ative \"Sobrepor a outros apps\" para ela na próxima tela.")
             .setPositiveButton("Abrir configuração") { _, _ ->
@@ -495,7 +495,7 @@ internal fun MainActivity.alternarGesto() {
         return
     }
     iniciarEscutaDeFundoSePreciso()
-    AlertDialog.Builder(this)
+    CaixaBuilder(this)
         .setTitle("Gesto ligado")
         .setMessage(
             "Com a tela ligada, gire o celular para um lado e para o outro, duas vezes, firme. A ${Marca.nome} abre já ouvindo, e a música pausa enquanto você fala.\n\n" +
@@ -534,7 +534,7 @@ internal fun MainActivity.alternarEscutaDeFundo() {
         requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO), PEDIDO_MICROFONE)
     }
     if (!podeSobrepor()) {
-        AlertDialog.Builder(this)
+        CaixaBuilder(this)
             .setTitle("Uma permissão a mais")
             .setMessage(
                 "Para o orbe aparecer por cima de outros apps quando você disser \"${Marca.nome}, ativar\", " +
@@ -561,7 +561,7 @@ internal fun MainActivity.alternarEscutaDeFundo() {
 }
 
 internal fun MainActivity.definirAssistentePadrao() {
-    AlertDialog.Builder(this)
+    CaixaBuilder(this)
         .setTitle("Assistente padrão")
         .setMessage(
             "Na próxima tela, escolha a ${Marca.nome} como \"App assistente digital\" (ou \"Assistente padrão\"). " +

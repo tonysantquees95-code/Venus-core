@@ -77,7 +77,7 @@ private fun hashtagsDe(p: JSONObject): List<String> = p.optJSONArray("hashtags")
 private fun textoDaPostagem(p: JSONObject) = p.optString("legenda") + "\n\n" + hashtagsDe(p).joinToString(" ")
 
 internal fun MainActivity.confirmar(pergunta: String, sim: () -> Unit) {
-    AlertDialog.Builder(this).setTitle(pergunta).setPositiveButton("Sim") { _, _ -> sim() }.setNegativeButton("Cancelar", null).show()
+    CaixaBuilder(this).setTitle(pergunta).setPositiveButton("Sim") { _, _ -> sim() }.setNegativeButton("Cancelar", null).show()
 }
 
 internal fun MainActivity.agendarPostagem(id: Int, tela: TelaDeAjustes?) {
@@ -225,7 +225,7 @@ private fun MainActivity.mostrarConceitos(conceitos: List<Criativos.Conceito>) {
             setOnClickListener { dialogo?.dismiss(); acoesDoLogo(k) }
         }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { bottomMargin = dp(12) })
     }
-    dialogo = AlertDialog.Builder(this).setTitle("Toque no que mais gostou").setView(ScrollView(this).apply { addView(coluna) })
+    dialogo = CaixaBuilder(this).setTitle("Toque no que mais gostou").setView(ScrollView(this).apply { addView(coluna) })
         .setNegativeButton("Fechar", null).setNeutralButton("Outros") { _, _ -> criarLogotipos() }.show()
 }
 
@@ -259,7 +259,7 @@ internal fun MainActivity.mostrarCores(cores: List<Int>, titulo: String) {
         setPadding(dp(14), dp(14), dp(14), dp(14))
         setOnClickListener { copiar(Paleta.hex(c), Paleta.hex(c)) }
     }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { bottomMargin = dp(6) })
-    AlertDialog.Builder(this).setTitle(titulo).setView(coluna)
+    CaixaBuilder(this).setTitle(titulo).setView(coluna)
         .setPositiveButton("Copiar todas") { _, _ -> copiar("Cores", texto) }
         .setNeutralButton("Usar a primeira como cor da loja") { _, _ -> usarCorDaLoja(cores.first()) }
         .setNegativeButton("Fechar", null).show()
@@ -305,7 +305,7 @@ internal fun MainActivity.previa(titulo: String, imagens: List<Bitmap>, nome: St
     val coluna = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(12), dp(8), dp(12), dp(8)) }
     for (b in imagens) coluna.addView(ImageView(this).apply { setImageBitmap(b); adjustViewBounds = true },
         LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { bottomMargin = dp(10) })
-    val b = AlertDialog.Builder(this).setTitle(titulo).setView(ScrollView(this).apply { addView(coluna) })
+    val b = CaixaBuilder(this).setTitle(titulo).setView(ScrollView(this).apply { addView(coluna) })
         .setPositiveButton("Compartilhar") { _, _ ->
             val agora = System.currentTimeMillis()
             compartilharImagens(imagens.mapIndexed { i, img -> Criativos.salvar(this, img, "${nome}_${agora}_${i + 1}") })

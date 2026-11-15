@@ -152,7 +152,7 @@ internal fun MainActivity.gerarRelatorio(periodo: String) {
 }
 
 internal fun MainActivity.oferecerPdf(uri: Uri) {
-    AlertDialog.Builder(this)
+    CaixaBuilder(this)
         .setTitle("Relatório financeiro (PDF)")
         .setMessage("O que você quer fazer com o relatório?")
         .setPositiveButton("Compartilhar") { _, _ ->
@@ -225,7 +225,7 @@ internal fun MainActivity.mostrarLog() {
 internal fun MainActivity.limparLogDeErros() {
     val n = Registro.log(this).size
     if (n == 0) return responder("O log de erros já está limpo.")
-    AlertDialog.Builder(this)
+    CaixaBuilder(this)
         .setTitle("Limpar o log de erros?")
         .setMessage("Os $n erros em aberto saem do log. Use quando já foram consertados; os que ainda não foram enviados ao GitHub não serão mais enviados.")
         .setPositiveButton("Limpar") { _, _ ->
@@ -273,7 +273,7 @@ internal fun MainActivity.procurarAtualizacao(manual: Boolean) {
 internal fun MainActivity.oferecerAtualizacao(v: Atualizador.Versao) {
     val novidades = v.notas.ifBlank { "Melhorias e correções." }
     if (v.ehRobo) {
-        AlertDialog.Builder(this)
+        CaixaBuilder(this)
             .setTitle("Nova versão do Vênus Robô: 1.${v.numero}")
             .setMessage("$novidades\n\nO robô continua com a chave, os canais e o acesso às notificações. Toque em Atualizar na tela do Android.")
             .setPositiveButton("Atualizar o robô") { _, _ -> instalarAtualizacao(v) }
@@ -281,7 +281,7 @@ internal fun MainActivity.oferecerAtualizacao(v: Atualizador.Versao) {
             .show()
         return
     }
-    AlertDialog.Builder(this)
+    CaixaBuilder(this)
         .setTitle("Nova versão da ${Marca.nome}: 1.${v.numero}")
         .setMessage("$novidades\n\nA atualização mantém suas memórias, ajustes e a conexão com a loja.")
         .setPositiveButton("Atualizar agora") { _, _ -> instalarAtualizacao(v) }
@@ -295,7 +295,7 @@ internal fun MainActivity.instalarAtualizacao(v: Atualizador.Versao) {
         setPadding(dp(24), dp(16), dp(24), dp(8))
         textSize = 16f
     }
-    val dialogo = AlertDialog.Builder(this).setTitle(if (v.ehRobo) "Atualizando o Vênus Robô" else "Atualizando a ${Marca.nome}")
+    val dialogo = CaixaBuilder(this).setTitle(if (v.ehRobo) "Atualizando o Vênus Robô" else "Atualizando a ${Marca.nome}")
         .setView(aviso).setCancelable(false).show()
     // depois que a Vênus reabrir atualizada, ela procura de novo e já oferece o robô
     if (!v.ehRobo) atualizador.esquecerBusca()
@@ -346,7 +346,7 @@ internal fun MainActivity.resultadoDaInstalacao(intent: Intent) {
 
 internal fun MainActivity.pedirTokenDoGithub(motivo: String?) {
     val campo = campoDeDialogo("", "Cole o token aqui (github_pat_…)")
-    AlertDialog.Builder(this)
+    CaixaBuilder(this)
         .setTitle("Token do GitHub")
         .setMessage(
             (motivo?.let { "$it\n\n" } ?: "") +
