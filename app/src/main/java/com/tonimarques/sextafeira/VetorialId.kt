@@ -40,6 +40,8 @@ object VetorialId {
     fun assinatura(ctx: Context): String = prefs(ctx).getString(PREF_ASSINATURA, "").orEmpty()
     /** Só a conta do dono (o servidor diz): libera as telas de escolha de IA, chaves e modelo. */
     fun admin(ctx: Context): Boolean = logado(ctx) && prefs(ctx).getBoolean(PREF_ADMIN, false)
+    /** O servidor (batimento) diz se esta conta é a do administrador: atualiza sozinho, sem precisar sair e entrar de novo. */
+    fun guardarAdmin(ctx: Context, admin: Boolean) { if (prefs(ctx).getBoolean(PREF_ADMIN, false) != admin) prefs(ctx).edit().putBoolean(PREF_ADMIN, admin).apply() }
     fun perfilVersao(ctx: Context): Long = prefs(ctx).getLong(PREF_PERFIL_V, -1L)
 
     /** Puxa nome, foto e assinatura do servidor (o avatar do menu lê daqui). Chamar fora da tela principal. */

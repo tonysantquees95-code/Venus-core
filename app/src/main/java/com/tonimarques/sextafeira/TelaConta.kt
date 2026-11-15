@@ -195,6 +195,7 @@ object BatimentoId {
                     }
                     r.ok -> {
                         VetorialId.guardarSelo(a, r.json.optString("selo"))
+                        if (r.json.has("admin")) VetorialId.guardarAdmin(a, r.json.optBoolean("admin", false))
                         if (r.json.optLong("perfil") != VetorialId.perfilVersao(a) && VetorialId.atualizarPerfil(a)) h.post { a.gaveta?.atualizarPerfil() }
                         SincroniaId.rodar(a)
                     }
