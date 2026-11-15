@@ -3,4 +3,5 @@
 <full-backup-content>
     <include domain="database" path="sexta.db" />
     <include domain="sharedpref" path="config.xml" />
+    <include domain="sharedpref" path="perfil.xml" />
 </full-backup-content>

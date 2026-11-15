@@ -47,6 +47,13 @@ class VetorialIdTest {
     }
 
     @Test
+    fun cadastroPerdidoNaReinstalacao() {
+        assertTrue(VetorialId.cadastroPerdido(false, 4))   // versões voltaram do backup, cadastro não
+        assertFalse(VetorialId.cadastroPerdido(true, 4))
+        assertFalse(VetorialId.cadastroPerdido(false, 0))  // conta nova: nada a recuperar
+    }
+
+    @Test
     fun versaoESessao() {
         assertTrue(VetorialId.deveAplicar(3, 2))
         assertFalse(VetorialId.deveAplicar(2, 2))
