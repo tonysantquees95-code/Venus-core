@@ -256,7 +256,7 @@ object BancoDeFrases {
             "desativar",
             listOf("desativar", "pode descansar", "modo de espera", "vai dormir", "descansa", "pode desativar", "desativa sexta-feira"),
             especial = "desativar",
-            respostas = listOf("Entrando em modo de espera. É só chamar.", "Certo, vou descansar. Diga {nome}, ativar quando precisar."),
+            respostas = listOf("Entrando em modo de espera. É só chamar.", "Certo, vou descansar. Diga Ei {nome} quando precisar."),
         ),
 
         Intencao(

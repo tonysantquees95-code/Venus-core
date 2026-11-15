@@ -25,3 +25,17 @@ export function limparParaFalar(texto: string, max = 700): string {
   }
   return t;
 }
+
+/** A Vênus só responde em voz alta quando a pessoa falou (e deixou a voz ligada); quem digita quer ler. */
+export const deveFalar = (porVoz: boolean, vozLigada: boolean): boolean => porVoz && vozLigada;
+
+/** Nome do arquivo ao guardar uma resposta: "2026-11-15 1430 - como fazer um bolo.txt". */
+export function nomeDoArquivo(texto: string, quando: Date = new Date()): string {
+  const p = (n: number) => String(n).padStart(2, "0");
+  const data = `${quando.getFullYear()}-${p(quando.getMonth() + 1)}-${p(quando.getDate())} ${p(quando.getHours())}${p(quando.getMinutes())}`;
+  const inicio = texto.replace(/[^\p{L}\p{N} ]/gu, " ").trim().split(/\s+/).filter(Boolean).slice(0, 6).join(" ").toLowerCase().slice(0, 40).trim();
+  return inicio ? `${data} - ${inicio}.txt` : `${data}.txt`;
+}
+
+/** Só as respostas de verdade ganham os botões (ouvir, compartilhar, guardar). */
+export const merecemAcoes = (texto: string): boolean => texto.trim().length >= 20;

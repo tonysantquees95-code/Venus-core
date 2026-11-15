@@ -5,7 +5,7 @@ import { escolherMime, limparParaFalar } from "./logica";
 export type EstadoVoz = "parado" | "gravando" | "transcrevendo";
 
 /** Lê o texto em voz alta com a voz em português do sistema. */
-export function falar(texto: string) {
+export function falar(texto: string, aoTerminar?: () => void) {
   try {
     const t = limparParaFalar(texto);
     if (!t || typeof speechSynthesis === "undefined") return;
@@ -14,10 +14,20 @@ export function falar(texto: string) {
     u.lang = "pt-BR";
     const voz = speechSynthesis.getVoices().find((v) => v.lang?.toLowerCase().startsWith("pt-br")) ?? speechSynthesis.getVoices().find((v) => v.lang?.toLowerCase().startsWith("pt"));
     if (voz) u.voice = voz;
+    if (aoTerminar) { u.onend = aoTerminar; u.onerror = aoTerminar; }
     speechSynthesis.speak(u);
   } catch {
+    aoTerminar?.();
     /* sem voz no sistema: segue só com o texto */
   }
+}
+
+export function pausarFala() {
+  try { speechSynthesis?.pause(); } catch { /* ok */ }
+}
+
+export function continuarFala() {
+  try { speechSynthesis?.resume(); } catch { /* ok */ }
 }
 
 export function calar() {

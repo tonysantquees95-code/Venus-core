@@ -21,7 +21,7 @@ import kotlin.math.max
 import kotlin.math.sqrt
 
 /**
- * Espera "Vênus, ativar" com o reconhecimento de voz offline (sem internet e sem o Google).
+ * Espera "Ei Vênus" com o reconhecimento de voz offline (sem internet e sem o Google).
  *
  * O microfone fica aberto o tempo todo, numa sessão só: na barra de status aparece apenas o
  * pontinho verde fixo, sem o ícone do microfone piscando a cada poucos segundos.
@@ -33,13 +33,14 @@ import kotlin.math.sqrt
  */
 class Despertador(
     private val contexto: Context,
-    private val aoOuvir: () -> Unit,
+    /** Ouviu a chamada; recebe o que foi dito logo depois dela na mesma frase ("Ei Vênus, toca pagode" → "toca pagode"). */
+    private val aoOuvir: (String) -> Unit,
     private val aoFalhar: () -> Unit = {},
-    /** Comandos de música sem "Vênus, ativar" (pausar, próxima, volume...). null = desligado. */
+    /** Comandos de música sem "Ei Vênus" (pausar, próxima, volume...). null = desligado. */
     private val aoComando: ((String) -> Unit)? = null,
     /** Lido a cada segundo: o usuário pode ligar e desligar nos ajustes. */
     private val modoMusicaLigado: () -> Boolean = { true },
-    /** Lido a cada fala: com o nome sozinho ("Vênus") o orbe já ativa, sem precisar dizer "ativar". */
+    /** Lido a cada fala: com o nome sozinho ("Vênus") o orbe já ativa, sem precisar dizer "ei". */
     private val acionarPeloNome: () -> Boolean = { false },
 ) {
     private val principal = Handler(Looper.getMainLooper())
@@ -150,6 +151,7 @@ class Despertador(
         var reconhecedor: Recognizer? = null
         var livre: Recognizer? = null // fala livre (nome de gênero, artista...) depois de "Vênus, toca"
         var ouviu = false
+        var restoOuvido = ""
         var falhou = false
         try {
             val modelo = carregarModelo(contexto)
@@ -185,6 +187,28 @@ class Despertador(
             var esperaAte = 0L
             var livreAte = 0L
             var inicioDaFala = 0L
+            var aguardaDesde = 0L
+            var mudouEm = 0L
+            var textoDaChamada = ""
+            // Ouviu a chamada ("Ei Vênus"): espera a pessoa terminar de falar (ou parar um instante), para já levar o pedido junto.
+            fun acionou(texto: String, terminou: Boolean, agora: Long): Boolean {
+                if (!Cerebro.pareceAtivacao(texto, acionarPeloNome())) {
+                    aguardaDesde = 0L
+                    textoDaChamada = ""
+                    return false
+                }
+                if (aguardaDesde == 0L) aguardaDesde = agora
+                if (texto != textoDaChamada) {
+                    textoDaChamada = texto
+                    mudouEm = agora
+                }
+                val ehComando = Cerebro.comandoDeMusica(texto, 12, exigirNome = true) != null
+                val quieto = !ehComando && agora - mudouEm >= 600
+                if (!terminou && !quieto && agora - aguardaDesde < 3000) return false
+                restoOuvido = Cerebro.restoDepoisDaAtivacao(texto) ?: Cerebro.pedidoPorNome(texto).orEmpty()
+                ouviu = true
+                return true
+            }
             while (minha == geracao) {
                 val n = gravador.read(bloco, 0, bloco.size)
                 if (n < 0) {
@@ -242,11 +266,8 @@ class Despertador(
                         continue
                     }
                     val comando = Cerebro.comandoDeMusica(texto, exigirNome = true)
-                    // "Vênus, ativar" abre o orbe; só o nome ("Vênus") vale depois que a pessoa termina de falar
-                    if (comando == null && Cerebro.pareceAtivacao(texto, terminou && acionarPeloNome())) {
-                        ouviu = true
-                        break
-                    }
+                    // "Ei Vênus" abre o orbe; só o nome ("Vênus") vale depois que a pessoa termina de falar
+                    if (comando == null && acionou(texto, terminou, agora)) break
                     if (comando != null && agora >= esperaAte) {
                         if (comando == candidato) repeticoes++ else {
                             candidato = comando
@@ -287,20 +308,22 @@ class Despertador(
                     }
                     val terminou = rec.acceptWaveForm(bloco, n)
                     val texto = if (terminou) campo(rec.result, "text") else campo(rec.partialResult, "partial")
-                    if (Cerebro.pareceAtivacao(texto, acionarPeloNome())) {
-                        ouviu = true
-                        break
+                    // "Vênus, aumentar o volume" também funciona sem música tocando: vai direto, sem abrir o orbe
+                    if (terminou && aoComando != null && modoMusicaLigado()) {
+                        val c = Cerebro.comandoDeMusica(texto, 12, exigirNome = true)
+                        if (c != null) {
+                            principal.post { aoComando?.invoke(c) }
+                            aguardaDesde = 0L
+                            textoDaChamada = ""
+                            analisando = false
+                            rec.reset()
+                            continue
+                        }
                     }
-                    // Comandos de música também funcionam com o som baixo
-                    if (terminou && aoComando != null && modoMusicaLigado() && audio?.isMusicActive == true) {
-                        Cerebro.comandoDeMusica(texto, 6, exigirNome = true)?.let { c -> principal.post { aoComando?.invoke(c) } }
-                    }
+                    if (acionou(texto, terminou, agora)) break
                 } else if (analisando) {
                     analisando = false
-                    if (Cerebro.pareceAtivacao(campo(rec.finalResult, "text"), acionarPeloNome())) {
-                        ouviu = true
-                        break
-                    }
+                    if (acionou(campo(rec.finalResult, "text"), true, agora)) break
                 }
                 anteriores.addLast(bloco.copyOf(n))
                 if (anteriores.size > 4) anteriores.removeFirst()
@@ -327,7 +350,7 @@ class Despertador(
                 when {
                     ouviu -> principal.post {
                         parar()
-                        aoOuvir()
+                        aoOuvir(restoOuvido)
                     }
                     // Não conseguiu abrir porque outro app está com o microfone: espera ele terminar.
                     falhou && outroAppGravando() -> cedido = true

@@ -331,7 +331,7 @@ class Cerebro(
                 "|\\b(ativar|ativa)[\\s,]+(a\\s+)?(sexta[\\s-]*feira|sexta|venus)\\b"
         )
 
-        /** Se a frase contém "Sexta-feira, ativar", devolve o que vem depois (pode ser vazio). Senão, null. */
+        /** Se a frase contém "Ei Vênus", devolve o que vem depois (pode ser vazio). Senão, null. */
         fun restoDepoisDaAtivacao(texto: String): String? {
             val normal = ComandosLocais.normalizar(texto)
             val m = ATIVACAO.find(normal) ?: return null
@@ -345,7 +345,9 @@ class Cerebro(
         fun pareceAtivacao(texto: String, soNome: Boolean = false): Boolean {
             if (texto.isBlank()) return false
             if (restoDepoisDaAtivacao(texto) != null) return true
-            if (soNome && pareceSoONome(texto)) return true
+            // "Ei Vênus" (com a chamada) sempre ativa; só "Vênus, ..." depende do interruptor do nome.
+            if (pedidoPorNome(texto, exigirChamada = true) != null) return true
+            if (soNome && (pareceSoONome(texto) || pedidoPorNome(texto) != null)) return true
             val ps = Corretor.palavras(texto)
             for (i in ps.indices) {
                 val (ehNome, usadas) = when {
@@ -362,8 +364,30 @@ class Cerebro(
             return false
         }
 
+        /**
+         * "Ei Vênus, coloca a música tal" → "coloca a música tal"; "Ei Vênus" → "" (só a chamada);
+         * "Vênus, aumentar o volume" → "aumentar o volume" (sem a chamada só vale com exigirChamada = false).
+         * Se a frase não começa chamando a Vênus, devolve null. O resto sai com as palavras como foram ditas.
+         */
+        fun pedidoPorNome(texto: String, exigirChamada: Boolean = false): String? {
+            val tokens = texto.replace("[unk]", " ").trim().split(Regex("\\s+")).filter { it.isNotBlank() }
+            val chaves = tokens.map { ComandosLocais.normalizar(it).replace(Regex("[^a-z0-9]"), "") }
+            var i = 0
+            while (i < chaves.size && i < 2 && chaves[i] in CHAMADAS_FORTES) i++
+            val chamou = i > 0
+            val usadas = when {
+                i < chaves.size && pareceVenus(chaves[i]) -> 1
+                i < chaves.size && chaves[i] == "sextafeira" -> 1
+                i + 1 < chaves.size && chaves[i] == "sexta" && chaves[i + 1] == "feira" -> 2
+                else -> return null
+            }
+            if (exigirChamada && !chamou) return null
+            return tokens.drop(i + usadas).joinToString(" ").trim().trimStart(',', '.', '!', ' ').trim()
+        }
+
         private fun pareceVenus(p: String) = p.length in 4..6 && (p == "venus" || Corretor.distancia(p, "venus") <= 1)
 
+        private val CHAMADAS_FORTES = setOf("ei", "oi", "ola", "hey", "opa", "ai")
         private val CHAMADAS = setOf("ei", "oi", "ola", "hey", "opa", "ai", "fala", "e", "ok")
 
         /**
@@ -446,7 +470,7 @@ class Cerebro(
                 val i = p.indexOfFirst { pareceVenus(it) }
                 if (i !in 0..1) return null
                 p = p.filterIndexed { idx, _ -> idx != i }
-                if (p.isEmpty() || p.any { it.startsWith("ativ") }) return null // "Vênus, ativar" abre o orbe, não é música
+                if (p.isEmpty() || p.any { it.startsWith("ativ") }) return null // "Ei Vênus" abre o orbe, não é música
             }
             fun tem(vararg w: String) = p.any { it in w }
 

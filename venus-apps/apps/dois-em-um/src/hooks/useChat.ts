@@ -10,6 +10,7 @@ import { useEmpresa } from "../empresa/EmpresaProvider";
 import { contextoDaEmpresa } from "../empresa/logica";
 import { usePreferencias } from "../ajustes/Preferencias";
 import { falar } from "../voz/useVoz";
+import { deveFalar } from "../voz/logica";
 import { ponteDesktop } from "../desktop/ponte";
 import { abrirNoApp } from "../id/Avatar";
 import { useCatalogo } from "../empresa/CatalogoProvider";
@@ -31,7 +32,7 @@ export function useChat() {
   const forms = useFormulariosDaLoja();
 
   const enviar = useCallback(
-    async (texto: string) => {
+    async (texto: string, porVoz = false) => {
       const limpo = texto.trim();
       const id = ativa.id;
       if (!limpo || estaEnviando(id)) return;
@@ -45,7 +46,7 @@ export function useChat() {
         const local = await responderComandoDeConta(limpo, conta);
         if (local) {
           anexar(id, resposta(local.texto));
-          if (prefs.falarRespostas) falar(local.texto);
+          if (deveFalar(porVoz, prefs.falarRespostas)) falar(local.texto);
           if (local.abrir) abrirNoApp(local.abrir);
           return;
         }
@@ -54,7 +55,7 @@ export function useChat() {
         if (intencao) {
           const aviso = intencao === "cadastrar" ? "Abri a janelinha para cadastrar o produto." : "Abri a janelinha para atualizar o produto.";
           anexar(id, resposta(aviso));
-          forms.abrir(intencao, (t) => { anexar(id, resposta(t)); if (prefs.falarRespostas) falar(t); });
+          forms.abrir(intencao, (t) => { anexar(id, resposta(t)); if (deveFalar(porVoz, prefs.falarRespostas)) falar(t); });
           return;
         }
         // no Windows, "abrir calculadora", "aumentar volume", "bloquear a tela"… a Vênus faz no próprio computador
@@ -62,7 +63,7 @@ export function useChat() {
         if (pc?.tratado) {
           const t = pc.texto ?? "Feito.";
           anexar(id, resposta(t));
-          if (prefs.falarRespostas) falar(t);
+          if (deveFalar(porVoz, prefs.falarRespostas)) falar(t);
           return;
         }
         // preço e estoque vêm direto do site (catálogo guardado, renovado se tiver mais de 2 min): rápido e sem inventar
@@ -72,7 +73,7 @@ export function useChat() {
           const direta = respostaDeProduto(produtos, limpo);
           if (direta) {
             anexar(id, resposta(direta));
-            if (prefs.falarRespostas) falar(direta);
+            if (deveFalar(porVoz, prefs.falarRespostas)) falar(direta);
             return;
           }
         }
@@ -81,7 +82,7 @@ export function useChat() {
           historico.map((m) => ({ papel: m.autor === "eu" ? ("user" as const) : ("assistant" as const), texto: m.texto }))
         );
         anexar(id, resposta(texto2, detalhe));
-        if (prefs.falarRespostas) falar(texto2);
+        if (deveFalar(porVoz, prefs.falarRespostas)) falar(texto2);
       } catch (e) {
         anexar(id, resposta(e instanceof Error && e.message ? e.message : "Não consegui falar com o servidor agora. Tente de novo em instantes."));
       } finally {

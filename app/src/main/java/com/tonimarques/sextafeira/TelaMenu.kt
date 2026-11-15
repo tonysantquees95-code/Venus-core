@@ -129,13 +129,13 @@ internal fun MainActivity.abrirMenu(@Suppress("UNUSED_PARAMETER") ancora: View) 
         ),
         TelaDeAjustes.Secao(
             "Ativação por voz", listOf(
-                item("Ouvir \"$n, ativar\" com o app aberto", { "Fala a frase e ela já começa a ouvir o seu pedido." },
+                item("Ouvir \"Ei $n\" com o app aberto", { "Fala a frase e ela já começa a ouvir o seu pedido." },
                     MENU_VIGILIA) { vigiliaLigada() },
-                item("Acionar só dizendo o nome", {
-                    "Dizer apenas \"$n\" já abre o orbe ouvindo, sem precisar falar \"ativar\"."
+                item("Acionar sem dizer \"ei\"", {
+                    "Dizer só \"$n\" ou \"$n, aumentar o volume\" já funciona, sem o \"ei\"."
                 }, MENU_NOME) { prefs.getBoolean(VigiliaService.PREF_NOME, true) },
                 item("Ouvir com o app fechado", {
-                    "Diga \"$n, ativar\" de qualquer tela e o orbe aparece num pop-up, sem abrir o app inteiro."
+                    "Diga \"Ei $n\" de qualquer tela e o orbe aparece num pop-up, sem abrir o app inteiro."
                 }, MENU_FUNDO) { prefs.getBoolean(PREF_FUNDO, false) },
                 TelaDeAjustes.Ajuste("Guia do primeiro acesso", { "Passo a passo do que ligar nas configurações do celular." }) { Onboarding.mostrar(this) },
                 TelaDeAjustes.Ajuste("O que há de novo", { "Tudo o que mudou, melhorou e foi corrigido nas atualizações." }) { Novidades.mostrarTudo(this) },
@@ -149,7 +149,7 @@ internal fun MainActivity.abrirMenu(@Suppress("UNUSED_PARAMETER") ancora: View) 
                         "Desligue a \"Câmera rápida\" no app Moto para não abrir os dois."
                 }, MENU_GESTO) { prefs.getBoolean(VigiliaService.PREF_GESTO, false) },
                 item("Funcionar com a tela apagada", {
-                    "Ouve \"$n, ativar\", os comandos de música e o gesto mesmo com a tela apagada ou bloqueada. " +
+                    "Ouve \"Ei $n\", os comandos de música e o gesto mesmo com a tela apagada ou bloqueada. " +
                         "Acende a tela e aparece por cima do bloqueio; para abrir apps ou mandar mensagem, pede a senha antes. Gasta mais bateria."
                 }, MENU_TELA_APAGADA) { prefs.getBoolean(VigiliaService.PREF_TELA_APAGADA, false) },
                 item("Abrir segurando o botão", {
@@ -443,7 +443,7 @@ internal fun MainActivity.alternarTelaApagada() {
     }
     if (!ligar) return
     val energia = getSystemService(android.os.PowerManager::class.java)
-    val explicacao = "Com a tela apagada, a ${Marca.nome} continua ouvindo \"${Marca.nome}, ativar\", os comandos de música e o gesto. " +
+    val explicacao = "Com a tela apagada, a ${Marca.nome} continua ouvindo \"Ei ${Marca.nome}\", os comandos de música e o gesto. " +
         "Para o Android não desligar ela para economizar bateria, permita na próxima tela que ela funcione sem restrição de bateria."
     if (energia?.isIgnoringBatteryOptimizations(packageName) == true) {
         if (!prefs.getBoolean(PREF_FUNDO, false) && !prefs.getBoolean(VigiliaService.PREF_GESTO, false)) {
@@ -537,7 +537,7 @@ internal fun MainActivity.alternarEscutaDeFundo() {
         CaixaBuilder(this)
             .setTitle("Uma permissão a mais")
             .setMessage(
-                "Para o orbe aparecer por cima de outros apps quando você disser \"${Marca.nome}, ativar\", " +
+                "Para o orbe aparecer por cima de outros apps quando você disser \"Ei ${Marca.nome}\", " +
                     "ative \"Sobrepor a outros apps\" (ou \"Exibir sobre outros apps\") para a ${Marca.nome} na próxima tela. " +
                     "Depois é só voltar aqui."
             )
@@ -555,7 +555,7 @@ internal fun MainActivity.alternarEscutaDeFundo() {
     }
     Toast.makeText(
         this,
-        "Com o app fechado e o celular desbloqueado, diga \"${Marca.nome}, ativar\". Fica uma notificação enquanto ela escuta.",
+        "Com o app fechado e o celular desbloqueado, diga \"Ei ${Marca.nome}\". Fica uma notificação enquanto ela escuta.",
         Toast.LENGTH_LONG
     ).show()
 }

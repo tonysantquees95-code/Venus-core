@@ -20,7 +20,7 @@ internal object Onboarding {
         ),
         Passo(
             "1. Microfone",
-            "Permita o microfone para eu ouvir \"$n\" e os seus pedidos. A voz de ativação roda no próprio celular.",
+            "Permita o microfone para eu ouvir \"Ei $n\" e os seus pedidos. A voz de ativação roda no próprio celular.",
             "Permitir microfone",
         ) { it.requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO), 21) },
         Passo(
