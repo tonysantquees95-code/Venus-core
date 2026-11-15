@@ -30,7 +30,7 @@ export function Chave({ id, titulo, descricao, ligado, aoMudar, desabilitado }: 
         onClick={() => aoMudar(!ligado)}
         className={`relative h-9 w-16 shrink-0 rounded-full transition-colors duration-200 disabled:opacity-40 ${ligado ? "bg-venus" : "bg-white/15"}`}
       >
-        <span className={`absolute top-1 size-7 rounded-full bg-white shadow transition-transform duration-200 ${ligado ? "translate-x-8" : "translate-x-1"}`} />
+        <span className={`absolute left-1 top-1 size-7 rounded-full bg-white shadow transition-transform duration-200 ${ligado ? "translate-x-7" : "translate-x-0"}`} />
       </button>
     </section>
   );
