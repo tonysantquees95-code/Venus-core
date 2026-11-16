@@ -2,7 +2,8 @@ import { useEffect, useState } from "react";
 import { IdentidadeDaLoja } from "./CriarLoja";
 import { IconeNomeado } from "../components/Icones";
 import { PaginaComLateral, type ItemLateral } from "../components/PaginaComLateral";
-import { CartaoDeVisitas, Panfleto, QrCodeSecao, VitrineECatalogo } from "./Divulgacao";
+import { CartaoDeVisitas, Panfleto, QrCodeSecao } from "./Divulgacao";
+import { VitrineECatalogo } from "./VitrineWeb";
 import { DadosDaLoja, Historico, IdeiasDePost, IdeiasDeVideo, InstagramDaLoja, PrimeirosPassos, RegrasDeVenda, RespostasDoInstagram, StoriesDoDia } from "./secoes";
 
 const SECOES: ItemLateral[] = [

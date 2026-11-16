@@ -73,6 +73,10 @@ export interface Licenca {
   fimDoAcesso?: number;
 }
 
+/** Vitrine online da loja (vetorial.tech/<loja>): o que o servidor guarda e entrega. */
+export interface VitrineInfo { url: string; titulo: string; descricao: string; cor: string; logo: string; whatsapp: string; itensDoApp: number }
+export interface ItemVitrine { sku: string; nome: string; preco_centavos: number | null; promocao_centavos: number | null; estoque: number | null; categoria: string; imagem: string; descricao: string }
+
 export function criarApi(base: string = URL_API, f: typeof fetch = (...a) => fetch(...a)) {
   async function chamar<T>(metodo: string, caminho: string, corpo?: unknown, token?: string): Promise<T> {
     let r: Response;
@@ -110,6 +114,11 @@ export function criarApi(base: string = URL_API, f: typeof fetch = (...a) => fet
     encerrarSessao: (t: string, sessao: string) => chamar<{ ok: boolean }>("POST", `/id/sessoes/${sessao}/encerrar`, {}, t),
     licenca: (t: string, gerar = false, escolha?: { pacote: string; forma: "recorrente" | "avulso" }) =>
       chamar<Licenca>("GET", `/id/licenca${gerar ? `?gerar=1${escolha ? `&pacote=${encodeURIComponent(escolha.pacote)}&forma=${escolha.forma}` : ""}` : ""}`, undefined, t),
+    vitrine: (t: string) => chamar<VitrineInfo>("GET", "/loja/vitrine", undefined, t),
+    salvarVitrine: (t: string, d: { titulo?: string; descricao?: string; cor?: string; whatsapp?: string }) => chamar<{ ok: boolean; url: string }>("PUT", "/loja/vitrine", d, t),
+    itensDaVitrine: (t: string) => chamar<{ url: string; produtos: ItemVitrine[] }>("GET", "/loja/vitrine/itens", undefined, t),
+    salvarItens: (t: string, produtos: Partial<ItemVitrine>[]) => chamar<{ ok: boolean; itens: number; url: string }>("PUT", "/loja/vitrine/itens", { produtos }, t),
+    fotoDaVitrine: (t: string, sku: string, dados: string) => chamar<{ ok: boolean; url: string }>("PUT", "/loja/vitrine/foto", { sku, dados }, t),
     lerSync: (t: string, desde: number) => chamar<{ agora: number; docs: DocSync[] }>("GET", `/id/sync?desde=${desde}`, undefined, t),
     gravarSync: (t: string, chave: string, valor: unknown, versao: number) =>
       chamar<{ versao: number; atualizado: number }>("PUT", `/id/sync/${chave}`, { valor, versao }, t)
