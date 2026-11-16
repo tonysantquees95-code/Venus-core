@@ -181,12 +181,13 @@ export function ContaLogada() {
       )}
       {verPlanos && (
         <div className="space-y-3 rounded-2xl border border-white/10 p-3">
+          {lic?.promocao && <p className="rounded-2xl bg-emerald-500/15 p-3 text-emerald-200">🎉 Promoção de lançamento: a suíte completa por {reais(lic.promocao.precoCentavos)}/mês. Quem assina até {new Date(lic.promocao.fim).toLocaleDateString("pt-BR")} mantém esse preço por {lic.promocao.meses} meses.</p>}
           <p className="font-semibold">1. Escolha o plano</p>
           <div className="grid gap-2" role="radiogroup" aria-label="Plano">
             {planos.map((p) => (
               <button key={p.chave} type="button" role="radio" aria-checked={pacote === p.chave} onClick={() => setPacote(p.chave)}
                 className={`flex items-center justify-between rounded-2xl border px-4 py-3 text-left transition ${pacote === p.chave ? "border-venus bg-venus/15" : "border-white/15 bg-white/5"}`}>
-                <span className="font-semibold">{p.nome}</span><span className="text-suave">{reais(p.precoCentavos)}/mês</span>
+                <span className="font-semibold">{p.nome}{p.promocao && <span className="ml-2 rounded-full bg-emerald-500/20 px-2 py-0.5 text-xs text-emerald-300">promoção</span>}</span><span className="text-suave">{p.promocao && p.precoCheioCentavos ? <s className="mr-1 opacity-60">{reais(p.precoCheioCentavos)}</s> : null}{reais(p.precoCentavos)}/mês</span>
               </button>
             ))}
           </div>

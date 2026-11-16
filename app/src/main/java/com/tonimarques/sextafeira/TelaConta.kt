@@ -120,13 +120,13 @@ internal fun MainActivity.abrirLicenca() {
                 j.optBoolean("emTeste") -> "Teste grátis: ${j.optInt("diasDeTesteRestantes")} dia(s) restantes."
                 else -> "Plano Fundadores ativo: ${j.optInt("diasPagosRestantes")} dia(s) restantes."
             }
-            CaixaBuilder(this).setTitle("Licença").setMessage("$estado\n\nPlanos a partir de R$ 49,90 por mês. Pague no cartão de crédito (renova sozinho) ou no Pix/débito (30 dias por vez, sem renovar sozinho).")
+            CaixaBuilder(this).setTitle("Licença").setMessage("$estado\n\n" + (j.optJSONObject("promocao")?.let { "Promoção de lançamento: a suíte completa por ${reaisDoPlano(it.optInt("precoCentavos"))} por mês. Quem assinar até o fim da promoção mantém esse preço por ${it.optInt("meses")} meses.\n\n" } ?: "") + "Planos a partir de R$ 49,90 por mês. Pague no cartão de crédito (renova sozinho) ou no Pix/débito (30 dias por vez, sem renovar sozinho).")
                 .setPositiveButton("Escolher plano e pagar") { _, _ ->
                     val planos = j.optJSONArray("pacotes")
                     if (planos == null || planos.length() == 0) escolherFormaDePagar("venus", "Vênus")
                     else escolher("Escolha o plano", (0 until planos.length()).map { i ->
                         val p = planos.getJSONObject(i)
-                        "${p.optString("nome")} · ${reaisDoPlano(p.optInt("precoCentavos"))}/mês" to { escolherFormaDePagar(p.optString("chave"), p.optString("nome")) }
+                        "${p.optString("nome")} · ${reaisDoPlano(p.optInt("precoCentavos"))}/mês" + (if (p.optBoolean("promocao")) " (promoção)" else "") to { escolherFormaDePagar(p.optString("chave"), p.optString("nome")) }
                     })
                 }.setNegativeButton("Fechar", null).show()
         }

@@ -171,7 +171,7 @@ class TravaActivity : Activity() {
                 if (planos == null || planos.length() == 0) escolherFormaDePagar("venus", "Vênus")
                 else escolher("Escolha o plano", (0 until planos.length()).map { i ->
                     val p = planos.getJSONObject(i)
-                    "${p.optString("nome")} · R$ " + String.format(java.util.Locale("pt", "BR"), "%.2f", p.optInt("precoCentavos") / 100.0) + "/mês" to { escolherFormaDePagar(p.optString("chave"), p.optString("nome")) }
+                    "${p.optString("nome")} · R$ " + String.format(java.util.Locale("pt", "BR"), "%.2f", p.optInt("precoCentavos") / 100.0) + "/mês" + (if (p.optBoolean("promocao")) " (promoção)" else "") to { escolherFormaDePagar(p.optString("chave"), p.optString("nome")) }
                 })
             }
         }
