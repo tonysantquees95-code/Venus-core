@@ -54,6 +54,7 @@ export const NOVIDADES: Novidade[] = [
   { id: 14, data: "2026-11-16", tipo: "novo", titulo: "Promoção de lançamento", texto: "Por tempo limitado, a suíte completa (Vênus, Vindex e Vortex) custa R$ 49,90 por mês, com 7 dias grátis. Quem assinar durante a promoção mantém esse preço por 6 meses. Veja em Ajustes › Segurança." },
   { id: 15, data: "2026-11-16", tipo: "melhoria", titulo: "Panfleto e cartão de visitas digitais", texto: "O panfleto e o cartão de visitas agora são digitais, feitos para a tela: você vê como ficam e manda por WhatsApp, salva em PDF ou baixa a imagem. O QR Code é opcional, e o botão da loja, o telefone e os produtos viram links clicáveis." },
   { id: 16, data: "2026-11-16", tipo: "novo", titulo: "Vitrine online pelo computador e pelo navegador", texto: "Em Empresa › Vitrine e catálogo você abre, edita e publica a vitrine da loja também pelo Windows, Mac, iPhone e navegador: adicione produtos com foto e preço, copie o link e mande por WhatsApp. Cada produto ganha a sua página." },
+  { id: 17, data: "2026-11-16", tipo: "novo", titulo: "Painel ao vivo no computador", texto: "Em Empresa › Painel ao vivo você acompanha o faturamento, as taxas e a auditoria da loja em tempo real, igual ao painel do celular, no Windows, no Mac, no iPhone e no navegador." },
 ];
 
 export const ROTULO: Record<TipoNovidade, string> = { novo: "Novo", melhoria: "Melhorou", correcao: "Corrigido" };
