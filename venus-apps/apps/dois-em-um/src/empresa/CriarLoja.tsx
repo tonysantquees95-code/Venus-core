@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { botaoPrimario, botaoSuave, campo } from "../ajustes/Controles";
 import { useEmpresa } from "./EmpresaProvider";
+import { useId } from "../id/IdProvider";
+import { identidadeParaEmpresa } from "./identidadeDoSite";
 import { gerarSvg, MODELOS, rasterizar, urlDoSvg } from "./logos";
 import { iniciaisDaLoja, NICHOS, normalizarSite, paletasDoNicho, textoSobre, type Empresa } from "./logica";
 
@@ -293,6 +295,16 @@ export function CriarLoja({ aoConcluir, aoIr }: { aoConcluir: () => void; aoIr?:
 /** Empresa › Identidade da loja: refazer o passo a passo ou ajustar logo e cores a qualquer hora. */
 export function IdentidadeDaLoja({ aoRefazer }: { aoRefazer: () => void }) {
   const { empresa, salvar } = useEmpresa();
+  const { api, sessao } = useId();
+  const [aviso, setAviso] = useState("");
+  async function doSite() {
+    if (!sessao) return;
+    setAviso("Lendo o site…");
+    try {
+      const m = await identidadeParaEmpresa(api, sessao.token, empresa, true);
+      if (m.cor || m.logo) { salvar(m); setAviso("Pronto: peguei a cor e o logo do site."); } else setAviso("Não achei cor nem logo nesse site. Escolha abaixo.");
+    } catch (e) { setAviso(e instanceof Error ? e.message : "Não consegui ler o site."); }
+  }
   return (
     <>
       <header className="mb-4">
@@ -303,6 +315,7 @@ export function IdentidadeDaLoja({ aoRefazer }: { aoRefazer: () => void }) {
         <section className="rounded-3xl border border-white/10 bg-white/[0.06] p-4"><h3 className="mb-4 text-base font-semibold">Logo</h3><EditorDeLogo empresa={empresa} aoMudar={salvar} /></section>
         <section className="rounded-3xl border border-white/10 bg-white/[0.06] p-4"><h3 className="mb-4 text-base font-semibold">Cores</h3><EditorDeCores empresa={empresa} aoMudar={salvar} /></section>
       </div>
+      {empresa.site && sessao && <div className="mt-4"><button type="button" className={botaoSuave} onClick={() => void doSite()}>Pegar cor e logo do site ({empresa.site.replace(/^https?:\/\//, "")})</button>{aviso && <p role="status" className="mt-2 text-sm text-suave">{aviso}</p>}</div>}
       <button type="button" className={`${botaoSuave} mt-4`} onClick={aoRefazer}>Refazer o passo a passo da loja</button>
     </>
   );

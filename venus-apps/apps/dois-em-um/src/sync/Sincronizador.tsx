@@ -3,6 +3,7 @@ import { ErroId } from "../id/api";
 import { useId } from "../id/IdProvider";
 import { usePreferencias } from "../ajustes/Preferencias";
 import { useEmpresa } from "../empresa/EmpresaProvider";
+import { useLojas } from "../empresa/LojasProvider";
 import { empresaPreenchida, limparEmpresa } from "../empresa/logica";
 import { useTema } from "../theming";
 import { docDeIdeias, lerDocIdeias } from "../empresa/marketing";
@@ -21,6 +22,10 @@ export function Sincronizador() {
   const { tema, definirTudo: definirTemaTudo } = useTema();
   const { prefs, definirTodas } = usePreferencias();
   const { empresa, definirTudo } = useEmpresa();
+  const { chaveDaEmpresa } = useLojas(); // "empresa" na loja principal; "empresa-<id>" nas outras
+  const ultimaChave = useRef(chaveDaEmpresa);
+  const chaveEmpresa = useRef(chaveDaEmpresa);
+  chaveEmpresa.current = chaveDaEmpresa;
   const mk = useMarketing();
   const [configVoz] = useConfigVoz();
   const versoes = useRef<Versoes>({});
@@ -37,6 +42,8 @@ export function Sincronizador() {
   useEffect(() => {
     if (!sessao) return;
     let parar = false;
+    // trocou de loja: busca tudo de novo (o que já está igual não é aplicado)
+    if (ultimaChave.current !== chaveDaEmpresa) { ultimaChave.current = chaveDaEmpresa; desde.current = 0; }
     const puxar = async () => {
       try {
         const r = await api.lerSync(sessao.token, desde.current);
@@ -50,9 +57,9 @@ export function Sincronizador() {
           } else if (doc.chave === "ideiaspost" || doc.chave === "postagens" || doc.chave === "stories" || doc.chave === "instagram") {
             if (doc.chave === "ideiaspost") ultimoEnviado.current.ideiaspost = JSON.stringify(docDeIdeias(lerDocIdeias(doc.valor)));
             receberMk.current(doc.chave, doc.valor);
-          } else if (doc.chave === "empresa") {
+          } else if (doc.chave === chaveEmpresa.current) {
             const nova = limparEmpresa(doc.valor);
-            ultimoEnviado.current.empresa = JSON.stringify(nova);
+            ultimoEnviado.current[doc.chave] = JSON.stringify(nova);
             definirTudo(nova);
           } else if (doc.chave === "voz") {
             const nova = configRecebida(lerConfigVoz(), doc.valor);
@@ -78,7 +85,8 @@ export function Sincronizador() {
       clearInterval(t);
       document.removeEventListener("visibilitychange", aoVoltar);
     };
-  }, [api, sessao?.token]);
+  }, [api, sessao?.token, chaveDaEmpresa]);
+
 
   // enviar (com um pequeno atraso para juntar vários toques)
   useEffect(() => {
@@ -88,7 +96,7 @@ export function Sincronizador() {
       // a voz só vai para a conta depois de mexer nela (ou se já veio de outro aparelho): o padrão não apaga o que está no celular
       const vozTexto = JSON.stringify(configParaEnviar(atual.current.voz));
       if (versoes.current.voz || vozTexto !== JSON.stringify(configParaEnviar(CONFIG_VOZ_PADRAO))) itens.push(["voz", configParaEnviar(atual.current.voz)]);
-      if (empresaPreenchida(atual.current.empresa)) itens.push(["empresa", atual.current.empresa]);
+      if (empresaPreenchida(atual.current.empresa)) itens.push([chaveEmpresa.current, atual.current.empresa]);
       if (atual.current.ideias.length) itens.push(["ideiaspost", docDeIdeias(atual.current.ideias)]);
       for (const [chave, valor] of itens) {
         const texto = JSON.stringify(valor);
@@ -103,7 +111,7 @@ export function Sincronizador() {
       }
     }, 1500);
     return () => clearTimeout(espera);
-  }, [api, sessao?.token, tema, prefs, empresa, mk.todasAsIdeias, configVoz]);
+  }, [api, sessao?.token, tema, prefs, empresa, mk.todasAsIdeias, configVoz, chaveDaEmpresa]);
 
   return null;
 }

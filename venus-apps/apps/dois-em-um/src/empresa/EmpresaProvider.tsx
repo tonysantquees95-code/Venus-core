@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useMemo, type ReactNode } from "react";
 import { usePersistido } from "../hooks/usePersistido";
+import { useLojas } from "./LojasProvider";
 import { EMPRESA_VAZIA, limparEmpresa, normalizarSite, type Empresa } from "./logica";
 
 interface Ctx {
@@ -12,7 +13,8 @@ interface Ctx {
 const C = createContext<Ctx | null>(null);
 
 export function EmpresaProvider({ children }: { children: ReactNode }) {
-  const [bruto, setBruto] = usePersistido<unknown>("venus:empresa", EMPRESA_VAZIA);
+  const { sufixo } = useLojas(); // cada loja da conta guarda o seu cadastro
+  const [bruto, setBruto] = usePersistido<unknown>(`venus:empresa${sufixo}`, EMPRESA_VAZIA);
   const empresa = useMemo(() => limparEmpresa(bruto), [bruto]);
   const salvar = useCallback((p: Partial<Empresa>) => {
     const novo = { ...empresa, ...p };

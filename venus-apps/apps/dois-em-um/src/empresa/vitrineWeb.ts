@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useState } from "react";
 import { useId } from "../id/IdProvider";
+import { useLojas } from "./LojasProvider";
 import type { ApiId, ItemVitrine, Sessao, VitrineInfo } from "../id/api";
 
 /** A vitrine online da loja (vetorial.tech/<loja>) como a web enxerga: dados da página e produtos publicados. */
 export function useVitrine(): { info: VitrineInfo | null; produtos: ItemVitrine[]; erro: string; carregando: boolean; carregar: () => Promise<void>; sessao: Sessao | null; api: ApiId } {
   const { api, sessao } = useId();
+  const { abertaId } = useLojas(); // trocou de loja: lê a vitrine e os produtos da outra
   const [info, setInfo] = useState<VitrineInfo | null>(null);
   const [produtos, setProdutos] = useState<ItemVitrine[]>([]);
   const [erro, setErro] = useState("");
@@ -12,13 +14,14 @@ export function useVitrine(): { info: VitrineInfo | null; produtos: ItemVitrine[
   const token = sessao?.token;
   const carregar = useCallback(async () => {
     if (!token) return;
+    setInfo(null); setProdutos([]);
     setCarregando(true); setErro("");
     try {
       const [i, p] = await Promise.all([api.vitrine(token), api.itensDaVitrine(token)]);
       setInfo(i); setProdutos(p.produtos);
     } catch (e) { setErro(e instanceof Error ? e.message : "Não consegui falar com o servidor."); }
     setCarregando(false);
-  }, [api, token]);
+  }, [api, token, abertaId]);
   useEffect(() => { void carregar(); }, [carregar]);
   return { info, produtos, erro, carregando, carregar, sessao, api };
 }

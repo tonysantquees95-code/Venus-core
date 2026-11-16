@@ -5,9 +5,11 @@ import { PaginaComLateral, type ItemLateral } from "../components/PaginaComLater
 import { CartaoDeVisitas, Panfleto, QrCodeSecao } from "./Divulgacao";
 import { VitrineECatalogo } from "./VitrineWeb";
 import { PainelAoVivo } from "./PainelAoVivo";
+import { MinhasLojas, SeletorDeLoja } from "./MinhasLojas";
 import { DadosDaLoja, Historico, IdeiasDePost, IdeiasDeVideo, InstagramDaLoja, PrimeirosPassos, RegrasDeVenda, RespostasDoInstagram, StoriesDoDia } from "./secoes";
 
 const SECOES: ItemLateral[] = [
+  { id: "lojas", rotulo: "Minhas lojas", icone: <IconeNomeado nome="loja" className="size-5" />, grupo: "Minha loja" },
   { id: "dados", rotulo: "Dados da loja", icone: <IconeNomeado nome="loja" className="size-5" />, grupo: "Minha loja" },
   { id: "identidade", rotulo: "Identidade da loja", icone: <IconeNomeado nome="vitrine" className="size-5" />, grupo: "Minha loja" },
   { id: "regras", rotulo: "Regras de venda", icone: <IconeNomeado nome="regras" className="size-5" />, grupo: "Minha loja" },
@@ -32,6 +34,8 @@ export function TelaEmpresa({ alvo }: { alvo?: string }) {
   return (
     <PaginaComLateral titulo="Empresa" itens={SECOES} atual={secao} aoEscolher={setSecao} abrirDireto={!!alvo && SECOES.some((i) => i.id === alvo)}>
       <div className="mx-auto w-full max-w-5xl p-4 md:p-8">
+        {secao !== "lojas" && <SeletorDeLoja aoGerenciar={() => setSecao("lojas")} />}
+        {secao === "lojas" && <MinhasLojas aoCriada={() => { setSecao("identidade"); window.dispatchEvent(new Event("venus:criar-loja")); }} />}
         {secao === "dados" && <DadosDaLoja />}
         {secao === "identidade" && <IdentidadeDaLoja aoRefazer={() => window.dispatchEvent(new Event("venus:criar-loja"))} />}
         {secao === "regras" && <RegrasDeVenda />}

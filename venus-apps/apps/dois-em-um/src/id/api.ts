@@ -77,13 +77,19 @@ export interface Licenca {
 export interface VitrineInfo { url: string; titulo: string; descricao: string; cor: string; logo: string; whatsapp: string; itensDoApp: number }
 export interface ItemVitrine { sku: string; nome: string; preco_centavos: number | null; promocao_centavos: number | null; estoque: number | null; categoria: string; imagem: string; descricao: string }
 
+/** Loja aberta agora ("" = a principal da conta). Vai no cabeçalho x-loja de tudo que é da loja (produtos, vitrine, BI). */
+let lojaAberta = "";
+export function definirLojaAberta(id: string) { lojaAberta = id; }
+export interface LojaDaConta { id: string; nome: string; slug: string; titulo: string; cor: string; principal: boolean; ativa: boolean }
+export interface IdentidadeDoSite { site: string; nome: string; descricao: string; cor: string; logo: string }
+
 export function criarApi(base: string = URL_API, f: typeof fetch = (...a) => fetch(...a)) {
   async function chamar<T>(metodo: string, caminho: string, corpo?: unknown, token?: string): Promise<T> {
     let r: Response;
     try {
       r = await f(`${base}${caminho}`, {
         method: metodo,
-        headers: { ...(corpo !== undefined ? { "content-type": "application/json" } : {}), ...(token ? { authorization: `Bearer ${token}` } : {}) },
+        headers: { ...(corpo !== undefined ? { "content-type": "application/json" } : {}), ...(token ? { authorization: `Bearer ${token}` } : {}), ...(lojaAberta && !caminho.startsWith("/id/") ? { "x-loja": lojaAberta } : {}) },
         body: corpo !== undefined ? JSON.stringify(corpo) : undefined
       });
     } catch {
@@ -114,6 +120,10 @@ export function criarApi(base: string = URL_API, f: typeof fetch = (...a) => fet
     encerrarSessao: (t: string, sessao: string) => chamar<{ ok: boolean }>("POST", `/id/sessoes/${sessao}/encerrar`, {}, t),
     licenca: (t: string, gerar = false, escolha?: { pacote: string; forma: "recorrente" | "avulso" }) =>
       chamar<Licenca>("GET", `/id/licenca${gerar ? `?gerar=1${escolha ? `&pacote=${encodeURIComponent(escolha.pacote)}&forma=${escolha.forma}` : ""}` : ""}`, undefined, t),
+    lojas: (t: string) => chamar<{ lojas: LojaDaConta[]; max: number }>("GET", "/loja/lojas", undefined, t),
+    criarLoja: (t: string, d: { nome: string }) => chamar<{ id: string; nome: string; slug: string; url: string }>("POST", "/loja/lojas", d, t),
+    renomearLoja: (t: string, nome: string) => chamar<{ ok: boolean }>("PUT", "/loja/lojas/atual", { nome }, t),
+    identidadeDoSite: (t: string, site: string) => chamar<IdentidadeDoSite>("GET", `/loja/identidade?site=${encodeURIComponent(site)}`, undefined, t),
     vitrine: (t: string) => chamar<VitrineInfo>("GET", "/loja/vitrine", undefined, t),
     salvarVitrine: (t: string, d: { titulo?: string; descricao?: string; cor?: string; whatsapp?: string }) => chamar<{ ok: boolean; url: string }>("PUT", "/loja/vitrine", d, t),
     itensDaVitrine: (t: string) => chamar<{ url: string; produtos: ItemVitrine[] }>("GET", "/loja/vitrine/itens", undefined, t),
