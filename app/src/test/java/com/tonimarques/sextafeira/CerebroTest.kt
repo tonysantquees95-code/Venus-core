@@ -34,6 +34,13 @@ class CerebroTest {
         return (d as Decisao.Responder).texto
     }
 
+    @Test fun playlistNaoViraPlay() {
+        assertEquals(setOf("PLAYLIST", "loja"), Cerebro.conceitos("Uma play list para a loja ?"))
+        val d = novo().responder("Uma play list para a loja ?")
+        assertTrue("\"play list\" no meio de uma frase não é o comando play, veio $d", !(d is Decisao.Executar && d.nome == "controlar_midia"))
+        executa(novo(), "play", "controlar_midia", "acao" to "tocar")
+    }
+
     @Test fun conceitos() {
         assertEquals(setOf("ABRIR", "CONFIG"), Cerebro.conceitos("Abre as Configurações!"))
         assertEquals(setOf("LIGAR", "LANTERNA"), Cerebro.conceitos("liga a luz por favor"))

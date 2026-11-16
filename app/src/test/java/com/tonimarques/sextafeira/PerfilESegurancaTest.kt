@@ -22,6 +22,7 @@ class PerfilESegurancaTest {
         assertTrue(Marca.personalidade.contains("2 a 3 frases"))
         assertTrue(Marca.personalidade.contains("UMA pergunta"))
         assertTrue(Marca.personalidade.contains("Não invente"))
+        assertTrue(Marca.personalidade.contains("fique no assunto dele"))
     }
 
     @Test fun impressaoDigitalDoApk() {

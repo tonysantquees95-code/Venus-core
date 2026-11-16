@@ -45,6 +45,7 @@ export const NOVIDADES: Novidade[] = [
   { id: 6, data: "2026-11-15", tipo: "novo", titulo: "Escolha a voz da Vênus", texto: "Em Ajustes › Comportamento, agora dá para escolher a voz, a velocidade e o tom, e usar a voz neural da Microsoft (Francisca, Thalita e outras), igual ao celular. O que você já ajustou no celular aparece aqui sozinho pela sua conta." },
   { id: 7, data: "2026-11-15", tipo: "melhoria", titulo: "Atualização com barra e instalação por escolha", texto: "No Windows, ao achar uma versão nova a Vênus baixa mostrando a barra de andamento e, quando termina, você escolhe a hora de tocar em Instalar agora. É o mesmo jeito do celular." },
   { id: 8, data: "2026-11-16", tipo: "melhoria", titulo: "Papo mais natural", texto: "No computador, a Vênus agora tem o mesmo jeito de conversar do celular: responde curto, no seu tom, e termina com uma pergunta só sobre o que você contou. Ela também não inventa detalhes do que você viveu: reage ao que você disse e pergunta." },
+  { id: 9, data: "2026-11-16", tipo: "melhoria", titulo: "Papo no seu assunto", texto: "No papo, a Vênus agora fica no assunto que você puxou, sem trazer a loja do nada, e não oferece fazer o que ela não sabe fazer." },
 ];
 
 export const ROTULO: Record<TipoNovidade, string> = { novo: "Novo", melhoria: "Melhorou", correcao: "Corrigido" };

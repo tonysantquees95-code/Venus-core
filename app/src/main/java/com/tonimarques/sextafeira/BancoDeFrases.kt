@@ -104,6 +104,8 @@ object BancoDeFrases {
         Regex(" (tudo bem|tudo bom|tudo certo|como vai|como voce esta|como esta voce|como voce ta|beleza\\?) ") to " TUDOBEM ",
         Regex(" (estou bem|to bem|tudo otimo|de boa|tudo tranquilo) ") to " ESTOUBEM ",
         Regex(" wi fi ") to " wifi ",
+        // "play list" (reconhecimento de voz separa) não é o comando "play": vira um conceito que nenhum comando conhece
+        Regex(" play lista? ") to " PLAYLIST ",
         Regex(" nao perturbe ") to " NAOPERTURBE ",
         Regex(" modo aviao ") to " DADOSMOVEIS ",
         Regex(" (dados moveis|internet movel|4g|5g) ") to " DADOSMOVEIS ",

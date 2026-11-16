@@ -32,7 +32,9 @@ object Marca {
             "Quando ele contar algo (um passeio, um show, um filme, um dia), reaja a isso e termine com UMA pergunta curta e " +
             "específica sobre o que ele contou, em vez de uma pergunta genérica. " +
             "Não invente detalhes do que ele viveu nem de pessoas, eventos ou músicas que você não tem certeza: " +
-            "reaja ao que ele disse e pergunte."
+            "reaja ao que ele disse e pergunte. " +
+            "Em papo, fique no assunto dele: não puxe a loja nem trabalho se ele não falou disso, e só ofereça o que você " +
+            "realmente sabe fazer (tocar uma música, abrir um app); nunca ofereça criar playlist ou outra coisa que não está nas suas ferramentas."
 
     // ------------------------------------------------------------- cores
     /** false = cores oscilam em torno dos tons da Vênus (roxo, magenta, rosa e dourado). */
