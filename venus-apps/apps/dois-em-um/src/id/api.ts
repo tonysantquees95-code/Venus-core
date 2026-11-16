@@ -63,7 +63,10 @@ export interface Licenca {
   diasDeTesteRestantes?: number;
   diasPagosRestantes?: number;
   emTeste?: boolean;
-  cobranca?: { url: string; valorCentavos: number };
+  cobranca?: { url: string; valorCentavos: number; pacote?: string; forma?: "recorrente" | "avulso" };
+  pacote?: string;
+  /** Os planos à venda (preço em centavos), como o servidor entrega. */
+  pacotes?: { chave: string; nome: string; precoCentavos: number }[];
   selo?: string;
   fimDoAcesso?: number;
 }
@@ -103,7 +106,8 @@ export function criarApi(base: string = URL_API, f: typeof fetch = (...a) => fet
     dispositivos: (t: string) => chamar<ListaDeAparelhos>("GET", "/id/dispositivos", undefined, t),
     removerDispositivo: (t: string, id: string) => chamar<{ ok: boolean }>("DELETE", `/id/dispositivos/${id}`, undefined, t),
     encerrarSessao: (t: string, sessao: string) => chamar<{ ok: boolean }>("POST", `/id/sessoes/${sessao}/encerrar`, {}, t),
-    licenca: (t: string, gerar = false) => chamar<Licenca>("GET", `/id/licenca${gerar ? "?gerar=1" : ""}`, undefined, t),
+    licenca: (t: string, gerar = false, escolha?: { pacote: string; forma: "recorrente" | "avulso" }) =>
+      chamar<Licenca>("GET", `/id/licenca${gerar ? `?gerar=1${escolha ? `&pacote=${encodeURIComponent(escolha.pacote)}&forma=${escolha.forma}` : ""}` : ""}`, undefined, t),
     lerSync: (t: string, desde: number) => chamar<{ agora: number; docs: DocSync[] }>("GET", `/id/sync?desde=${desde}`, undefined, t),
     gravarSync: (t: string, chave: string, valor: unknown, versao: number) =>
       chamar<{ versao: number; atualizado: number }>("PUT", `/id/sync/${chave}`, { valor, versao }, t)

@@ -148,31 +148,65 @@ function ManutencaoDoWindows({ setMsg }: { setMsg: (m: string) => void }) {
   );
 }
 
+const reais = (centavos: number) => `R$ ${(centavos / 100).toFixed(2).replace(".", ",")}`;
+
 export function ContaLogada() {
   const { sessao, sair, api } = useId();
   const [lic, setLic] = useState<Licenca | null>(null);
   const [msg, setMsg] = useState("");
-  useEffect(() => { if (sessao) api.licenca(sessao.token).then(setLic).catch(() => undefined); }, [api, sessao?.token]);
+  const [pacote, setPacote] = useState("venus");
+  const [forma, setForma] = useState<"recorrente" | "avulso">("recorrente");
+  const [verPlanos, setVerPlanos] = useState(false);
+  useEffect(() => { if (sessao) api.licenca(sessao.token).then((l) => { setLic(l); if (l.pacote) setPacote(l.pacote); }).catch(() => undefined); }, [api, sessao?.token]);
   if (!sessao) return null;
-  async function renovar() {
+  const planos = lic?.pacotes ?? [];
+  const escolhido = planos.find((p) => p.chave === pacote);
+  async function pagar() {
     try {
-      const l = await api.licenca(sessao!.token, true);
+      const l = await api.licenca(sessao!.token, true, { pacote, forma });
       setLic(l);
       if (l.cobranca?.url) window.open(l.cobranca.url, "_blank", "noopener");
     } catch (e) { setMsg(e instanceof Error ? e.message : "Não consegui gerar o link."); }
   }
+  const precisa = lic?.renovar || !lic?.acesso;
   return (
     <div className="space-y-3 text-sm">
       <p>Conectada como <b>{sessao.usuario.email}</b></p>
       {lic && (
         <p className="rounded-2xl bg-black/25 p-3">
           {lic.acesso
-            ? lic.emTeste ? `Teste grátis: ${lic.diasDeTesteRestantes} dia(s) restantes.` : `Plano Fundadores ativo: ${lic.diasPagosRestantes} dia(s) restantes.`
-            : "Acesso vencido. Renove o Plano Fundadores para continuar."}
+            ? lic.emTeste ? `Teste grátis: ${lic.diasDeTesteRestantes} dia(s) restantes.` : `Plano ativo: ${lic.diasPagosRestantes} dia(s) restantes.`
+            : "Acesso vencido. Renove o plano para continuar."}
         </p>
       )}
+      {verPlanos && (
+        <div className="space-y-3 rounded-2xl border border-white/10 p-3">
+          <p className="font-semibold">1. Escolha o plano</p>
+          <div className="grid gap-2" role="radiogroup" aria-label="Plano">
+            {planos.map((p) => (
+              <button key={p.chave} type="button" role="radio" aria-checked={pacote === p.chave} onClick={() => setPacote(p.chave)}
+                className={`flex items-center justify-between rounded-2xl border px-4 py-3 text-left transition ${pacote === p.chave ? "border-venus bg-venus/15" : "border-white/15 bg-white/5"}`}>
+                <span className="font-semibold">{p.nome}</span><span className="text-suave">{reais(p.precoCentavos)}/mês</span>
+              </button>
+            ))}
+          </div>
+          <p className="font-semibold">2. Escolha como pagar</p>
+          <div className="grid gap-2" role="radiogroup" aria-label="Forma de pagamento">
+            {([
+              ["recorrente", "Cartão de crédito, todo mês", "Renova sozinho a cada 30 dias. Você cancela quando quiser."],
+              ["avulso", "Pix ou cartão de débito, 30 dias", "Paga só este mês, sem renovar sozinho. Quando vencer, é só pagar mais 30 dias. Se não pagar, o acesso fica travado até você pagar."]
+            ] as const).map(([id, titulo, sub]) => (
+              <button key={id} type="button" role="radio" aria-checked={forma === id} onClick={() => setForma(id)}
+                className={`rounded-2xl border px-4 py-3 text-left transition ${forma === id ? "border-venus bg-venus/15" : "border-white/15 bg-white/5"}`}>
+                <b className="block">{titulo}</b><span className="mt-0.5 block text-xs text-suave">{sub}</span>
+              </button>
+            ))}
+          </div>
+          <button className={`${botaoPrimario} w-full`} onClick={pagar}>{forma === "avulso" ? "Pagar com Pix ou débito" : "Assinar no cartão"}{escolhido ? ` · ${reais(escolhido.precoCentavos)}` : ""}</button>
+        </div>
+      )}
       <div className="flex flex-wrap gap-2">
-        <button className={botaoPrimario} onClick={renovar}>{lic?.renovar || !lic?.acesso ? "Renovar licença (R$ 49,90)" : "Gerar link de pagamento"}</button>
+        <button className={precisa && !verPlanos ? botaoPrimario : botaoSuave} onClick={() => { setVerPlanos((v) => !v); if (!verPlanos) setMsg(""); }}>{verPlanos ? "Fechar os planos" : precisa ? "Renovar ou escolher o plano" : "Ver planos e pagar"}</button>
         <button className={botaoSuave} onClick={() => void sair()}>Sair deste aparelho</button>
       </div>
       <ManutencaoDoWindows setMsg={setMsg} />

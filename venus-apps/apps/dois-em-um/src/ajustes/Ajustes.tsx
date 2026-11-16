@@ -199,7 +199,7 @@ export function Ajustes({ aoAbrirTema, alvo }: { aoAbrirTema: () => void; alvo?:
             </Cartao>
           )}
           {mostra("conta", "seguranca") && <Cartao id="conta" titulo="Conta Vetorial ID" descricao="Um login só para Vênus, Vindex e Vortex em todos os aparelhos.">{sessao ? <ContaLogada /> : <Entrar />}</Cartao>}
-          {mostra("licenca", "seguranca") && <Cartao id="licenca" titulo="Plano Fundadores" descricao="R$ 49,90 por mês, com 7 dias de teste grátis. Veja a validade e renove na seção Conta acima." />}
+          {mostra("licenca", "seguranca") && <Cartao id="licenca" titulo="Planos e pagamento" descricao="A partir de R$ 49,90 por mês, com 7 dias de teste grátis. Escolha o plano e pague no cartão (todo mês) ou no Pix/débito (30 dias) na seção Conta acima." />}
 
           <Titulo cat="dispositivos" />
           {mostra("dispositivos", "dispositivos") && <Cartao id="dispositivos" titulo="Meus dispositivos" descricao="Onde a sua conta está conectada agora."><MeusDispositivos /></Cartao>}

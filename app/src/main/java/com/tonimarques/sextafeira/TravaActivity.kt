@@ -110,6 +110,19 @@ class TravaActivity : Activity() {
         }
     }
 
+    private fun escolherFormaDePagar(chave: String, nome: String) = escolher("Como pagar o plano $nome?", listOf(
+        "Cartão de crédito, todo mês (renova sozinho)" to { gerarLinkDePagamento(chave, "recorrente") },
+        "Pix ou débito, 30 dias (paga só este mês; vencendo, paga mais 30 dias)" to { gerarLinkDePagamento(chave, "avulso") },
+    ))
+
+    private fun gerarLinkDePagamento(chave: String, forma: String) {
+        emFundo({ VetorialId.licenca(this, true, chave, forma) }) { r ->
+            val url = r?.json?.optJSONObject("cobranca")?.optString("url").orEmpty()
+            if (r != null && r.ok && url.startsWith("https://")) try { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) } catch (e: Exception) { aviso(url) }
+            else aviso(r?.erro() ?: "Sem conexão com o servidor.")
+        }
+    }
+
     private fun escolher(titulo: String, itens: List<Pair<String, () -> Unit>>) {
         val nomes = (itens.map { it.first } + "Cancelar").toTypedArray()
         CaixaBuilder(this).setTitle(titulo).setItems(nomes) { _, i -> if (i < itens.size) itens[i].second() }.show()
@@ -152,10 +165,14 @@ class TravaActivity : Activity() {
         corpo.addView(titulo("O seu teste acabou"))
         corpo.addView(texto("Para continuar com os serviços, adicione uma forma de pagamento e escolha um plano. Os seus dados continuam guardados."))
         botao("Escolher plano e pagar", true) {
-            emFundo({ VetorialId.licenca(this, true) }) { r ->
-                val url = r?.json?.optJSONObject("cobranca")?.optString("url").orEmpty()
-                if (r != null && r.ok && url.startsWith("https://")) try { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) } catch (e: Exception) { aviso(url) }
-                else aviso(r?.erro() ?: "Sem conexão com o servidor.")
+            // os planos vêm do servidor; depois a pessoa escolhe cartão de crédito (todo mês) ou Pix/débito (30 dias)
+            emFundo({ VetorialId.licenca(this, false) }) { r ->
+                val planos = r?.json?.optJSONArray("pacotes")
+                if (planos == null || planos.length() == 0) escolherFormaDePagar("venus", "Vênus")
+                else escolher("Escolha o plano", (0 until planos.length()).map { i ->
+                    val p = planos.getJSONObject(i)
+                    "${p.optString("nome")} · R$ " + String.format(java.util.Locale("pt", "BR"), "%.2f", p.optInt("precoCentavos") / 100.0) + "/mês" to { escolherFormaDePagar(p.optString("chave"), p.optString("nome")) }
+                })
             }
         }
         botao("Já paguei: verificar de novo", false) { validar(manual = true) }
