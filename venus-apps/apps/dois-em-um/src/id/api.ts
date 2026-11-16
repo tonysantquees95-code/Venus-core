@@ -66,7 +66,9 @@ export interface Licenca {
   cobranca?: { url: string; valorCentavos: number; pacote?: string; forma?: "recorrente" | "avulso" };
   pacote?: string;
   /** Os planos à venda (preço em centavos), como o servidor entrega. */
-  pacotes?: { chave: string; nome: string; precoCentavos: number }[];
+  pacotes?: { chave: string; nome: string; precoCentavos: number; precoCheioCentavos?: number; promocao?: boolean }[];
+  /** Promoção de lançamento aberta (fim em ms): a suíte completa com preço mantido por alguns meses. */
+  promocao?: { fim: number; meses: number; pacote: string; precoCentavos: number } | null;
   selo?: string;
   fimDoAcesso?: number;
 }

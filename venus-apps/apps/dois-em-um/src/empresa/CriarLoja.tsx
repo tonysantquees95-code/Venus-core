@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { botaoPrimario, botaoSuave, campo } from "../ajustes/Controles";
 import { useEmpresa } from "./EmpresaProvider";
+import { gerarSvg, MODELOS, rasterizar, urlDoSvg } from "./logos";
 import { iniciaisDaLoja, NICHOS, normalizarSite, paletasDoNicho, textoSobre, type Empresa } from "./logica";
 
 export const CHAVE_LOJA_GUIADA = "venus:loja-guiada";
@@ -52,6 +53,37 @@ export function EditorDeLogo({ empresa, aoMudar }: { empresa: Empresa; aoMudar: 
         {empresa.logo && <button type="button" className={botaoSuave} onClick={() => aoMudar({ logo: "" })}>Usar as iniciais</button>}
       </div>
       {erro && <p role="alert" className="text-sm text-rose-400">{erro}</p>}
+      <GaleriaDeLogos empresa={empresa} aoMudar={aoMudar} aoErro={setErro} />
+    </div>
+  );
+}
+
+/** 24 logos prontos: escreva o nome, troque as cores e toque no que gostar. */
+function GaleriaDeLogos({ empresa, aoMudar, aoErro }: { empresa: Empresa; aoMudar: (p: Partial<Empresa>) => void; aoErro: (m: string) => void }) {
+  const [aberta, setAberta] = useState(false);
+  const [nome, setNome] = useState(empresa.loja || "");
+  const [cor, setCor] = useState(empresa.cor || "#7c3aed");
+  const [apoio, setApoio] = useState(empresa.corApoio || "#ffffff");
+  if (!aberta) return <button type="button" className={botaoSuave} onClick={() => setAberta(true)}>Escolher um logo pronto (24 modelos)</button>;
+  return (
+    <div className="w-full rounded-3xl border border-white/10 bg-white/[0.04] p-3">
+      <label className="flex flex-col gap-1 text-sm"><span className="text-suave">Nome no logo</span>
+        <input className={campo} value={nome} maxLength={28} placeholder="Nome da sua loja" onChange={(e) => setNome(e.target.value)} /></label>
+      <div className="mt-3 grid grid-cols-2 gap-3">
+        <label className="flex flex-col gap-1 text-sm"><span className="text-suave">Cor principal</span>
+          <input type="color" className="h-11 w-full rounded-xl border border-white/15 bg-white/5" value={cor} onChange={(e) => setCor(e.target.value)} /></label>
+        <label className="flex flex-col gap-1 text-sm"><span className="text-suave">Cor de apoio</span>
+          <input type="color" className="h-11 w-full rounded-xl border border-white/15 bg-white/5" value={apoio} onChange={(e) => setApoio(e.target.value)} /></label>
+      </div>
+      <div className="mt-3 grid grid-cols-3 gap-2" role="list">
+        {MODELOS.map((m) => (
+          <button key={m.id} type="button" role="listitem" aria-label={`Usar o logo ${m.fonte.nome} ${m.formato}`} className="overflow-hidden rounded-2xl border border-white/15 bg-white/5"
+            onClick={async () => { aoErro(""); try { aoMudar({ logo: await rasterizar(gerarSvg(m, nome, cor, apoio)), cor, corApoio: apoio, ...(nome.trim() && !empresa.loja ? { loja: nome.trim() } : {}) }); } catch (x) { aoErro(x instanceof Error ? x.message : "Não consegui usar esse logo."); } }}>
+            <img alt="" className="block w-full" src={urlDoSvg(gerarSvg(m, nome, cor, apoio))} />
+          </button>
+        ))}
+      </div>
+      <p className="mt-2 text-xs text-suave">Prefere o seu próprio logo? Use “Escolher o logo” acima: a Vênus passa a usar a imagem que você enviar.</p>
     </div>
   );
 }
