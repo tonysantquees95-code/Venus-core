@@ -124,6 +124,8 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
     /** O último pedido e a ação feita, para anotar quando você diz "não foi isso". */
     internal var ultimoPedido: String? = null
     internal var ultimaAcaoFeita: String? = null
+    /** O que a Vênus acabou de dizer: o roteador usa para saber se a sua frase é resposta a ela. */
+    internal var ultimaDaVenus: String = ""
     internal val apagarTela = Runnable { window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) }
 
     // ------------------------------------------------------------ ciclo de vida
@@ -845,6 +847,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
 
     internal open fun adicionarMensagem(texto: String, doUsuario: Boolean, salvar: Boolean = true): TextView {
         // Contexto da conversa: valores e nomes citados ficam disponíveis para as próximas contas.
+        if (!doUsuario && salvar) ultimaDaVenus = texto
         if (salvar) Calculadora.lembrar(texto)
         if (salvar) {
             try {
@@ -1099,7 +1102,12 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
                 return@comTempoLimite pergunta
             }
             // 2) o Gemini só interpreta qual ação é
-            val rota = Roteador.rotear(k, m, pedido, contexto)
+            // o roteador também vê o que ela acabou de dizer: "Adoro a Human Nature" depois de "qual música você curtiu?" é resposta, não pedido
+            val comFala = if (ultimaDaVenus.isBlank()) contexto else
+                (if (contexto.isBlank()) "" else "$contexto; ") + "última fala da Vênus: \"${ultimaDaVenus.take(300)}\""
+            val rotaBruta = Roteador.rotear(k, m, pedido, comFala)
+            // trava: comentário de gosto ("adoro", "curto", "amo"…) nunca vira consulta de produto da loja
+            val rota = rotaBruta?.takeUnless { Roteador.ehComentarioDeGosto(pedido) && it.acao in Roteador.ACOES_DE_PRODUTO }
             Tempos.marcar("interpretar")
             // frases que dependem do assunto anterior ("e o dele?") não viram regra fixa
             val dependeDoContexto = contexto.isNotBlank() &&
@@ -1262,8 +1270,11 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
     // ----------------------------------------------------------- memória
     internal fun tratarMemoria(pedido: ComandosMemoria.Pedido) {
         when (pedido) {
-            is ComandosMemoria.Pedido.Lembrar ->
-                responder(if (memoria.lembrar(pedido.texto, pedido.categoria)) "Anotado! Vou lembrar disso." else "Isso eu já sabia!")
+            is ComandosMemoria.Pedido.Lembrar -> {
+                val frase = if (memoria.lembrar(pedido.texto, pedido.categoria)) "Anotado! Vou lembrar disso." else "Isso eu já sabia!"
+                // gosto contado em papo ("adoro a música X"): ela reage de verdade, e a frase pronta só entra se a IA falhar
+                if (pedido.categoria == "gosto" && obterGemini() != null) consultarIA(pedido.texto, reserva = frase) else responder(frase)
+            }
             is ComandosMemoria.Pedido.Definir -> {
                 memoria.definir(pedido.categoria, pedido.valor)
                 val resposta = when {
@@ -1665,6 +1676,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         fun entregar(texto: String) {
             val b = vivo
             if (b == null) { responder(texto); return }
+            ultimaDaVenus = texto
             b.text = texto
             try {
                 Calculadora.lembrar(texto)

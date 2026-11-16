@@ -52,4 +52,14 @@ class RelatoNaoEClimaTest {
         assertTrue(Corretor.corrigir("qual a previzao do tempo").contains("previsao"))
         assertTrue(Corretor.corrigir("vai xover amanha").contains("chover"))
     }
+
+    @Test fun gostoNaoViraBuscaDeProduto() {
+        for (f in listOf("Adora a human Nature", "Adoro a música Human Nature do MJ", "curto muito esse cantor", "Eu amo o Michael Jackson")) {
+            assertTrue("\"$f\" é comentário de gosto", Roteador.ehComentarioDeGosto(f))
+        }
+        for (f in listOf("quanto custa o gel", "tem estoque do gel lubrificante", "quanto vendi hoje", "adiciona 10 unidades do gel")) {
+            assertFalse("\"$f\" não é comentário de gosto", Roteador.ehComentarioDeGosto(f))
+        }
+        assertTrue("loja_estoque" in Roteador.ACOES_DE_PRODUTO)
+    }
 }
