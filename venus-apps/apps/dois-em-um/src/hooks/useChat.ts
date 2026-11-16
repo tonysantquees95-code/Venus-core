@@ -1,5 +1,7 @@
 import { useCallback } from "react";
 import { perguntarIAcomDetalhe } from "../ia/cliente";
+import { responderAoVivo } from "../ia/aoVivo";
+import { URL_API } from "@venus/nucleo";
 import { sistemaDaConversa } from "../ia/personalidade";
 import { useMarketing } from "../empresa/MarketingProvider";
 import { contextoDeMarketing } from "../empresa/marketing";
@@ -77,6 +79,15 @@ export function useChat() {
             if (deveFalar(porVoz, prefs.falarRespostas)) falar(direta);
             return;
           }
+        }
+        // dólar, previsão do tempo e notícias/preços de agora: dados reais (como no celular), não "não consigo ver"
+        const hist = historico.map((m) => ({ papel: m.autor === "eu" ? ("user" as const) : ("assistant" as const), texto: m.texto }));
+        const aoVivo = await responderAoVivo(limpo, { cidadePadrao: empresa.cidade, urlApi: URL_API, historico: hist }).catch(() => undefined);
+        if (aoVivo) {
+          const fonte = aoVivo.fontes?.[0] ? `\n\nFonte: ${aoVivo.fontes[0].titulo}` : "";
+          anexar(id, resposta(aoVivo.texto + fonte));
+          if (deveFalar(porVoz, prefs.falarRespostas)) falar(aoVivo.texto);
+          return;
         }
         const { texto: texto2, detalhe } = await perguntarIAcomDetalhe(
           sistemaDaConversa(contextoDaEmpresa(empresa), contextoDeCatalogo(produtos, limpo), contextoDeMarketing(mk.todasAsIdeias, mk.postsDoCelular, mk.storiesDoCelular, Date.now(), mk.resumoInstagram)),
