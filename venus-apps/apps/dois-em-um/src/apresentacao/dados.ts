@@ -55,6 +55,7 @@ export const NOVIDADES: Novidade[] = [
   { id: 15, data: "2026-11-16", tipo: "melhoria", titulo: "Panfleto e cartão de visitas digitais", texto: "O panfleto e o cartão de visitas agora são digitais, feitos para a tela: você vê como ficam e manda por WhatsApp, salva em PDF ou baixa a imagem. O QR Code é opcional, e o botão da loja, o telefone e os produtos viram links clicáveis." },
   { id: 16, data: "2026-11-16", tipo: "novo", titulo: "Vitrine online pelo computador e pelo navegador", texto: "Em Empresa › Vitrine e catálogo você abre, edita e publica a vitrine da loja também pelo Windows, Mac, iPhone e navegador: adicione produtos com foto e preço, copie o link e mande por WhatsApp. Cada produto ganha a sua página." },
   { id: 17, data: "2026-11-16", tipo: "novo", titulo: "Painel ao vivo no computador", texto: "Em Empresa › Painel ao vivo você acompanha o faturamento, as taxas e a auditoria da loja em tempo real, igual ao painel do celular, no Windows, no Mac, no iPhone e no navegador." },
+  { id: 18, data: "2026-11-16", tipo: "novo", titulo: "Até 3 lojas na mesma conta", texto: "Em Empresa › Minhas lojas você cria até 3 lojas (outro site, outro nicho) na mesma assinatura. Cada loja tem a sua identidade, produtos, vitrine, QR Code, cartão, panfleto e painel ao vivo, tudo separado, e você troca de uma para outra no alto da tela. Ao informar o site, a Vênus pega a cor e o logo dele." },
 ];
 
 export const ROTULO: Record<TipoNovidade, string> = { novo: "Novo", melhoria: "Melhorou", correcao: "Corrigido" };

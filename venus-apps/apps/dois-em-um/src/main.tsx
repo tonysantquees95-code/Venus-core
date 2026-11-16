@@ -6,6 +6,7 @@ import { ConversasProvider } from "./sessao/ConversasProvider";
 import { ThemingProvider } from "./theming";
 import { IdProvider } from "./id/IdProvider";
 import { EmpresaProvider } from "./empresa/EmpresaProvider";
+import { LojasProvider } from "./empresa/LojasProvider";
 import { MarketingProvider } from "./empresa/MarketingProvider";
 import { CatalogoProvider } from "./empresa/CatalogoProvider";
 import { FormulariosDaLojaProvider } from "./empresa/FormulariosDaLoja";
@@ -23,6 +24,7 @@ createRoot(document.getElementById("app")!).render(
     <ThemingProvider>
       <PreferenciasProvider>
         <IdProvider>
+          <LojasProvider>
           <EmpresaProvider>
           <MarketingProvider>
           <CatalogoProvider>
@@ -34,6 +36,7 @@ createRoot(document.getElementById("app")!).render(
           </CatalogoProvider>
           </MarketingProvider>
           </EmpresaProvider>
+          </LojasProvider>
         </IdProvider>
       </PreferenciasProvider>
     </ThemingProvider>

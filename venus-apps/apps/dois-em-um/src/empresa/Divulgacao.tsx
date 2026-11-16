@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { usePersistido } from "../hooks/usePersistido";
 import { botaoPrimario, botaoSuave } from "../ajustes/Controles";
 import { useEmpresa } from "./EmpresaProvider";
+import { useLojas } from "./LojasProvider";
 import { enderecoParaQr, svgDoQr } from "./qr";
 import { montarCartao, montarPanfleto, type DadosDaPeca, type Peca } from "./peca";
 import { pdfComImagem } from "./pdf";
@@ -21,7 +22,7 @@ export const campo = "w-full rounded-xl border border-white/15 bg-white/5 px-3 p
 
 interface Dados { telefone: string; link: string; chamada: string; oferta: string; cor: string; qr: boolean; skus: string[] }
 const PADRAO: Dados = { telefone: "", link: "", chamada: "", oferta: "", cor: "#7c3aed", qr: false, skus: [] };
-function useDados() { const [d, set] = usePersistido<Dados>("venus:divulgacao", PADRAO); return [{ ...PADRAO, ...d }, set] as const; }
+function useDados() { const { sufixo } = useLojas(); const [d, set] = usePersistido<Dados>(`venus:divulgacao${sufixo}`, PADRAO); return [{ ...PADRAO, ...d }, set] as const; }
 
 /** Imprime só a folha (o resto da tela some no @media print); no diálogo do Windows dá para "Salvar como PDF". */
 function Imprimivel({ children, rotulo = "Imprimir ou salvar em PDF" }: { children: ReactNode; rotulo?: string }) {
