@@ -1,5 +1,6 @@
 import { useCallback } from "react";
 import { perguntarIAcomDetalhe } from "../ia/cliente";
+import { sistemaDaConversa } from "../ia/personalidade";
 import { useMarketing } from "../empresa/MarketingProvider";
 import { contextoDeMarketing } from "../empresa/marketing";
 import type { Mensagem } from "../tipos";
@@ -78,7 +79,7 @@ export function useChat() {
           }
         }
         const { texto: texto2, detalhe } = await perguntarIAcomDetalhe(
-          [contextoDaEmpresa(empresa), contextoDeCatalogo(produtos, limpo), contextoDeMarketing(mk.todasAsIdeias, mk.postsDoCelular, mk.storiesDoCelular, Date.now(), mk.resumoInstagram)].filter(Boolean).join("\n\n") || undefined,
+          sistemaDaConversa(contextoDaEmpresa(empresa), contextoDeCatalogo(produtos, limpo), contextoDeMarketing(mk.todasAsIdeias, mk.postsDoCelular, mk.storiesDoCelular, Date.now(), mk.resumoInstagram)),
           historico.map((m) => ({ papel: m.autor === "eu" ? ("user" as const) : ("assistant" as const), texto: m.texto }))
         );
         anexar(id, resposta(texto2, detalhe));

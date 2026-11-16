@@ -18,6 +18,12 @@ class PerfilESegurancaTest {
         assertTrue(Marca.personalidade.contains(Perfil.loja))
     }
 
+    @Test fun papoCurtoComUmaPerguntaEsemInventar() {
+        assertTrue(Marca.personalidade.contains("2 a 3 frases"))
+        assertTrue(Marca.personalidade.contains("UMA pergunta"))
+        assertTrue(Marca.personalidade.contains("Não invente"))
+    }
+
     @Test fun impressaoDigitalDoApk() {
         val asset = JSONObject().put("digest", "sha256:ABC123")
         assertEquals("abc123", Atualizador.sha256De(asset))
