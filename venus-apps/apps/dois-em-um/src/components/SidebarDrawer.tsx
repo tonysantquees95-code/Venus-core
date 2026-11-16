@@ -1,17 +1,21 @@
 import { useEffect, useMemo, useRef, useState, type TouchEvent } from "react";
 import { useConversas } from "../sessao/ConversasProvider";
 import { agrupar } from "../sessao/logica";
-import { IconeChat, IconeFechar, IconeLixeira, IconeMais } from "./Icones";
+import { IconeAjustes, IconeChat, IconeEmpresa, IconeFechar, IconeLixeira, IconeMais, IconeRobo, IconeTema } from "./Icones";
+import type { Tela } from "../tipos";
 
 interface Props {
   aberto: boolean;
   aoFechar: () => void;
   /** Chamado depois de "Nova conversa" ou de escolher uma do histórico (o App volta para o chat). */
   aoNavegar: () => void;
+  /** Abre uma tela do app (Robô, Minha loja, Aparência, Ajustes) e fecha a gaveta. */
+  aoIr: (t: Tela) => void;
+  roboLigado: boolean;
 }
 
 /** Menu lateral em gaveta: botão "Nova conversa" em destaque + histórico salvo. */
-export function SidebarDrawer({ aberto, aoFechar, aoNavegar }: Props) {
+export function SidebarDrawer({ aberto, aoFechar, aoNavegar, aoIr, roboLigado }: Props) {
   const { ativa, historico, novaConversa, abrir, excluir, apagarHistorico } = useConversas();
   const [confirmar, setConfirmar] = useState<string | null>(null); // id, ou "tudo"
   const botaoNova = useRef<HTMLButtonElement>(null);
@@ -89,6 +93,20 @@ export function SidebarDrawer({ aberto, aoFechar, aoNavegar }: Props) {
             Nova conversa
           </button>
         </div>
+
+        <nav aria-label="Atalhos do app" className="px-2 pb-2">
+          {([
+            ["robo", <IconeRobo key="r" className="size-5" />, "Vênus Robô", roboLigado ? "Ligado · respostas automáticas aos clientes" : "Respostas automáticas aos clientes"],
+            ["empresa", <IconeEmpresa key="e" className="size-5" />, "Minha loja", "Perfil, regras, Instagram, divulgação e vitrine"],
+            ["tema", <IconeTema key="t" className="size-5" />, "Aparência", "Cor, orbe e ícones"],
+            ["ajustes", <IconeAjustes key="a" className="size-5" />, "Ajustes", "Conta, plano, voz, segurança e apresentação"]
+          ] as const).map(([id, icone, titulo, sub]) => (
+            <button key={id} type="button" onClick={() => aoIr(id)} className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left hover:bg-white/5">
+              <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-venus/15 text-venus">{icone}</span>
+              <span className="min-w-0"><b className="block text-sm">{titulo}</b><span className="block truncate text-xs text-suave">{sub}</span></span>
+            </button>
+          ))}
+        </nav>
 
         <nav aria-label="Conversas salvas" className="min-h-0 flex-1 overflow-y-auto px-2 pb-2">
           {grupos.length === 0 ? (

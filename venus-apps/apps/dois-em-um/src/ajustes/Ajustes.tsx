@@ -114,6 +114,7 @@ export function Ajustes({ aoAbrirTema, alvo }: { aoAbrirTema: () => void; alvo?:
     <PaginaComLateral
       titulo="Ajustes"
       itens={CATEGORIAS.map((c) => ({ id: c.id, rotulo: c.nome, icone: <IconeNomeado nome={c.icone} className="size-5" /> }))}
+      abrirDireto={!!alvo}
       atual={buscando ? "" : categoria}
       aoEscolher={(id) => { setCategoria(id as Categoria); setTermo(""); }}
       topo={
@@ -177,6 +178,11 @@ export function Ajustes({ aoAbrirTema, alvo }: { aoAbrirTema: () => void; alvo?:
           {mostra("atualizacoes", "comportamento") && noDesktop() && <Cartao id="atualizacoes" titulo="Atualizações"><Atualizacoes /></Cartao>}
 
           <Titulo cat="conexoes" />
+          {mostra("cadastroLoja", "conexoes") && (
+            <Cartao id="cadastroLoja" titulo="Cadastro guiado da loja" descricao="Não tem loja ainda, ou quer refazer? Escolha o nicho, o nome, o logo e as cores. Dá para pular o que quiser.">
+              <button type="button" className={botaoSuave} onClick={() => window.dispatchEvent(new Event("venus:criar-loja"))}>Abrir o passo a passo</button>
+            </Cartao>
+          )}
           {mostra("servidor", "conexoes") && <Cartao id="servidor" titulo="Conexão com o servidor"><Servidor /></Cartao>}
           {mostra("canais", "conexoes") && <Cartao id="canais" titulo="Canais de venda" descricao="Nuvemshop, Mercado Livre e o seu site (até 3) são conectados na Central da loja do app Android, e o estoque sincroniza sozinho." />}
 
