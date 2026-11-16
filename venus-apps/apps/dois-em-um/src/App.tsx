@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState, type TouchEvent } from "react";
-import { Navegacao } from "./components/Navegacao";
 import { SidebarDrawer } from "./components/SidebarDrawer";
 import { useConversas } from "./sessao/ConversasProvider";
 import { ChatPanel } from "./features/chat/ChatPanel";
@@ -25,9 +24,7 @@ import { lojaJaConfigurada } from "./empresa/logica";
 const TITULOS: Record<Tela, string> = { chat: "Chat", robo: "Vênus Robô", empresa: "Minha loja", tema: "Aparência", ajustes: "Ajustes" };
 
 /**
- * Uma interface só:
- *  - celular/tablet: navegação alterna entre Chat e Robô;
- *  - tela larga (xl): os dois aparecem lado a lado, e o ícone do robô só destaca o painel.
+ * Uma interface só, igual ao app Android: o chat é a tela principal e o resto abre pelo menu em gaveta (sem barra fixa).
  */
 export function App() {
   const [tela, setTela] = useState<Tela>("chat");
@@ -98,13 +95,12 @@ export function App() {
   if (estado.tipo === "validar_online") return <TelaValidando />;
 
   return (
-    <div onTouchStart={aoTocar} onTouchEnd={aoSoltar} className="flex h-dvh flex-col pt-[env(safe-area-inset-top)] md:flex-row">
+    <div onTouchStart={aoTocar} onTouchEnd={aoSoltar} className="flex h-dvh flex-col pt-[env(safe-area-inset-top)]">
       <SidebarDrawer aberto={menuAberto} aoFechar={() => setMenuAberto(false)} aoNavegar={() => { setTela("chat"); setMenuAberto(false); }}
         roboLigado={robo.ligado} aoIr={(t) => { setTela(t); setMenuAberto(false); }} />
-      <Navegacao tela={tela} aoMudar={setTela} roboLigado={robo.ligado} />
-      <main className="flex min-h-0 min-w-0 flex-1 flex-col md:flex-row">
+      <main className="flex min-h-0 min-w-0 flex-1 flex-col">
         {tela !== "chat" && (
-          <div className="flex shrink-0 items-center gap-2 border-b border-borda bg-painel px-2 py-2 md:hidden">
+          <div className="flex shrink-0 items-center gap-2 border-b border-borda bg-painel px-2 py-2">
             <button type="button" onClick={() => setTela("chat")} aria-label="Voltar para o chat" className="flex min-h-11 items-center gap-1 rounded-xl px-3 text-sm font-semibold text-venus">‹ Chat</button>
             <span className="font-semibold">{TITULOS[tela]}</span>
           </div>
