@@ -120,16 +120,33 @@ internal fun MainActivity.abrirLicenca() {
                 j.optBoolean("emTeste") -> "Teste grátis: ${j.optInt("diasDeTesteRestantes")} dia(s) restantes."
                 else -> "Plano Fundadores ativo: ${j.optInt("diasPagosRestantes")} dia(s) restantes."
             }
-            CaixaBuilder(this).setTitle("Licença").setMessage("$estado\n\nPlano Fundadores: R$ 49,90 por mês. Ao pagar, a licença é renovada sozinha por mais 30 dias.")
-                .setPositiveButton("Gerar link de pagamento") { _, _ ->
-                    emFundo({ VetorialId.licenca(this, true) }) { r2 ->
-                        r2.onFailure { aviso(it.mensagemAmigavel()) }
-                        r2.onSuccess { x ->
-                            val url = x.json.optJSONObject("cobranca")?.optString("url").orEmpty()
-                            if (x.ok && url.startsWith("https://")) try { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) } catch (e: Exception) { copiar("Pagamento", url) } else aviso(x.erro())
-                        }
-                    }
+            CaixaBuilder(this).setTitle("Licença").setMessage("$estado\n\nPlanos a partir de R$ 49,90 por mês. Pague no cartão de crédito (renova sozinho) ou no Pix/débito (30 dias por vez, sem renovar sozinho).")
+                .setPositiveButton("Escolher plano e pagar") { _, _ ->
+                    val planos = j.optJSONArray("pacotes")
+                    if (planos == null || planos.length() == 0) escolherFormaDePagar("venus", "Vênus")
+                    else escolher("Escolha o plano", (0 until planos.length()).map { i ->
+                        val p = planos.getJSONObject(i)
+                        "${p.optString("nome")} · ${reaisDoPlano(p.optInt("precoCentavos"))}/mês" to { escolherFormaDePagar(p.optString("chave"), p.optString("nome")) }
+                    })
                 }.setNegativeButton("Fechar", null).show()
+        }
+    }
+}
+
+private fun reaisDoPlano(centavos: Int) = "R$ " + String.format(java.util.Locale("pt", "BR"), "%.2f", centavos / 100.0)
+
+/** Cartão de crédito todo mês (assinatura) ou Pix/débito por 30 dias (avulso): quem não tem cartão de crédito também consegue pagar. */
+private fun MainActivity.escolherFormaDePagar(chave: String, nome: String) = escolher("Como pagar o plano $nome?", listOf(
+    "Cartão de crédito, todo mês (renova sozinho)" to { gerarLinkDePagamento(chave, "recorrente") },
+    "Pix ou débito, 30 dias (paga só este mês; vencendo, paga mais 30 dias)" to { gerarLinkDePagamento(chave, "avulso") },
+))
+
+private fun MainActivity.gerarLinkDePagamento(chave: String, forma: String) {
+    emFundo({ VetorialId.licenca(this, true, chave, forma) }) { r2 ->
+        r2.onFailure { aviso(it.mensagemAmigavel()) }
+        r2.onSuccess { x ->
+            val url = x.json.optJSONObject("cobranca")?.optString("url").orEmpty()
+            if (x.ok && url.startsWith("https://")) try { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) } catch (e: Exception) { copiar("Pagamento", url) } else aviso(x.erro())
         }
     }
 }

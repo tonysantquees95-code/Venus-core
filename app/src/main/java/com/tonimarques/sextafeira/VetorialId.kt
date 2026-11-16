@@ -139,7 +139,8 @@ object VetorialId {
     fun encerrarSessao(ctx: Context, sessao: String) = Nuvem.bruto(ctx, "POST", "/id/sessoes/$sessao/encerrar", JSONObject(), token(ctx))
     fun removerDispositivo(ctx: Context, id: String) = Nuvem.bruto(ctx, "DELETE", "/id/dispositivos/$id", null, token(ctx))
     fun reativar(ctx: Context, encerrar: String) = Nuvem.bruto(ctx, "POST", "/id/reativar", JSONObject().put("encerrar", encerrar), token(ctx))
-    fun licenca(ctx: Context, gerar: Boolean) = Nuvem.bruto(ctx, "GET", "/id/licenca" + if (gerar) "?gerar=1" else "", null, token(ctx))
+    fun licenca(ctx: Context, gerar: Boolean, pacote: String = "venus", forma: String = "recorrente") =
+        Nuvem.bruto(ctx, "GET", "/id/licenca" + if (gerar) "?gerar=1&pacote=$pacote&forma=$forma" else "", null, token(ctx))
     fun sair(ctx: Context) {
         try { Nuvem.bruto(ctx, "POST", "/id/sair", JSONObject(), token(ctx)) } catch (e: Exception) { }
         limpar(ctx)
