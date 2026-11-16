@@ -601,7 +601,11 @@ class Cerebro(
             for (e in exemplo) if (e in entrada || entrada.any { parecidas(it, e) }) comum++
             val contem = comum.toDouble() / exemplo.size
             val equilibrio = 2.0 * comum / (entrada.size + exemplo.size)
-            return if (pergunta) equilibrio else 0.6 * contem + 0.4 * equilibrio
+            if (pergunta) return equilibrio
+            val nota = 0.6 * contem + 0.4 * equilibrio
+            // Exemplo de uma palavra só ("play", "oi", "mapa") dentro de uma frase com 3 ou mais conceitos é conversa, não comando:
+            // "uma playlist para a loja" não pode virar "play". Fica só como palpite, e quem decide é a IA.
+            return if (exemplo.size == 1 && entrada.size >= 3) minOf(nota, PROVAVEL + 0.1) else nota
         }
 
         /** Palavras quase iguais (erros de reconhecimento de voz), ex.: "lanterna" e "lanterma". */

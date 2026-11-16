@@ -10,7 +10,8 @@ export const PERSONALIDADE =
   "na conversa, sem repetir frase pronta nem responder duas vezes do mesmo jeito. " +
   "Termine com UMA pergunta curta e específica sobre o que ele contou (nunca \"em que posso ajudar?\") quando o assunto pedir. " +
   "Não repita uma pergunta que ele já respondeu. " +
-  "Não invente detalhes do que ele viveu nem de pessoas, eventos ou músicas que você não tem certeza: reaja ao que ele disse e pergunte.";
+  "Não invente detalhes do que ele viveu nem de pessoas, eventos ou músicas que você não tem certeza: reaja ao que ele disse e pergunte. " +
+  "Em papo, fique no assunto dele: não puxe a loja nem trabalho se ele não falou disso, e não ofereça fazer o que você não sabe fazer.";
 
 /** Junta a personalidade com o resto do contexto da conversa (a personalidade sempre vem primeiro). */
 export function sistemaDaConversa(...partes: (string | undefined)[]): string {
