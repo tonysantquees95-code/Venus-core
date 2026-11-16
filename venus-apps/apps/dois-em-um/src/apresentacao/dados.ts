@@ -16,6 +16,7 @@ export const TOUR: PassoDoTour[] = [
   { icone: "💬", titulo: "Chat", texto: "Peça o que precisar: preços, estoque, ideias de post, contas, lembretes. Dá para falar em voz alta ou digitar.", como: ["Toque no microfone para falar.", "As conversas ficam na gaveta à esquerda."] },
   { icone: "🤖", titulo: "Robô de atendimento", texto: "O robô responde os clientes no WhatsApp Business com as informações da sua loja, e você acompanha tudo.", como: ["Ligue e desligue o robô na aba Robô.", "Você continua responsável pelo que a loja envia."] },
   { icone: "🏪", titulo: "Minha loja", texto: "Produtos, vendas, clientes, canais de venda e marketing num lugar só.", como: ["Conecte a sua loja, o Mercado Pago e a Meta em Ajustes.", "As chaves ficam guardadas no seu aparelho."] },
+  { icone: "🛍️", titulo: "Crie a sua loja", texto: "Ainda não tem loja? A Vênus te guia: nicho, nome, logo e cores. Quem já tem site só informa o endereço.", como: ["Aparece logo depois do login e dá para pular qualquer etapa.", "Refaça quando quiser em Minha loja › Identidade da loja."] },
   { icone: "🎨", titulo: "Seu jeito", texto: "Mude cores, orbe e ícones; tudo acompanha você nos outros aparelhos.", como: ["Em Ajustes › Tema, cores e orbe."] },
   { icone: "🔄", titulo: "Sempre atualizada", texto: "A Vênus se atualiza pelo canal oficial e mostra o que mudou depois de cada atualização.", como: ["Em Ajustes você confere se há versão nova."] },
 ];
@@ -46,6 +47,8 @@ export const NOVIDADES: Novidade[] = [
   { id: 7, data: "2026-11-15", tipo: "melhoria", titulo: "Atualização com barra e instalação por escolha", texto: "No Windows, ao achar uma versão nova a Vênus baixa mostrando a barra de andamento e, quando termina, você escolhe a hora de tocar em Instalar agora. É o mesmo jeito do celular." },
   { id: 8, data: "2026-11-16", tipo: "melhoria", titulo: "Papo mais natural", texto: "No computador, a Vênus agora tem o mesmo jeito de conversar do celular: responde curto, no seu tom, e termina com uma pergunta só sobre o que você contou. Ela também não inventa detalhes do que você viveu: reage ao que você disse e pergunta." },
   { id: 9, data: "2026-11-16", tipo: "melhoria", titulo: "Papo no seu assunto", texto: "No papo, a Vênus agora fica no assunto que você puxou, sem trazer a loja do nada, e não oferece fazer o que ela não sabe fazer." },
+  { id: 10, data: "2026-11-16", tipo: "novo", titulo: "Criar a sua loja", texto: "Depois do login a Vênus pergunta se você já tem loja. Quem vende sem site ou ainda não tem loja escolhe o nicho, o nome, o logo e as cores; quem tem site só informa o endereço. Dá para pular qualquer etapa e refazer depois em Minha loja › Identidade da loja. As cores e o logo já saem no cartão de visitas e no panfleto." },
+  { id: 11, data: "2026-11-16", tipo: "melhoria", titulo: "No celular, igual ao app Android", texto: "No celular e no iPhone o chat ocupa a tela toda e o menu lateral (deslize da borda ou toque no menu) leva ao Robô, à Minha loja, à Aparência e aos Ajustes. As abas de Minha loja e dos Ajustes não ficam mais cortadas." },
 ];
 
 export const ROTULO: Record<TipoNovidade, string> = { novo: "Novo", melhoria: "Melhorou", correcao: "Corrigido" };

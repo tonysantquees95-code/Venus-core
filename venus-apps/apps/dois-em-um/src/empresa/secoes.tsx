@@ -115,6 +115,7 @@ export function PrimeirosPassos({ aoIr }: { aoIr: (id: string) => void }) {
             <li key={p.id} className="flex items-center gap-3 text-sm">
               <span className={`grid size-6 place-items-center rounded-full text-xs ${p.feito ? "bg-emerald-500/20 text-emerald-300" : "bg-white/10 text-suave"}`}>{p.feito ? "✓" : "•"}</span>
               <span className={p.feito ? "text-suave line-through" : ""}>{p.texto}</span>
+              {!p.feito && p.id === "identidade" && <button className="ml-auto text-venus underline" onClick={() => aoIr("identidade")}>Criar</button>}
               {!p.feito && p.id === "dados" && <button className="ml-auto text-venus underline" onClick={() => aoIr("dados")}>Preencher</button>}
               {!p.feito && p.id === "id" && <button className="ml-auto text-venus underline" onClick={() => window.dispatchEvent(new CustomEvent("venus:abrir", { detail: { tela: "ajustes", alvo: "conta" } }))}>Entrar</button>}
             </li>

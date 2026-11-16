@@ -45,7 +45,7 @@ test("respostas do Instagram: 12 modelos (4 perguntas frequentes), texto limpo e
 
 test("primeiros passos acompanham o cadastro", () => {
   assert.equal(primeirosPassos(EMPRESA_VAZIA, false).filter((p) => p.feito).length, 0);
-  const p = primeirosPassos({ ...loja, site: "https://d.com", regrasConfiguradas: true }, true);
+  const p = primeirosPassos({ ...loja, site: "https://d.com", cor: "#7c3aed", regrasConfiguradas: true }, true);
   assert.ok(p.every((x) => x.feito));
 });
 

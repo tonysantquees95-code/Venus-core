@@ -55,3 +55,26 @@ test("contexto da conversa: vazio sem cadastro, com regras ou com aviso de que f
   assert.match(sem, /não invente/);
   assert.ok(c.length <= 3900);
 });
+
+test("identidade da loja: logo, cores e modo de venda são validados", async () => {
+  const { limparEmpresa, iniciaisDaLoja, paletasDoNicho, textoSobre, lojaJaConfigurada, EMPRESA_VAZIA } = await import("../src/empresa/logica.ts");
+  const e = limparEmpresa({ loja: "Desejo de Intimidade", cor: "#7C3AED", corApoio: "azul", modo: "interno", logo: "data:image/webp;base64,AAAA" });
+  assert.equal(e.cor, "#7c3aed");
+  assert.equal(e.corApoio, "");
+  assert.equal(e.modo, "interno");
+  assert.equal(e.logo, "data:image/webp;base64,AAAA");
+  assert.equal(limparEmpresa({ logo: "http://x.com/a.png" }).logo, "");
+  assert.equal(limparEmpresa({ logo: "data:text/html;base64,AAAA" }).logo, "");
+  assert.equal(limparEmpresa({ modo: "qualquer" }).modo, "");
+  assert.equal(iniciaisDaLoja("Desejo de Intimidade"), "DD");
+  assert.equal(iniciaisDaLoja(""), "V");
+  assert.equal(paletasDoNicho("Moda feminina")[0][0], "#d946ef");
+  assert.ok(paletasDoNicho("coisa que ninguém conhece").length >= 3);
+  assert.equal(textoSobre("#ffffff"), "#111111");
+  assert.equal(textoSobre("#111827"), "#ffffff");
+  // só passa pelo passo a passo quem ainda não tem loja, não escolheu o modo e não pulou
+  assert.equal(lojaJaConfigurada(EMPRESA_VAZIA, false), false);
+  assert.equal(lojaJaConfigurada(EMPRESA_VAZIA, true), true);
+  assert.equal(lojaJaConfigurada({ ...EMPRESA_VAZIA, loja: "Minha" }, false), true);
+  assert.equal(lojaJaConfigurada({ ...EMPRESA_VAZIA, modo: "site" }, false), true);
+});

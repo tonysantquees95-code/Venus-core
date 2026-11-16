@@ -12,6 +12,8 @@
 }
 
 html, body, #app { height: 100%; }
+/* o app rola por dentro das telas: sem isto, rolar para cima no topo de uma lista "puxa para atualizar" a página inteira */
+html, body { overscroll-behavior: none; }
 body {
   margin: 0;
   background: var(--color-fundo);

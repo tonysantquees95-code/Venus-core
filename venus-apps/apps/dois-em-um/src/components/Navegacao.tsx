@@ -19,15 +19,15 @@ const ITENS: { id: Tela; rotulo: string; icone: ReactNode }[] = [
 const ROTULOS: Record<Tela, string> = { chat: "Abrir chat", robo: "Abrir painel do Robô", empresa: "Abrir minha empresa", tema: "Abrir aparência", ajustes: "Abrir ajustes" };
 
 /**
- * Navegação única: barra lateral no tablet/desktop (md+) e barra inferior no celular.
+ * Navegação em barra lateral no tablet/computador (md+). No celular ela some: o chat é a tela principal e o resto abre pelo menu da gaveta, igual ao app Android.
  * O botão do robozinho abre o painel do Robô; a bolinha mostra se ele está ligado.
  */
 export function Navegacao({ tela, aoMudar, roboLigado }: Props) {
   return (
     <nav
       aria-label="Navegação principal"
-      className="order-last flex shrink-0 justify-around border-t border-borda bg-painel pb-[env(safe-area-inset-bottom)]
-                 md:order-first md:w-20 md:flex-col md:items-center md:justify-start md:gap-2 md:border-t-0 md:border-r md:py-4"
+      className="order-last hidden shrink-0 justify-around border-t border-borda bg-painel pb-[env(safe-area-inset-bottom)]
+                 md:order-first md:flex md:w-20 md:flex-col md:items-center md:justify-start md:gap-2 md:border-t-0 md:border-r md:py-4"
     >
       <span className="hidden font-semibold tracking-[0.3em] text-venus md:mb-4 md:block md:[writing-mode:vertical-rl]">
         VÊNUS

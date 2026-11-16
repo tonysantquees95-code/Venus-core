@@ -8,15 +8,23 @@ export interface Empresa {
   sobre: string;
   site: string;
   ramo: string;
+  /** Identidade visual criada no passo a passo da loja: logo (imagem pequena em data URL), cor principal e cor de apoio (#RRGGBB). */
+  logo: string;
+  cor: string;
+  corApoio: string;
+  /** Como vende: com site, sem site (catálogo na Vênus) ou ainda não decidiu. */
+  modo: "" | "site" | "interno";
   /** Regras de venda (pagamento, frete, trocas…): cadastradas no celular e guardadas aqui sem perder nada. */
   regras: Record<string, any> | null;
   regrasConfiguradas: boolean;
 }
 
-export const EMPRESA_VAZIA: Empresa = { dono: "", loja: "", cidade: "", uf: "", sobre: "", site: "", ramo: "", regras: null, regrasConfiguradas: false };
+export const EMPRESA_VAZIA: Empresa = { dono: "", loja: "", cidade: "", uf: "", sobre: "", site: "", ramo: "", logo: "", cor: "", corApoio: "", modo: "", regras: null, regrasConfiguradas: false };
 
 const texto = (v: unknown, max: number) => (typeof v === "string" ? v.trim().slice(0, max) : "");
 const objeto = (v: unknown): Record<string, any> | null => (v && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, any>) : null);
+
+const corValida = (v: unknown) => (typeof v === "string" && /^#[0-9a-fA-F]{6}$/.test(v) ? v.toLowerCase() : "");
 
 /** Aceita qualquer coisa vinda da nuvem ou do disco e devolve um cadastro válido. */
 export function limparEmpresa(v: unknown): Empresa {
@@ -30,6 +38,10 @@ export function limparEmpresa(v: unknown): Empresa {
     sobre: texto(o.sobre, 1500),
     site: texto(o.site, 200),
     ramo: texto(o.ramo, 120),
+    logo: typeof o.logo === "string" && /^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/.test(o.logo) && o.logo.length <= 150_000 ? o.logo : "",
+    cor: corValida(o.cor),
+    corApoio: corValida(o.corApoio),
+    modo: o.modo === "site" || o.modo === "interno" ? o.modo : "",
     regras: objeto(o.regras),
     regrasConfiguradas: o.regrasConfiguradas === true
   };
@@ -95,3 +107,38 @@ export function contextoDaEmpresa(e: Empresa): string {
   ].filter(Boolean);
   return linhas.join("\n").slice(0, 3900);
 }
+
+/** Ideias de cores por nicho (principal, apoio): ponto de partida para a loja; dá para escolher qualquer outra. */
+export const NICHOS: { id: string; rotulo: string; paletas: [string, string][] }[] = [
+  { id: "moda-feminina", rotulo: "Moda feminina", paletas: [["#d946ef", "#fdf4ff"], ["#e11d48", "#fff1f2"], ["#7c3aed", "#f5f3ff"], ["#0f172a", "#f5d0fe"]] },
+  { id: "moda-masculina", rotulo: "Moda masculina", paletas: [["#1e3a8a", "#e0e7ff"], ["#111827", "#f59e0b"], ["#166534", "#dcfce7"], ["#374151", "#f3f4f6"]] },
+  { id: "beleza", rotulo: "Cosméticos e beleza", paletas: [["#ec4899", "#fdf2f8"], ["#be185d", "#fce7f3"], ["#9d174d", "#fbcfe8"], ["#a16207", "#fef9c3"]] },
+  { id: "intimidade", rotulo: "Sex shop e intimidade", paletas: [["#be123c", "#18181b"], ["#7c3aed", "#18181b"], ["#db2777", "#fdf2f8"], ["#111827", "#fb7185"]] },
+  { id: "eletronicos", rotulo: "Eletrônicos e games", paletas: [["#0ea5e9", "#0b1220"], ["#22c55e", "#0b1220"], ["#ef4444", "#111827"], ["#6366f1", "#e0e7ff"]] },
+  { id: "alimentos", rotulo: "Alimentos e bebidas", paletas: [["#ea580c", "#fff7ed"], ["#b91c1c", "#fef2f2"], ["#65a30d", "#f7fee7"], ["#78350f", "#fef3c7"]] },
+  { id: "casa", rotulo: "Casa e decoração", paletas: [["#0d9488", "#f0fdfa"], ["#a16207", "#fefce8"], ["#57534e", "#fafaf9"], ["#be185d", "#fdf2f8"]] },
+  { id: "pet", rotulo: "Pet shop", paletas: [["#f97316", "#fff7ed"], ["#0ea5e9", "#f0f9ff"], ["#16a34a", "#f0fdf4"], ["#7c3aed", "#f5f3ff"]] },
+  { id: "esportes", rotulo: "Esportes e fitness", paletas: [["#16a34a", "#052e16"], ["#ef4444", "#111827"], ["#2563eb", "#eff6ff"], ["#eab308", "#1c1917"]] },
+  { id: "infantil", rotulo: "Infantil", paletas: [["#f472b6", "#fdf2f8"], ["#38bdf8", "#f0f9ff"], ["#facc15", "#fefce8"], ["#a78bfa", "#f5f3ff"]] },
+  { id: "papelaria", rotulo: "Papelaria e presentes", paletas: [["#8b5cf6", "#f5f3ff"], ["#f43f5e", "#fff1f2"], ["#14b8a6", "#f0fdfa"], ["#f59e0b", "#fffbeb"]] },
+  { id: "outro", rotulo: "Outro", paletas: [["#7c3aed", "#f5f3ff"], ["#2563eb", "#eff6ff"], ["#059669", "#ecfdf5"], ["#dc2626", "#fef2f2"]] }
+];
+
+export const paletasDoNicho = (ramo: string): [string, string][] => {
+  const t = ramo.toLowerCase();
+  const achou = NICHOS.find((n) => n.rotulo.toLowerCase() === t) ?? NICHOS.find((n) => t && n.rotulo.toLowerCase().split(/ e |, /).some((w) => t.includes(w.trim().slice(0, 6))));
+  return (achou ?? NICHOS[NICHOS.length - 1]!).paletas;
+};
+
+/** Primeira letra de cada uma das duas primeiras palavras: o "logo" provisório de quem ainda não tem um. */
+export const iniciaisDaLoja = (nome: string): string => nome.trim().split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]!.toUpperCase()).join("") || "V";
+
+/** Cor do texto (preto ou branco) que fica legível sobre a cor escolhida. */
+export function textoSobre(hex: string): string {
+  const h = /^#[0-9a-f]{6}$/i.test(hex) ? hex : "#7c3aed";
+  const [r, g, b] = [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
+  return (0.299 * r! + 0.587 * g! + 0.114 * b!) > 150 ? "#111111" : "#ffffff";
+}
+
+/** A pessoa já passou pela criação da loja ou já tem a loja cadastrada (inclusive pelo celular)? */
+export const lojaJaConfigurada = (e: Empresa, pulou: boolean): boolean => pulou || empresaPreenchida(e) || e.modo !== "";

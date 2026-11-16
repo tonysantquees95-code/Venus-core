@@ -138,6 +138,7 @@ export const limparResposta = (t: string) => t.replace(/^["“]|["”]$/g, "").t
 export function primeirosPassos(e: Empresa, logado: boolean): { id: string; texto: string; feito: boolean }[] {
   return [
     { id: "id", texto: "Entrar com o Vetorial ID (a mesma conta do celular)", feito: logado },
+    { id: "identidade", texto: "Criar a identidade da loja (logo e cores)", feito: !!(e.logo || e.cor) },
     { id: "dados", texto: "Preencher nome, loja, ramo e cidade", feito: !!(e.dono && e.loja && e.ramo && e.cidade) },
     { id: "sobre", texto: "Contar sobre a empresa em poucas linhas", feito: e.sobre.length >= 20 },
     { id: "site", texto: "Informar o site da loja", feito: !!e.site },

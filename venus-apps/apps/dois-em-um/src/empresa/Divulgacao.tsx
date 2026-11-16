@@ -97,9 +97,12 @@ export function CartaoDeVisitas() {
   const { empresa } = useEmpresa();
   const [d, setD] = useDados();
   const alvo = enderecoParaQr(d.link, empresa.site);
+  // a cor escolhida na criação da loja vale até a pessoa escolher outra aqui
+  const cor = d.cor !== PADRAO.cor ? d.cor : empresa.cor || d.cor;
   const cartao = (
-    <div className="cartao-visita" style={{ background: "#0b0b14", color: "#fff", borderTop: `6px solid ${d.cor}` }}>
+    <div className="cartao-visita" style={{ background: "#0b0b14", color: "#fff", borderTop: `6px solid ${cor}` }}>
       <div className="cv-texto">
+        {empresa.logo && <img src={empresa.logo} alt="" style={{ height: "10mm", width: "auto", maxWidth: "24mm", objectFit: "contain", marginBottom: "2mm" }} />}
         <div className="cv-loja">{empresa.loja || "Nome da loja"}</div>
         {empresa.ramo && <div className="cv-linha cv-suave">{empresa.ramo}</div>}
         <div className="cv-espaco" />
@@ -116,7 +119,7 @@ export function CartaoDeVisitas() {
       <Titulo titulo="Cartão de visitas" descricao="Tamanho 9 × 5 cm com o QR Code da loja. Imprima em papel comum ou salve em PDF para mandar à gráfica." />
       <div className="mb-5 grid max-w-xl gap-3 sm:grid-cols-2">
         <div><label className="mb-1 block text-sm text-suave">Telefone / WhatsApp</label><input className={campo} value={d.telefone} onChange={(e) => setD({ ...d, telefone: e.target.value })} placeholder="(51) 99999-9999" /></div>
-        <div><label className="mb-1 block text-sm text-suave">Cor de destaque</label><input type="color" className="h-11 w-full rounded-xl border border-white/15 bg-white/5" value={d.cor} onChange={(e) => setD({ ...d, cor: e.target.value })} /></div>
+        <div><label className="mb-1 block text-sm text-suave">Cor de destaque</label><input type="color" className="h-11 w-full rounded-xl border border-white/15 bg-white/5" value={cor} onChange={(e) => setD({ ...d, cor: e.target.value })} /></div>
       </div>
       <div className="mb-5 inline-block overflow-hidden rounded-xl shadow-lg">{cartao}</div>
       <div><Imprimivel>{cartao}</Imprimivel></div>
@@ -130,11 +133,14 @@ export function Panfleto() {
   const { empresa } = useEmpresa();
   const [d, setD] = useDados();
   const alvo = enderecoParaQr(d.link, empresa.site);
+  // a cor escolhida na criação da loja vale até a pessoa escolher outra aqui
+  const cor = d.cor !== PADRAO.cor ? d.cor : empresa.cor || d.cor;
   const folha = (
-    <div className="panfleto" style={{ borderTop: `12mm solid ${d.cor}` }}>
+    <div className="panfleto" style={{ borderTop: `12mm solid ${cor}` }}>
+      {empresa.logo && <img src={empresa.logo} alt="" style={{ height: "22mm", width: "auto", maxWidth: "60mm", objectFit: "contain" }} />}
       <h1 className="pf-loja">{empresa.loja || "Nome da loja"}</h1>
       <p className="pf-chamada">{d.chamada || "Escreva aqui a chamada do panfleto"}</p>
-      {d.oferta && <div className="pf-oferta" style={{ background: d.cor }}>{d.oferta}</div>}
+      {d.oferta && <div className="pf-oferta" style={{ background: cor }}>{d.oferta}</div>}
       {empresa.sobre && <p className="pf-sobre">{empresa.sobre.slice(0, 280)}</p>}
       <div className="pf-rodape">
         {alvo && <Qr texto={alvo} tamanho={140} />}
@@ -153,7 +159,7 @@ export function Panfleto() {
         <div className="sm:col-span-2"><label className="mb-1 block text-sm text-suave">Chamada principal</label><input className={campo} value={d.chamada} onChange={(e) => setD({ ...d, chamada: e.target.value })} placeholder="Ex.: Frete grátis neste fim de semana" /></div>
         <div><label className="mb-1 block text-sm text-suave">Destaque (oferta)</label><input className={campo} value={d.oferta} onChange={(e) => setD({ ...d, oferta: e.target.value })} placeholder="Ex.: 10% de desconto no Pix" /></div>
         <div><label className="mb-1 block text-sm text-suave">Telefone / WhatsApp</label><input className={campo} value={d.telefone} onChange={(e) => setD({ ...d, telefone: e.target.value })} /></div>
-        <div><label className="mb-1 block text-sm text-suave">Cor</label><input type="color" className="h-11 w-full rounded-xl border border-white/15 bg-white/5" value={d.cor} onChange={(e) => setD({ ...d, cor: e.target.value })} /></div>
+        <div><label className="mb-1 block text-sm text-suave">Cor</label><input type="color" className="h-11 w-full rounded-xl border border-white/15 bg-white/5" value={cor} onChange={(e) => setD({ ...d, cor: e.target.value })} /></div>
       </div>
       <div className="mb-5 w-[300px] overflow-hidden rounded-xl bg-white shadow-lg"><div style={{ transform: "scale(.5)", transformOrigin: "top left", width: "148mm", height: "210mm" }}>{folha}</div><div style={{ height: "calc(210mm * -0.5)" }} /></div>
       <div className="mt-[-100px]"><Imprimivel>{folha}</Imprimivel></div>
