@@ -4,6 +4,7 @@ import { IconeNomeado } from "../components/Icones";
 import { PaginaComLateral, type ItemLateral } from "../components/PaginaComLateral";
 import { CartaoDeVisitas, Panfleto, QrCodeSecao } from "./Divulgacao";
 import { VitrineECatalogo } from "./VitrineWeb";
+import { PainelAoVivo } from "./PainelAoVivo";
 import { DadosDaLoja, Historico, IdeiasDePost, IdeiasDeVideo, InstagramDaLoja, PrimeirosPassos, RegrasDeVenda, RespostasDoInstagram, StoriesDoDia } from "./secoes";
 
 const SECOES: ItemLateral[] = [
@@ -11,6 +12,7 @@ const SECOES: ItemLateral[] = [
   { id: "identidade", rotulo: "Identidade da loja", icone: <IconeNomeado nome="vitrine" className="size-5" />, grupo: "Minha loja" },
   { id: "regras", rotulo: "Regras de venda", icone: <IconeNomeado nome="regras" className="size-5" />, grupo: "Minha loja" },
   { id: "passos", rotulo: "Primeiros passos", icone: <IconeNomeado nome="passos" className="size-5" />, grupo: "Minha loja" },
+  { id: "painel", rotulo: "Painel ao vivo", icone: <IconeNomeado nome="painel" className="size-5" />, grupo: "Financeiro" },
   { id: "historico", rotulo: "Histórico de conversas", icone: <IconeNomeado nome="conversas" className="size-5" />, grupo: "Conversas" },
   { id: "ideias", rotulo: "Ideias de post", icone: <IconeNomeado nome="ideia" className="size-5" />, grupo: "Instagram" },
   { id: "videos", rotulo: "Ideias de vídeo (Reels)", icone: <IconeNomeado nome="video" className="size-5" />, grupo: "Instagram" },
@@ -44,6 +46,7 @@ export function TelaEmpresa({ alvo }: { alvo?: string }) {
         {secao === "cartao" && <CartaoDeVisitas />}
         {secao === "panfleto" && <Panfleto />}
         {secao === "vitrine" && <VitrineECatalogo />}
+        {secao === "painel" && <PainelAoVivo />}
       </div>
     </PaginaComLateral>
   );
