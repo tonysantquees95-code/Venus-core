@@ -117,7 +117,8 @@ class Cerebro(
         if (melhor != null && nota >= CONFIANTE) return decidir(melhor)
 
         // 4) Talvez o reconhecimento de voz tenha errado alguma palavra: tenta a frase corrigida.
-        val corrigida = Corretor.corrigir(entrada)
+        // Só em pedidos curtos: um relato ou conversa longa ("acabei de chegar do show…") não é comando mal ouvido.
+        val corrigida = if (Corretor.palavras(entrada).size <= MAX_PALAVRAS_DE_COMANDO) Corretor.corrigir(entrada) else entrada
         if (corrigida != entrada) {
             ComandosLocais.interpretar(corrigida)?.let { r ->
                 ultimaCorrecao = corrigida
@@ -308,6 +309,8 @@ class Cerebro(
         private val BOM_DIA = Regex("^(?:(?:ola|oi|ei) )?bom dia(?: (?:venus|sexta feira|sexta|chefe|meu amor|querida))?$")
 
         const val CONFIANTE = 0.8
+        /** Pedido de voz curto; acima disso a frase é conversa e não passa pela correção de palavras. */
+        const val MAX_PALAVRAS_DE_COMANDO = 8
         const val PROVAVEL = 0.55
 
         private val SIM = Regex(
