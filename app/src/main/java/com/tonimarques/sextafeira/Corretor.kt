@@ -25,6 +25,18 @@ object Corretor {
             "some soma somar subtrai tira divide multiplica metade dobro triplo porcentagem desconto frete total significa sinonimo plural"
         ).split(" ")
 
+    /**
+     * Palavras de fora (ou gírias) que as pessoas dizem direto em português e que não estão no dicionário:
+     * não são erro de reconhecimento, então não podem ser "corrigidas" ("cover" não vira "chover").
+     */
+    private val PROTEGIDAS = setOf(
+        "cover", "covers", "teaser", "teasers", "show", "shows", "live", "lives", "trailer", "trailers", "remix", "single", "hit", "hits",
+        "feat", "playlist", "podcast", "stream", "streams", "streamer", "gamer", "gamers", "game", "games", "online", "offline", "link", "links",
+        "post", "posts", "story", "stories", "reels", "feed", "like", "likes", "print", "email", "app", "apps", "site", "blog", "vlog",
+        "mouse", "laptop", "tablet", "notebook", "drive", "backup", "login", "stories", "selfie", "hobby", "banda", "rock", "pop", "funk", "rap",
+        "trap", "indie", "cosplay", "deploy", "bug", "bugs", "lag", "ping", "noob", "boss", "loot", "skin", "skins", "clan", "guild",
+    )
+
     /** Vocabulário conhecido, com frequência (mais usado = mais provável). */
     private val VOCABULARIO: Map<String, Int> by lazy {
         val contagem = HashMap<String, Int>()
@@ -85,6 +97,7 @@ object Corretor {
         if (limpa.length < 4) return false
         if (limpa.any { it.isDigit() }) return false
         if (limpa in VOCABULARIO) return false
+        if (limpa in PROTEGIDAS) return false
         // palavra que existe no português não é "corrigida" ("charada" não vira "chamada")
         if (Lexico.existe(limpa)) return false
         // Nome próprio no meio da frase: deixa como está ("toca Anitta", "manda pra Marcela").
@@ -101,6 +114,11 @@ object Corretor {
             if (abs(v.length - palavra.length) > limite) continue
             if (v.length < 3) continue
             if (distancia(palavra, v) <= limite) candidatas += v
+        }
+        // Palavra curta (até 5 letras) só vira outra se soar igual ou se o contexto pedir: "cover" e "chover" só diferem por
+        // uma letra, mas não são a mesma palavra, e uma letra a mais ou a menos muda muito em palavra curta.
+        if (palavra.length <= 5) {
+            candidatas.retainAll { v -> chaveFonetica(v) == chave || (anterior != null && "$anterior $v" in PARES) }
         }
         if (candidatas.isEmpty()) return null
         return candidatas.minByOrNull { v ->

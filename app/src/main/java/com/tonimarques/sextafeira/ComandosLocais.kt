@@ -157,6 +157,9 @@ object ComandosLocais {
     private fun clima(f: Frase): Resultado? {
         val c = f.chave
         if (!CLIMA.containsMatchIn(c)) return null
+        // Palavra solta como "chover", "frio" ou "sol" no meio de um relato ("cheguei do show, o cover do Michael…") não é
+        // pedido de previsão: sem "previsão", "clima", "temperatura"… só vale em frase curta e sem cara de história.
+        if (!CLIMA_FORTE.containsMatchIn(c) && (c.split(" ").size > 8 || RELATO.containsMatchIn(c))) return null
         // "qual a temperatura mais fria da Antártica?": pergunta de conhecimento, não é a previsão do tempo daqui
         if (Regex("\\b(?:mais (?:fri[oa]s?|quentes?|chuvos[oa]s?|sec[oa]s?|umid[oa]s?)|recordes?|historic[oa]s?|(?:maior|menor) temperatura|temperatura (?:minima|maxima) (?:ja )?registrada)\\b").containsMatchIn(c)) return null
         if (Regex("\\b(timer|alarme|temporizador|cronometro|minutos?|segundos?)\\b").containsMatchIn(c)) return null
@@ -769,7 +772,13 @@ object ComandosLocais {
             "esta frio|esta calor|ta frio|ta calor|faz frio|faz calor|o tempo (hoje|amanha|agora|la fora)|como (esta|ta) o tempo|" +
             "tempo (hoje|amanha|la fora)|vai fazer sol|ensolarado|nublado)\\b"
     )
-    private val LUGAR_CLIMA = Regex("\\b(?:em|no|na|de|para|pra)\\s+([a-z][a-z .'-]+?)\\s*(?:hoje|amanha|agora)?$")
+    private val CLIMA_FORTE = Regex(
+        "\\b(graus|temperatura|previsao do tempo|previsao|clima|o tempo (hoje|amanha|agora|la fora)|como (esta|ta) o tempo|tempo (hoje|amanha|la fora)|" +
+            "vai chover|vai fazer (frio|calor|sol)|(esta|ta) chovendo)\\b"
+    )
+    private val RELATO = Regex("\\b(acabei|cheguei|chegou|fui|foi|estava|estive|tive|fiz|fizemos|vi|ouvi|assisti|comprei|vim|fomos|estavamos|gostei|adorei|amei)\\b")
+    // a cidade tem no máximo 4 palavras (Porto Alegre, Santa Maria da Boa Vista…)
+    private val LUGAR_CLIMA = Regex("\\b(?:em|no|na|de|para|pra)\\s+([a-z][a-z.'-]*(?:\\s+[a-z][a-z.'-]*){0,3}?)\\s*(?:hoje|amanha|agora)?$")
     private val LUGARES_GENERICOS = setOf(
         "hoje", "amanha", "agora", "la fora", "aqui", "casa", "rua", "chuva", "tempo", "frio", "calor", "sol",
         "graus", "temperatura", "manha", "tarde", "noite", "semana", "fim de semana", "clima",

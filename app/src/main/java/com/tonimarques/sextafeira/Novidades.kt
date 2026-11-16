@@ -29,6 +29,7 @@ internal object Novidades {
         Item(10, "2026-11-15", "novo", "Ouvir, compartilhar e guardar", "Embaixo de cada resposta há três botões: Ouvir (com pausa e continuar), Compartilhar e Guardar. O texto guardado vai para a pasta Download › Vênus."),
         Item(11, "2026-11-15", "melhoria", "Só fala quando você fala", "Se você digita, a Vênus responde só por escrito. Ela responde em voz alta quando você pediu falando. Para ouvir uma resposta escrita, use o botão Ouvir."),
         Item(12, "2026-11-15", "novo", "Voz igual no computador", "A voz que você escolheu aqui (voz neural da Microsoft, jeito de falar, velocidade e tom) agora acompanha a sua conta Vetorial ID e aparece sozinha na Vênus do Windows. Se mudar no computador, muda aqui também."),
+        Item(13, "2026-11-15", "correcao", "Conversa não vira previsão do tempo", "Quando você contava algo (como \"cheguei do show, o cover do Michael Jackson\"), a Vênus trocava \"cover\" por \"chover\" e respondia sobre o clima ou pedia a sua localização. Agora ela deixa palavras como cover, teaser e show como estão, só corrige palavras curtas quando o som é igual, e só trata \"chover\" ou \"frio\" como previsão em pedidos curtos de clima. Relatos e conversas vão para o papo normal."),
     )
 
     fun rotulo(tipo: String): String = when (tipo) { "novo" -> "Novo"; "melhoria" -> "Melhorou"; "correcao" -> "Corrigido"; else -> tipo }
