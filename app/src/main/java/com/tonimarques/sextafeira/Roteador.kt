@@ -89,6 +89,14 @@ object Roteador {
     )
     val NOMES = ACOES.map { it.first }.toSet()
 
+    /** Ações que procuram um produto pelo nome falado. */
+    val ACOES_DE_PRODUTO = setOf("loja_produto", "loja_estoque", "loja_margem", "loja_previsao", "loja_alterar", "pesquisar_preco", "programar_post")
+
+    private val GOSTO = Regex("^(?:eu |ela |ele )?(?:adoro|adora|amo|ama|curto|curte|gosto|gosta|prefiro|prefere|odeio|detesto|escutei|ouvi|assisti)\\b")
+
+    /** "Adoro a Human Nature", "curto esse cantor": opinião sobre algo, não um pedido. */
+    fun ehComentarioDeGosto(frase: String): Boolean = GOSTO.containsMatchIn(chave(frase))
+
     // ------------------------------------------------------------------ memória das frases decifradas
     private const val PREFS = "rotas_aprendidas"
     private const val LIMITE = 600
@@ -124,6 +132,8 @@ object Roteador {
     fun montarPedido(frase: String, contexto: String): String =
         "Você é o interpretador de comandos da Vênus, assistente de voz do ${Perfil.dono}, dono da loja online ${Perfil.loja}. " +
             "Escolha qual ação da lista atende a frase dele, ou \"conversa\" se for pergunta geral, papo, conhecimento ou algo fora da lista. " +
+            "Se a frase for comentário, gosto, opinião, relato ou resposta a uma pergunta da Vênus (veja a última fala dela no contexto), é \"conversa\" — " +
+            "mesmo citando música, banda, filme, jogo ou pessoa. Só escolha uma ação da loja quando ele pedir claramente algo da loja (preço, estoque, vendas, pedidos…). " +
             "Use o contexto para entender \"ele\", \"dela\", \"e o do…\", \"o mesmo\". Datas relativas em relação a ${java.text.SimpleDateFormat("yyyy-MM-dd HH:mm (EEEE)", java.util.Locale("pt", "BR")).format(java.util.Date())}.\n" +
             "Ações:\n" + ACOES.joinToString("\n") { "- ${it.first}: ${it.second}" + if (it.third.isNotBlank()) " | ${it.third}" else "" } +
             "\n\nContexto da conversa: ${contexto.ifBlank { "(início)" }}\n" +
