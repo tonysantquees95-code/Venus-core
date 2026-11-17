@@ -135,14 +135,14 @@ internal fun MainActivity.cadastroGuiado(etapaInicial: Int = 0) {
                     val atual = Plataformas.config(this)
                     val conectado = ferramentas.loja.conectada
                     f.adicionar(f.aviso(if (conectado) "✓ Conectado: ${Plataformas.TIPOS.firstOrNull { it.id == atual.tipo }?.nome ?: atual.tipo}."
-                    else "Toque na plataforma do seu site. Abre uma janela com o passo a passo para pegar a chave; depois volte aqui e toque em Continuar."))
+                    else "Toque na plataforma do seu site. Em \"Site próprio\" você entra só com o e-mail e a senha de administrador do site, sem chave. Nas outras (Shopify, WooCommerce, Nuvemshop) abre um passo a passo para pegar a chave. Depois volte aqui e toque em Continuar."))
                     for (t in Plataformas.TIPOS.filter { it.id != "interno" }) {
                         f.adicionar(f.botao(t.nome + if (atual.tipo == t.id && (conectado || atual.chave.isNotBlank())) "  ✓" else "") {
                             configurarPlataforma(t)
                             if (t.id == "floot") conectarLoja()
                         }, 10)
                     }
-                    f.adicionar(f.aviso("Se não tiver a chave agora, pode continuar: depois é só ir no menu → Plataforma da loja."), 10)
+                    f.adicionar(f.aviso("Se não tiver os dados agora, pode continuar: depois é só ir no menu → Plataforma da loja."), 10)
                     f.fecharCartao()
                 }
                 val continuar = f.botao("Continuar", primario = true) { mostrar(3) }
