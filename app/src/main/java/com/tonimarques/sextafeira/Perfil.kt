@@ -9,7 +9,8 @@ import android.content.Context
  */
 object Perfil {
 
-    private const val PREFS = "perfil"
+    /** O perfil é um arquivo por loja: "perfil" na principal e "perfil_<id>" nas extras (ver Lojas). */
+    private fun arquivo(ctx: Context) = Lojas.arquivoDoPerfil(ctx)
 
     @Volatile var dono: String = "Toni"
         private set
@@ -58,12 +59,16 @@ object Perfil {
         private set
 
     fun carregar(ctx: Context) {
-        val p = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val p = ctx.getSharedPreferences(arquivo(ctx), Context.MODE_PRIVATE)
+        // ao trocar de loja, o que não estiver salvo nesta volta ao padrão (não herda o da loja anterior)
+        dono = "Toni"; loja = "Desejo de Intimidade"; cidade = "Porto Alegre"; uf = "RS"
+        site = "https://desejo-de-intimidade.tonysantquees95.workers.dev"; ramo = "moda íntima e sex shop"
+        sobre = "mora em Porto Alegre e trabalha num hotel"; regras = RegrasDeVenda()
         // quem já usava a Vênus (memória ou chave salva) fica com os dados da primeira loja; instalação nova começa neutra
         val origem = p.getString("origem", null) ?: run {
-            val antigo = ctx.getDatabasePath("sexta.db").exists() ||
+            val antigo = !Lojas.extraAberta(ctx) && (ctx.getDatabasePath("sexta.db").exists() ||
                 ctx.getSharedPreferences("config", Context.MODE_PRIVATE).contains("chave") ||
-                ctx.getSharedPreferences("loja", Context.MODE_PRIVATE).contains("email")
+                ctx.getSharedPreferences("loja", Context.MODE_PRIVATE).contains("email"))
             (if (antigo) "herdado" else "novo").also { p.edit().putString("origem", it).apply() }
         }
         if (origem == "novo") {
@@ -100,7 +105,7 @@ object Perfil {
 
     /** Dados da loja (site, ramo e regras de venda em campos). Leva as regras para a memória e para o site. */
     fun salvarLoja(ctx: Context, site: String, ramo: String, novas: RegrasDeVenda) {
-        ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+        ctx.getSharedPreferences(arquivo(ctx), Context.MODE_PRIVATE).edit()
             .putString("site", normalizarSite(site)).putString("ramo", ramo.trim())
             .putString("regras_json", novas.json(ramo.trim()).toString())
             .remove("regras").remove("pix")
@@ -118,7 +123,7 @@ object Perfil {
 
     fun salvar(ctx: Context, dono: String, loja: String, cidadeComUf: String, sobre: String) {
         val (c, u) = separarCidade(cidadeComUf)
-        ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+        ctx.getSharedPreferences(arquivo(ctx), Context.MODE_PRIVATE).edit()
             .putString("dono", dono.trim()).putString("loja", loja.trim())
             .putString("cidade", c).putString("uf", u).putString("sobre", sobre.trim())
             .apply()
@@ -129,7 +134,7 @@ object Perfil {
 
     /** O cadastro da empresa que viaja com o Vetorial ID (celular, computador, outro celular). Sem chaves de IA nem senhas. */
     fun paraSincronia(ctx: Context): org.json.JSONObject? {
-        val p = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val p = ctx.getSharedPreferences(arquivo(ctx), Context.MODE_PRIVATE)
         // instalação nova que ainda não preencheu nada não manda um cadastro vazio por cima do que já existe na conta
         if (p.getString("origem", "novo") == "novo" && !p.contains("loja") && !p.contains("regras_json")) return null
         return org.json.JSONObject().put("dono", dono).put("loja", loja).put("cidade", cidade).put("uf", uf).put("sobre", sobre)
@@ -137,7 +142,7 @@ object Perfil {
     }
 
     fun aplicarSincronia(ctx: Context, v: org.json.JSONObject) {
-        val e = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+        val e = ctx.getSharedPreferences(arquivo(ctx), Context.MODE_PRIVATE).edit()
         for (campo in listOf("dono", "loja", "cidade", "uf", "sobre", "ramo")) if (v.has(campo)) e.putString(campo, v.optString(campo))
         if (v.has("site")) e.putString("site", normalizarSite(v.optString("site")))
         v.optJSONObject("regras")?.let { e.putString("regras_json", it.toString()).remove("regras").remove("pix") }

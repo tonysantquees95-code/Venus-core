@@ -70,6 +70,8 @@ object Nuvem {
             c.readTimeout = 45_000
             c.setRequestProperty("Accept", "application/json")
             if (comToken) c.setRequestProperty("Authorization", "Bearer ${tokenFixo ?: token(ctx)}")
+            // loja extra aberta: catálogo, vitrine, painel e links são dela (as rotas /id/ são da conta)
+            if (comToken && !caminho.startsWith("/id/") && Lojas.extraAberta(ctx)) c.setRequestProperty("x-loja", Lojas.aberta(ctx))
             if (corpo != null) {
                 c.doOutput = true
                 c.setRequestProperty("Content-Type", "application/json; charset=utf-8")

@@ -35,6 +35,7 @@ internal object Novidades {
         Item(16, "2026-11-16", "correcao", "\"Play list\" não é o comando play", "Dizer \"uma play list para a loja\" não faz mais a Vênus continuar a música que estava tocando: ela entende que é conversa e responde. No papo ela também fica no assunto que você puxou, sem trazer a loja do nada, e só oferece o que realmente sabe fazer."),
         Item(17, "2026-11-16", "novo", "Escolher o plano e pagar no Pix ou no débito", "Ao renovar, agora você escolhe o plano (a Vênus sozinha, com o Vindex, com o Vortex ou o completo) e como pagar: cartão de crédito todo mês, ou Pix e cartão de débito por 30 dias. No Pix e no débito não renova sozinho: quando vencer, é só pagar mais 30 dias. Quem não tem cartão de crédito também consegue usar.")
         Item(18, "2026-11-16", "novo", "Promoção de lançamento", "Por tempo limitado, a suíte completa (Vênus, Vindex e Vortex) custa R$ 49,90 por mês, com 7 dias grátis. Quem assinar durante a promoção mantém esse preço por 6 meses. Veja em Configurações › Licença."),
+        Item(19, "2026-11-16", "novo", "Até 3 lojas na mesma conta", "Em Menu › Loja › Minhas lojas você cria até 3 lojas (outro site, outro nicho) na mesma assinatura e troca entre elas. Cada loja tem o seu perfil, catálogo, vitrine e painel ao vivo."),
     )
 
     fun rotulo(tipo: String): String = when (tipo) { "novo" -> "Novo"; "melhoria" -> "Melhorou"; "correcao" -> "Corrigido"; else -> tipo }

@@ -176,6 +176,7 @@ internal fun MainActivity.abrirMenu(@Suppress("UNUSED_PARAMETER") ancora: View) 
         TelaDeAjustes.Secao(
             "Loja ${Perfil.loja}", listOf(
                 TelaDeAjustes.Ajuste("Minha loja", { "Perfil, site ou catálogo, vitrine online e o painel ao vivo da ${Perfil.loja}, tudo num lugar só." }) { abrirCentral() },
+                TelaDeAjustes.Ajuste("Minhas lojas", { "Até ${Lojas.MAX} lojas na mesma conta, cada uma com perfil, vitrine, painel e catálogo próprios. Aberta: ${Perfil.loja}." }) { minhasLojas() },
                 TelaDeAjustes.Ajuste("Cadastro guiado", { "Passo a passo: você e a loja, com ou sem site, regras de venda e as chaves das IAs." }) { cadastroGuiado() },
                 TelaDeAjustes.Ajuste("Primeiros passos", { "A lista do que configurar para a $n funcionar com a sua loja." }) { primeirosPassos() },
                 TelaDeAjustes.Ajuste("Perfil do dono e da loja", { Perfil.resumo() + ". A $n usa esses dados nas respostas, nos avisos e no estudo." }) { editarPerfil() },
