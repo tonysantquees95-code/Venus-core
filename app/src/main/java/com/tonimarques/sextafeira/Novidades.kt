@@ -36,6 +36,7 @@ internal object Novidades {
         Item(17, "2026-11-16", "novo", "Escolher o plano e pagar no Pix ou no débito", "Ao renovar, agora você escolhe o plano (a Vênus sozinha, com o Vindex, com o Vortex ou o completo) e como pagar: cartão de crédito todo mês, ou Pix e cartão de débito por 30 dias. No Pix e no débito não renova sozinho: quando vencer, é só pagar mais 30 dias. Quem não tem cartão de crédito também consegue usar."),
         Item(18, "2026-11-16", "novo", "Promoção de lançamento", "Por tempo limitado, a suíte completa (Vênus, Vindex e Vortex) custa R$ 49,90 por mês, com 7 dias grátis. Quem assinar durante a promoção mantém esse preço por 6 meses. Veja em Configurações › Licença."),
         Item(19, "2026-11-16", "novo", "Até 3 lojas na mesma conta", "Em Menu › Loja › Minhas lojas você cria até 3 lojas (outro site, outro nicho) na mesma assinatura e troca entre elas. Cada loja tem o seu perfil, catálogo, vitrine e painel ao vivo."),
+        Item(20, "2026-11-17", "melhoria", "A conexão da loja volta sozinha", "A chave de acesso do site, o login de administrador e o aviso de pedidos agora acompanham a sua conta Vetorial. Se você reinstalar a Vênus ou entrar em outro aparelho, é só entrar com a sua conta: não precisa configurar o site de novo."),
     )
 
     fun rotulo(tipo: String): String = when (tipo) { "novo" -> "Novo"; "melhoria" -> "Melhorou"; "correcao" -> "Corrigido"; else -> tipo }
