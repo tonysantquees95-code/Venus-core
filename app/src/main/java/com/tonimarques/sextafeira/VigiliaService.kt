@@ -189,14 +189,7 @@ class VigiliaService : Service() {
                 this,
                 aoOuvir = { resto ->
                     falhasOffline = 0
-                    // Pedido seco de música ("Vênus, próxima música", "Vênus, toca pagode"): só faz, sem abrir o pop-up nem ficar ouvindo.
-                    val seco = if (resto.isNotBlank() && prefs.getBoolean(PREF_MUSICA, true)) Cerebro.pedidoDeMusica("vênus $resto") else null
-                    if (seco != null) {
-                        Midia.executar(this, seco)
-                        agendar(1500)
-                    } else {
-                        abrirPopup(resto)
-                    }
+                    abrirPopup(resto)
                 },
                 aoFalhar = {
                     falhasOffline++
@@ -240,6 +233,17 @@ class VigiliaService : Service() {
     }
 
     private fun abrirPopup(resto: String, ouvirDireto: Boolean = false) {
+        // Pedido seco de música ("Vênus, próxima música", "Vênus, toca pagode"): só faz, sem abrir o pop-up nem ficar ouvindo.
+        // Vale para qualquer caminho de escuta (voz offline ou reconhecimento do Google).
+        if (!ouvirDireto && resto.isNotBlank() && prefs.getBoolean(PREF_MUSICA, true)) {
+            val seco = Cerebro.pedidoDeMusica("vênus $resto")
+            if (seco != null) {
+                pausar()
+                Midia.executar(this, seco)
+                agendar(1500)
+                return
+            }
+        }
         pausar()
         errosSeguidos = 0
         if (!Settings.canDrawOverlays(this)) {
