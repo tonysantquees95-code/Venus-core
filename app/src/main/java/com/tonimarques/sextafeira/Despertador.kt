@@ -220,7 +220,7 @@ class Despertador(
             var textoMusica = ""
             var mudouMusicaEm = 0L
             // Ouviu a chamada ("Ei Vênus"): espera a pessoa terminar de falar (ou parar um instante), para já levar o pedido junto.
-            fun acionou(texto: String, terminou: Boolean, agora: Long): Boolean {
+            fun acionou(texto: String, terminou: Boolean, agora: Long, quietoMs: Long = 600L): Boolean {
                 if (!Cerebro.pareceAtivacao(texto, acionarPeloNome())) {
                     aguardaDesde = 0L
                     textoDaChamada = ""
@@ -232,8 +232,8 @@ class Despertador(
                     mudouEm = agora
                 }
                 val ehComando = Cerebro.comandoDeMusica(texto, 12, exigirNome = true) != null
-                val quieto = !ehComando && agora - mudouEm >= 600
-                if (!terminou && !quieto && agora - aguardaDesde < 3000) return false
+                val quieto = !ehComando && agora - mudouEm >= quietoMs
+                if (!terminou && !quieto && agora - aguardaDesde < quietoMs + 2400) return false
                 restoOuvido = Cerebro.restoDepoisDaAtivacao(texto) ?: Cerebro.pedidoPorNome(texto).orEmpty()
                 ouviu = true
                 return true
@@ -302,7 +302,11 @@ class Despertador(
                     val parou = texto.isNotBlank() && agora - mudouMusicaEm >= 800
                     val comando = Cerebro.comandoDeMusica(texto, exigirNome = true)
                     // "Ei Vênus" abre o orbe; só o nome ("Vênus") vale depois que a pessoa termina de falar
-                    if (comando == null && acionou(texto, terminou || parou, agora)) break
+                    // "Ei Vênus" abre na hora; só "Vênus" espera uma pausa maior (com música a pessoa fala o comando devagar e o
+                    // reconhecedor demora a escrever o resto: abrir cedo demais pausava a música à toa)
+                    val comChamada = Cerebro.pedidoPorNome(texto, exigirChamada = true) != null || Cerebro.restoDepoisDaAtivacao(texto) != null
+                    val parouDeVez = if (comChamada) parou else texto.isNotBlank() && agora - mudouMusicaEm >= 2500
+                    if (comando == null && acionou(texto, terminou || parouDeVez, agora, if (comChamada) 600L else 2500L)) break
                     if (comando != null && agora >= esperaAte) {
                         if (comando == candidato) repeticoes++ else {
                             candidato = comando
@@ -346,7 +350,7 @@ class Despertador(
                     val texto = if (terminou) campo(rec.result, "text") else campo(rec.partialResult, "partial")
                     // "Vênus, aumentar o volume" também funciona sem música tocando: vai direto, sem abrir o orbe
                     if (terminou && aoComando != null && modoMusicaLigado()) {
-                        val c = Cerebro.comandoDeMusica(texto, 12, exigirNome = true)
+                        val c = Cerebro.pedidoDeMusica(texto)
                         if (c != null) {
                             principal.post { aoComando?.invoke(c) }
                             aguardaDesde = 0L

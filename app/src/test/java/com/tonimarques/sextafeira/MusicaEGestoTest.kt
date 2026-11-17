@@ -9,6 +9,13 @@ import org.junit.Test
 /** Comandos curtos de música (sem "Vênus, ativar") e o gesto de torcer o pulso. */
 class MusicaEGestoTest {
 
+    @Test fun pedidoSecoDeMusicaPeloNome() {
+        assertEquals("proxima", Cerebro.pedidoDeMusica("vênus próxima música"))
+        assertEquals("pausar", Cerebro.pedidoDeMusica("vênus pausar"))
+        assertEquals("tocar_busca:pagode", Cerebro.pedidoDeMusica("vênus toca pagode"))
+        assertNull(Cerebro.pedidoDeMusica("vênus qual é a previsão do tempo"))
+    }
+
     @Test fun comandosCurtos() {
         assertEquals("pausar", Cerebro.comandoDeMusica("pausar música"))
         assertEquals("pausar", Cerebro.comandoDeMusica("[unk] para a música"))

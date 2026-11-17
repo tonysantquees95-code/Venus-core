@@ -93,6 +93,9 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
     internal var ocupado = false
     internal var pedidoAtual = 0
     internal var ultimaFoiVoz = false
+
+    /** O último pedido foi uma ação seca (tocar, pausar, próxima, volume, abrir app): depois dela não volta a ouvir, quem quiser fala de novo. */
+    internal var acaoSemConversa = false
     internal var forcarEscuta = false
     /** O botão "Ouvir" da resposta que está sendo lida em voz alta agora (null = nenhuma). */
     internal var botaoDeLeitura: TextView? = null
@@ -927,6 +930,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
     }
 
     internal fun processar(entrada: String) {
+        acaoSemConversa = false
         if (ocupado) return
         // com anexos esperando, o que você falar é o pedido sobre eles
         if (temAnexos() && Cerebro.restoDepoisDaAtivacao(entrada)?.isBlank() != true) {
@@ -1225,11 +1229,17 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
                     // A música estava pausada só para ouvir você: devolve o som e só então aperta o botão.
                     val tinhaFoco = foco != null
                     liberarFoco()
-                    principal.postDelayed({ responder(ferramentas.executar(decisao.nome, decisao.args)) }, if (tinhaFoco) 450 else 0)
+                    principal.postDelayed({
+                        val resultado = ferramentas.executar(decisao.nome, decisao.args)
+                        // ação feita: não volta a ouvir (só se ela perguntou algo, como "Qual volume?")
+                        acaoSemConversa = !resultado.trimEnd().endsWith("?")
+                        responder(resultado)
+                    }, if (tinhaFoco) 450 else 0)
                 }
                 else -> {
                     val resultado = ferramentas.executar(decisao.nome, decisao.args)
                     val appNaoAchado = decisao.nome == "abrir_app" && resultado.startsWith("Não encontrei")
+                    if (decisao.nome == "abrir_app" && !appNaoAchado) acaoSemConversa = true
                     if (appNaoAchado && obterGemini() != null) consultarIA(pedido) else responder(resultado)
                 }
             }
@@ -1919,7 +1929,9 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         val estavaOuvindo = interruptor?.ativo == true
         interruptor?.parar()
         mudarEstadoOcioso()
-        val continuar = !leituraManual && ultimaFoiVoz && naTela && !ocupado &&
+        val acaoSeca = acaoSemConversa && !forcarEscuta && !cerebro.aguardandoResposta
+        acaoSemConversa = false
+        val continuar = !leituraManual && !acaoSeca && ultimaFoiVoz && naTela && !ocupado &&
             (forcarEscuta || cerebro.aguardandoResposta || prefs.getBoolean(PREF_CONTINUA, true))
         if (continuar) {
             // Fica uns 12 segundos esperando você responder (tentando de novo se o reconhecedor desistir antes)
