@@ -248,9 +248,9 @@ internal object SincroniaId {
                 env.put("tema", VetorialId.temaParaJson(m, i, cor).toString())
                 Handler(Looper.getMainLooper()).post { a.aplicarTema() }
             }
-            if (chave == "empresa" && valor != null) {
+            if (chave == Lojas.chaveDeSync(a) && valor != null) {
                 Perfil.aplicarSincronia(a, valor)
-                Perfil.paraSincronia(a)?.let { env.put("empresa", it.toString()) }
+                Perfil.paraSincronia(a)?.let { env.put(chave, it.toString()) }
             }
             if (chave == "voz" && valor != null) {
                 aplicarVoz(a, valor)
@@ -268,7 +268,7 @@ internal object SincroniaId {
         val tema = VetorialId.temaParaJson(a.prefs.getInt(Tema.PREF_MODELO, 0), a.prefs.getInt(Tema.PREF_ICONES, 0), Tema.cor(a.prefs))
         enviar(a, "tema", tema, ver, env)
         enviar(a, "preferencias", prefsAtuais(a), ver, env)
-        Perfil.paraSincronia(a)?.let { enviar(a, "empresa", it, ver, env) }
+        Perfil.paraSincronia(a)?.let { enviar(a, Lojas.chaveDeSync(a), it, ver, env) }
         vozAtual(a)?.let { enviar(a, "voz", it, ver, env) }
         SincroniaMarketing.enviarTudo(a, ver, env)
         a.prefs.edit().putString(VetorialId.PREF_VERSOES, ver.toString()).putString(VetorialId.PREF_ENVIADO, env.toString()).apply()
