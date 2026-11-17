@@ -162,7 +162,7 @@ internal fun MainActivity.abrirCanais(anterior: TelaDeAjustes? = null) {
         if (canais.size < 3) {
             conectar += TelaDeAjustes.Ajuste("Conectar Nuvemshop", { "Você autoriza no navegador e volta para a Vênus." }) { conectarPeloNavegador("nuvemshop") }
             conectar += TelaDeAjustes.Ajuste("Conectar Mercado Livre", { "Você autoriza no navegador e volta para a Vênus." }) { conectarPeloNavegador("mercadolivre") }
-            conectar += TelaDeAjustes.Ajuste("Conectar site próprio", { "Qualquer loja com a API simples da Vênus (produtos, pedidos e estoque) e uma chave de acesso." }) { conectarSiteProprio(tela) }
+            conectar += TelaDeAjustes.Ajuste("Conectar outro site (com chave de API)", { "Só para lojas que têm a API simples da Vênus. Se o seu site é o da Desejo de Intimidade, não precisa: use Menu › Conectar à loja, só com e-mail e senha." }) { conectarSiteProprio(tela) }
         } else {
             conectar += TelaDeAjustes.Ajuste("Limite de 3 canais atingido", { "Desconecte um canal para conectar outro." }) { }
         }
