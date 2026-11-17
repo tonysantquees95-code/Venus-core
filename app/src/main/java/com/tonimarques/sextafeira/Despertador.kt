@@ -56,6 +56,9 @@ class Despertador(
     @Volatile
     private var gravando = false
 
+    @Volatile
+    private var abertoEm = 0L
+
     /** true enquanto a Vênus deve esperar a frase (mesmo que, no momento, tenha cedido o microfone). */
     @Volatile
     var ativo = false
@@ -109,6 +112,7 @@ class Despertador(
     private fun abrirMicrofone() {
         if (!ativo || gravando) return
         gravando = true
+        abertoEm = SystemClock.elapsedRealtime()
         val minha = ++geracao
         Thread({ executar(minha) }, "venus-despertador").start()
     }
@@ -127,14 +131,37 @@ class Despertador(
             emptyList()
         }
         val emLigacao = audio?.mode == AudioManager.MODE_IN_CALL || audio?.mode == AudioManager.MODE_IN_COMMUNICATION
-        return emLigacao || lista.any { it.clientAudioSessionId != minhaSessao }
+        return emLigacao || gravacoesDeOutros(lista) > 0
+    }
+
+    /**
+     * Quantas gravações da lista do sistema NÃO são a nossa. Alguns celulares informam um número de sessão diferente
+     * do que o AudioRecord devolve; sem este cuidado a Vênus achava que a própria gravação era de outro app, soltava
+     * o microfone, voltava, soltava... (o microfone ligando e desligando sem parar, e o player pausando e tocando).
+     */
+    private fun gravacoesDeOutros(lista: List<AudioRecordingConfiguration>): Int {
+        var outras = 0
+        var achouMinha = false
+        for (c in lista) {
+            val porSessao = minhaSessao != -1 && c.clientAudioSessionId == minhaSessao
+            val porOrigem = gravando && !achouMinha &&
+                c.clientAudioSource == MediaRecorder.AudioSource.VOICE_RECOGNITION
+            if (porSessao || porOrigem) {
+                achouMinha = true
+            } else {
+                outras++
+            }
+        }
+        return outras
     }
 
     private fun reavaliar(configs: List<AudioRecordingConfiguration>) {
         if (!ativo) return
         val silenciada = Build.VERSION.SDK_INT >= 29 &&
             configs.any { it.clientAudioSessionId == minhaSessao && it.isClientSilenced }
-        if (gravando && (silenciada || outroAppGravando(configs))) {
+        // logo depois de abrir, o sistema ainda está registrando a nossa gravação: não conta como "outro app"
+        val acabouDeAbrir = SystemClock.elapsedRealtime() - abertoEm < 1500
+        if (gravando && !acabouDeAbrir && (silenciada || outroAppGravando(configs))) {
             // Outro app começou a gravar: solta o microfone na hora.
             cedido = true
             principal.removeCallbacks(retomar)
@@ -190,6 +217,8 @@ class Despertador(
             var aguardaDesde = 0L
             var mudouEm = 0L
             var textoDaChamada = ""
+            var textoMusica = ""
+            var mudouMusicaEm = 0L
             // Ouviu a chamada ("Ei Vênus"): espera a pessoa terminar de falar (ou parar um instante), para já levar o pedido junto.
             fun acionou(texto: String, terminou: Boolean, agora: Long): Boolean {
                 if (!Cerebro.pareceAtivacao(texto, acionarPeloNome())) {
@@ -265,9 +294,15 @@ class Despertador(
                         livreAte = agora + 6000
                         continue
                     }
+                    if (texto != textoMusica) {
+                        textoMusica = texto
+                        mudouMusicaEm = agora
+                    }
+                    // Com música tocando o reconhecedor quase nunca "termina" a frase: texto parado por 0,8 s vale como fim.
+                    val parou = texto.isNotBlank() && agora - mudouMusicaEm >= 800
                     val comando = Cerebro.comandoDeMusica(texto, exigirNome = true)
                     // "Ei Vênus" abre o orbe; só o nome ("Vênus") vale depois que a pessoa termina de falar
-                    if (comando == null && acionou(texto, terminou, agora)) break
+                    if (comando == null && acionou(texto, terminou || parou, agora)) break
                     if (comando != null && agora >= esperaAte) {
                         if (comando == candidato) repeticoes++ else {
                             candidato = comando
@@ -275,12 +310,13 @@ class Despertador(
                         }
                         // volume só depois da frase inteira ("vinte" não pode virar 20 antes do "e cinco")
                         val precisaDoFim = comando.startsWith("volume") || comando == "aumentar_volume" || comando == "diminuir_volume"
-                        if (terminou || (!precisaDoFim && repeticoes >= 3)) {
+                        if (terminou || parou || (!precisaDoFim && repeticoes >= 3)) {
                             val c = comando
                             principal.post { aoComando?.invoke(c) }
                             esperaAte = agora + 1500
                             candidato = null
                             repeticoes = 0
+                            textoMusica = ""
                             rec.reset()
                             inicioDaFala = agora
                         }
@@ -374,7 +410,7 @@ class Despertador(
          */
         val FRASES_MUSICA = listOf(
             "vênus", "venus", "ei", "ativar", "ativa",
-            "pausar", "pausa", "pause", "parar", "para", "pare", "continuar", "continua", "continue", "tocar", "toca", "toque", "retomar",
+            "trocar", "troca", "troque", "mudar", "muda", "mude", "outra", "pausar", "pausa", "pause", "parar", "para", "pare", "continuar", "continua", "continue", "tocar", "toca", "toque", "retomar",
             "próxima", "proxima", "próximo", "seguinte", "pula", "pular", "pule", "passa", "passar", "anterior", "volta", "voltar", "volte",
             "música", "musica", "faixa", "som", "player", "essa", "esta", "de", "a", "o", "e", "um", "uma", "pouco",
             "volume", "aumentar", "aumenta", "aumente", "sobe", "subir", "suba", "diminuir", "diminui", "diminua", "abaixar", "abaixa", "abaixe",

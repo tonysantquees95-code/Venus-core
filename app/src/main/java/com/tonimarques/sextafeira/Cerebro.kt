@@ -502,6 +502,7 @@ class Cerebro(
             val parar = tem("pausar", "pausa", "pause", "parar", "pare")
             if (parar || (tem("para") && tem("musica", "som", "faixa", "player", "tocar"))) return "pausar"
             if (tem("proxima", "proximo", "seguinte") ||
+                (tem("trocar", "troca", "troque", "mudar", "muda", "mude") && (tem("musica", "faixa", "essa", "esta", "outra") || p.size <= 2)) ||
                 (tem("pula", "pular", "pule", "passa", "passar", "avanca") && (tem("musica", "faixa", "essa", "esta") || p.size <= 2))
             ) return "proxima"
             if (tem("anterior") || (tem("volta", "voltar", "volte") && tem("musica", "faixa"))) return "anterior"
