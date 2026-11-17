@@ -56,6 +56,19 @@ class Loja(private val contexto: Context) {
         return null
     }
 
+    /** E-mail e senha do administrador do site (Floot) para acompanhar a conta em outro aparelho; null se não estiver conectado. */
+    fun loginParaSincronia(): Pair<String, String>? {
+        val email = prefs.getString(P_EMAIL, null) ?: return null
+        val senha = prefs.getString(P_SENHA, null)?.let { decifrar(it) } ?: return null
+        return email to senha
+    }
+
+    /** Guarda o login que veio da conta (sem testar de novo na rede), só se este aparelho ainda não tem um. */
+    fun guardarLoginDaConta(email: String, senha: String) {
+        if (email.isBlank() || senha.isBlank() || prefs.getString(P_EMAIL, null) != null) return
+        prefs.edit().putString(P_EMAIL, email.trim()).putString(P_SENHA, cifrar(senha)).apply()
+    }
+
     fun desconectar() {
         prefs.edit().clear().apply()
     }

@@ -236,6 +236,9 @@ internal object SincroniaId {
         if (VetorialId.cadastroPerdido(perfilLocal.contains("dono") || perfilLocal.contains("regras_json"), ver.optInt("empresa", 0))) {
             ver.remove("empresa"); env.remove("empresa"); desde = 0L // reinstalou e o Android só devolveu as versões: busca o cadastro da conta de novo
         }
+        if (ver.optInt(SincroniaConexoes.CHAVE, 0) > 0 && SincroniaConexoes.paraSincronia(a) == null) {
+            ver.remove(SincroniaConexoes.CHAVE); env.remove(SincroniaConexoes.CHAVE); desde = 0L // reinstalou: busca a conexão da loja na conta de novo
+        }
         val r = Nuvem.bruto(a, "GET", "/id/sync?desde=$desde", null, VetorialId.token(a))
         if (!r.ok) return
         for (doc in r.json.optJSONArray("docs").itens()) {
@@ -251,6 +254,10 @@ internal object SincroniaId {
             if (chave == Lojas.chaveDeSync(a) && valor != null) {
                 Perfil.aplicarSincronia(a, valor)
                 Perfil.paraSincronia(a)?.let { env.put(chave, it.toString()) }
+            }
+            if (chave == SincroniaConexoes.CHAVE && valor != null) {
+                SincroniaConexoes.aplicar(a, valor)
+                SincroniaConexoes.paraSincronia(a)?.let { env.put(chave, it.toString()) }
             }
             if (chave == "voz" && valor != null) {
                 aplicarVoz(a, valor)
@@ -269,6 +276,7 @@ internal object SincroniaId {
         enviar(a, "tema", tema, ver, env)
         enviar(a, "preferencias", prefsAtuais(a), ver, env)
         Perfil.paraSincronia(a)?.let { enviar(a, Lojas.chaveDeSync(a), it, ver, env) }
+        SincroniaConexoes.paraSincronia(a)?.let { enviar(a, SincroniaConexoes.CHAVE, it, ver, env) }
         vozAtual(a)?.let { enviar(a, "voz", it, ver, env) }
         SincroniaMarketing.enviarTudo(a, ver, env)
         a.prefs.edit().putString(VetorialId.PREF_VERSOES, ver.toString()).putString(VetorialId.PREF_ENVIADO, env.toString()).apply()
