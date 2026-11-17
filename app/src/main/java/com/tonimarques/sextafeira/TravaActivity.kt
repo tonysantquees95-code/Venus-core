@@ -89,14 +89,19 @@ class TravaActivity : Activity() {
         val fone = if (criar) campo("Celular com DDD (para recuperar a senha)", InputType.TYPE_CLASS_PHONE) else null
         val email = campo("E-mail", InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS).also { it.setText(email0) }
         val senha = campo("Senha (8 ou mais caracteres)", InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD)
-        botao(if (criar) "Criar conta" else "Entrar", true) { enviarLogin(email.text.toString().trim(), senha.text.toString(), nome?.text?.toString().orEmpty().trim(), fone?.text?.toString().orEmpty().trim(), null, null) }
+        if (criar) corpo.addView(texto(RecuperacaoDeConta.EXPLICACAO))
+        val rec = if (criar) RecuperacaoDeConta.camposDeCadastro(this) { dica, tipo -> campo(dica, tipo) } else null
+        botao(if (criar) "Criar conta" else "Entrar", true) {
+            if (rec != null && !rec.preenchidos()) return@botao aviso("Preencha a recuperação: senha de 6 números e pergunta secreta, cada uma duas vezes.")
+            enviarLogin(email.text.toString().trim(), senha.text.toString(), nome?.text?.toString().orEmpty().trim(), fone?.text?.toString().orEmpty().trim(), null, null, rec?.json())
+        }
         link(if (criar) "Já tenho conta" else "Criar conta") { criar = !criar; mostrarLogin(email.text.toString().trim()) }
         if (!criar) link("Esqueci minha senha") { mostrarRecuperacao(email.text.toString().trim()) }
     }
 
-    private fun enviarLogin(email: String, senha: String, nome: String, fone: String, encerrar: String?, remover: String?) {
+    private fun enviarLogin(email: String, senha: String, nome: String, fone: String, encerrar: String?, remover: String?, recuperacao: JSONObject? = null) {
         aviso(if (criar && encerrar == null && remover == null) "Criando a conta…" else "Entrando…")
-        emFundo({ if (criar && encerrar == null && remover == null) VetorialId.cadastrar(this, email, senha, nome, fone) else VetorialId.entrar(this, email, senha, encerrar, remover) }) { r ->
+        emFundo({ if (criar && encerrar == null && remover == null) VetorialId.cadastrar(this, email, senha, nome, fone, recuperacao) else VetorialId.entrar(this, email, senha, encerrar, remover) }) { r ->
             if (r == null) return@emFundo aviso("Sem conexão com o servidor. Tente de novo.")
             val codigo = r.json.optString("codigo")
             when {
@@ -134,8 +139,9 @@ class TravaActivity : Activity() {
         corpo.addView(texto("Recuperar a senha"))
         val email = campo("E-mail da conta", InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS).also { it.setText(email0) }
         if (!enviado) {
+            botao("Usar a senha de 6 números ou a pergunta secreta", true) { RecuperacaoDeConta.iniciar(this, email.text.toString().trim()) { mail -> criar = false; mostrarLogin(mail) } }
             var canal = canal0
-            botao("Receber o código por e-mail", true) { canal = "email"; pedirCodigo(email.text.toString().trim(), canal) }
+            botao("Receber o código por e-mail", false) { canal = "email"; pedirCodigo(email.text.toString().trim(), canal) }
             botao("Receber o código por SMS", false) { canal = "sms"; pedirCodigo(email.text.toString().trim(), canal) }
         } else {
             val codigo = campo("Código de 6 dígitos", InputType.TYPE_CLASS_NUMBER)

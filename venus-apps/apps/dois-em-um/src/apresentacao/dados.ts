@@ -57,6 +57,7 @@ export const NOVIDADES: Novidade[] = [
   { id: 17, data: "2026-11-16", tipo: "novo", titulo: "Painel ao vivo no computador", texto: "Em Empresa › Painel ao vivo você acompanha o faturamento, as taxas e a auditoria da loja em tempo real, igual ao painel do celular, no Windows, no Mac, no iPhone e no navegador." },
   { id: 18, data: "2026-11-16", tipo: "novo", titulo: "Até 3 lojas na mesma conta", texto: "Em Empresa › Minhas lojas você cria até 3 lojas (outro site, outro nicho) na mesma assinatura. Cada loja tem a sua identidade, produtos, vitrine, QR Code, cartão, panfleto e painel ao vivo, tudo separado, e você troca de uma para outra no alto da tela. Ao informar o site, a Vênus pega a cor e o logo dele." },
   { id: 19, data: "2026-11-16", tipo: "correcao", titulo: "Vênus responde dólar, chuva e notícias", texto: "No navegador, no Windows e no Mac a Vênus agora mostra a cotação do dólar e de outras moedas, a previsão do tempo (hoje, amanhã e a semana) e pesquisa na internet para notícias e preços de agora, como no celular." },
+  { id: 20, data: "2026-11-17", tipo: "novo", titulo: "Recuperar a senha sem e-mail", texto: "Ao criar o Vetorial ID você define uma senha de recuperação de 6 números e uma pergunta secreta com a resposta. Se esquecer a senha, toque em Esqueci a senha, escolha um dos dois jeitos e crie a senha nova. Guarde bem esses dados." },
 ];
 
 export const ROTULO: Record<TipoNovidade, string> = { novo: "Novo", melhoria: "Melhorou", correcao: "Corrigido" };

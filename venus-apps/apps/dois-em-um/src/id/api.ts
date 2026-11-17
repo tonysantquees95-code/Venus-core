@@ -1,6 +1,9 @@
 import { URL_API } from "@venus/nucleo";
 
 /** Cliente do Vetorial ID (servidor da Vênus). Sem segredos: só o token da sessão do próprio usuário. */
+/** Senha de 6 números e pergunta secreta do cadastro (cada uma digitada duas vezes). */
+export type DadosDeRecuperacao = { pin: string; pinConfirma: string; pergunta: string; resposta: string; respostaConfirma: string };
+
 export class ErroId extends Error {
   constructor(
     public status: number,
@@ -102,8 +105,10 @@ export function criarApi(base: string = URL_API, f: typeof fetch = (...a) => fet
   return {
     entrar: (email: string, senha: string, dispositivo: Aparelho, extra: { encerrar?: string; remover?: string } = {}) =>
       chamar<Sessao>("POST", "/id/entrar", { email, senha, dispositivo, ...extra }),
-    cadastrar: (email: string, senha: string, nome: string, telefone: string, dispositivo: Aparelho) =>
-      chamar<Sessao>("POST", "/id/cadastrar", { email, senha, nome, telefone, dispositivo }),
+    cadastrar: (email: string, senha: string, nome: string, telefone: string, dispositivo: Aparelho, recuperacao?: DadosDeRecuperacao) =>
+      chamar<Sessao>("POST", "/id/cadastrar", { email, senha, nome, telefone, dispositivo, recuperacao }),
+    recuperarPergunta: (email: string) => chamar<{ existe: boolean; configurada: boolean; pergunta: string }>("POST", "/id/recuperar/pergunta", { email }),
+    recuperarSegredo: (email: string, metodo: "pin" | "pergunta", valor: string, novaSenha: string) => chamar<{ ok: boolean }>("POST", "/id/recuperar/segredo", { email, metodo, valor, novaSenha }),
     recuperarCanais: () => chamar<{ canais: { email: boolean; sms: boolean } }>("GET", "/id/recuperar/canais"),
     recuperarPedir: (email: string, canal: "email" | "sms") => chamar<{ ok: boolean; mensagem: string }>("POST", "/id/recuperar/pedir", { email, canal }),
     recuperarConfirmar: (email: string, codigo: string, novaSenha: string) => chamar<{ ok: boolean }>("POST", "/id/recuperar/confirmar", { email, codigo, novaSenha }),

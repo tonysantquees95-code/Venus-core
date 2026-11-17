@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { criarApi, ErroId, type Aparelho, type ApiId, type Licenca, type Perfil, type Sessao } from "./api";
+import { criarApi, ErroId, type Aparelho, type DadosDeRecuperacao, type ApiId, type Licenca, type Perfil, type Sessao } from "./api";
 import { detectarPlataforma, NOMES_DE_PLATAFORMA } from "../ajustes/logica";
 import { noDesktop, ponteDesktop } from "../desktop/ponte";
 import { avaliar, type Estado } from "./trava";
@@ -37,7 +37,7 @@ interface Ctx {
   conflito: Conflito | null;
   aviso: string;
   entrar: (email: string, senha: string, extra?: { encerrar?: string; remover?: string }) => Promise<void>;
-  cadastrar: (email: string, senha: string, nome: string, telefone: string) => Promise<void>;
+  cadastrar: (email: string, senha: string, nome: string, telefone: string, recuperacao?: DadosDeRecuperacao) => Promise<void>;
   /** Trava de segurança: o que o selo de licença assinado autoriza agora. */
   estado: Estado;
   validarAgora: () => Promise<void>;
@@ -141,7 +141,7 @@ export function IdProvider({ children, api: apiFora }: { children: ReactNode; ap
   }, [sessao?.sessao, recarregarConta]);
 
   const entrar = useCallback<Ctx["entrar"]>(async (email, senha, extra) => guardar(await api.entrar(email, senha, meuAparelho(), extra)), [api, guardar]);
-  const cadastrar = useCallback<Ctx["cadastrar"]>(async (e, s, n, t) => guardar(await api.cadastrar(e, s, n, t, meuAparelho())), [api, guardar]);
+  const cadastrar = useCallback<Ctx["cadastrar"]>(async (e, s, n, t, r) => guardar(await api.cadastrar(e, s, n, t, meuAparelho(), r)), [api, guardar]);
   const sair = useCallback(async () => {
     const t = ref.current?.token;
     guardar(null);
