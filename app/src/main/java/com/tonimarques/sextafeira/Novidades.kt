@@ -38,6 +38,7 @@ internal object Novidades {
         Item(19, "2026-11-16", "novo", "Até 3 lojas na mesma conta", "Em Menu › Loja › Minhas lojas você cria até 3 lojas (outro site, outro nicho) na mesma assinatura e troca entre elas. Cada loja tem o seu perfil, catálogo, vitrine e painel ao vivo."),
         Item(20, "2026-11-17", "melhoria", "A conexão da loja volta sozinha", "A chave de acesso do site, o login de administrador e o aviso de pedidos agora acompanham a sua conta Vetorial. Se você reinstalar a Vênus ou entrar em outro aparelho, é só entrar com a sua conta: não precisa configurar o site de novo."),
         Item(21, "2026-11-17", "correcao", "Música: comandos pela voz mais firmes", "Com música tocando, “Vênus, aumentar o volume”, “Vênus, trocar música” e os outros comandos agora funcionam sem precisar do “Ei”. Também corrigi o microfone que ligava e desligava sem parar e fazia a música pausar e tocar sozinha."),
+        Item(22, "2026-11-17", "correcao", "Música por voz sem abrir a tela", "Dizer \"Vênus, próxima música\" (ou pausar, volume, tocar algo) agora só faz o que você pediu: não abre o pop-up, não pausa a música e não fica ouvindo de novo. Se você disser \"Ei Vênus\", aí sim ela abre e conversa. Também deixei a Vênus mais paciente quando você diz só o nome com música tocando."),
     )
 
     fun rotulo(tipo: String): String = when (tipo) { "novo" -> "Novo"; "melhoria" -> "Melhorou"; "correcao" -> "Corrigido"; else -> tipo }

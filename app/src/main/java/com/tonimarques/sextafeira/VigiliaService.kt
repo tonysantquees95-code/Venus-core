@@ -189,7 +189,14 @@ class VigiliaService : Service() {
                 this,
                 aoOuvir = { resto ->
                     falhasOffline = 0
-                    abrirPopup(resto)
+                    // Pedido seco de música ("Vênus, próxima música", "Vênus, toca pagode"): só faz, sem abrir o pop-up nem ficar ouvindo.
+                    val seco = if (resto.isNotBlank() && prefs.getBoolean(PREF_MUSICA, true)) Cerebro.pedidoDeMusica("vênus $resto") else null
+                    if (seco != null) {
+                        Midia.executar(this, seco)
+                        agendar(1500)
+                    } else {
+                        abrirPopup(resto)
+                    }
                 },
                 aoFalhar = {
                     falhasOffline++
