@@ -659,15 +659,20 @@ class Ferramentas(private val activity: Activity, private val memoria: Memoria? 
             if (audio.isMusicActive) {
                 pacote?.let { prefs.edit().putString(PREF_ULTIMO_PLAYER, it).apply() }
             } else if (pacote != null) {
+                // O player estava fechado: abre e insiste no play até a música começar (um app que acabou de abrir leva alguns segundos).
                 activity.packageManager.getLaunchIntentForPackage(pacote)?.let { abrir ->
                     try {
                         activity.startActivity(abrir.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
                     } catch (e: Exception) {
                     }
-                    principal.postDelayed({ if (!audio.isMusicActive) play() }, 3000)
+                    for (espera in longArrayOf(2500, 5000, 8000, 12000)) {
+                        principal.postDelayed({
+                            if (!audio.isMusicActive) play() else prefs.edit().putString(PREF_ULTIMO_PLAYER, pacote).apply()
+                        }, espera)
+                    }
                 }
             }
-        }, 1500)
+        }, 1200)
         val nome = mapOf("spotify" to "Spotify", "deezer" to "Deezer", "youtube music" to "YouTube Music", "youtube" to "YouTube Music")[ComandosLocais.normalizar(app).trim()]
         return if (nome != null) "Continuando a música de onde parou no $nome." else "Continuando a música de onde parou."
     }
