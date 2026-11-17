@@ -39,6 +39,7 @@ internal object Novidades {
         Item(20, "2026-11-17", "melhoria", "A conexão da loja volta sozinha", "A chave de acesso do site, o login de administrador e o aviso de pedidos agora acompanham a sua conta Vetorial. Se você reinstalar a Vênus ou entrar em outro aparelho, é só entrar com a sua conta: não precisa configurar o site de novo."),
         Item(21, "2026-11-17", "correcao", "Música: comandos pela voz mais firmes", "Com música tocando, “Vênus, aumentar o volume”, “Vênus, trocar música” e os outros comandos agora funcionam sem precisar do “Ei”. Também corrigi o microfone que ligava e desligava sem parar e fazia a música pausar e tocar sozinha."),
         Item(22, "2026-11-17", "correcao", "Música por voz sem abrir a tela", "Dizer \"Vênus, próxima música\" (ou pausar, volume, tocar algo) agora só faz o que você pediu: não abre o pop-up, não pausa a música e não fica ouvindo de novo. Se você disser \"Ei Vênus\", aí sim ela abre e conversa. Também deixei a Vênus mais paciente quando você diz só o nome com música tocando."),
+        Item(23, "2026-11-17", "melhoria", "Comandos de música e apps sem conversa", "\"Dê play no Deezer\" agora abre o Deezer fechado e dá play de verdade. E, ao pedir para tocar, pausar, mudar o volume ou abrir um app, a Vênus só faz: escreve o aviso na tela, sem ficar falando \"abrindo…\" nem voltar a ouvir."),
     )
 
     fun rotulo(tipo: String): String = when (tipo) { "novo" -> "Novo"; "melhoria" -> "Melhorou"; "correcao" -> "Corrigido"; else -> tipo }

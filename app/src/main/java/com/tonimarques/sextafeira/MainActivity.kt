@@ -1742,7 +1742,8 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
 
     internal fun responder(texto: String) {
         adicionarMensagem(texto, false)
-        falar(texto)
+        // Ação seca (tocar, pausar, abrir app): só escreve o aviso e faz; não precisa falar "abrindo o Deezer".
+        if (acaoSemConversa) principal.post { aposFala() } else falar(texto)
     }
 
     internal fun obterGemini(): Gemini? {
