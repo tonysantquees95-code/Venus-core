@@ -3,7 +3,7 @@ import { IdentidadeDaLoja } from "./CriarLoja";
 import { IconeNomeado } from "../components/Icones";
 import { PaginaComLateral, type ItemLateral } from "../components/PaginaComLateral";
 import { CartaoDeVisitas, Panfleto, QrCodeSecao } from "./Divulgacao";
-import { VitrineECatalogo } from "./VitrineWeb";
+import { VitrineECatalogo } from "./TelaVitrineWeb";
 import { PainelAoVivo } from "./PainelAoVivo";
 import { MinhasLojas, SeletorDeLoja } from "./MinhasLojas";
 import { DadosDaLoja, Historico, IdeiasDePost, IdeiasDeVideo, InstagramDaLoja, PrimeirosPassos, RegrasDeVenda, RespostasDoInstagram, StoriesDoDia } from "./secoes";
