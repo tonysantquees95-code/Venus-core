@@ -38,24 +38,28 @@ private fun MainActivity.formularioDeConta(criar: Boolean, email0: String = "", 
     val nome = if (criar) campo("Nome da loja ou o seu nome", InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_WORDS, nome0) else null
     val email = campo("E-mail", InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS, email0)
     val senha = campo("Senha (8 ou mais caracteres)", InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD)
+    val rec = if (criar) RecuperacaoDeConta.camposDeCadastro(this) { dica, tipo -> campo(dica, tipo) } else null
     val pendente = VetorialId.pegarAviso(this)
     CaixaBuilder(this)
         .setTitle(if (criar) "Criar conta Vetorial ID" else "Entrar com o Vetorial ID")
         .setMessage(pendente.ifBlank { "Um login só para a Vênus (celular, Windows e iPhone), o Vindex e o Vortex." })
-        .setView(coluna)
+        .setView(android.widget.ScrollView(this).apply { addView(coluna) })
         .setPositiveButton(if (criar) "Criar conta" else "Entrar") { _, _ ->
             val e = email.text.toString().trim(); val s = senha.text.toString(); val n = nome?.text?.toString().orEmpty().trim()
-            tentarLogin(criar, e, s, n, null, null)
+            if (rec != null && !rec.preenchidos()) { aviso("Preencha a recuperação: senha de 6 números e pergunta secreta, cada uma duas vezes."); formularioDeConta(true, e, n); return@setPositiveButton }
+            tentarLogin(criar, e, s, n, null, null, rec?.json())
         }
         .setNeutralButton(if (criar) "Já tenho conta" else "Criar conta") { _, _ ->
             formularioDeConta(!criar, email.text.toString().trim(), nome?.text?.toString().orEmpty())
         }
-        .setNegativeButton("Cancelar", null).show()
+        .setNegativeButton(if (criar) "Cancelar" else "Esqueci a senha") { _, _ ->
+            if (!criar) RecuperacaoDeConta.iniciar(this, email.text.toString().trim()) { mail -> formularioDeConta(false, mail) }
+        }.show()
 }
 
-private fun MainActivity.tentarLogin(criar: Boolean, email: String, senha: String, nome: String, encerrar: String?, remover: String?) {
+private fun MainActivity.tentarLogin(criar: Boolean, email: String, senha: String, nome: String, encerrar: String?, remover: String?, recuperacao: JSONObject? = null) {
     aviso(if (criar) "Criando a conta…" else "Entrando…")
-    emFundo({ if (criar && encerrar == null && remover == null) VetorialId.cadastrar(this, email, senha, nome) else VetorialId.entrar(this, email, senha, encerrar, remover) }) { r ->
+    emFundo({ if (criar && encerrar == null && remover == null) VetorialId.cadastrar(this, email, senha, nome, "", recuperacao) else VetorialId.entrar(this, email, senha, encerrar, remover) }) { r ->
         r.onFailure { aviso(it.mensagemAmigavel()) }
         r.onSuccess { resp ->
             val codigo = resp.json.optString("codigo")

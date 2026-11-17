@@ -8,6 +8,67 @@ import { haQuantoTempo, NOMES_DE_PLATAFORMA } from "./logica";
 const ICONE: Record<string, string> = { android: "🤖", ios: "📱", windows: "🖥️", mac: "💻", web: "🌐" };
 
 /** Entrar ou criar conta, com o aviso inteligente de aparelhos (3 vinculados, 2 ativos). */
+/** Recuperar a senha sem e-mail: e-mail → escolhe 6 números ou pergunta secreta → senha nova. */
+function RecuperarPorSegredo({ emailInicial, aoFechar }: { emailInicial: string; aoFechar: () => void }) {
+  const { api } = useId();
+  const [email, setEmail] = useState(emailInicial);
+  const [info, setInfo] = useState<{ pergunta: string } | null>(null);
+  const [metodo, setMetodo] = useState<"pin" | "pergunta" | null>(null);
+  const [valor, setValor] = useState("");
+  const [nova, setNova] = useState("");
+  const [nova2, setNova2] = useState("");
+  const [msg, setMsg] = useState("");
+  const [pronto, setPronto] = useState(false);
+  async function buscar(ev: FormEvent) {
+    ev.preventDefault(); setMsg("");
+    try {
+      const r = await api.recuperarPergunta(email.trim());
+      if (!r.existe) setMsg("Não encontramos uma conta com esse e-mail.");
+      else if (!r.configurada) setMsg("Essa conta foi criada antes da recuperação por senha de 6 números. Entre com a senha e cadastre a recuperação em Minha conta.");
+      else setInfo({ pergunta: r.pergunta });
+    } catch (e) { setMsg(e instanceof Error ? e.message : "Não consegui conferir."); }
+  }
+  async function trocar(ev: FormEvent) {
+    ev.preventDefault(); setMsg("");
+    if (nova !== nova2) { setMsg("As duas senhas novas não são iguais."); return; }
+    try { await api.recuperarSegredo(email.trim(), metodo!, valor, nova); setPronto(true); } catch (e) { setMsg(e instanceof Error ? e.message : "Não deu certo."); }
+  }
+  return (
+    <div role="dialog" aria-label="Recuperar senha" className="space-y-3 rounded-2xl border border-white/15 bg-white/10 p-4 text-sm">
+      <p className="font-semibold">Recuperar a senha</p>
+      {pronto ? (
+        <>
+          <p className="text-emerald-300">Senha trocada. Entre com a nova senha.</p>
+          <button className={`${botaoPrimario} w-full`} onClick={aoFechar}>Voltar para o login</button>
+        </>
+      ) : !info ? (
+        <form onSubmit={buscar} className="space-y-3">
+          <input className={campo} type="email" required placeholder="E-mail da conta" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="username" />
+          <button className={`${botaoPrimario} w-full`}>Continuar</button>
+        </form>
+      ) : !metodo ? (
+        <div className="space-y-2">
+          <p className="text-suave">Como provar que é você?</p>
+          <button className={`${botaoPrimario} w-full`} onClick={() => setMetodo("pin")}>Usar a senha de recuperação (6 números)</button>
+          <button className={`${botaoSuave} w-full`} onClick={() => setMetodo("pergunta")}>Responder a pergunta secreta</button>
+        </div>
+      ) : (
+        <form onSubmit={trocar} className="space-y-3">
+          {metodo === "pergunta" && <p>{info.pergunta}</p>}
+          <input className={campo} required autoComplete="off" type={metodo === "pin" ? "password" : "text"} inputMode={metodo === "pin" ? "numeric" : "text"} maxLength={metodo === "pin" ? 6 : 80}
+            placeholder={metodo === "pin" ? "Senha de recuperação (6 números)" : "Sua resposta"} value={valor} onChange={(e) => setValor(metodo === "pin" ? e.target.value.replace(/\D/g, "") : e.target.value)} />
+          <input className={campo} type="password" required minLength={8} placeholder="Senha nova (8 ou mais caracteres)" value={nova} onChange={(e) => setNova(e.target.value)} autoComplete="new-password" />
+          <input className={campo} type="password" required minLength={8} placeholder="Repita a senha nova" value={nova2} onChange={(e) => setNova2(e.target.value)} autoComplete="new-password" />
+          <button className={`${botaoPrimario} w-full`}>Trocar a senha</button>
+          <button type="button" className={`${botaoSuave} w-full`} onClick={() => { setMetodo(null); setValor(""); setMsg(""); }}>Escolher outro jeito</button>
+        </form>
+      )}
+      {msg && !pronto && <p role="status" className="text-suave">{msg}</p>}
+      {!pronto && <button type="button" className={`${botaoSuave} w-full`} onClick={aoFechar}>Cancelar</button>}
+    </div>
+  );
+}
+
 /** Recuperação de senha: pede o código (e-mail ou SMS), confirma e define a nova senha. */
 function RecuperarSenha({ emailInicial, aoFechar }: { emailInicial: string; aoFechar: () => void }) {
   const { api } = useId();
@@ -67,7 +128,10 @@ export function Entrar() {
   const [senha, setSenha] = useState("");
   const [nome, setNome] = useState("");
   const [telefone, setTelefone] = useState("");
+  const [pin, setPin] = useState(""); const [pin2, setPin2] = useState("");
+  const [perg, setPerg] = useState(""); const [resp, setResp] = useState(""); const [resp2, setResp2] = useState("");
   const [recuperando, setRecuperando] = useState(false);
+  const [outroJeito, setOutroJeito] = useState(false);
   const [erro, setErro] = useState("");
   const [ocupado, setOcupado] = useState(false);
   const [escolha, setEscolha] = useState<{ tipo: "encerrar" | "remover"; itens: { id: string; titulo: string }[] } | null>(null);
@@ -77,7 +141,7 @@ export function Entrar() {
     setOcupado(true);
     limparAviso();
     try {
-      if (criar && !extra.encerrar && !extra.remover) await cadastrar(email, senha, nome, telefone);
+      if (criar && !extra.encerrar && !extra.remover) await cadastrar(email, senha, nome, telefone, { pin, pinConfirma: pin2, pergunta: perg, resposta: resp, respostaConfirma: resp2 });
       else await entrar(email, senha, extra);
       setEscolha(null);
     } catch (e) {
@@ -107,11 +171,23 @@ export function Entrar() {
         {criar && <input className={campo} type="tel" required placeholder="Celular com DDD (para recuperar a senha)" value={telefone} onChange={(e) => setTelefone(e.target.value)} autoComplete="tel" />}
         <input className={campo} type="email" required placeholder="E-mail" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="username" />
         <input className={campo} type="password" required minLength={8} placeholder="Senha (8 ou mais caracteres)" value={senha} onChange={(e) => setSenha(e.target.value)} autoComplete={criar ? "new-password" : "current-password"} />
+        {criar && (
+          <div className="space-y-3 rounded-2xl border border-white/15 p-3">
+            <p className="text-xs text-suave">Recuperação da conta: se esquecer a senha, você troca por uma destas duas. Guarde bem.</p>
+            <input className={campo} type="password" required inputMode="numeric" maxLength={6} autoComplete="off" placeholder="Senha de recuperação (6 números)" value={pin} onChange={(e) => setPin(e.target.value.replace(/\D/g, ""))} />
+            <input className={campo} type="password" required inputMode="numeric" maxLength={6} autoComplete="off" placeholder="Repita a senha de recuperação" value={pin2} onChange={(e) => setPin2(e.target.value.replace(/\D/g, ""))} />
+            <input className={campo} required maxLength={120} autoComplete="off" placeholder="Pergunta secreta (escreva a sua)" value={perg} onChange={(e) => setPerg(e.target.value)} />
+            <input className={campo} required maxLength={80} autoComplete="off" placeholder="Resposta da pergunta" value={resp} onChange={(e) => setResp(e.target.value)} />
+            <input className={campo} required maxLength={80} autoComplete="off" placeholder="Repita a resposta" value={resp2} onChange={(e) => setResp2(e.target.value)} />
+          </div>
+        )}
         <button className={`${botaoPrimario} w-full`} disabled={ocupado}>{criar ? "Criar conta" : "Entrar"}</button>
       </form>
       {erro && <p role="alert" className="text-sm text-rose-300">{erro}</p>}
       {!criar && <button type="button" className="w-full text-center text-sm text-suave underline" onClick={() => setRecuperando(true)}>Esqueci minha senha</button>}
-      {recuperando && <RecuperarSenha emailInicial={email} aoFechar={() => setRecuperando(false)} />}
+      {recuperando && (outroJeito
+        ? <RecuperarSenha emailInicial={email} aoFechar={() => { setRecuperando(false); setOutroJeito(false); }} />
+        : <><RecuperarPorSegredo emailInicial={email} aoFechar={() => setRecuperando(false)} /><button type="button" className="w-full text-center text-xs text-suave underline" onClick={() => setOutroJeito(true)}>Receber um código por e-mail ou SMS</button></>)}
       {escolha && (
         <div role="alertdialog" className="rounded-2xl border border-white/15 bg-white/10 p-4 text-sm">
           <p className="font-semibold">

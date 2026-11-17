@@ -111,6 +111,11 @@ object VetorialId {
     }
 
     // ------------------------------------------------------------------ recuperação de senha
+    /** Recuperar a senha sem e-mail: pergunta secreta da conta e troca da senha pelos 6 números ou pela resposta. */
+    fun recuperarPergunta(ctx: Context, email: String) = Nuvem.bruto(ctx, "POST", "/id/recuperar/pergunta", JSONObject().put("email", email), null)
+    fun recuperarSegredo(ctx: Context, email: String, metodo: String, valor: String, novaSenha: String) =
+        Nuvem.bruto(ctx, "POST", "/id/recuperar/segredo", JSONObject().put("email", email).put("metodo", metodo).put("valor", valor).put("novaSenha", novaSenha), null)
+
     fun recuperarCanais(ctx: Context) = Nuvem.bruto(ctx, "GET", "/id/recuperar/canais", null, null)
     fun recuperarPedir(ctx: Context, email: String, canal: String) = Nuvem.bruto(ctx, "POST", "/id/recuperar/pedir", JSONObject().put("email", email).put("canal", canal), null)
     fun recuperarConfirmar(ctx: Context, email: String, codigo: String, novaSenha: String) =
@@ -128,8 +133,9 @@ object VetorialId {
     }
 
     /** Cria a conta; se este celular já usa a loja (token vl_…), a loja é ligada à conta. */
-    fun cadastrar(ctx: Context, email: String, senha: String, nome: String, telefone: String = ""): Nuvem.Resposta {
+    fun cadastrar(ctx: Context, email: String, senha: String, nome: String, telefone: String = "", recuperacao: JSONObject? = null): Nuvem.Resposta {
         val corpo = JSONObject().put("email", email).put("senha", senha).put("nome", nome).put("telefone", telefone).put("dispositivo", aparelho(ctx))
+        if (recuperacao != null) corpo.put("recuperacao", recuperacao)
         val antigo = Nuvem.tokenDaLoja(ctx).takeIf { it.startsWith("vl_") }
         return Nuvem.bruto(ctx, "POST", "/id/cadastrar", corpo, antigo).also { if (it.ok) { guardar(ctx, it.json); puxarPerfilSemErro(ctx) } }
     }
