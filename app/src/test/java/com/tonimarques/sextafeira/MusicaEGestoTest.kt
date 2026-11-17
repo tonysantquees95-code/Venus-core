@@ -14,6 +14,8 @@ class MusicaEGestoTest {
         assertEquals("pausar", Cerebro.comandoDeMusica("[unk] para a música"))
         assertEquals("proxima", Cerebro.comandoDeMusica("próxima música"))
         assertEquals("proxima", Cerebro.comandoDeMusica("próxima"))
+        assertEquals("proxima", Cerebro.comandoDeMusica("vênus trocar música", exigirNome = true))
+        assertEquals("proxima", Cerebro.comandoDeMusica("vênus troca de música", exigirNome = true))
         assertEquals("anterior", Cerebro.comandoDeMusica("música anterior"))
         assertEquals("tocar", Cerebro.comandoDeMusica("continuar música"))
         assertEquals("aumentar_volume", Cerebro.comandoDeMusica("aumenta o volume"))
