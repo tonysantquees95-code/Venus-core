@@ -33,7 +33,7 @@ export function diaDoAno(agora: Date): number {
 }
 
 export function dica(agora: Date): string {
-  return DICAS[diaDoAno(agora) % DICAS.length];
+  return DICAS[diaDoAno(agora) % DICAS.length] ?? DICAS[0]!;
 }
 
 /** [esgotados]: nomes dos produtos sem estoque (vem do catálogo do site); [apelido]: como a pessoa gosta de ser chamada. */
