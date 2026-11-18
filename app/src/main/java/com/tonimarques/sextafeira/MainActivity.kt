@@ -221,6 +221,32 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         tratarIntent(intent)
     }
 
+    /** Painel do dia: uma vez por dia, ao abrir, escreve no chat o que importa agora (lembretes, loja e uma dica). */
+    private fun mostrarPainelDoDia() {
+        val agora = Calendar.getInstance()
+        if (!PainelDoDia.deveMostrar(prefs.getBoolean(PainelDoDia.PREF_LIGADO, true), prefs.getString(PainelDoDia.PREF_ULTIMO, null), agora)) return
+        // só depois de a pessoa ter cadastro e a primeira conversa: no primeiro uso quem explica é o guia
+        if (!prefs.getBoolean(Onboarding.PREF_VISTO, false) || precisaDoCadastro()) return
+        prefs.edit().putString(PainelDoDia.PREF_ULTIMO, PainelDoDia.chaveDoDia(agora)).apply()
+        Thread {
+            val lembretes = try {
+                Lembretes.deHoje(this).map { "${Lembretes.quandoFalado(it.quando)}, ${it.texto.replaceFirstChar { c -> c.lowercase() }}" }
+            } catch (e: Exception) { emptyList() }
+            var loja: String? = null
+            var aviso: String? = null
+            try {
+                val l = Loja(this)
+                if (l.conectada) {
+                    loja = l.resumoDaManha()
+                    aviso = Gestao.avisoDeData(agora)
+                }
+            } catch (e: Exception) {
+            }
+            val texto = PainelDoDia.montar(memoria.valor("apelido"), lembretes, loja, aviso, agora)
+            runOnUiThread { if (!isFinishing) adicionarMensagem(texto, false) }
+        }.start()
+    }
+
     override fun onResume() {
         super.onResume()
         // o teste pode acabar com o app aberto: confere de novo ao voltar para a tela
@@ -254,6 +280,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
                     "Diga posta agora para publicar.", false
             )
         }
+        mostrarPainelDoDia()
         orbe.invalidate()
         if (vigiliaLigada()) {
             if (temMicrofone()) {

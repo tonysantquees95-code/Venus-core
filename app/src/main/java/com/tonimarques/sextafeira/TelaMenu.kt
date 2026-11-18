@@ -211,6 +211,12 @@ internal fun MainActivity.abrirMenu(@Suppress("UNUSED_PARAMETER") ancora: View) 
                     VigiaDaLoja.definirSemanal(this, !VigiaDaLoja.semanalLigado(this))
                     ajustes?.atualizar()
                 },
+                TelaDeAjustes.Ajuste("Painel do dia", {
+                    "Uma vez por dia, ao abrir a $n, aparece no chat um resumo curto: lembretes de hoje, como está a loja e uma dica do que ela sabe fazer."
+                }, { prefs.getBoolean(PainelDoDia.PREF_LIGADO, true) }) {
+                    prefs.edit().putBoolean(PainelDoDia.PREF_LIGADO, !prefs.getBoolean(PainelDoDia.PREF_LIGADO, true)).apply()
+                    ajustes?.atualizar()
+                },
                 TelaDeAjustes.Ajuste("Resumo da loja às 21h", {
                     "Com os avisos ligados, toda noite chega uma notificação com as vendas do dia e o que fica para amanhã."
                 }, { VigiaDaLoja.resumoLigado(this) }) {

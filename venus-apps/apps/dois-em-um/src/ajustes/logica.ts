@@ -24,6 +24,7 @@ export interface Preferencias {
   falarRespostas: boolean;
   notificacoes: boolean;
   alertasDaLoja: boolean;
+  painelDoDia: boolean;
   iniciarComOSistema: boolean;
 }
 export const PREFERENCIAS_PADRAO: Preferencias = {
@@ -33,6 +34,7 @@ export const PREFERENCIAS_PADRAO: Preferencias = {
   falarRespostas: true,
   notificacoes: true,
   alertasDaLoja: true,
+  painelDoDia: true,
   iniciarComOSistema: false
 };
 
@@ -41,7 +43,7 @@ export function limparPreferencias(bruto: unknown): Preferencias {
   const b = (bruto && typeof bruto === "object" ? bruto : {}) as Record<string, unknown>;
   const p = { ...PREFERENCIAS_PADRAO };
   if (MODOS.some((m) => m.id === b.modo)) p.modo = b.modo as ModoDeUso;
-  for (const k of ["escutaContinua", "acionarPeloNome", "falarRespostas", "notificacoes", "alertasDaLoja", "iniciarComOSistema"] as const) {
+  for (const k of ["escutaContinua", "acionarPeloNome", "falarRespostas", "notificacoes", "alertasDaLoja", "painelDoDia", "iniciarComOSistema"] as const) {
     if (typeof b[k] === "boolean") p[k] = b[k] as boolean;
   }
   return p;
@@ -64,6 +66,7 @@ export const CATALOGO: ItemDeAjuste[] = [
   { id: "voz", categoria: "comportamento", titulo: "Voz da Vênus", descricao: "Escolher a voz, a velocidade e o tom; voz neural da Microsoft.", palavras: ["voz", "tom", "velocidade", "falar", "neural", "azure", "francisca", "audio", "grave", "agudo"] },
   { id: "notificacoes", categoria: "comportamento", titulo: "Notificações", descricao: "Avisos do sistema para pedidos, estoque e lembretes.", palavras: ["notificacao", "aviso", "alerta", "push"] },
   { id: "alertasDaLoja", categoria: "comportamento", titulo: "Alertas da loja", descricao: "Pedido novo, estoque baixo e pagamentos.", palavras: ["loja", "pedido", "estoque", "pagamento", "alerta"] },
+  { id: "painelDoDia", categoria: "comportamento", titulo: "Painel do dia", descricao: "Uma vez por dia, ao abrir a Vênus, aparece um resumo curto no chat: a loja e uma dica.", palavras: ["painel", "dia", "resumo", "bom dia", "dica", "manha"] },
   { id: "iniciarComOSistema", categoria: "comportamento", titulo: "Iniciar com o sistema", descricao: "No Windows e no Mac, abre junto com o computador, na bandeja.", palavras: ["windows", "mac", "bandeja", "iniciar", "boot", "tray"] },
   { id: "atualizacoes", categoria: "comportamento", titulo: "Atualizações", descricao: "No Windows: versão instalada e botão para verificar e instalar a versão nova.", palavras: ["atualizar", "atualizacao", "versao", "nova", "verificar", "update", "baixar"] },
   { id: "cadastroLoja", categoria: "conexoes", titulo: "Cadastro guiado da loja", descricao: "Passo a passo para criar a loja: nicho, nome, logo e cores. Dá para pular o que quiser.", palavras: ["loja", "criar", "logo", "cores", "nicho", "cadastro", "identidade", "primeiro acesso"] },

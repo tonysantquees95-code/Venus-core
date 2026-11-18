@@ -58,6 +58,7 @@ export const NOVIDADES: Novidade[] = [
   { id: 18, data: "2026-11-16", tipo: "novo", titulo: "Até 3 lojas na mesma conta", texto: "Em Empresa › Minhas lojas você cria até 3 lojas (outro site, outro nicho) na mesma assinatura. Cada loja tem a sua identidade, produtos, vitrine, QR Code, cartão, panfleto e painel ao vivo, tudo separado, e você troca de uma para outra no alto da tela. Ao informar o site, a Vênus pega a cor e o logo dele." },
   { id: 19, data: "2026-11-16", tipo: "correcao", titulo: "Vênus responde dólar, chuva e notícias", texto: "No navegador, no Windows e no Mac a Vênus agora mostra a cotação do dólar e de outras moedas, a previsão do tempo (hoje, amanhã e a semana) e pesquisa na internet para notícias e preços de agora, como no celular." },
   { id: 20, data: "2026-11-17", tipo: "novo", titulo: "Recuperar a senha sem e-mail", texto: "Ao criar o Vetorial ID você define uma senha de recuperação de 6 números e uma pergunta secreta com a resposta. Se esquecer a senha, toque em Esqueci a senha, escolha um dos dois jeitos e crie a senha nova. Guarde bem esses dados." },
+  { id: 21, data: "2026-11-18", tipo: "novo", titulo: "Painel do dia", texto: "Uma vez por dia, ao abrir a Vênus, aparece no chat um resumo curto: como está o estoque da loja e uma dica do que ela sabe fazer. Para desligar, vá em Ajustes › Painel do dia." },
 ];
 
 export const ROTULO: Record<TipoNovidade, string> = { novo: "Novo", melhoria: "Melhorou", correcao: "Corrigido" };
