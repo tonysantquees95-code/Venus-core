@@ -41,6 +41,7 @@ internal object Novidades {
         Item(22, "2026-11-17", "correcao", "Música por voz sem abrir a tela", "Dizer \"Vênus, próxima música\" (ou pausar, volume, tocar algo) agora só faz o que você pediu: não abre o pop-up, não pausa a música e não fica ouvindo de novo. Se você disser \"Ei Vênus\", aí sim ela abre e conversa. Também deixei a Vênus mais paciente quando você diz só o nome com música tocando."),
         Item(23, "2026-11-17", "melhoria", "Comandos de música e apps sem conversa", "\"Dê play no Deezer\" agora abre o Deezer fechado e dá play de verdade. E, ao pedir para tocar, pausar, mudar o volume ou abrir um app, a Vênus só faz: escreve o aviso na tela, sem ficar falando \"abrindo…\" nem voltar a ouvir."),
         Item(24, "2026-11-17", "novo", "Recuperar a senha sem e-mail", "Ao criar o Vetorial ID você define uma senha de recuperação de 6 números e uma pergunta secreta com a resposta. Se esquecer a senha, toque em Esqueci a senha, escolha um dos dois jeitos e crie a senha nova. Guarde bem esses dados."),
+        Item(25, "2026-11-18", "novo", "Painel do dia", "Uma vez por dia, ao abrir a Vênus, aparece no chat um resumo curto: seus lembretes de hoje, como está a loja e uma dica do que ela sabe fazer. Para desligar, vá em Menu › Painel do dia."),
     )
 
     fun rotulo(tipo: String): String = when (tipo) { "novo" -> "Novo"; "melhoria" -> "Melhorou"; "correcao" -> "Corrigido"; else -> tipo }

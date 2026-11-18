@@ -173,6 +173,7 @@ export function Ajustes({ aoAbrirTema, alvo }: { aoAbrirTema: () => void; alvo?:
             if (v && !noDesktop() && typeof Notification !== "undefined" && Notification.permission === "default") void Notification.requestPermission();
           }} />}
           {mostra("alertasDaLoja", "comportamento") && <Chave id="alertasDaLoja" titulo="Alertas da loja" descricao="Pedido novo, estoque baixo e pagamentos." ligado={prefs.alertasDaLoja} aoMudar={(v) => definir("alertasDaLoja", v)} />}
+          {mostra("painelDoDia", "comportamento") && <Chave id="painelDoDia" titulo="Painel do dia" descricao="Uma vez por dia, ao abrir a Vênus, aparece um resumo curto no chat: a loja e uma dica." ligado={prefs.painelDoDia} aoMudar={(v) => definir("painelDoDia", v)} />}
           {mostra("iniciarComOSistema", "comportamento") && noDesktop() && <Chave id="iniciarComOSistema" titulo="Iniciar com o sistema" descricao="Abre junto com o computador, escondida na bandeja. Vale só neste computador." ligado={prefs.iniciarComOSistema} aoMudar={(v) => definir("iniciarComOSistema", v)} />}
 
           {mostra("atualizacoes", "comportamento") && noDesktop() && <Cartao id="atualizacoes" titulo="Atualizações"><Atualizacoes /></Cartao>}

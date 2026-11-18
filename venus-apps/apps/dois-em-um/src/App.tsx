@@ -20,6 +20,9 @@ import { lerVisto, novasDesde, precisaApresentar, type Novidade } from "./aprese
 import { CriarLoja, lojaGuiadaPulada } from "./empresa/CriarLoja";
 import { useEmpresa } from "./empresa/EmpresaProvider";
 import { lojaJaConfigurada } from "./empresa/logica";
+import { useCatalogo } from "./empresa/CatalogoProvider";
+import { usePreferencias } from "./ajustes/Preferencias";
+import { CHAVE_PAINEL, chaveDoDia, deveMostrar, montarPainel } from "./ajustes/painelDoDia";
 
 const TITULOS: Record<Tela, string> = { chat: "Chat", robo: "Vênus Robô", empresa: "Minha loja", tema: "Aparência", ajustes: "Ajustes" };
 
@@ -38,6 +41,24 @@ export function App() {
   const [lojaPulada, setLojaPulada] = useState(() => lojaGuiadaPulada());
   useAtalhoGlobal(() => setTela("chat"));
   const { sessao, estado } = useId();
+  const { anexar } = useConversas();
+  const catalogo = useCatalogo();
+  const { prefs } = usePreferencias();
+  // painel do dia: uma vez por dia, ao abrir, escreve no chat um resumo curto (igual ao do app Android)
+  const painelFeito = useRef(false);
+  useEffect(() => {
+    if (painelFeito.current || estado.tipo !== "livre" || precisaApresentar()) return;
+    let ultimo: string | null = null;
+    try { ultimo = localStorage.getItem(CHAVE_PAINEL); } catch { /* sem armazenamento: mostra só desta vez */ }
+    const agora = new Date();
+    if (!deveMostrar(prefs.painelDoDia, ultimo, agora)) return;
+    painelFeito.current = true;
+    try { localStorage.setItem(CHAVE_PAINEL, chaveDoDia(agora)); } catch { /* ok */ }
+    void catalogo.garantir(15 * 60_000).catch(() => []).then((itens) => {
+      const texto = montarPainel(null, itens.filter((p) => p.esgotado).map((p) => p.nome), itens.length > 0, agora);
+      anexar(ativa.id, { id: crypto.randomUUID(), autor: "venus", texto, quando: Date.now() });
+    });
+  }, [estado.tipo]); // eslint-disable-line react-hooks/exhaustive-deps
   // Avatar, comandos de conversa e o Windows pedem telas por este evento
   useEffect(() => {
     const ouvir = (e: Event) => {
