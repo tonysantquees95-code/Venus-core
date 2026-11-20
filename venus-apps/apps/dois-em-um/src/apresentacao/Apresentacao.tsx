@@ -75,7 +75,7 @@ export function Novidades({ itens, aoFechar, versao }: { itens: Novidade[]; aoFe
   const fechar = () => { marcarVisto(ultimoId()); aoFechar(); };
   return (
     <div className="fixed inset-0 z-50 grid place-items-center bg-black/80 p-4">
-      <div className="rounded-2xl border border-borda bg-painel flex max-h-full w-full max-w-md flex-col gap-3 p-5" style={{ background: "var(--color-painel)" }}>
+      <div className="rounded-2xl border border-borda bg-painel flex max-h-[calc(100dvh-2rem)] w-full max-w-md flex-col gap-3 p-5" style={{ background: "var(--color-painel)" }}>
         <div><h2 className="text-xl font-black">O que há de novo</h2><p className="text-xs text-suave">{versao ? `Vênus ${versao} · ` : ""}o que mudou desde a última vez que você abriu</p></div>
         <ul className="min-h-0 flex-1 space-y-3 overflow-y-auto">{itens.map((n) => <li key={n.id} className="rounded-xl border border-borda p-3"><div className="flex items-center gap-2"><span className="rounded-full bg-venus/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-venus">{ROTULO[n.tipo]}</span><b>{n.titulo}</b></div><p className="mt-1 text-sm text-suave">{n.texto}</p></li>)}</ul>
         <button onClick={fechar} className={botaoPrimario}>Entendi</button>
