@@ -17,6 +17,7 @@ export const TOUR: PassoDoTour[] = [
   { icone: "🤖", titulo: "Robô de atendimento", texto: "O robô responde os clientes no WhatsApp Business com as informações da sua loja, e você acompanha tudo.", como: ["Ligue e desligue o robô na aba Robô.", "Você continua responsável pelo que a loja envia."] },
   { icone: "🏪", titulo: "Minha loja", texto: "Produtos, vendas, clientes, canais de venda e marketing num lugar só.", como: ["Conecte a sua loja, o Mercado Pago e a Meta em Ajustes.", "As chaves ficam guardadas no seu aparelho."] },
   { icone: "🛍️", titulo: "Crie a sua loja", texto: "Ainda não tem loja? A Vênus te guia: nicho, nome, logo e cores. Quem já tem site só informa o endereço.", como: ["Aparece logo depois do login e dá para pular qualquer etapa.", "Refaça quando quiser em Minha loja › Identidade da loja."] },
+  { icone: "📅", titulo: "Agenda e site do seu negócio", texto: "Para salão, barbearia e quem atende com hora marcada: o cliente agenda por um link, a equipe vê a agenda no celular e você ganha um site com logo próprio.", como: ["Em Minha loja › Agenda de serviços e Meu site e logo.", "Os avisos de nova marcação chegam no celular, sem WhatsApp oficial."] },
   { icone: "🎨", titulo: "Seu jeito", texto: "Mude cores, orbe e ícones; tudo acompanha você nos outros aparelhos.", como: ["Em Ajustes › Tema, cores e orbe."] },
   { icone: "🔄", titulo: "Sempre atualizada", texto: "A Vênus se atualiza pelo canal oficial e mostra o que mudou depois de cada atualização.", como: ["Em Ajustes você confere se há versão nova."] },
 ];
@@ -60,6 +61,8 @@ export const NOVIDADES: Novidade[] = [
   { id: 20, data: "2026-11-17", tipo: "novo", titulo: "Recuperar a senha sem e-mail", texto: "Ao criar o Vetorial ID você define uma senha de recuperação de 6 números e uma pergunta secreta com a resposta. Se esquecer a senha, toque em Esqueci a senha, escolha um dos dois jeitos e crie a senha nova. Guarde bem esses dados." },
   { id: 21, data: "2026-11-18", tipo: "novo", titulo: "Painel do dia", texto: "Uma vez por dia, ao abrir a Vênus, aparece no chat um resumo curto: como está o estoque da loja e uma dica do que ela sabe fazer. Para desligar, vá em Ajustes › Painel do dia." },
   { id: 22, data: "2026-11-20", tipo: "correcao", titulo: "Novidades rolam no Windows", texto: "No Windows, quando a lista de novidades era grande, não dava para rolar até o botão Entendi. Agora a lista rola e o botão fica sempre à mostra." },
+  { id: 23, data: "2026-11-21", tipo: "novo", titulo: "Agenda de serviços para salão e barbearia", texto: "Em Empresa › Agenda de serviços você cadastra os serviços e a equipe, e o cliente marca o horário sozinho por um link, sem baixar nada. Cada profissional vê o próprio dia num link só dele, a recepção vê todos, e dá para lembrar o cliente pelo WhatsApp com a mensagem já pronta. Horário ocupado não aparece, então não tem marcação dobrada." },
+  { id: 24, data: "2026-11-21", tipo: "novo", titulo: "Meu site e logo personalizado", texto: "Em Empresa › Meu site e logo você escolhe entre vários logos feitos para o seu ramo (símbolo, formato, letra e cores), baixa a imagem e publica um site do seu negócio com serviços, fotos, depoimentos e botão de agendar e de WhatsApp." },
 ];
 
 export const ROTULO: Record<TipoNovidade, string> = { novo: "Novo", melhoria: "Melhorou", correcao: "Corrigido" };

@@ -29,3 +29,8 @@
 - Android: `Onboarding.kt` (guia de permissões, cada uma explicada antes de pedir) → `TelaCadastro.kt` (termos em `Termos.kt`; mudou o texto: suba `Termos.VERSAO`).
 - Windows/web: `apresentacao/Apresentacao.tsx` + `dados.ts` (tour → permissões → termos; mudou o texto: suba `VERSAO_DOS_TERMOS`).
 - Função nova: acrescente ou ajuste um passo do tour. Permissão nova: explique o porquê ANTES de pedir.
+
+## Agenda de serviços e Meu site (páginas do servidor dentro do app)
+- A agenda (`/agenda/painel`) e o editor do site com logo (`/site/editor`) são páginas hospedadas no servidor (repositório `vetorial-servidor`, pastas `agenda/` e `meusite/`). No Android abrem em `TelaPaginaDoServidor.kt` (WebView em tela cheia, com galeria para fotos e download do logo pela `VenusAndroid`); no Windows/web, em `empresa/PaginaDoServidor.tsx` (iframe). Menu: Minha loja › Agenda de serviços / Meu site e logo.
+- Aviso de nova marcação: `AgendaAvisos.kt` (roda no `VigiaDaLoja`, `GET /loja/agenda/novos`). Só liga depois que a pessoa abre a agenda a primeira vez.
+- Mudou rota ou regra lá? Confira o servidor.
