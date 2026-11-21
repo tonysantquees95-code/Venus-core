@@ -28,8 +28,9 @@ import android.widget.TextView
  * Escolher foto (galeria/câmera) e baixar o logo funcionam aqui dentro; links de fora (WhatsApp etc.) abrem no app certo.
  */
 @SuppressLint("SetJavaScriptEnabled")
-internal fun MainActivity.abrirPaginaDoServidor(titulo: String, caminho: String, aoAbrir: () -> Unit = {}) {
-    emFundo({ Nuvem.garantirConta(this) }) { r ->
+internal fun MainActivity.abrirPaginaDoServidor(titulo: String, caminho: String, semConta: Boolean = false, aoAbrir: () -> Unit = {}) {
+    // páginas públicas (feedback) abrem sem login; as da loja precisam da conta
+    emFundo({ if (!semConta) Nuvem.garantirConta(this) }) { r ->
         r.onFailure { aviso(it.mensagemAmigavel()) }
         r.onSuccess {
             aoAbrir()
@@ -41,7 +42,7 @@ internal fun MainActivity.abrirPaginaDoServidor(titulo: String, caminho: String,
                 setPadding(dp(16), dp(12), dp(16), dp(12))
             }
             barra.addView(TextView(this).apply {
-                text = "${titulo.uppercase()} · ${Perfil.loja}"
+                text = if (semConta) titulo.uppercase() else "${titulo.uppercase()} · ${Perfil.loja}"
                 setTextColor(Color.WHITE)
                 textSize = 14f
                 letterSpacing = 0.08f
@@ -56,7 +57,7 @@ internal fun MainActivity.abrirPaginaDoServidor(titulo: String, caminho: String,
                 setOnClickListener { dialogo.dismiss() }
             })
             val loja = Lojas.aberta(this)
-            val endereco = "${Servidor.ENDERECO}$caminho#t=${Nuvem.token(this)}" + if (loja.isNotBlank()) "&l=$loja" else ""
+            val endereco = if (semConta) "${Servidor.ENDERECO}$caminho" else "${Servidor.ENDERECO}$caminho#t=${Nuvem.token(this)}" + if (loja.isNotBlank()) "&l=$loja" else ""
             val web = WebView(this).apply {
                 settings.javaScriptEnabled = true
                 settings.domStorageEnabled = true
@@ -109,6 +110,12 @@ internal fun MainActivity.abrirPaginaDoServidor(titulo: String, caminho: String,
             dialogo.show()
         }
     }
+}
+
+/** Feedback, relato de erro e pesquisa rápida (página pública do servidor; vai o app, a versão e a plataforma). */
+internal fun MainActivity.abrirFeedback() {
+    val versao = try { packageManager.getPackageInfo(packageName, 0).versionName.orEmpty() } catch (e: Exception) { "" }
+    abrirPaginaDoServidor("Feedback", "/feedback?app=venus&v=" + Uri.encode(versao) + "&p=android", semConta = true)
 }
 
 /** O que a página pode pedir ao app: guardar um arquivo (o logo em PNG/SVG) na pasta Download › Vênus. */
