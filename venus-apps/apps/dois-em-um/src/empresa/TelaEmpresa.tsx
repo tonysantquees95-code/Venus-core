@@ -5,6 +5,7 @@ import { PaginaComLateral, type ItemLateral } from "../components/PaginaComLater
 import { CartaoDeVisitas, Panfleto, QrCodeSecao } from "./Divulgacao";
 import { VitrineECatalogo } from "./TelaVitrineWeb";
 import { PainelAoVivo } from "./PainelAoVivo";
+import { PaginaDoServidor } from "./PaginaDoServidor";
 import { MinhasLojas, SeletorDeLoja } from "./MinhasLojas";
 import { DadosDaLoja, Historico, IdeiasDePost, IdeiasDeVideo, InstagramDaLoja, PrimeirosPassos, RegrasDeVenda, RespostasDoInstagram, StoriesDoDia } from "./secoes";
 
@@ -12,6 +13,8 @@ const SECOES: ItemLateral[] = [
   { id: "lojas", rotulo: "Minhas lojas", icone: <IconeNomeado nome="loja" className="size-5" />, grupo: "Minha loja" },
   { id: "dados", rotulo: "Dados da loja", icone: <IconeNomeado nome="loja" className="size-5" />, grupo: "Minha loja" },
   { id: "identidade", rotulo: "Identidade da loja", icone: <IconeNomeado nome="vitrine" className="size-5" />, grupo: "Minha loja" },
+  { id: "agenda", rotulo: "Agenda de serviços", icone: <IconeNomeado nome="agenda" className="size-5" />, grupo: "Minha loja" },
+  { id: "meusite", rotulo: "Meu site e logo", icone: <IconeNomeado nome="site" className="size-5" />, grupo: "Minha loja" },
   { id: "regras", rotulo: "Regras de venda", icone: <IconeNomeado nome="regras" className="size-5" />, grupo: "Minha loja" },
   { id: "passos", rotulo: "Primeiros passos", icone: <IconeNomeado nome="passos" className="size-5" />, grupo: "Minha loja" },
   { id: "painel", rotulo: "Painel ao vivo", icone: <IconeNomeado nome="painel" className="size-5" />, grupo: "Financeiro" },
@@ -51,6 +54,8 @@ export function TelaEmpresa({ alvo }: { alvo?: string }) {
         {secao === "panfleto" && <Panfleto />}
         {secao === "vitrine" && <VitrineECatalogo />}
         {secao === "painel" && <PainelAoVivo />}
+        {secao === "agenda" && <PaginaDoServidor titulo="Agenda de serviços" descricao="Para salão, barbearia e quem atende com hora marcada: o cliente escolhe o serviço e o horário, e a equipe vê a agenda por um link." caminho="/agenda/painel" />}
+        {secao === "meusite" && <PaginaDoServidor titulo="Meu site e logo" descricao="Crie o site do seu negócio e escolha um logo personalizado, com serviços, fotos e botão de agendar." caminho="/site/editor" />}
       </div>
     </PaginaComLateral>
   );

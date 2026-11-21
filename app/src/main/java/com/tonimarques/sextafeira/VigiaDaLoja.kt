@@ -41,6 +41,11 @@ class VigiaDaLoja : JobService() {
             } catch (e: Exception) {
             }
             try {
+                // horários marcados pelos clientes na agenda de serviços
+                AgendaAvisos.conferir(applicationContext)
+            } catch (e: Exception) {
+            }
+            try {
                 // rede de segurança das cobranças por link (loja sem site)
                 Cobranca.conferirPendentes(applicationContext)
             } catch (e: Exception) {
@@ -110,7 +115,7 @@ class VigiaDaLoja : JobService() {
         /** Garante que está agendado (chamado ao abrir o app, caso o Android tenha esquecido). */
         fun garantir(c: Context) {
             // também serve de rede de segurança dos stories: a cada 15 minutos confere se algum ficou para trás
-            if (!ligado(c) && !StoriesDoDia.ligado(c) && !PedidosDoSite.ativo(c) && Cobranca.pendentes(c).isEmpty()) return
+            if (!ligado(c) && !StoriesDoDia.ligado(c) && !PedidosDoSite.ativo(c) && !AgendaAvisos.ativo(c) && Cobranca.pendentes(c).isEmpty()) return
             val agendador = c.getSystemService(JobScheduler::class.java)
             if (agendador.allPendingJobs.none { it.id == JOB_ID }) agendar(c)
         }

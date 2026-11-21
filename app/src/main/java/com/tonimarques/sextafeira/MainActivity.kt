@@ -2230,6 +2230,11 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
     @Deprecated("API clássica, suficiente para este app")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == PEDIDO_ARQUIVO_DA_PAGINA) {
+            arquivoDaPagina?.onReceiveValue(android.webkit.WebChromeClient.FileChooserParams.parseResult(resultCode, data))
+            arquivoDaPagina = null
+            return
+        }
         if (requestCode == PEDIDO_ARQUIVO || requestCode == PEDIDO_ANEXO_FOTOS) {
             if (resultCode == RESULT_OK && data != null) {
                 val uris = mutableListOf<Uri>()
@@ -2304,6 +2309,8 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
     // ----------------------------------------------------------- cadastro de produto
     internal var fotoDaCamera: Uri? = null
     internal var cadastroFoto: ((Uri) -> Unit)? = null
+    /** Quem pediu um arquivo dentro de uma página do servidor (agenda, editor do site): recebe a escolha em onActivityResult. */
+    internal var arquivoDaPagina: android.webkit.ValueCallback<Array<Uri>>? = null
 
     // ----------------------------------------------------------- responder clientes
     /** Texto recebido pelo "Compartilhar" (ex.: mensagem de uma cliente no WhatsApp). */
@@ -2506,6 +2513,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         internal const val PEDIDO_FOTO_GALERIA = 41
         internal const val PEDIDO_ARQUIVO = 42
         internal const val PEDIDO_ANEXO_FOTOS = 43
+        internal const val PEDIDO_ARQUIVO_DA_PAGINA = 44
         internal const val MAXIMO_ANEXOS = 10
         internal const val PREF_AVISO_ARQUIVOS = "aviso_arquivos"
         internal const val LIMITE_IA_MS = 35_000L
