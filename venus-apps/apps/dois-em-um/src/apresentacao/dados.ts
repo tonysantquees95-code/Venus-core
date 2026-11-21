@@ -63,6 +63,7 @@ export const NOVIDADES: Novidade[] = [
   { id: 22, data: "2026-11-20", tipo: "correcao", titulo: "Novidades rolam no Windows", texto: "No Windows, quando a lista de novidades era grande, não dava para rolar até o botão Entendi. Agora a lista rola e o botão fica sempre à mostra." },
   { id: 23, data: "2026-11-21", tipo: "novo", titulo: "Agenda de serviços para salão e barbearia", texto: "Em Empresa › Agenda de serviços você cadastra os serviços e a equipe, e o cliente marca o horário sozinho por um link, sem baixar nada. Cada profissional vê o próprio dia num link só dele, a recepção vê todos, e dá para lembrar o cliente pelo WhatsApp com a mensagem já pronta. Horário ocupado não aparece, então não tem marcação dobrada." },
   { id: 24, data: "2026-11-21", tipo: "novo", titulo: "Meu site e logo personalizado", texto: "Em Empresa › Meu site e logo você escolhe entre vários logos feitos para o seu ramo (símbolo, formato, letra e cores), baixa a imagem e publica um site do seu negócio com serviços, fotos, depoimentos e botão de agendar e de WhatsApp." },
+  { id: 25, data: "2026-11-21", tipo: "novo", titulo: "Feedback e relato de erros", texto: "Em Ajustes › Sobre a Vênus você encontra Enviar feedback e Reportar um erro: conte o que achou, avise quando algo não funcionou e responda uma pesquisa rápida de 1 minuto. A Vênus está em fase de testes (beta) e cada relato ajuda a melhorar." },
 ];
 
 export const ROTULO: Record<TipoNovidade, string> = { novo: "Novo", melhoria: "Melhorou", correcao: "Corrigido" };

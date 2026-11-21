@@ -44,6 +44,7 @@ internal object Novidades {
         Item(25, "2026-11-18", "novo", "Painel do dia", "Uma vez por dia, ao abrir a Vênus, aparece no chat um resumo curto: seus lembretes de hoje, como está a loja e uma dica do que ela sabe fazer. Para desligar, vá em Menu › Painel do dia."),
         Item(26, "2026-11-21", "novo", "Agenda de serviços para salão e barbearia", "Em Minha loja › Agenda de serviços você cadastra os serviços e a equipe, e o cliente marca o horário sozinho por um link, sem baixar nada. Quando alguém marca, a Vênus avisa no seu celular. Cada profissional vê o próprio dia num link só dele, a recepção vê todos, e dá para lembrar o cliente pelo WhatsApp com a mensagem pronta. Horário ocupado não aparece, então não tem marcação dobrada."),
         Item(27, "2026-11-21", "novo", "Meu site e logo personalizado", "Em Minha loja › Meu site e logo você escolhe entre vários logos feitos para o seu ramo (símbolo, formato, letra e cores), baixa a imagem para o Instagram e a fachada e publica um site do seu negócio com serviços, fotos, depoimentos e botões de agendar e de WhatsApp."),
+        Item(28, "2026-11-21", "novo", "Feedback e relato de erros", "Em Menu › Enviar feedback e Menu › Reportar um erro você conta o que achou da Vênus, avisa quando algo não funcionou e responde uma pesquisa rápida de 1 minuto. A Vênus está em fase de testes (beta) e cada relato ajuda a melhorar."),
     )
 
     fun rotulo(tipo: String): String = when (tipo) { "novo" -> "Novo"; "melhoria" -> "Melhorou"; "correcao" -> "Corrigido"; else -> tipo }
