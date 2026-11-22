@@ -82,7 +82,7 @@ private fun MainActivity.mostrarDocumentos(todos: List<Loja.Pedido>) {
     f.adicionar(f.aviso(listOf(e.nome, e.documento, e.contato).filter { it.isNotBlank() }.joinToString(" · ") + "\n" + e.enderecoLinhas.joinToString(" · ") +
         (if (GeradorDeCatalogo.arquivoDoLogo(this).exists()) "\nLogo da loja ✓" else "\nSem logo (escolha em Minha loja › Catálogo)")), 2)
     f.lado(
-        f.botao("Dados da loja") { f.fechar(); editarDadosDaLoja() },
+        f.botao("Dados da loja") { f.fechar(); editarDadosDosDocumentos() },
         f.botao("Recibo avulso") { f.fechar(); reciboAvulso() },
     )
     val pedidos = todos.filter { it.status != "canceled" && it.status != "awaiting_payment" }.sortedByDescending { it.criado }.take(12)
@@ -104,7 +104,7 @@ private fun MainActivity.mostrarDocumentos(todos: List<Loja.Pedido>) {
     f.mostrar()
 }
 
-private fun MainActivity.editarDadosDaLoja() {
+private fun MainActivity.editarDadosDosDocumentos() {
     val f = Formulario(this, "Dados da loja", "Saem no topo do recibo e da notinha e no remetente da etiqueta")
     val p = prefsDocs()
     f.cartao("Identificação")
