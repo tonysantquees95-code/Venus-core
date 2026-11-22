@@ -6,7 +6,7 @@ import { CartaoDeVisitas, Panfleto, QrCodeSecao } from "./Divulgacao";
 import { VitrineECatalogo } from "./TelaVitrineWeb";
 import { PainelAoVivo } from "./PainelAoVivo";
 import { PaginaDoServidor } from "./PaginaDoServidor";
-import { RecibosEEtiquetas } from "./Documentos";
+import { RecibosEEtiquetas } from "./RecibosEEtiquetas";
 import { MinhasLojas, SeletorDeLoja } from "./MinhasLojas";
 import { DadosDaLoja, Historico, IdeiasDePost, IdeiasDeVideo, InstagramDaLoja, PrimeirosPassos, RegrasDeVenda, RespostasDoInstagram, StoriesDoDia } from "./secoes";
 
