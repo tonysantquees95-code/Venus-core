@@ -4,7 +4,10 @@ import "./index.css";
 import { App } from "./App";
 import { ConversasProvider } from "./sessao/ConversasProvider";
 import { ThemingProvider } from "./theming";
-import { IdProvider } from "./id/IdProvider";
+import { IdProvider, IdDemoProvider } from "./id/IdProvider";
+
+// Demonstração do site (build com VITE_DEMO=1): conta de mentira. No build normal isto some por inteiro.
+const ProvedorDeConta = import.meta.env.VITE_DEMO === "1" ? IdDemoProvider : IdProvider;
 import { EmpresaProvider } from "./empresa/EmpresaProvider";
 import { LojasProvider } from "./empresa/LojasProvider";
 import { MarketingProvider } from "./empresa/MarketingProvider";
@@ -23,7 +26,7 @@ createRoot(document.getElementById("app")!).render(
   <StrictMode>
     <ThemingProvider>
       <PreferenciasProvider>
-        <IdProvider>
+        <ProvedorDeConta>
           <LojasProvider>
           <EmpresaProvider>
           <MarketingProvider>
@@ -37,7 +40,7 @@ createRoot(document.getElementById("app")!).render(
           </MarketingProvider>
           </EmpresaProvider>
           </LojasProvider>
-        </IdProvider>
+        </ProvedorDeConta>
       </PreferenciasProvider>
     </ThemingProvider>
   </StrictMode>
