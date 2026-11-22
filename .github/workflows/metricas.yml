@@ -5,6 +5,11 @@ name: Métricas do código
 on:
   push:
     branches: [main]
+    # só recontar quando o código muda (documentos e ajustes de fluxo não gastam minutos)
+    paths:
+      - "app/**"
+      - "venus-apps/**"
+      - "servidor/**"
   workflow_dispatch:
 
 permissions:

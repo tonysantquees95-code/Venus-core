@@ -16,6 +16,11 @@ on:
 permissions:
   contents: write
 
+# Push novo cancela a geração anterior ainda em andamento (a nova já inclui tudo): economiza minutos do GitHub.
+concurrency:
+  group: gerar-apk
+  cancel-in-progress: true
+
 jobs:
   apk:
     runs-on: ubuntu-latest
