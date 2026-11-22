@@ -248,3 +248,21 @@ export function useId(): Ctx {
   if (!c) throw new Error("useId precisa estar dentro de <IdProvider>");
   return c;
 }
+
+/**
+ * SÓ para a demonstração do site (build com VITE_DEMO=1, que o build normal nunca usa): uma conta de mentira, sem servidor,
+ * para a Vênus de verdade abrir dentro do celular da página inicial. O app publicado continua exigindo o selo de licença assinado.
+ */
+export function IdDemoProvider({ children }: { children: ReactNode }) {
+  const valor = useMemo<Ctx>(() => {
+    const usuario = { id: "demo", email: "demo@exemplo.com", nome: "Visitante" };
+    const nada = async () => undefined;
+    return {
+      api: {} as ApiId, sessao: { token: "demo", sessao: "demo", usuario }, conflito: null, aviso: "",
+      entrar: nada, cadastrar: nada, validarAgora: nada, sair: nada, recarregarConta: nada, salvarPerfil: nada, resolverConflito: nada, limparAviso: () => undefined,
+      estado: { tipo: "livre", teste: false, fim: Date.now() + 365 * 86_400_000, diasRestantes: 365 },
+      conta: { usuario: { ...usuario, foto: "", atualizado: 1 }, licenca: { acesso: true, plano: "completo", pacote: "completo" } }
+    };
+  }, []);
+  return <C.Provider value={valor}>{children}</C.Provider>;
+}
