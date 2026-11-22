@@ -206,6 +206,13 @@ internal fun MainActivity.abrirMenu(@Suppress("UNUSED_PARAMETER") ancora: View) 
                     "A cada 15 minutos, mais ou menos, a $n olha a loja e avisa por notificação quando entra um pedido pago " +
                         "ou um produto fica com 2 unidades ou menos."
                 }, { VigiaDaLoja.ligado(this) }) { alternarAvisosDaLoja() },
+                TelaDeAjustes.Ajuste("Ligar ao Vyntem (caixa)", {
+                    "Cada venda paga e confirmada entra sozinha no caixa do Vyntem, o app grátis de finanças, com o número do pedido e o nome do cliente. " +
+                        "Pedido aguardando pagamento não entra, e venda cancelada vira estorno. Vale para as vendas a partir de agora."
+                }, { CaixaDoVyntem.ligado(this) }) {
+                    CaixaDoVyntem.definir(this, !CaixaDoVyntem.ligado(this))
+                    ajustes?.atualizar()
+                },
                 TelaDeAjustes.Ajuste("Relatório da semana (segunda, 9h)", {
                     "Com os avisos ligados, toda segunda chega o resumo da semana: vendas, comparação, mais vendidos e o que vai acabar. " +
                         "Também avisa quando uma retirada fica 2 dias sem agendar."
