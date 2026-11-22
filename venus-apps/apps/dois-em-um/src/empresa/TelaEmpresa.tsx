@@ -6,6 +6,7 @@ import { CartaoDeVisitas, Panfleto, QrCodeSecao } from "./Divulgacao";
 import { VitrineECatalogo } from "./TelaVitrineWeb";
 import { PainelAoVivo } from "./PainelAoVivo";
 import { PaginaDoServidor } from "./PaginaDoServidor";
+import { RecibosEEtiquetas } from "./Documentos";
 import { MinhasLojas, SeletorDeLoja } from "./MinhasLojas";
 import { DadosDaLoja, Historico, IdeiasDePost, IdeiasDeVideo, InstagramDaLoja, PrimeirosPassos, RegrasDeVenda, RespostasDoInstagram, StoriesDoDia } from "./secoes";
 
@@ -15,6 +16,7 @@ const SECOES: ItemLateral[] = [
   { id: "identidade", rotulo: "Identidade da loja", icone: <IconeNomeado nome="vitrine" className="size-5" />, grupo: "Minha loja" },
   { id: "agenda", rotulo: "Agenda de serviços", icone: <IconeNomeado nome="agenda" className="size-5" />, grupo: "Minha loja" },
   { id: "meusite", rotulo: "Meu site e logo", icone: <IconeNomeado nome="site" className="size-5" />, grupo: "Minha loja" },
+  { id: "recibos", rotulo: "Recibos e etiquetas", icone: <IconeNomeado nome="recibo" className="size-5" />, grupo: "Minha loja" },
   { id: "regras", rotulo: "Regras de venda", icone: <IconeNomeado nome="regras" className="size-5" />, grupo: "Minha loja" },
   { id: "passos", rotulo: "Primeiros passos", icone: <IconeNomeado nome="passos" className="size-5" />, grupo: "Minha loja" },
   { id: "painel", rotulo: "Painel ao vivo", icone: <IconeNomeado nome="painel" className="size-5" />, grupo: "Financeiro" },
@@ -41,6 +43,7 @@ export function TelaEmpresa({ alvo }: { alvo?: string }) {
         {secao === "lojas" && <MinhasLojas aoCriada={() => { setSecao("identidade"); window.dispatchEvent(new Event("venus:criar-loja")); }} />}
         {secao === "dados" && <DadosDaLoja />}
         {secao === "identidade" && <IdentidadeDaLoja aoRefazer={() => window.dispatchEvent(new Event("venus:criar-loja"))} />}
+        {secao === "recibos" && <RecibosEEtiquetas />}
         {secao === "regras" && <RegrasDeVenda />}
         {secao === "passos" && <PrimeirosPassos aoIr={setSecao} />}
         {secao === "historico" && <Historico />}

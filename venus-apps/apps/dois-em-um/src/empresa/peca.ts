@@ -13,7 +13,7 @@ export interface DadosDaPeca {
   gerarQr?: (conteudo: string) => string;
   produtos?: ProdutoDaPeca[];
 }
-export interface Peca { svg: string; largura: number; altura: number; links: LinkPdf[] }
+export interface Peca { svg: string; largura: number; altura: number; links: LinkPdf[]; /** Pixels por unidade do SVG ao desenhar (padrão 1): documentos para imprimir usam 2. */ escala?: number }
 
 export const esc = (t: string) => t.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&apos;" })[c]!);
 const corOk = (c: string | undefined, p: string) => (c && /^#[0-9a-f]{6}$/i.test(c) ? c : p);

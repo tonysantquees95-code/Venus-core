@@ -155,6 +155,7 @@ const CAMINHOS: Record<string, string> = {
   qr: "M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h2v2h-2zM18 14h2v2h-2zM14 18h2v2h-2zM18 18h2v2h-2z",
   cartao: "M3 6h18v12H3zM6.5 10h5M6.5 13.5h3M15 10h2.5v3.5H15z",
   panfleto: "M6 3h12v18H6zM9 7h6M9 11h6M9 15h3",
+  recibo: "M6 3h12v18l-3-2-3 2-3-2-3 2zM9 8h6M9 12h6M9 16h3",
   painel: "M4 20v-8M10 20V4M16 20v-5M22 20H2",
   vitrine: "M3 9l2-5h14l2 5M3 9a3 3 0 0 0 6 0 3 3 0 0 0 6 0 3 3 0 0 0 6 0M5 12v8h14v-8",
   conta: "M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1",

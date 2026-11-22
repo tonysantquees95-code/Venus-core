@@ -25,16 +25,16 @@ const PADRAO: Dados = { telefone: "", link: "", chamada: "", oferta: "", cor: "#
 function useDados() { const { sufixo } = useLojas(); const [d, set] = usePersistido<Dados>(`venus:divulgacao${sufixo}`, PADRAO); return [{ ...PADRAO, ...d }, set] as const; }
 
 /** Imprime só a folha (o resto da tela some no @media print); no diálogo do Windows dá para "Salvar como PDF". */
-function Imprimivel({ children, rotulo = "Imprimir ou salvar em PDF" }: { children: ReactNode; rotulo?: string }) {
+export function Imprimivel({ children, rotulo = "Imprimir ou salvar em PDF", antes, depois, classe = botaoPrimario }: { children: ReactNode; rotulo?: string; antes?: () => boolean; depois?: () => void; classe?: string }) {
   const [vez, setVez] = useState(0);
   useEffect(() => {
     if (!vez) return;
-    const t = setTimeout(() => window.print(), 80);
+    const t = setTimeout(() => { window.print(); depois?.(); }, 80);
     return () => clearTimeout(t);
   }, [vez]);
   return (
     <>
-      <button className={botaoPrimario} onClick={() => setVez((v) => v + 1)}>{rotulo}</button>
+      <button className={classe} onClick={() => { if (!antes || antes()) setVez((v) => v + 1); }}>{rotulo}</button>
       {createPortal(<div className="folha-impressao">{children}</div>, document.body)}
     </>
   );
@@ -103,7 +103,8 @@ async function desenhar(peca: Peca): Promise<HTMLCanvasElement> {
   const url = URL.createObjectURL(new Blob([peca.svg], { type: "image/svg+xml;charset=utf-8" }));
   await new Promise<void>((ok, falha) => { img.onload = () => ok(); img.onerror = () => falha(new Error("Não consegui montar a imagem.")); img.src = url; });
   const c = document.createElement("canvas");
-  c.width = peca.largura; c.height = peca.altura;
+  const k = peca.escala ?? 1;
+  c.width = Math.round(peca.largura * k); c.height = Math.round(peca.altura * k);
   const x = c.getContext("2d")!;
   x.fillStyle = "#ffffff"; x.fillRect(0, 0, c.width, c.height);
   x.drawImage(img, 0, 0, c.width, c.height);
@@ -114,13 +115,14 @@ const paraBlob = (c: HTMLCanvasElement, tipo: string, q?: number) => new Promise
 const nomeDeArquivo = (t: string) => (t.normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-zA-Z0-9]+/g, "-").replace(/^-|-$/g, "").toLowerCase() || "loja");
 
 /** Prévia da peça digital com os atalhos: mandar por WhatsApp, salvar em PDF (com links clicáveis) ou baixar a imagem. */
-function PecaDigital({ peca, arquivo, mensagem, link }: { peca: Peca; arquivo: string; mensagem: string; link: string }) {
+export function PecaDigital({ peca, arquivo, mensagem, link, antes, depois, semLink }: { peca: Peca; arquivo: string; mensagem: string; link: string; antes?: () => boolean; depois?: () => void; semLink?: boolean }) {
   const [aviso, setAviso] = useState("");
   const [ocupado, setOcupado] = useState(false);
   const previa = useMemo(() => "data:image/svg+xml;charset=utf-8," + encodeURIComponent(peca.svg), [peca.svg]);
   async function fazer(acao: () => Promise<string | void>) {
+    if (antes && !antes()) return;
     setOcupado(true); setAviso("");
-    try { const m = await acao(); if (m) setAviso(m); } catch (e) { if ((e as Error)?.name !== "AbortError") setAviso(e instanceof Error ? e.message : "Não deu certo."); }
+    try { const m = await acao(); depois?.(); if (m) setAviso(m); } catch (e) { if ((e as Error)?.name !== "AbortError") setAviso(e instanceof Error ? e.message : "Não deu certo."); }
     setOcupado(false);
   }
   const whats = () => fazer(async () => {
@@ -133,7 +135,8 @@ function PecaDigital({ peca, arquivo, mensagem, link }: { peca: Peca; arquivo: s
   });
   const pdf = () => fazer(async () => {
     const jpeg = new Uint8Array(await (await paraBlob(await desenhar(peca), "image/jpeg", 0.92)).arrayBuffer());
-    baixar(`${arquivo}.pdf`, "application/pdf", pdfComImagem(jpeg, peca.largura, peca.altura, peca.links) as unknown as BlobPart);
+    const k = peca.escala ?? 1;
+    baixar(`${arquivo}.pdf`, "application/pdf", pdfComImagem(jpeg, peca.largura * k, peca.altura * k, peca.links, k) as unknown as BlobPart);
     return peca.links.length ? "PDF salvo. Os botões, os produtos e o QR Code dele são links clicáveis." : "PDF salvo.";
   });
   const imagem = () => fazer(async () => { baixar(`${arquivo}.png`, "image/png", await paraBlob(await desenhar(peca), "image/png")); });
@@ -150,7 +153,7 @@ function PecaDigital({ peca, arquivo, mensagem, link }: { peca: Peca; arquivo: s
         {link && <button className={botaoSuave} disabled={ocupado} onClick={() => void copiar()}>Copiar mensagem com link</button>}
       </div>
       {aviso && <p role="status" className="text-sm text-suave">{aviso}</p>}
-      {!link && <p className="text-xs text-suave">Dica: sem um link (site ou vitrine) a peça não tem botão clicável. Cadastre o site em “Dados da loja” ou publique a vitrine.</p>}
+      {!link && !semLink && <p className="text-xs text-suave">Dica: sem um link (site ou vitrine) a peça não tem botão clicável. Cadastre o site em “Dados da loja” ou publique a vitrine.</p>}
     </div>
   );
 }

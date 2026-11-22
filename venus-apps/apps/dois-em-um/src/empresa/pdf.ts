@@ -9,8 +9,9 @@ const num = (n: number) => (Math.round(n * 100) / 100).toString();
 const urlPdf = (u: string) => encodeURI(u).replace(/[()\\]/g, (c) => "%" + c.charCodeAt(0).toString(16).toUpperCase());
 
 /** Monta o PDF. As medidas dos links são em pixels da imagem (origem no canto de cima, à esquerda). */
-export function pdfComImagem(jpeg: Uint8Array, larg: number, alt: number, links: LinkPdf[] = []): Uint8Array {
-  const pw = larg * 0.75, ph = alt * 0.75; // 96 dpi → pontos
+/** `escala` > 1: a imagem tem mais pixels que a página (mais nitidez ao imprimir); a página continua do tamanho de `larg` × `alt` a 96 dpi. */
+export function pdfComImagem(jpeg: Uint8Array, larg: number, alt: number, links: LinkPdf[] = [], escala = 1): Uint8Array {
+  const pw = (larg / escala) * 0.75, ph = (alt / escala) * 0.75; // 96 dpi → pontos
   const uteis = links.filter((l) => /^https?:\/\//i.test(l.url) && l.w > 0 && l.h > 0);
   const primeiroLink = 6;
   const annots = uteis.map((_, i) => `${primeiroLink + i} 0 R`).join(" ");
@@ -24,7 +25,7 @@ export function pdfComImagem(jpeg: Uint8Array, larg: number, alt: number, links:
   objeto(1, [str("<< /Type /Catalog /Pages 2 0 R >>")]);
   objeto(2, [str("<< /Type /Pages /Kids [3 0 R] /Count 1 >>")]);
   objeto(3, [str(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${num(pw)} ${num(ph)}] /Resources << /XObject << /Im0 4 0 R >> >> /Contents 5 0 R${annots ? ` /Annots [${annots}]` : ""} >>`)]);
-  objeto(4, [str(`<< /Type /XObject /Subtype /Image /Width ${larg} /Height ${alt} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${jpeg.length} >>\nstream\n`), jpeg, str("\nendstream")]);
+  objeto(4, [str(`<< /Type /XObject /Subtype /Image /Width ${Math.round(larg)} /Height ${Math.round(alt)} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${jpeg.length} >>\nstream\n`), jpeg, str("\nendstream")]);
   const conteudo = `q ${num(pw)} 0 0 ${num(ph)} 0 0 cm /Im0 Do Q`;
   objeto(5, [str(`<< /Length ${conteudo.length} >>\nstream\n${conteudo}\nendstream`)]);
   uteis.forEach((l, i) => {
