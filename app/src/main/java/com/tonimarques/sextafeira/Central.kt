@@ -100,6 +100,7 @@ private fun MainActivity.montarCentral(resumo: ResumoDaLoja?) {
                 TelaDeAjustes.Ajuste("Painel ao vivo", { "Faturamento, taxas e auditoria atualizando sozinhos, aqui dentro da Vênus." }) { abrirPainelDentro() },
                 TelaDeAjustes.Ajuste("Agenda de serviços", { "Para salão, barbearia e quem atende com hora marcada: o cliente escolhe o serviço e o horário, e você e a equipe veem tudo num link." }) { abrirPaginaDoServidor("Agenda", "/agenda/painel", aoAbrir = { AgendaAvisos.ativar(this) }) },
                 TelaDeAjustes.Ajuste("Meu site e logo", { "Crie o site do seu negócio e escolha um logo personalizado, com serviços, fotos e botão de agendar." }) { abrirPaginaDoServidor("Meu site", "/site/editor") },
+                TelaDeAjustes.Ajuste("Recibos e etiquetas", { "Recibo, notinha e etiqueta de envio dos seus pedidos, com o logo da loja. Sem valor fiscal." }) { abrirDocumentos() },
             )
         ),
         TelaDeAjustes.Secao(

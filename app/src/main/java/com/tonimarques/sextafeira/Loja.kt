@@ -525,6 +525,8 @@ class Loja(private val contexto: Context) {
         val entrega: String, val criado: Long, val pago: Long?, val itens: List<Item>,
         val telefone: String = "", val rastreio: String? = null,
         val descontoCentavos: Int = 0, val freteCentavos: Int = 0,
+        /** Endereço de entrega, uma linha por "\n" (vazio na retirada ou quando a plataforma não manda). */
+        val endereco: String = "",
     )
     data class Produto(
         val id: Int, val nome: String, val ativo: Boolean, val estoque: Int?, val precoCentavos: Int?,
@@ -661,6 +663,12 @@ class Loja(private val contexto: Context) {
                 freteCentavos = o.optInt("shippingCents"),
                 telefone = o.optString("customerPhone"),
                 rastreio = if (o.isNull("trackingCode")) null else o.optString("trackingCode").ifBlank { null },
+                endereco = o.optJSONObject("shippingAddress")?.let { a ->
+                    Documentos.enderecoEmLinhas(
+                        a.optString("street"), a.optString("number"), a.optString("complement"),
+                        a.optString("neighborhood"), a.optString("city"), a.optString("state"), a.optString("cep"),
+                    ).joinToString("\n")
+                }.orEmpty(),
             )
         }
 
