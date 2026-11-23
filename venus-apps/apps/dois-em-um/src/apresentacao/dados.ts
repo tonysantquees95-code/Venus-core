@@ -66,6 +66,7 @@ export const NOVIDADES: Novidade[] = [
   { id: 24, data: "2026-11-21", tipo: "novo", titulo: "Meu site e logo personalizado", texto: "Em Empresa › Meu site e logo você escolhe entre vários logos feitos para o seu ramo (símbolo, formato, letra e cores), baixa a imagem e publica um site do seu negócio com serviços, fotos, depoimentos e botão de agendar e de WhatsApp." },
   { id: 25, data: "2026-11-21", tipo: "novo", titulo: "Feedback e relato de erros", texto: "Em Ajustes › Sobre a Vênus você encontra Enviar feedback e Reportar um erro: conte o que achou, avise quando algo não funcionou e responda uma pesquisa rápida de 1 minuto. A Vênus está em fase de testes (beta) e cada relato ajuda a melhorar." },
   { id: 26, data: "2026-11-22", tipo: "novo", titulo: "Recibos e etiquetas", texto: "Em Minha loja › Recibos e etiquetas você preenche o cliente, os itens e o endereço e gera o recibo (A4), a notinha (cupom de 80 mm) ou a etiqueta de envio 10x15, com o nome e o logo da sua loja. Mande no WhatsApp, salve em PDF ou imprima. São documentos sem valor fiscal. No plano grátis são 15 por mês, com a marca da Vênus pequena no rodapé." },
+  { id: 27, data: "2026-11-23", tipo: "novo", titulo: "Vênus Vitrine dentro da Vênus", texto: "Em Minha loja, logo abaixo, tem a nova aba Vênus Vitrine: criar o site do seu negócio em 6 passos, link curto e QR code, panfleto, logo e catálogo com pedido pelo WhatsApp, tudo num só lugar." },
 ];
 
 export const ROTULO: Record<TipoNovidade, string> = { novo: "Novo", melhoria: "Melhorou", correcao: "Corrigido" };

@@ -104,6 +104,15 @@ private fun MainActivity.montarCentral(resumo: ResumoDaLoja?) {
             )
         ),
         TelaDeAjustes.Secao(
+            "Vênus Vitrine", listOf(
+                TelaDeAjustes.Ajuste("Criar meu site", { "Assistente em 6 passos: logo, formato, serviços, fotos e publicação, com prévia ao vivo." }) { abrirPaginaDoServidor("Vênus Vitrine", "/vitrine/", extra = "&app=venus") },
+                TelaDeAjustes.Ajuste("Link curto e QR code", { "Encurte um endereço e gere o QR code para balcão, vitrine e cartão." }) { abrirPaginaDoServidor("Link curto e QR", "/vitrine/", extra = "&app=venus&ir=ferramentas&aba=link") },
+                TelaDeAjustes.Ajuste("Panfleto grátis", { "Panfleto pronto para imprimir ou postar, com o QR do seu WhatsApp." }) { abrirPaginaDoServidor("Panfleto", "/vitrine/", extra = "&app=venus&ir=ferramentas&aba=panfleto") },
+                TelaDeAjustes.Ajuste("Logo grátis", { "48 modelos prontos e o editor para personalizar do seu jeito." }) { abrirPaginaDoServidor("Logo", "/vitrine/", extra = "&app=venus&ir=ferramentas&aba=logo") },
+                TelaDeAjustes.Ajuste("Catálogo com pedido no WhatsApp", { "Catálogo online em que o cliente monta o pedido e manda pelo WhatsApp." }) { abrirPaginaDoServidor("Catálogo", "/vitrine/", extra = "&app=venus&ir=ferramentas&aba=catalogo") },
+            )
+        ),
+        TelaDeAjustes.Secao(
             "Atalhos prontos", listOf(
                 TelaDeAjustes.Ajuste("QR Code da minha loja", { usa }) { qrDaLoja() },
                 TelaDeAjustes.Ajuste("Panfleto da minha loja", { "Ofertas do catálogo, contato e QR Code, já preenchidos." }) { criarPanfleto() },

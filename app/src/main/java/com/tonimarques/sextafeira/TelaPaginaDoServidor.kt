@@ -28,7 +28,7 @@ import android.widget.TextView
  * Escolher foto (galeria/câmera) e baixar o logo funcionam aqui dentro; links de fora (WhatsApp etc.) abrem no app certo.
  */
 @SuppressLint("SetJavaScriptEnabled")
-internal fun MainActivity.abrirPaginaDoServidor(titulo: String, caminho: String, semConta: Boolean = false, aoAbrir: () -> Unit = {}) {
+internal fun MainActivity.abrirPaginaDoServidor(titulo: String, caminho: String, semConta: Boolean = false, extra: String = "", aoAbrir: () -> Unit = {}) {
     // páginas públicas (feedback) abrem sem login; as da loja precisam da conta
     emFundo({ if (!semConta) Nuvem.garantirConta(this) }) { r ->
         r.onFailure { aviso(it.mensagemAmigavel()) }
@@ -57,7 +57,7 @@ internal fun MainActivity.abrirPaginaDoServidor(titulo: String, caminho: String,
                 setOnClickListener { dialogo.dismiss() }
             })
             val loja = Lojas.aberta(this)
-            val endereco = if (semConta) "${Servidor.ENDERECO}$caminho" else "${Servidor.ENDERECO}$caminho#t=${Nuvem.token(this)}" + if (loja.isNotBlank()) "&l=$loja" else ""
+            val endereco = if (semConta) "${Servidor.ENDERECO}$caminho" else "${Servidor.ENDERECO}$caminho#t=${Nuvem.token(this)}" + if (loja.isNotBlank()) "&l=$loja" else "" + extra
             val web = WebView(this).apply {
                 settings.javaScriptEnabled = true
                 settings.domStorageEnabled = true

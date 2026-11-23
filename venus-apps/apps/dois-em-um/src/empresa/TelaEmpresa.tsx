@@ -19,6 +19,11 @@ const SECOES: ItemLateral[] = [
   { id: "recibos", rotulo: "Recibos e etiquetas", icone: <IconeNomeado nome="recibo" className="size-5" />, grupo: "Minha loja" },
   { id: "regras", rotulo: "Regras de venda", icone: <IconeNomeado nome="regras" className="size-5" />, grupo: "Minha loja" },
   { id: "passos", rotulo: "Primeiros passos", icone: <IconeNomeado nome="passos" className="size-5" />, grupo: "Minha loja" },
+  { id: "vv-site", rotulo: "Criar meu site", icone: <IconeNomeado nome="site" className="size-5" />, grupo: "Vênus Vitrine" },
+  { id: "vv-link", rotulo: "Link curto e QR code", icone: <IconeNomeado nome="conta" className="size-5" />, grupo: "Vênus Vitrine" },
+  { id: "vv-panfleto", rotulo: "Panfleto grátis", icone: <IconeNomeado nome="panfleto" className="size-5" />, grupo: "Vênus Vitrine" },
+  { id: "vv-logo", rotulo: "Logo grátis", icone: <IconeNomeado nome="ideia" className="size-5" />, grupo: "Vênus Vitrine" },
+  { id: "vv-catalogo", rotulo: "Catálogo no WhatsApp", icone: <IconeNomeado nome="vitrine" className="size-5" />, grupo: "Vênus Vitrine" },
   { id: "painel", rotulo: "Painel ao vivo", icone: <IconeNomeado nome="painel" className="size-5" />, grupo: "Financeiro" },
   { id: "historico", rotulo: "Histórico de conversas", icone: <IconeNomeado nome="conversas" className="size-5" />, grupo: "Conversas" },
   { id: "ideias", rotulo: "Ideias de post", icone: <IconeNomeado nome="ideia" className="size-5" />, grupo: "Instagram" },
@@ -57,6 +62,11 @@ export function TelaEmpresa({ alvo }: { alvo?: string }) {
         {secao === "panfleto" && <Panfleto />}
         {secao === "vitrine" && <VitrineECatalogo />}
         {secao === "painel" && <PainelAoVivo />}
+        {secao === "vv-site" && <PaginaDoServidor titulo="Criar meu site" descricao="Assistente em 6 passos: logo, formato, serviços, fotos e publicação, com prévia ao vivo." caminho="/vitrine/" extra="&app=venus" />}
+        {secao === "vv-link" && <PaginaDoServidor titulo="Link curto e QR code" descricao="Encurte um endereço e gere o QR code para balcão, vitrine e cartão." caminho="/vitrine/" extra="&app=venus&ir=ferramentas&aba=link" />}
+        {secao === "vv-panfleto" && <PaginaDoServidor titulo="Panfleto grátis" descricao="Panfleto pronto para imprimir ou postar, com o QR do seu WhatsApp." caminho="/vitrine/" extra="&app=venus&ir=ferramentas&aba=panfleto" />}
+        {secao === "vv-logo" && <PaginaDoServidor titulo="Logo grátis" descricao="48 modelos prontos e o editor para personalizar do seu jeito." caminho="/vitrine/" extra="&app=venus&ir=ferramentas&aba=logo" />}
+        {secao === "vv-catalogo" && <PaginaDoServidor titulo="Catálogo no WhatsApp" descricao="Catálogo online em que o cliente monta o pedido e manda pelo WhatsApp." caminho="/vitrine/" extra="&app=venus&ir=ferramentas&aba=catalogo" />}
         {secao === "agenda" && <PaginaDoServidor titulo="Agenda de serviços" descricao="Para salão, barbearia e quem atende com hora marcada: o cliente escolhe o serviço e o horário, e a equipe vê a agenda por um link." caminho="/agenda/painel" />}
         {secao === "meusite" && <PaginaDoServidor titulo="Meu site e logo" descricao="Crie o site do seu negócio e escolha um logo personalizado, com serviços, fotos e botão de agendar." caminho="/site/editor" />}
       </div>
