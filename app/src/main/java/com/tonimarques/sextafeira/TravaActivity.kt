@@ -44,7 +44,8 @@ class TravaActivity : Activity() {
         if (!VetorialId.logado(this)) return mostrarLogin()
         when (val e = VetorialId.estado(this)) {
             is Selo.Estado.Livre -> abrirApp()
-            is Selo.Estado.TesteAcabou -> mostrarBloqueio()
+            // nunca mostra "o teste acabou" só pelo que ficou guardado no aparelho: confirma com o servidor antes
+            is Selo.Estado.TesteAcabou -> { mostrarValidando("confirmando"); validar() }
             is Selo.Estado.ValidarOnline -> { mostrarValidando(e.motivo); validar() }
         }
     }
