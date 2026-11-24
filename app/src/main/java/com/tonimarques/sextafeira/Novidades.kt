@@ -52,6 +52,7 @@ internal object Novidades {
         Item(33, "2026-11-24", "melhoria", "Respostas à cliente com os produtos certos", "Ao escrever ou responder uma cliente, a Vênus agora acha os produtos que combinam com o que ela pediu, mesmo que as palavras sejam diferentes (e não só os primeiros da lista). Também usa sempre as regras e respostas que a loja já conferiu como base, e ignora ordens escondidas dentro da mensagem da cliente."),
         Item(34, "2026-11-24", "novo", "Conte se você vai assinar", "Durante o teste grátis (a partir do 2º dia), a Vênus pergunta de vez em quando se você pretende assinar e por quê. É rápido e dá para tocar em Agora não. Se você responder, ela não pergunta de novo por 7 dias; se fechar sem responder, ela volta amanhã. Suas respostas ajudam a gente a melhorar a Vênus."),
         Item(35, "2026-11-24", "novo", "Aprender a usar a Vênus", "Em Menu › Aprender a usar a Vênus você assiste a vídeos curtos (atendimento no WhatsApp, criar o seu site e Instagram no automático) e segue um passo a passo para deixar a loja pronta, criando um site novo ou conectando o que você já tem."),
+        Item(36, "2026-11-24", "novo", "Plano anual da Vênus", "Ao renovar a Vênus, agora dá para pagar o plano anual: R$ 499 de uma vez no Pix ou no débito, valendo 365 dias (equivale a 2 meses grátis). Não renova sozinho: quando vencer, é só pagar de novo."),
     )
 
     fun rotulo(tipo: String): String = when (tipo) { "novo" -> "Novo"; "melhoria" -> "Melhorou"; "correcao" -> "Corrigido"; else -> tipo }

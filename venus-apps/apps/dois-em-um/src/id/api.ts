@@ -66,7 +66,7 @@ export interface Licenca {
   diasDeTesteRestantes?: number;
   diasPagosRestantes?: number;
   emTeste?: boolean;
-  cobranca?: { url: string; valorCentavos: number; pacote?: string; forma?: "recorrente" | "avulso" };
+  cobranca?: { url: string; valorCentavos: number; pacote?: string; forma?: "recorrente" | "avulso" | "anual" };
   pacote?: string;
   /** Os planos à venda (preço em centavos), como o servidor entrega. */
   pacotes?: { chave: string; nome: string; precoCentavos: number; precoCheioCentavos?: number; promocao?: boolean }[];
@@ -123,7 +123,7 @@ export function criarApi(base: string = URL_API, f: typeof fetch = (...a) => fet
     dispositivos: (t: string) => chamar<ListaDeAparelhos>("GET", "/id/dispositivos", undefined, t),
     removerDispositivo: (t: string, id: string) => chamar<{ ok: boolean }>("DELETE", `/id/dispositivos/${id}`, undefined, t),
     encerrarSessao: (t: string, sessao: string) => chamar<{ ok: boolean }>("POST", `/id/sessoes/${sessao}/encerrar`, {}, t),
-    licenca: (t: string, gerar = false, escolha?: { pacote: string; forma: "recorrente" | "avulso" }) =>
+    licenca: (t: string, gerar = false, escolha?: { pacote: string; forma: "recorrente" | "avulso" | "anual" }) =>
       chamar<Licenca>("GET", `/id/licenca${gerar ? `?gerar=1${escolha ? `&pacote=${encodeURIComponent(escolha.pacote)}&forma=${escolha.forma}` : ""}` : ""}`, undefined, t),
     lojas: (t: string) => chamar<{ lojas: LojaDaConta[]; max: number }>("GET", "/loja/lojas", undefined, t),
     criarLoja: (t: string, d: { nome: string }) => chamar<{ id: string; nome: string; slug: string; url: string }>("POST", "/loja/lojas", d, t),

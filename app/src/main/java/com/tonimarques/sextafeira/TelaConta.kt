@@ -143,7 +143,7 @@ private fun reaisDoPlano(centavos: Int) = "R$ " + String.format(java.util.Locale
 private fun MainActivity.escolherFormaDePagar(chave: String, nome: String) = escolher("Como pagar o plano $nome?", listOf(
     "Cartão de crédito, todo mês (renova sozinho)" to { gerarLinkDePagamento(chave, "recorrente") },
     "Pix ou débito, 30 dias (paga só este mês; vencendo, paga mais 30 dias)" to { gerarLinkDePagamento(chave, "avulso") },
-))
+) + (if (chave == "venus") listOf<Pair<String, () -> Unit>>("Plano anual: R$ 499 no Pix ou débito, 365 dias (2 meses grátis, sem renovar sozinho)" to { gerarLinkDePagamento(chave, "anual") }) else emptyList()))
 
 private fun MainActivity.gerarLinkDePagamento(chave: String, forma: String) {
     emFundo({ VetorialId.licenca(this, true, chave, forma) }) { r2 ->

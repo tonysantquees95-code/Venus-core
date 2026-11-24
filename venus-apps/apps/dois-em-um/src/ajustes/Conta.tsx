@@ -231,7 +231,7 @@ export function ContaLogada() {
   const [lic, setLic] = useState<Licenca | null>(null);
   const [msg, setMsg] = useState("");
   const [pacote, setPacote] = useState("venus");
-  const [forma, setForma] = useState<"recorrente" | "avulso">("recorrente");
+  const [forma, setForma] = useState<"recorrente" | "avulso" | "anual">("recorrente");
   const [verPlanos, setVerPlanos] = useState(false);
   useEffect(() => { if (sessao) api.licenca(sessao.token).then((l) => { setLic(l); if (l.pacote) setPacote(l.pacote); }).catch(() => undefined); }, [api, sessao?.token]);
   if (!sessao) return null;
@@ -261,7 +261,7 @@ export function ContaLogada() {
           <p className="font-semibold">1. Escolha o plano</p>
           <div className="grid gap-2" role="radiogroup" aria-label="Plano">
             {planos.map((p) => (
-              <button key={p.chave} type="button" role="radio" aria-checked={pacote === p.chave} onClick={() => setPacote(p.chave)}
+              <button key={p.chave} type="button" role="radio" aria-checked={pacote === p.chave} onClick={() => { setPacote(p.chave); if (p.chave !== "venus" && forma === "anual") setForma("recorrente"); }}
                 className={`flex items-center justify-between rounded-2xl border px-4 py-3 text-left transition ${pacote === p.chave ? "border-venus bg-venus/15" : "border-white/15 bg-white/5"}`}>
                 <span className="font-semibold">{p.nome}{p.promocao && <span className="ml-2 rounded-full bg-emerald-500/20 px-2 py-0.5 text-xs text-emerald-300">promoção</span>}</span><span className="text-suave">{p.promocao && p.precoCheioCentavos ? <s className="mr-1 opacity-60">{reais(p.precoCheioCentavos)}</s> : null}{reais(p.precoCentavos)}/mês</span>
               </button>
@@ -271,7 +271,8 @@ export function ContaLogada() {
           <div className="grid gap-2" role="radiogroup" aria-label="Forma de pagamento">
             {([
               ["recorrente", "Cartão de crédito, todo mês", "Renova sozinho a cada 30 dias. Você cancela quando quiser."],
-              ["avulso", "Pix ou cartão de débito, 30 dias", "Paga só este mês, sem renovar sozinho. Quando vencer, é só pagar mais 30 dias. Se não pagar, o acesso fica travado até você pagar."]
+              ["avulso", "Pix ou cartão de débito, 30 dias", "Paga só este mês, sem renovar sozinho. Quando vencer, é só pagar mais 30 dias. Se não pagar, o acesso fica travado até você pagar."],
+              ...(pacote === "venus" ? [["anual", "Plano anual: R$ 499 no Pix ou débito", "365 dias de uma vez (equivale a 2 meses grátis). Não renova sozinho: quando vencer, é só pagar de novo."]] as const : [])
             ] as const).map(([id, titulo, sub]) => (
               <button key={id} type="button" role="radio" aria-checked={forma === id} onClick={() => setForma(id)}
                 className={`rounded-2xl border px-4 py-3 text-left transition ${forma === id ? "border-venus bg-venus/15" : "border-white/15 bg-white/5"}`}>
@@ -279,7 +280,7 @@ export function ContaLogada() {
               </button>
             ))}
           </div>
-          <button className={`${botaoPrimario} w-full`} onClick={pagar}>{forma === "avulso" ? "Pagar com Pix ou débito" : "Assinar no cartão"}{escolhido ? ` · ${reais(escolhido.precoCentavos)}` : ""}</button>
+          <button className={`${botaoPrimario} w-full`} onClick={pagar}>{forma === "anual" ? "Pagar o plano anual" : forma === "avulso" ? "Pagar com Pix ou débito" : "Assinar no cartão"}{forma === "anual" ? " · R$ 499,00" : escolhido ? ` · ${reais(escolhido.precoCentavos)}` : ""}</button>
         </div>
       )}
       <div className="flex flex-wrap gap-2">
