@@ -10,12 +10,15 @@ import { AvisoDeConflito } from "./ajustes/Conta";
 import { InstalarIOS } from "./ios/InstalarIOS";
 import { Sincronizador } from "./sync/Sincronizador";
 import { useAtalhoGlobal } from "./desktop/useAtalhoGlobal";
-import { useId } from "./id/IdProvider";
+import { meuAparelho, useId } from "./id/IdProvider";
+import { ponteDesktop } from "./desktop/ponte";
 import { TelaLogin } from "./id/TelaLogin";
 import { TelaBloqueio, TelaValidando } from "./id/TelaBloqueio";
 import { useRobo } from "./hooks/useRobo";
 import type { Tela } from "./tipos";
 import { Apresentacao, Novidades } from "./apresentacao/Apresentacao";
+import { PesquisaDeAssinatura } from "./apresentacao/PesquisaDeAssinatura";
+import { deveMostrar as devePerguntarSeAssina, diasUsados, faseDaLicenca, lerEstado as lerEstadoDaPesquisa, marcarMostrada as marcarPesquisaMostrada } from "./apresentacao/pesquisaAssinatura";
 import { lerVisto, novasDesde, precisaApresentar, type Novidade } from "./apresentacao/dados";
 import { CriarLoja, lojaGuiadaPulada } from "./empresa/CriarLoja";
 import { useEmpresa } from "./empresa/EmpresaProvider";
@@ -40,7 +43,7 @@ export function App() {
   const [criandoLoja, setCriandoLoja] = useState(false);
   const [lojaPulada, setLojaPulada] = useState(() => lojaGuiadaPulada());
   useAtalhoGlobal(() => setTela("chat"));
-  const { sessao, estado } = useId();
+  const { sessao, estado, conta } = useId();
   const { anexar } = useConversas();
   const catalogo = useCatalogo();
   const { prefs } = usePreferencias();
@@ -87,6 +90,18 @@ export function App() {
   }, [logado, lojaPulada, empresa]);
   const [apresentar, setApresentar] = useState(() => precisaApresentar());
   const [novidades, setNovidades] = useState<Novidade[]>(() => { const v = lerVisto(); return v === null ? [] : novasDesde(v); });
+  // pesquisa "vai assinar?": depois das novidades, uma vez por dia no máximo (a regra está em pesquisaAssinatura.ts)
+  const [pesquisa, setPesquisa] = useState(false);
+  const pesquisaVista = useRef(false);
+  useEffect(() => {
+    if (pesquisaVista.current || apresentar || novidades.length > 0 || !conta) return;
+    const fase = faseDaLicenca(conta.licenca), dias = diasUsados(conta.licenca), e = lerEstadoDaPesquisa();
+    if (!devePerguntarSeAssina(fase, dias, e.ultimoDia, e.respondidaEm, new Date())) return;
+    pesquisaVista.current = true;
+    marcarPesquisaMostrada();
+    const t = setTimeout(() => setPesquisa(true), 2500);
+    return () => clearTimeout(t);
+  }, [conta, apresentar, novidades.length]);
   const inicioToque = useRef<{ x: number; y: number } | null>(null);
 
   // Trocou, abriu ou criou conversa (inclui reabrir o app): volta para o chat e recolhe a gaveta.
@@ -148,6 +163,7 @@ export function App() {
       <AvisoDeConflito />
       <InstalarIOS />
       {novidades.length > 0 && <Novidades itens={novidades} aoFechar={() => setNovidades([])} />}
+      {pesquisa && conta && <PesquisaDeAssinatura fase={faseDaLicenca(conta.licenca)} dias={diasUsados(conta.licenca)} plataforma={["windows", "web", "ios", "mac", "android"].includes(String(meuAparelho().plataforma)) ? String(meuAparelho().plataforma) : "web"} versao={ponteDesktop()?.versao ?? ""} aoFechar={() => setPesquisa(false)} />}
     </div>
   );
 }
