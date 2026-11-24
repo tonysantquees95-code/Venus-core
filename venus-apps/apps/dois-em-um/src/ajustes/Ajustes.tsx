@@ -12,6 +12,7 @@ import { buscar, CATALOGO, CATEGORIAS, MODOS, type Categoria } from "./logica";
 import { usePreferencias } from "./Preferencias";
 import { CartaoVoz } from "./CartaoVoz";
 import { FeedbackDoApp } from "./FeedbackDoApp";
+import { AprenderDoApp } from "./AprenderDoApp";
 import { PaginaComLateral } from "../components/PaginaComLateral";
 import { IconeNomeado } from "../components/Icones";
 
@@ -81,7 +82,7 @@ function Atualizacoes() {
 
 /** Ajustes: categorias, cartões de vidro, alternâncias grandes e busca rápida. */
 export function Ajustes({ aoAbrirTema, alvo }: { aoAbrirTema: () => void; alvo?: string }) {
-  const [sobre, setSobre] = useState<"" | "tour" | "termos" | "novidades" | "feedback">("");
+  const [sobre, setSobre] = useState<"" | "tour" | "termos" | "novidades" | "feedback" | "aprender">("");
   const { prefs, definir } = usePreferencias();
   const { sessao } = useId();
   const { tema } = useTema();
@@ -207,6 +208,7 @@ export function Ajustes({ aoAbrirTema, alvo }: { aoAbrirTema: () => void; alvo?:
           {mostra("dispositivos", "dispositivos") && <Cartao id="dispositivos" titulo="Meus dispositivos" descricao="Onde a sua conta está conectada agora."><MeusDispositivos /></Cartao>}
           <Cartao id="sobre" titulo="Sobre a Vênus" descricao="Rever a apresentação, ler os termos, ver o que mudou e contar o que achou. A Vênus está em fase de testes (beta): o seu feedback nos ajuda a melhorar.">
             <div className="flex flex-wrap gap-2">
+              <button type="button" className={botaoSuave} onClick={() => setSobre("aprender")}>Aprender a usar a Vênus</button>
               <button type="button" className={botaoSuave} onClick={() => setSobre("tour")}>Rever a apresentação</button>
               <button type="button" className={botaoSuave} onClick={() => setSobre("termos")}>Termos de uso</button>
               <button type="button" className={botaoSuave} onClick={() => setSobre("novidades")}>O que há de novo</button>
@@ -217,6 +219,7 @@ export function Ajustes({ aoAbrirTema, alvo }: { aoAbrirTema: () => void; alvo?:
           {sobre === "tour" && <div className="fixed inset-0 z-50 flex flex-col bg-fundo"><div className="mx-auto flex min-h-0 w-full max-w-lg flex-1 flex-col px-5 pb-4 pt-6"><Tour aoTerminar={() => setSobre("")} aoFechar={() => setSobre("")} rotuloFinal="Fechar" /></div></div>}
           {sobre === "termos" && <Termos aoFechar={() => setSobre("")} />}
           {sobre === "feedback" && <FeedbackDoApp aoFechar={() => setSobre("")} />}
+          {sobre === "aprender" && <AprenderDoApp aoFechar={() => setSobre("")} />}
           {sobre === "novidades" && <Novidades itens={novasDesde(0, NOVIDADES)} aoFechar={() => setSobre("")} />}
         </div>
       </div>

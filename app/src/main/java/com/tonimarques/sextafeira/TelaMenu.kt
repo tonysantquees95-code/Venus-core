@@ -137,6 +137,7 @@ internal fun MainActivity.abrirMenu(@Suppress("UNUSED_PARAMETER") ancora: View) 
                 item("Ouvir com o app fechado", {
                     "Diga \"Ei $n\" de qualquer tela e o orbe aparece num pop-up, sem abrir o app inteiro."
                 }, MENU_FUNDO) { prefs.getBoolean(PREF_FUNDO, false) },
+                TelaDeAjustes.Ajuste("Aprender a usar a $n", { "Vídeos curtos e passo a passo: atendimento no WhatsApp, criar o seu site e Instagram no automático." }) { abrirAprender() },
                 TelaDeAjustes.Ajuste("Guia do primeiro acesso", { "Passo a passo do que ligar nas configurações do celular." }) { Onboarding.mostrar(this) },
                 TelaDeAjustes.Ajuste("O que há de novo", { "Tudo o que mudou, melhorou e foi corrigido nas atualizações." }) { Novidades.mostrarTudo(this) },
                 TelaDeAjustes.Ajuste("Enviar feedback", { "A $n está em fase de testes (beta). Conte o que achou e responda uma pesquisa rápida: isso nos ajuda a melhorar." }) { abrirFeedback() },

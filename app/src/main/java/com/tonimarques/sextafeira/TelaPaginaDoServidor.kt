@@ -118,6 +118,11 @@ internal fun MainActivity.abrirFeedback() {
     abrirPaginaDoServidor("Feedback", "/feedback?app=venus&v=" + Uri.encode(versao) + "&p=android", semConta = true)
 }
 
+/** Aprender a usar a Vênus: vídeos curtos e passo a passo (página pública do servidor, sem login; abre sem o cabeçalho do site). */
+internal fun MainActivity.abrirAprender() {
+    abrirPaginaDoServidor("Aprender a usar a Vênus", "/aprender.html#app=venus", semConta = true)
+}
+
 /** O que a página pode pedir ao app: guardar um arquivo (o logo em PNG/SVG) na pasta Download › Vênus. */
 internal class PonteDaPagina(private val atividade: MainActivity) {
     @JavascriptInterface

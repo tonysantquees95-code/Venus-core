@@ -51,6 +51,7 @@ internal object Novidades {
         Item(32, "2026-11-23", "correcao", "Teste grátis não pede mais pagamento por engano", "Quem está nos 7 dias grátis não vê mais a tela \"O seu teste acabou\" por causa de uma informação antiga guardada no celular: o app confirma com o servidor antes de pedir qualquer pagamento."),
         Item(33, "2026-11-24", "melhoria", "Respostas à cliente com os produtos certos", "Ao escrever ou responder uma cliente, a Vênus agora acha os produtos que combinam com o que ela pediu, mesmo que as palavras sejam diferentes (e não só os primeiros da lista). Também usa sempre as regras e respostas que a loja já conferiu como base, e ignora ordens escondidas dentro da mensagem da cliente."),
         Item(34, "2026-11-24", "novo", "Conte se você vai assinar", "Durante o teste grátis (a partir do 2º dia), a Vênus pergunta de vez em quando se você pretende assinar e por quê. É rápido e dá para tocar em Agora não. Se você responder, ela não pergunta de novo por 7 dias; se fechar sem responder, ela volta amanhã. Suas respostas ajudam a gente a melhorar a Vênus."),
+        Item(35, "2026-11-24", "novo", "Aprender a usar a Vênus", "Em Menu › Aprender a usar a Vênus você assiste a vídeos curtos (atendimento no WhatsApp, criar o seu site e Instagram no automático) e segue um passo a passo para deixar a loja pronta, criando um site novo ou conectando o que você já tem."),
     )
 
     fun rotulo(tipo: String): String = when (tipo) { "novo" -> "Novo"; "melhoria" -> "Melhorou"; "correcao" -> "Corrigido"; else -> tipo }
