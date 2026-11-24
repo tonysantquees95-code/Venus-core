@@ -130,13 +130,27 @@ object AtendenteDoRobo {
     }
 
     /** Os produtos mais ligados à conversa (palavras em comum), para não mandar o catálogo inteiro à IA. */
-    fun produtosRelevantes(texto: String, produtos: List<Loja.Produto>, maximo: Int = 20): List<Loja.Produto> {
+    fun produtosRelevantes(texto: String, produtos: List<Loja.Produto>, maximo: Int = 20, similaridades: Map<Int, Double>? = null): List<Loja.Produto> {
         val palavras = normalizar(texto).split(' ').filter { it.length >= 4 }.toSet()
         val ativos = produtos.filter { it.ativo && it.precoCentavos != null }
-        if (palavras.isEmpty()) return ativos.take(12)
-        val pontuados = ativos.map { p -> p to normalizar(p.nome).split(' ').count { w -> palavras.any { w.startsWith(it.take(5)) } } }
-        val achados = pontuados.filter { it.second > 0 }.sortedByDescending { it.second }.map { it.first }
-        return (achados + ativos.filter { it !in achados }).take(if (achados.isEmpty()) 12 else maximo)
+        val porPalavra = if (palavras.isEmpty()) emptyList() else
+            ativos.map { p -> p to normalizar(p.nome).split(' ').count { w -> palavras.any { w.startsWith(it.take(5)) } } }
+                .filter { it.second > 0 }.sortedByDescending { it.second }.map { it.first.id }
+        val porSentido = similaridades?.entries?.filter { it.value >= SENTIDO_MINIMO }?.sortedByDescending { it.value }?.map { it.key }.orEmpty()
+        val ids = fundirRankings(listOf(porPalavra, porSentido), maximo)
+        if (ids.isEmpty()) return ativos.take(12)
+        val porId = ativos.associateBy { it.id }
+        return ids.mapNotNull { porId[it] }
+    }
+
+    /** Parecido mínimo (0 a 1) para o sentido contar; abaixo disso é ruído. */
+    const val SENTIDO_MINIMO = 0.55
+
+    /** Junta listas ordenadas (palavra + sentido) em uma só: quem aparece bem em várias sobe (soma de 1/(60+posição)). */
+    fun fundirRankings(rankings: List<List<Int>>, maximo: Int, k: Int = 60): List<Int> {
+        val nota = HashMap<Int, Double>()
+        for (r in rankings) r.forEachIndexed { i, id -> nota[id] = (nota[id] ?: 0.0) + 1.0 / (k + i + 1) }
+        return nota.entries.sortedWith(compareByDescending<Map.Entry<Int, Double>> { it.value }.thenBy { it.key }).take(maximo).map { it.key }
     }
 
     // ------------------------------------------------------------------ conversa guardada (só no celular)
@@ -208,16 +222,19 @@ object AtendenteDoRobo {
         val chaveGemini = GeminiRota.efetiva(ctx, Cofre.ler(config, "chave"))
         val modelo = config.getString("modelo", "gemini-flash-latest").orEmpty().ifBlank { "gemini-flash-latest" }
         val anterior = conversa?.mensagens?.lastOrNull { it.cliente }?.texto.orEmpty()
-        val catalogo = Loja.catalogoParaIA(produtosRelevantes("$anterior $mensagem", produtos(ctx)))
+        val catalogo = ContextoDaLoja.catalogo("$anterior $mensagem", produtos(ctx), chaveGemini)
+        val conferidas = try { ContextoDaLoja.textoDasReferencias(ContextoDaLoja.referencias(Memoria(ctx), mensagem, chaveGemini)) } catch (e: Exception) { "" }
         val historico = conversa?.mensagens?.takeLast(8)?.joinToString("\n") { (if (it.cliente) "Cliente: " else "${Marca.nome}: ") + it.texto }.orEmpty()
         val pedido = "Você é a ${Marca.nome}, atendente virtual da ${Perfil.loja} (${Perfil.ramo}). Está respondendo no " +
             (if (canal == "whatsapp") "WhatsApp" else "direct do Instagram") + " da loja. " + Perfil.injecao() + "\n" +
             "Escreva como uma pessoa simpática e discreta escreve no celular: curto (1 a 3 frases), no máximo 1 emoji, sem markdown, sem palavras vulgares. " +
             "Use SOMENTE as regras acima e os produtos abaixo; não invente produtos, preços, prazos nem políticas. Quando indicar produto, mande o link dele (se tiver). " +
             (if (Plataformas.tipo(ctx) == "interno") "A loja não tem site: quando a cliente quiser comprar, confirme o produto e marque chamarHumano=true para a equipe fechar o pedido (pagamento e entrega). " else "") +
+            ContextoDaLoja.AVISO_DADOS + " " +
             "Nunca peça CPF, endereço ou dados de cartão na conversa. Marque chamarHumano=true quando a cliente pedir para falar com alguém; " +
             "for troca, defeito, reclamação, pedido atrasado ou problema com pagamento; ou você não tiver a informação. Nesses casos, diga que vai chamar a equipe da loja.\n\n" +
             "Produtos (nome | preço | preço no Pix | estoque | link):\n${catalogo.ifBlank { "(catálogo indisponível agora)" }}\n\n" +
+            (if (conferidas.isNotBlank()) "Regras e respostas já conferidas da loja para perguntas parecidas (use as mesmas informações e o mesmo tom):\n$conferidas\n\n" else "") +
             (if (historico.isNotBlank()) "Conversa até aqui:\n$historico\n\n" else "") +
             "Nova mensagem da cliente: $mensagem\n\nResponda só com JSON: {\"texto\":\"...\",\"chamarHumano\":false}"
         val json = try {

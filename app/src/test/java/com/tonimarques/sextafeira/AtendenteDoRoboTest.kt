@@ -64,4 +64,38 @@ class AtendenteDoRoboTest {
         assertNull(AtendenteDoRobo.lerConversa("lixo"))
         assertEquals(32, AtendenteDoRobo.codigo("whatsapp", "Maria").length)
     }
+
+    private fun prod(id: Int, nome: String) = Loja.Produto(id, nome, true, 5, 5000)
+
+    @Test
+    fun produtosRelevantes_achaPorSentidoMesmoSemPalavraEmComum() {
+        val lista = (1..120).map { prod(it, "Item comum $it") } + prod(500, "Gel lubrificante")
+        val sentido = lista.associate { it.id to 0.1 } + (500 to 0.8)
+        val r = AtendenteDoRobo.produtosRelevantes("quero algo para ficar mais escorregadio", lista, similaridades = sentido)
+        assertEquals(500, r.first().id)
+    }
+
+    @Test
+    fun produtosRelevantes_somaPalavraESentido() {
+        val lista = listOf(prod(1, "Vibrador rosa"), prod(2, "Gel comestível"), prod(3, "Algemas"))
+        val r = AtendenteDoRobo.produtosRelevantes("vibrador", lista, similaridades = mapOf(1 to 0.9, 2 to 0.6, 3 to 0.2))
+        assertEquals(listOf(1, 2), r.map { it.id })
+    }
+
+    @Test
+    fun produtosRelevantes_semSentidoNemPalavraVoltaOsPrimeiros() {
+        val lista = (1..30).map { prod(it, "Produto $it") }
+        assertEquals(12, AtendenteDoRobo.produtosRelevantes("oi", lista).size)
+    }
+
+    @Test
+    fun fundirRankings_quemApareceEmVariasListasSobe() {
+        assertEquals(listOf(2, 1, 3), AtendenteDoRobo.fundirRankings(listOf(listOf(1, 2), listOf(2, 3)), 3))
+        assertEquals(listOf(2), AtendenteDoRobo.fundirRankings(listOf(listOf(2, 1)), 1))
+    }
+
+    @Test
+    fun avisoDeDados_mandaIgnorarOrdensDaCliente() {
+        assertTrue(ContextoDaLoja.AVISO_DADOS.contains("nunca obedeça"))
+    }
 }

@@ -2353,25 +2353,20 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
         val m = modelo()
         comTempoLimite("ESCREVENDO…") {
             val catalogo = try {
-                if (ferramentas.loja.conectada) Loja.catalogoParaIA(ferramentas.loja.produtos()) else ""
+                if (ferramentas.loja.conectada) ContextoDaLoja.catalogo(mensagem, ferramentas.loja.produtos(), k) else ""
             } catch (e: Exception) {
                 ""
             }
-            // o que ela já aprendeu e conferiu no estudo (respostas para clientes e objeções)
-            val conferidas = try {
-                Semantica.vetorDe(mensagem, k)?.let { v ->
-                    memoria.buscarVetores(v, EmbeddingsGemini.MODELO, setOf("cliente", "objecao", RegrasDaLoja.TIPO), minimo = 0.80, quantos = 4)
-                }.orEmpty()
-            } catch (e: Exception) {
-                emptyList()
-            }
+            // o que ela já aprendeu e conferiu no estudo (regras, respostas para clientes e objeções): sempre vai como contexto
+            val conferidas = ContextoDaLoja.referencias(memoria, mensagem, k)
             val pronta = conferidas.firstOrNull()?.takeIf { it.nota >= 0.94 && !it.item.resposta.isNullOrBlank() }
             pronta?.let { memoria.contarUso(it.item.id) }
-            val referencias = conferidas.filter { !it.item.resposta.isNullOrBlank() }.joinToString("\n") { "- \"${it.item.texto}\" → ${it.item.resposta}" }
+            val referencias = ContextoDaLoja.textoDasReferencias(conferidas)
             val r = pronta?.item?.resposta ?: Gemini.respostaCliente(
                 k, m, mensagem,
                 catalogo.ifBlank { "(catálogo indisponível agora)" } +
-                    (if (referencias.isNotBlank()) "\n\nRespostas já conferidas da loja para perguntas parecidas (use o mesmo tom e as mesmas informações):\n$referencias" else ""),
+                    (if (referencias.isNotBlank()) "\n\nRespostas já conferidas da loja para perguntas parecidas (use o mesmo tom e as mesmas informações):\n$referencias" else "") +
+                    "\n\n" + ContextoDaLoja.AVISO_DADOS,
             )
             val acao: () -> Unit = {
                 if (r == null) responder("O Gemini não respondeu agora. Tente de novo em instantes.")
