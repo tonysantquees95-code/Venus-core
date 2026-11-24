@@ -38,6 +38,10 @@ object VetorialId {
     fun nomeDaConta(ctx: Context): String = prefs(ctx).getString(PREF_NOME_CONTA, "").orEmpty()
     fun foto(ctx: Context): String = prefs(ctx).getString(PREF_FOTO, "").orEmpty()
     fun assinatura(ctx: Context): String = prefs(ctx).getString(PREF_ASSINATURA, "").orEmpty()
+    /** Em que ponto da assinatura a conta está, como o servidor disse na última vez: "teste", "pago", "vencido" ou "" (não sabe). */
+    fun fase(ctx: Context): String = prefs(ctx).getString("fase_assinatura", "").orEmpty()
+    /** Dias de teste já usados (0 a 7); -1 quando não está em teste. */
+    fun diasDeTesteUsados(ctx: Context): Int = prefs(ctx).getInt("teste_dias_usados", -1)
     /** Só a conta do dono (o servidor diz): libera as telas de escolha de IA, chaves e modelo. */
     fun admin(ctx: Context): Boolean = logado(ctx) && prefs(ctx).getBoolean(PREF_ADMIN, false)
     /** O servidor (batimento) diz se esta conta é a do administrador: atualiza sozinho, sem precisar sair e entrar de novo. */
@@ -50,7 +54,9 @@ object VetorialId {
         if (!r.ok) return false
         val u = r.json.optJSONObject("usuario") ?: return false
         prefs(ctx).edit().putString(PREF_NOME_CONTA, u.optString("nome")).putString(PREF_FOTO, u.optString("foto"))
-            .putBoolean(PREF_ADMIN, r.json.optBoolean("admin", false)).putLong(PREF_PERFIL_V, u.optLong("atualizado")).putString(PREF_ASSINATURA, textoDaAssinatura(r.json.optJSONObject("licenca"))).apply()
+            .putBoolean(PREF_ADMIN, r.json.optBoolean("admin", false)).putLong(PREF_PERFIL_V, u.optLong("atualizado")).putString(PREF_ASSINATURA, textoDaAssinatura(r.json.optJSONObject("licenca")))
+            .putString("fase_assinatura", PesquisaDeAssinatura.faseDaLicenca(r.json.optJSONObject("licenca")))
+            .putInt("teste_dias_usados", PesquisaDeAssinatura.diasUsados(r.json.optJSONObject("licenca"))).apply()
         return true
     }
 

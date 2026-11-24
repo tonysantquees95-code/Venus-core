@@ -171,7 +171,7 @@ open class MainActivity : Activity(), TextToSpeech.OnInitListener {
                     if (!isFinishing) Onboarding.mostrar(this) { if (precisaDoCadastro()) cadastroGuiado() }
                 }, 900)
             } else if (precisaDoCadastro()) window.decorView.postDelayed({ if (!isFinishing) cadastroGuiado() }, 900)
-            else window.decorView.postDelayed({ Novidades.mostrarSeHouver(this) }, 1200)
+            else window.decorView.postDelayed({ if (Novidades.novasDesde(prefs.getInt(Novidades.PREF_VISTAS, 0)).isEmpty()) PesquisaDeAssinatura.mostrarSeForAHora(this) else Novidades.mostrarSeHouver(this) }, 1200)
             // quem acabou de instalar não vê o histórico: o guia já explica
             if (!prefs.getBoolean(Onboarding.PREF_VISTO, false) && prefs.getInt(Novidades.PREF_VISTAS, -1) < 0) prefs.edit().putInt(Novidades.PREF_VISTAS, Novidades.ultimoId()).apply()
         }
