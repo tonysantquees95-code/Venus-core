@@ -211,6 +211,7 @@ object AtendenteDoRobo {
             if (decisao.humano) agora + PAUSA_HUMANO_MS else 0L, decisao.menu, agora,
         )
         if (!teste) p.edit().putString("c_$chave", gravarConversa(nova)).apply()
+        if (!teste) Resultado.anotarResposta(ctx, chave, decisao.humano)
         if (decisao.humano && !teste) {
             Diario.anotar(ctx, "robo", "Cliente do ${if (canal == "whatsapp") "WhatsApp" else "Instagram"} passada para a loja: \"${mensagem.take(120)}\"", "robô")
         }

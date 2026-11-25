@@ -167,6 +167,17 @@ class VigiaDaLoja : JobService() {
                 prefs.edit().putString(P_RESUMO_DIA, hoje).apply()
                 avisar(c, 901, "Resumo da loja de hoje", Loja.montarResumoDoDia(pedidos, produtos, agora) + (Gestao.avisoDeData(agora)?.let { " $it" } ?: ""))
             }
+            // resumo da manhã: uma vez por dia, na hora escolhida (padrão 8h), com o que a Vênus atendeu ontem
+            if (!primeira && Resultado.deveAvisarDeManha(Resultado.manhaLigada(c), Resultado.horaDaManha(c), Resultado.ultimoAvisoDaManha(c), agora)) {
+                Resultado.marcarAvisoDaManha(c, agora)
+                val ontem = Resultado.somar(Resultado.dias(c), listOf(Resultado.ontem(agora)))
+                val texto = listOf(
+                    Loja.montarResumoDaManha(pedidos, produtos, agora),
+                    Resultado.ontemParaOAviso(ontem),
+                    Gestao.avisoDeData(agora).orEmpty(),
+                ).filter { it.isNotBlank() }.joinToString(" ")
+                avisar(c, 904, "Bom dia! Sua loja hoje", texto)
+            }
             // relatório semanal: segunda-feira, a partir das 9h
             if (prefs.getBoolean(PREF_SEMANAL, true) && agora.get(java.util.Calendar.DAY_OF_WEEK) == java.util.Calendar.MONDAY &&
                 agora.get(java.util.Calendar.HOUR_OF_DAY) >= 9 && prefs.getString(P_SEMANAL_DIA, "") != hoje

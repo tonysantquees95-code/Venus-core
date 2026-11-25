@@ -227,6 +227,23 @@ internal fun MainActivity.abrirMenu(@Suppress("UNUSED_PARAMETER") ancora: View) 
                     prefs.edit().putBoolean(PainelDoDia.PREF_LIGADO, !prefs.getBoolean(PainelDoDia.PREF_LIGADO, true)).apply()
                     ajustes?.atualizar()
                 },
+                TelaDeAjustes.Ajuste("Resumo da manhã", {
+                    "Com os avisos ligados, toda manhã chega uma notificação com as vendas desde ontem à noite, o que fazer hoje e quantos clientes a $n atendeu ontem."
+                }, { Resultado.manhaLigada(this) }) {
+                    Resultado.definirManha(this, !Resultado.manhaLigada(this))
+                    ajustes?.atualizar()
+                },
+                TelaDeAjustes.Ajuste("Hora do resumo da manhã", { "Chega às ${Resultado.horaDaManha(this)}h. Toque para trocar." }) {
+                    val horas = Resultado.HORAS_DA_MANHA
+                    CaixaBuilder(this)
+                        .setTitle("Hora do resumo da manhã")
+                        .setItems(horas.map { "${it}h" + if (it == Resultado.horaDaManha(this)) "  ✓" else "" }.toTypedArray()) { _, i ->
+                            Resultado.definirHoraDaManha(this, horas[i])
+                            ajustes?.atualizar()
+                        }
+                        .setNegativeButton("Fechar", null)
+                        .show()
+                },
                 TelaDeAjustes.Ajuste("Resumo da loja às 21h", {
                     "Com os avisos ligados, toda noite chega uma notificação com as vendas do dia e o que fica para amanhã."
                 }, { VigiaDaLoja.resumoLigado(this) }) {

@@ -44,3 +44,7 @@
 - Telinha ao abrir o app para quem está no teste grátis (a partir do 2º dia) ou já ficou sem acesso: "Vou assinar / Ainda não sei / Não vou assinar" + motivo. Respondeu: some por 7 dias; fechou sem responder: volta no dia seguinte (8h às 21h, uma vez por dia). Quem já paga não vê.
 - Android: `PesquisaDeAssinatura.kt` (regra pura testada em `PesquisaDeAssinaturaTest.kt`; a fase vem de `/id/conta` em `VetorialId.atualizarPerfil`). Windows/web: `apresentacao/pesquisaAssinatura.ts` (+ `PesquisaDeAssinatura.tsx`, teste `teste/pesquisa-assinatura.test.mjs`).
 - Envia `POST /feedback` com `tipo: "assinatura"` e `respostas {decisao, motivo, plano, dias_de_uso}`; aparece no Painel Dev › Feedback ("Vai assinar?"). Servidor: `feedback/dados.js` (`DECISAO`, `MOTIVO`). Mudou a regra de um lado? Mude do outro.
+
+## Sua loja hoje e resumo da manhã (só Android)
+- `Resultado.kt` (lógica pura testada em `ResultadoTest.kt`): conta os atendimentos do robô por dia (`AtendenteDoRobo.atender` chama `Resultado.anotarResposta`; guarda só o hash do cliente, 35 dias) e calcula as vendas pagas. Tela: `TelaSuaLoja.kt` (Minha loja › Sua loja hoje). NUNCA diga que uma venda "veio da Vênus": ela só sabe o que respondeu e o que a loja vendeu, separados.
+- Aviso da manhã: dentro de `VigiaDaLoja.verificar` (precisa dos avisos da loja ligados), uma vez por dia, na hora escolhida em Menu (padrão 8h, janela até 13h). Não existe no Windows/web porque lá não há robô nem leitura dos pedidos; por isso a novidade (id 38) é só do Android.
