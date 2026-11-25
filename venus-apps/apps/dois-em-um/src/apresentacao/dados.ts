@@ -70,6 +70,7 @@ export const NOVIDADES: Novidade[] = [
   { id: 28, data: "2026-11-24", tipo: "novo", titulo: "Conte se você vai assinar", texto: "Durante o teste grátis (a partir do 2º dia), a Vênus pergunta de vez em quando se você pretende assinar e por quê. É rápido e dá para tocar em Agora não. Se você responder, ela não pergunta de novo por 7 dias; se fechar sem responder, ela volta amanhã. Suas respostas ajudam a gente a melhorar a Vênus." },
   { id: 29, data: "2026-11-24", tipo: "novo", titulo: "Aprender a usar a Vênus", texto: "Em Ajustes › Sobre a Vênus você assiste a vídeos curtos (atendimento no WhatsApp, criar o seu site e Instagram no automático) e segue um passo a passo para deixar a loja pronta, criando um site novo ou conectando o que você já tem." },
   { id: 30, data: "2026-11-24", tipo: "novo", titulo: "Plano anual da Vênus", texto: "Ao renovar a Vênus, agora dá para pagar o plano anual: R$ 499 de uma vez no Pix ou no débito, valendo 365 dias (equivale a 2 meses grátis). Não renova sozinho: quando vencer, é só pagar de novo." },
+  { id: 31, data: "2026-11-24", tipo: "novo", titulo: "Loja pelo cardápio", texto: "Na aba Vênus Vitrine, agora dá para criar a sua loja pelo cardápio: mande a foto ou o PDF, a Vênus lê os itens e os preços e monta o catálogo com pedido no WhatsApp. Você confere tudo antes de publicar. No grátis são 2 leituras por dia." },
 ];
 
 export const ROTULO: Record<TipoNovidade, string> = { novo: "Novo", melhoria: "Melhorou", correcao: "Corrigido" };
