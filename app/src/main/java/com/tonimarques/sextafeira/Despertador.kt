@@ -220,8 +220,8 @@ class Despertador(
             var textoMusica = ""
             var mudouMusicaEm = 0L
             // Ouviu a chamada ("Ei Vênus"): espera a pessoa terminar de falar (ou parar um instante), para já levar o pedido junto.
-            fun acionou(texto: String, terminou: Boolean, agora: Long, quietoMs: Long = 600L): Boolean {
-                if (!Cerebro.pareceAtivacao(texto, acionarPeloNome())) {
+            fun acionou(texto: String, terminou: Boolean, agora: Long, quietoMs: Long = 600L, soNome: Boolean = acionarPeloNome()): Boolean {
+                if (!Cerebro.pareceAtivacao(texto, soNome)) {
                     aguardaDesde = 0L
                     textoDaChamada = ""
                     return false
@@ -306,7 +306,8 @@ class Despertador(
                     // reconhecedor demora a escrever o resto: abrir cedo demais pausava a música à toa)
                     val comChamada = Cerebro.pedidoPorNome(texto, exigirChamada = true) != null || Cerebro.restoDepoisDaAtivacao(texto) != null
                     val parouDeVez = if (comChamada) parou else texto.isNotBlank() && agora - mudouMusicaEm >= 2500
-                    if (comando == null && acionou(texto, terminou || parouDeVez, agora, if (comChamada) 600L else 2500L)) break
+                    // com música ou vídeo tocando, o nome sozinho NÃO acorda (um som parecido com "Vênus" no vídeo abria o pop-up): só "Ei Vênus" ou "Vênus ativar"
+                    if (comando == null && acionou(texto, terminou || parouDeVez, agora, if (comChamada) 600L else 2500L, soNome = false)) break
                     if (comando != null && agora >= esperaAte) {
                         if (comando == candidato) repeticoes++ else {
                             candidato = comando

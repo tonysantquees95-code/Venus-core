@@ -350,6 +350,8 @@ class Cerebro(
             if (restoDepoisDaAtivacao(texto) != null) return true
             // "Ei Vênus" (com a chamada) sempre ativa; só "Vênus, ..." depende do interruptor do nome.
             if (pedidoPorNome(texto, exigirChamada = true) != null) return true
+            // o reconhecimento offline às vezes escreve o "ei" como "e", "a", "hei"...: duas palavras só ("a vênus") contam como chamada
+            if (pareceChamadaCurta(texto)) return true
             if (soNome && (pareceSoONome(texto) || pedidoPorNome(texto) != null)) return true
             val ps = Corretor.palavras(texto)
             for (i in ps.indices) {
@@ -386,6 +388,16 @@ class Cerebro(
             }
             if (exigirChamada && !chamou) return null
             return tokens.drop(i + usadas).joinToString(" ").trim().trimStart(',', '.', '!', ' ').trim()
+        }
+
+        /** Como o "ei" costuma sair escrito quando o reconhecimento não entende direito. */
+        private val EI_MAL_OUVIDO = setOf("e", "a", "eh", "ehi", "hei", "ey", "eis", "he", "ae")
+
+        /** Exatamente "<ei mal ouvido> Vênus" (duas palavras): vale como "Ei Vênus" mesmo com o nome sozinho desligado. */
+        fun pareceChamadaCurta(texto: String): Boolean {
+            val chaves = texto.replace("[unk]", " ").trim().split(Regex("\\s+")).filter { it.isNotBlank() }
+                .map { ComandosLocais.normalizar(it).replace(Regex("[^a-z0-9]"), "") }
+            return chaves.size == 2 && chaves[0] in EI_MAL_OUVIDO && (pareceVenus(chaves[1]) || chaves[1] == "sextafeira")
         }
 
         private fun pareceVenus(p: String) = p.length in 4..6 && (p == "venus" || Corretor.distancia(p, "venus") <= 1)

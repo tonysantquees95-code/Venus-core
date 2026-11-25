@@ -55,6 +55,7 @@ internal object Novidades {
         Item(36, "2026-11-24", "novo", "Plano anual da Vênus", "Ao renovar a Vênus, agora dá para pagar o plano anual: R$ 499 de uma vez no Pix ou no débito, valendo 365 dias (equivale a 2 meses grátis). Não renova sozinho: quando vencer, é só pagar de novo."),
         Item(37, "2026-11-24", "novo", "Loja pelo cardápio", "Na aba Vênus Vitrine, agora dá para criar a sua loja pelo cardápio: mande a foto ou o PDF, a Vênus lê os itens e os preços e monta o catálogo com pedido no WhatsApp. Você confere tudo antes de publicar. No grátis são 2 leituras por dia."),
         Item(38, "2026-11-25", "novo", "Sua loja hoje e resumo da manhã", "Em Minha loja › Sua loja hoje você vê quantos clientes a Vênus atendeu e quanto a loja vendeu, hoje e nos últimos 7 dias, e o que ainda precisa fazer. Com os avisos da loja ligados, toda manhã (às 8h, ou na hora que você escolher em Menu) chega o resumo com as vendas desde ontem à noite, o que fazer hoje e os atendimentos de ontem."),
+        Item(39, "2026-11-25", "correcao", "Chamar a Vênus sem acordar à toa", "Quando você assiste a um vídeo ou ouve música, a Vênus não abre mais o pop-up só porque saiu um som parecido com o nome dela: nessa hora ela só atende o \"Ei Vênus\" (ou \"Vênus, ativar\"). Também melhorou para entender o \"Ei Vênus\" quando o \"ei\" sai meio diferente."),
     )
 
     fun rotulo(tipo: String): String = when (tipo) { "novo" -> "Novo"; "melhoria" -> "Melhorou"; "correcao" -> "Corrigido"; else -> tipo }

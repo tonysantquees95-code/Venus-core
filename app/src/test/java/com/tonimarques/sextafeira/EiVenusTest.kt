@@ -14,6 +14,16 @@ class EiVenusTest {
         }
     }
 
+    @Test fun eiMalOuvidoAindaChama() {
+        for (f in listOf("e vênus", "a venus", "hei vênus", "eh venus")) {
+            assertTrue(f, Cerebro.pareceAtivacao(f))
+        }
+        // só vale com duas palavras: frase de vídeo não acorda
+        for (f in listOf("marte e vênus são planetas", "e vênus é quente", "a vênus de milo", "vênus")) {
+            assertFalse(f, Cerebro.pareceAtivacao(f))
+        }
+    }
+
     @Test fun soNomeDependeDoInterruptor() {
         assertFalse(Cerebro.pareceAtivacao("vênus aumentar o volume"))
         assertTrue(Cerebro.pareceAtivacao("vênus aumentar o volume", soNome = true))

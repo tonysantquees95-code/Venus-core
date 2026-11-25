@@ -132,7 +132,7 @@ internal fun MainActivity.abrirMenu(@Suppress("UNUSED_PARAMETER") ancora: View) 
                 item("Ouvir \"Ei $n\" com o app aberto", { "Fala a frase e ela já começa a ouvir o seu pedido." },
                     MENU_VIGILIA) { vigiliaLigada() },
                 item("Acionar sem dizer \"ei\"", {
-                    "Dizer só \"$n\" ou \"$n, aumentar o volume\" já funciona, sem o \"ei\"."
+                    "Dizer só \"$n\" ou \"$n, aumentar o volume\" já funciona, sem o \"ei\". Com música ou vídeo tocando, só vale com o \"ei\", para o som do vídeo não chamar a $n."
                 }, MENU_NOME) { prefs.getBoolean(VigiliaService.PREF_NOME, true) },
                 item("Ouvir com o app fechado", {
                     "Diga \"Ei $n\" de qualquer tela e o orbe aparece num pop-up, sem abrir o app inteiro."
