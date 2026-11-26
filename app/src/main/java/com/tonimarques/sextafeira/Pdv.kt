@@ -45,6 +45,45 @@ internal object Pdv {
     fun faltando(c: Carrinho, produtos: List<Loja.Produto>): List<String> =
         itens(c, produtos).filter { (p, q, _) -> p.estoque != null && q > p.estoque }.map { it.first.nome }
 
+    // ------------------------------------------------------------------ cartão por aproximação (InfiniteTap, do app da InfinitePay)
+    const val RETORNO_TAP = "venus-tap://resultado"
+
+    /** O endereço que abre o app da InfinitePay já com a cobrança (crédito de 1 a 12x ou débito). Mínimo R$ 1,00. */
+    fun enderecoDoTap(totalCentavos: Int, debito: Boolean, parcelas: Int, orderId: String, infiniteTag: String): String {
+        require(totalCentavos >= 100) { "O cartão por aproximação cobra a partir de R$ 1,00." }
+        fun e(t: String) = java.net.URLEncoder.encode(t, "UTF-8")
+        val partes = mutableListOf(
+            "amount=$totalCentavos",
+            "payment_method=" + if (debito) "debit" else "credit",
+        )
+        if (!debito) partes += "installments=${parcelas.coerceIn(1, 12)}"
+        partes += "order_id=" + e(orderId)
+        partes += "result_url=" + e(RETORNO_TAP)
+        partes += "app_client_referrer=" + e("Venus")
+        if (infiniteTag.isNotBlank()) partes += "handle=" + e(infiniteTag.trim().removePrefix("$"))
+        return "infinitepaydash://infinitetap-app?" + partes.joinToString("&")
+    }
+
+    /** O que voltou do app da InfinitePay: aprovado (com NSU e autorização), recusado/incompleto ou outra venda (ignorar). */
+    sealed class ResultadoDoTap {
+        data class Aprovado(val nsu: String, val autorizacao: String, val bandeira: String) : ResultadoDoTap()
+        data class Falhou(val motivo: String) : ResultadoDoTap()
+        object Ignorar : ResultadoDoTap()
+    }
+
+    private val UUID_NSU = Regex("[0-9a-fA-F-]{8,64}")
+
+    /** [esperado] = o order_id da venda em andamento. Qualquer outro order_id (ou nenhum) é ignorado: um app qualquer não consegue dar baixa. */
+    fun resultadoDoTap(param: (String) -> String?, esperado: String?): ResultadoDoTap {
+        if (esperado.isNullOrBlank() || param("order_id") != esperado) return ResultadoDoTap.Ignorar
+        val nsu = param("nsu").orEmpty()
+        val aut = param("aut").orEmpty()
+        val aviso = param("warning")
+        if (!aviso.isNullOrBlank()) return ResultadoDoTap.Falhou(aviso)
+        if (!UUID_NSU.matches(nsu) || aut.isBlank()) return ResultadoDoTap.Falhou("O pagamento por aproximação não foi concluído.")
+        return ResultadoDoTap.Aprovado(nsu, aut.take(20), param("card_brand").orEmpty().take(20))
+    }
+
     /** Troco em centavos; null se o que o cliente deu não cobre o total. */
     fun troco(total: Int, recebido: Int): Int? = if (recebido >= total) recebido - total else null
 

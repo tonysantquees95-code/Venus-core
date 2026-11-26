@@ -153,7 +153,15 @@
 
         <!-- As regras de venda para o Vênus Robô (somente leitura, mesma assinatura) -->
         <!-- Vênus Robô (agora parte da Vênus): tela, respostas prontas do Instagram e o ouvido das notificações -->
-        <activity android:name=".CaixaActivity" android:exported="false" android:configChanges="orientation|screenSize|keyboardHidden" />
+        <!-- singleTask + venus-tap://resultado: o app da InfinitePay devolve o resultado do cartão por aproximação (InfiniteTap) para o Caixa já aberto. Só vale se o order_id for o da venda em andamento. -->
+        <activity android:name=".CaixaActivity" android:exported="true" android:launchMode="singleTask" android:configChanges="orientation|screenSize|keyboardHidden">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="venus-tap" android:host="resultado" />
+            </intent-filter>
+        </activity>
         <activity android:name=".robo.TelaRobo" android:exported="false" />
         <activity android:name=".robo.TelaRespostas" android:exported="false" android:windowSoftInputMode="adjustResize" />
         <service

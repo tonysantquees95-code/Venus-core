@@ -374,6 +374,10 @@ class CaixaActivity : TelaBase() {
             addView(botao("Dinheiro", false) { cobrarDinheiro() }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
             addView(botao("Cartão", false) { cobrarCartao() }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { marginStart = dp(8) })
         }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(10) })
+        if (Cobranca.provedor(this) == "infinitepay" && Cobranca.configurada(this)) {
+            corpo.addView(botao("Cartão por aproximação (celular)", false) { cobrarAproximacao() },
+                LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(10) })
+        }
         corpo.addView(TextView(this).apply { text = "Só depois de escolher a forma e confirmar o recebimento a venda é registrada e o estoque baixa."; textSize = 12.5f; setTextColor(apagado); setPadding(dp(4), dp(12), 0, 0) })
         moldura("Pagamento", corpo, null) { etapa = Etapa.PRODUTOS; desenhar() }
     }
@@ -468,6 +472,50 @@ class CaixaActivity : TelaBase() {
         }.start()
     }
 
+    // ------------------------------------------------------------------ cartão por aproximação: o app da InfinitePay (InfiniteTap) cobra e devolve o resultado
+    private var tapPendente: String? = null
+
+    private fun cobrarAproximacao() {
+        if (vazio()) return
+        val total = Pdv.total(carrinho, produtos) // cartão: preço cheio, sem o desconto do Pix
+        if (total < 100) return aviso("O cartão por aproximação cobra a partir de R$ 1,00.")
+        val max = Perfil.regras.cartaoParcelasMax.coerceIn(1, 12)
+        val nomes = mutableListOf("Débito")
+        for (n in 1..max) nomes += if (n == 1) "Crédito à vista" else "Crédito em ${n}x"
+        CaixaBuilder(this).setTitle("Cartão por aproximação · ${total.brl()}")
+            .setItems(nomes.toTypedArray()) { _, i ->
+                val debito = i == 0
+                iniciarAproximacao(total, debito, if (debito) 1 else i)
+            }.setNegativeButton("Cancelar", null).show()
+    }
+
+    private fun iniciarAproximacao(total: Int, debito: Boolean, parcelas: Int) {
+        val ref = "balcao-" + java.util.UUID.randomUUID().toString().replace("-", "")
+        val url = try { Pdv.enderecoDoTap(total, debito, parcelas, ref, Cobranca.infiniteTag(this)) } catch (e: Exception) { return aviso(e.message ?: "Não consegui preparar a cobrança.") }
+        tapPendente = ref
+        try {
+            startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+        } catch (e: ActivityNotFoundException) {
+            tapPendente = null
+            aviso("Não achei o app da InfinitePay neste aparelho. Instale e entre na sua conta (e faça uma venda-teste de R$ 1,00 por lá antes).")
+        }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        val u = intent.data ?: return
+        if (u.scheme != "venus-tap") return
+        when (val r = Pdv.resultadoDoTap({ u.getQueryParameter(it) }, tapPendente)) {
+            is Pdv.ResultadoDoTap.Ignorar -> {}
+            is Pdv.ResultadoDoTap.Falhou -> { tapPendente = null; aviso(r.motivo + " Escolha outra forma de pagamento ou tente de novo.") }
+            is Pdv.ResultadoDoTap.Aprovado -> {
+                tapPendente = null
+                fechar("Cartão por aproximação", "InfinitePay · NSU ${r.nsu} · aut. ${r.autorizacao}" + if (r.bandeira.isNotBlank()) " · ${r.bandeira}" else "", comDescontoPix = false)
+            }
+        }
+    }
+
     private fun abrirLink(url: String) {
         try { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) } catch (e: ActivityNotFoundException) { aviso("Não achei um navegador. Copie o link e abra onde quiser.") }
     }
@@ -521,6 +569,7 @@ class CaixaActivity : TelaBase() {
     private fun cobrarPix() {
         if (vazio()) return
         val total = Pdv.totalNoPix(carrinho, produtos, Perfil.regras)
+        if (Cobranca.provedor(this) == "infinitepay" && Cobranca.configurada(this)) return pixPelaInfinitePay(total)
         if (!Cobranca.pixAutomaticoPronto(this)) return pixDaChave(total)
         Toast.makeText(this, "Gerando o Pix…", Toast.LENGTH_SHORT).show()
         val ref = "balcao-" + java.util.UUID.randomUUID().toString().replace("-", "")
@@ -530,6 +579,20 @@ class CaixaActivity : TelaBase() {
                 runOnUiThread { mostrarPix(total, px.codigo, px.id) }
             } catch (e: Exception) {
                 runOnUiThread { aviso(e.message ?: "Não consegui gerar o Pix automático."); pixDaChave(total) }
+            }
+        }.start()
+    }
+
+    /** InfinitePay: o QR é o do link de pagamento (a página dela mostra o Pix). Sem chave Pix para digitar; a venda fecha quando a InfinitePay confirma. */
+    private fun pixPelaInfinitePay(total: Int) {
+        val itens = Pdv.itensNoPix(carrinho, produtos, Perfil.regras).map { (p, q, preco) -> Loja.Item(p.nome, q, preco ?: p.precoCentavos ?: 0, p.id) }
+        Toast.makeText(this, "Gerando o Pix…", Toast.LENGTH_SHORT).show()
+        Thread {
+            try {
+                val link = Cobranca.criarLink(this, 0, itens, "Cliente do balcão")
+                runOnUiThread { mostrarPix(total, link.url, null, link) }
+            } catch (e: Exception) {
+                runOnUiThread { aviso((e.message ?: "Não consegui gerar o Pix pela InfinitePay.") + " Usando a chave Pix da loja."); pixDaChave(total) }
             }
         }.start()
     }
@@ -552,7 +615,7 @@ class CaixaActivity : TelaBase() {
     }
 
     /** [mpId] != null: Pix criado no Mercado Pago, conferido a cada 3 s; a venda fecha sozinha quando cai. */
-    private fun mostrarPix(total: Int, codigo: String, mpId: Long?) {
+    private fun mostrarPix(total: Int, codigo: String, mpId: Long?, link: Cobranca.Link? = null) {
         val m = QrLocal.matriz(codigo)
         val px = 720
         val bmp = Bitmap.createBitmap(px, px, Bitmap.Config.ARGB_8888)
@@ -570,20 +633,41 @@ class CaixaActivity : TelaBase() {
             orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER_HORIZONTAL; setPadding(dp(20), dp(8), dp(20), 0)
             addView(ImageView(this@CaixaActivity).apply { setImageBitmap(bmp) }, LinearLayout.LayoutParams(lado, lado))
             addView(TextView(this@CaixaActivity).apply {
-                text = if (mpId != null) "Mostre ao cliente. Assim que o Pix cair no Mercado Pago, a venda fecha sozinha."
+                text = if (link != null) "O cliente aponta a câmera para o QR, abre a página da InfinitePay e escolhe Pix. Assim que a InfinitePay confirmar, a venda fecha sozinha."
+                else if (mpId != null) "Mostre ao cliente. Assim que o Pix cair no Mercado Pago, a venda fecha sozinha."
                 else "Mostre ao cliente. Quando o dinheiro cair na sua conta, toque em “Pix recebido”."
                 textSize = 13f; setTextColor(Color.parseColor("#D7DAEE")); gravity = Gravity.CENTER; setPadding(0, dp(10), 0, dp(6))
             })
-            addView(botao("Copiar código Pix", false) {
+            addView(botao(if (link != null) "Copiar o link de pagamento" else "Copiar código Pix", false) {
                 (getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(ClipData.newPlainText("Pix", codigo))
-                Toast.makeText(this@CaixaActivity, "Código copiado.", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this@CaixaActivity, if (link != null) "Link copiado." else "Código copiado.", Toast.LENGTH_SHORT).show()
             })
-            if (mpId != null) addView(TextView(this@CaixaActivity).apply { text = "Aguardando o pagamento…"; textSize = 12.5f; setTextColor(apagado); gravity = Gravity.CENTER; setPadding(0, dp(8), 0, 0) })
+            if (mpId != null || link != null) addView(TextView(this@CaixaActivity).apply { text = "Aguardando o pagamento…"; textSize = 12.5f; setTextColor(apagado); gravity = Gravity.CENTER; setPadding(0, dp(8), 0, 0) })
         }
         val d = CaixaBuilder(this).setTitle("Pix de ${total.brl()}").setView(ScrollView(this).apply { addView(corpo) })
-            .setPositiveButton(if (mpId != null) "Confirmar à mão" else "Pix recebido") { _, _ -> fechar("Pix", if (mpId != null) "Confirmado à mão." else "Estoque atualizado.") }
+            .setPositiveButton(if (mpId != null || link != null) "Confirmar à mão" else "Pix recebido") { _, _ -> fechar("Pix", if (mpId != null || link != null) "Confirmado à mão." else "Estoque atualizado.") }
             .setNegativeButton("Cancelar", null).show()
         d.setOnDismissListener { vivo = false }
+        if (link != null) Thread {
+            var n = 0
+            while (vivo && n < 300) {
+                try {
+                    val sit = Cobranca.conferir(this, link.ref, link.provedor)
+                    if (sit.pago) {
+                        runOnUiThread {
+                            if (vivo) {
+                                vivo = false; d.dismiss()
+                                // o link do Pix também aceita cartão: se o cliente pagou no cartão, a venda sai como cartão (e avisa que o desconto do Pix foi dado)
+                                val noCartao = sit.forma != null && sit.forma != "Pix"
+                                fechar(if (noCartao) sit.forma!! else "Pix", "Aprovado pela InfinitePay." + if (noCartao) " Atenção: pagou no cartão no link do Pix (com o desconto do Pix)." else "", comDescontoPix = true)
+                            }
+                        }
+                        return@Thread
+                    }
+                } catch (e: Exception) { /* tenta de novo */ }
+                n++; Thread.sleep(3000)
+            }
+        }.start()
         if (mpId != null) Thread {
             var n = 0
             while (vivo && n < 200) {
@@ -599,10 +683,10 @@ class CaixaActivity : TelaBase() {
     }
 
     /** Registra a venda atual, zera o carrinho e vai para o recibo. Loja sem site: registro do catálogo. Loja com site: baixa o estoque no site e guarda a venda aqui. */
-    private fun fechar(forma: String, nota: String) {
+    private fun fechar(forma: String, nota: String, comDescontoPix: Boolean = forma == "Pix") {
         if (gravando) return
         // no Pix vale o preço com o desconto da loja (promoção fica de fora); nas outras formas, o preço cheio de hoje
-        val itens = if (forma == "Pix") Pdv.itensNoPix(carrinho, produtos, Perfil.regras) else Pdv.itens(carrinho, produtos)
+        val itens = if (comDescontoPix) Pdv.itensNoPix(carrinho, produtos, Perfil.regras) else Pdv.itens(carrinho, produtos)
         val total = itens.sumOf { (p, q, preco) -> (preco ?: p.precoCentavos ?: 0) * q }
         val sem = Pdv.faltando(carrinho, produtos)
         if (itens.isEmpty()) return

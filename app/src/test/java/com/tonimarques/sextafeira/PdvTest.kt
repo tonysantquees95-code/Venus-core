@@ -55,6 +55,25 @@ class PdvTest {
         assertEquals(false, Pdv.emPromocao(Loja.Produto(3, "X", true, null, 5_000, precoAntigo = 5_000)))
     }
 
+    @Test fun cartaoPorAproximacaoMontaOEnderecoELeOResultado() {
+        val url = Pdv.enderecoDoTap(15_000, debito = false, parcelas = 3, orderId = "balcao-abc", infiniteTag = "\$desejodeintimidade")
+        assertTrue(url.startsWith("infinitepaydash://infinitetap-app?amount=15000&payment_method=credit&installments=3&order_id=balcao-abc"))
+        assertTrue(url.contains("result_url=venus-tap%3A%2F%2Fresultado"))
+        assertTrue(url.contains("handle=desejodeintimidade"))
+        assertTrue(!Pdv.enderecoDoTap(5_000, debito = true, parcelas = 3, orderId = "x", infiniteTag = "").contains("installments"))
+        assertTrue(Pdv.enderecoDoTap(5_000, debito = true, parcelas = 1, orderId = "x", infiniteTag = "").contains("payment_method=debit"))
+        assertEquals(true, runCatching { Pdv.enderecoDoTap(50, false, 1, "x", "") }.isFailure)
+
+        val ok = mapOf("order_id" to "balcao-abc", "nsu" to "3f2b9c1e-1111-4a2b-8c3d-0123456789ab", "aut" to "A1B2C3", "card_brand" to "visa")
+        assertTrue(Pdv.resultadoDoTap({ ok[it] }, "balcao-abc") is Pdv.ResultadoDoTap.Aprovado)
+        // outra venda, ou nenhuma em andamento: ignora (não dá baixa)
+        assertTrue(Pdv.resultadoDoTap({ ok[it] }, "balcao-outra") is Pdv.ResultadoDoTap.Ignorar)
+        assertTrue(Pdv.resultadoDoTap({ ok[it] }, null) is Pdv.ResultadoDoTap.Ignorar)
+        // sem NSU ou com aviso de erro: não aprova
+        assertTrue(Pdv.resultadoDoTap({ (ok - "nsu")[it] }, "balcao-abc") is Pdv.ResultadoDoTap.Falhou)
+        assertTrue(Pdv.resultadoDoTap({ (ok + ("warning" to "order_id is empty"))[it] }, "balcao-abc") is Pdv.ResultadoDoTap.Falhou)
+    }
+
     @Test fun calculadoraDoDinheiro() {
         var v = 0L
         for (t in listOf("1", "5", "0", "0")) v = Pdv.teclar(v, t)
