@@ -13,6 +13,9 @@ import org.json.JSONObject
 internal object PdvVendas {
     private const val PREFS = "pdv_vendas"
     private const val BASE_ID = 1_000_000
+
+    /** O número que aparece para o cliente: a 1ª venda de balcão é a nº 1 (o id interno começa em 1.000.000 só para não colidir com os do site). */
+    fun numeroAmigavel(id: Int): Int = if (id >= BASE_ID) id - BASE_ID + 1 else id
     private const val MAX_GUARDADAS = 500
 
     data class Linha(val produtoId: Int, val nome: String, val quantidade: Int, val precoCentavos: Int)

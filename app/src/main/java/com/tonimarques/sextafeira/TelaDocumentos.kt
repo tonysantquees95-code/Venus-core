@@ -29,25 +29,28 @@ private const val PREFS_DOCS = "documentos"
 
 private fun Context.prefsDocs() = getSharedPreferences(PREFS_DOCS, Context.MODE_PRIVATE)
 
-private fun Context.semLimiteDeDocumentos(): Boolean = when (Licenca.estado(this)) {
+internal fun Context.semLimiteDeDocumentos(): Boolean = when (Licenca.estado(this)) {
     is Licenca.Estado.Isenta, is Licenca.Estado.Liberada -> true
     else -> false
 }
 
-private fun Context.cotaDeDocumentos(): Documentos.Cota? {
+internal fun Context.cotaDeDocumentos(): Documentos.Cota? {
     val p = prefsDocs()
     val mes = p.getString("mes", null) ?: return null
     return Documentos.Cota(mes, p.getStringSet("feitos", emptySet()).orEmpty().toSet())
 }
 
-private fun Context.guardarCota(c: Documentos.Cota) {
+internal fun Context.guardarCota(c: Documentos.Cota) {
     prefsDocs().edit().putString("mes", c.mes).putStringSet("feitos", c.feitos).apply()
 }
 
-private fun mesAgora() = Documentos.mesDe(System.currentTimeMillis())
+internal fun mesAgora() = Documentos.mesDe(System.currentTimeMillis())
 
 /** Os dados da loja que saem nos documentos: nome vem do perfil; o resto a pessoa preenche uma vez. */
-private fun MainActivity.emissor(): Documentos.Emissor {
+private fun MainActivity.emissor(): Documentos.Emissor = emissorDosDocumentos(prefs)
+
+/** Os dados da loja dos documentos a partir de qualquer tela (o Caixa usa o mesmo cabeçalho da notinha). */
+internal fun Context.emissorDosDocumentos(prefs: android.content.SharedPreferences): Documentos.Emissor {
     val p = prefsDocs()
     val contato = p.getString("contato", null)?.takeIf { it.isNotBlank() }
         ?: DadosDaLoja.telefoneBonito(DadosDaLoja.guardado(prefs, DadosDaLoja.PREF_WHATSAPP))

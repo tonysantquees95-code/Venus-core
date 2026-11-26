@@ -58,4 +58,52 @@ internal object Pdv {
         val ch = (altura - 2 * margem) / linhas.toFloat()
         return (0 until linhas).flatMap { r -> (0 until colunas).map { c -> Celula(margem + c * cw, margem + r * ch, cw, ch) } }
     }
+
+    // ------------------------------------------------------------------ recibo do cliente (CPF e WhatsApp são opcionais)
+    /** Só os dígitos do CPF; null se não tiver 11 ou se os dois dígitos verificadores não baterem (ex.: 111.111.111-11 não vale). */
+    fun cpfValido(texto: String): String? {
+        val d = texto.filter { it.isDigit() }
+        if (d.length != 11 || d.all { it == d[0] }) return null
+        fun dv(n: Int): Int {
+            val soma = (0 until n).sumOf { (d[it] - '0') * (n + 1 - it) }
+            val r = (soma * 10) % 11
+            return if (r == 10) 0 else r
+        }
+        return if (dv(9) == d[9] - '0' && dv(10) == d[10] - '0') d else null
+    }
+
+    fun cpfBonito(digitos: String): String =
+        if (digitos.length == 11) "${digitos.substring(0, 3)}.${digitos.substring(3, 6)}.${digitos.substring(6, 9)}-${digitos.substring(9)}" else digitos
+
+    /** Celular/telefone do cliente no formato do wa.me (55 + DDD + número); null se não parecer um telefone do Brasil. */
+    fun telefoneParaWhatsApp(texto: String): String? {
+        var d = texto.filter { it.isDigit() }
+        if (d.length in 12..13 && d.startsWith("55")) d = d.substring(2)
+        if (d.length !in 10..11) return null
+        if (d.substring(0, 2).toInt() < 11) return null // DDD
+        if (d.length == 11 && d[2] != '9') return null   // celular novo começa com 9
+        return "55$d"
+    }
+
+    class LinhaDoRecibo(val nome: String, val quantidade: Int, val precoCentavos: Int)
+
+    /** O texto do recibo que vai pelo WhatsApp (negrito do WhatsApp com *). CPF só entra se a pessoa quis. */
+    fun textoDoRecibo(loja: String, numero: String, data: String, itens: List<LinhaDoRecibo>, forma: String, mensagem: String, cpfDigitos: String?): String {
+        val total = itens.sumOf { it.quantidade * it.precoCentavos }
+        val b = StringBuilder()
+        b.append("*").append(loja.ifBlank { "Recibo" }).append("*\n")
+        b.append("Compra nº ").append(numero)
+        if (data.isNotBlank()) b.append(" · ").append(data)
+        b.append("\n\n")
+        for (i in itens) b.append(i.quantidade).append("x ").append(i.nome).append(" — ").append(Documentos.dinheiro(i.quantidade * i.precoCentavos)).append("\n")
+        b.append("\n*Total: ").append(Documentos.dinheiro(total)).append("* · ").append(forma).append("\n")
+        if (cpfDigitos != null) b.append("CPF na nota: ").append(cpfBonito(cpfDigitos)).append("\n")
+        if (mensagem.isNotBlank()) b.append("\n").append(mensagem.trim()).append("\n")
+        b.append("\n").append(Documentos.AVISO_SEM_VALOR_FISCAL)
+        return b.toString()
+    }
+
+    /** Link que abre o WhatsApp com a mensagem pronta (com ou sem número; sem número a pessoa escolhe o contato). */
+    fun linkWhatsApp(telefone55: String?, texto: String): String =
+        "https://wa.me/" + (telefone55 ?: "") + "?text=" + java.net.URLEncoder.encode(texto, "UTF-8").replace("+", "%20")
 }

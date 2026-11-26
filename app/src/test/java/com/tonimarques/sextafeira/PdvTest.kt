@@ -86,4 +86,48 @@ class PdvTest {
         assertEquals(1450, p.totalCentavos)
         assertEquals(listOf("Água", "Pastel"), p.itens.map { it.nome })
     }
+
+    @Test fun cpfConfereOsDoisDigitos() {
+        assertEquals("52998224725", Pdv.cpfValido("529.982.247-25"))
+        assertEquals("52998224725", Pdv.cpfValido(" 52998224725 "))
+        assertNull(Pdv.cpfValido("529.982.247-24")) // dígito errado
+        assertNull(Pdv.cpfValido("111.111.111-11")) // todos iguais não vale
+        assertNull(Pdv.cpfValido("1234"))
+        assertNull(Pdv.cpfValido(""))
+        assertEquals("529.982.247-25", Pdv.cpfBonito("52998224725"))
+    }
+
+    @Test fun telefoneParaWhatsApp() {
+        assertEquals("5551999990000", Pdv.telefoneParaWhatsApp("(51) 99999-0000"))
+        assertEquals("5551999990000", Pdv.telefoneParaWhatsApp("+55 51 99999 0000"))
+        assertEquals("555133334444", Pdv.telefoneParaWhatsApp("51 3333-4444")) // fixo de 10 dígitos
+        assertNull(Pdv.telefoneParaWhatsApp("99999-0000")) // sem DDD
+        assertNull(Pdv.telefoneParaWhatsApp("(51) 89999-0000")) // celular de 11 dígitos tem de começar com 9
+        assertNull(Pdv.telefoneParaWhatsApp(""))
+    }
+
+    @Test fun textoDoReciboEntraCpfSoSeOClienteQuis() {
+        val itens = listOf(Pdv.LinhaDoRecibo("Camisa", 2, 4000), Pdv.LinhaDoRecibo("Boné", 1, 1990))
+        val com = Pdv.textoDoRecibo("Loja Teste", "B7", "26/11/2026", itens, "Pix", "Obrigada!", "52998224725")
+        assertTrue(com.contains("*Loja Teste*"))
+        assertTrue(com.contains("2x Camisa — R\$ 80,00"))
+        assertTrue(com.contains("*Total: R\$ 99,90*"))
+        assertTrue(com.contains("CPF na nota: 529.982.247-25"))
+        val sem = Pdv.textoDoRecibo("Loja Teste", "B7", "26/11/2026", itens, "Pix", "", null)
+        assertTrue(!sem.contains("CPF"))
+        assertTrue(sem.contains("sem valor fiscal"))
+    }
+
+    @Test fun linkDoWhatsAppCodificaOTexto() {
+        val l = Pdv.linkWhatsApp("5551999990000", "Total: R\$ 10,00 & obrigado")
+        assertTrue(l.startsWith("https://wa.me/5551999990000?text="))
+        assertTrue(!l.contains(" ") && !l.contains("+") && l.contains("%26"))
+        assertTrue(Pdv.linkWhatsApp(null, "oi").startsWith("https://wa.me/?text="))
+    }
+
+    @Test fun numeroDaVendaDeBalcaoComecaEmUm() {
+        assertEquals(1, PdvVendas.numeroAmigavel(1_000_000))
+        assertEquals(12, PdvVendas.numeroAmigavel(1_000_011))
+        assertEquals(5, PdvVendas.numeroAmigavel(5)) // venda do catálogo interno já tem número pequeno
+    }
 }
