@@ -23,7 +23,7 @@
     "apk:release": "npm run apk:release -w @venus/assistente -w @venus/robo -w @venus/dois-em-um",
     "android:add": "npm run android:add -w @venus/assistente -w @venus/robo -w @venus/dois-em-um",
     "typecheck": "npm run typecheck --workspaces --if-present",
-    "test": "npm run test -w @venus/dois-em-um && node --test desktop/teste/status.test.mjs",
+    "test": "npm run test -w @venus/dois-em-um && node --test desktop/teste/status.test.mjs && node --test teste/seguranca.test.mjs",
     "isolamento": "node scripts/verificar-isolamento.mjs",
     "chaves": "node scripts/varrer-chaves.mjs",
     "verificar": "npm run isolamento && npm run chaves && npm run test && npm run typecheck && npm run build:web",
