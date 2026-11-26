@@ -91,6 +91,7 @@ private fun MainActivity.montarCentral(resumo: ResumoDaLoja?) {
     val s = listOf(
         TelaDeAjustes.Secao(
             "Minha loja · ${Perfil.loja}", listOf(
+                TelaDeAjustes.Ajuste("Caixa", { "Venda rápida de balcão: toque nos produtos e receba no Pix, dinheiro ou cartão. Baixa o estoque e entra nos relatórios." }) { abrirCaixa() },
                 TelaDeAjustes.Ajuste("Sua loja hoje", { "O que a Vênus atendeu e quanto a loja vendeu, hoje e nos últimos 7 dias." }) { abrirSuaLojaHoje() },
                 TelaDeAjustes.Ajuste("Perfil da loja", { Perfil.resumo() + " · " + Perfil.ramo }) { editarPerfil() },
                 TelaDeAjustes.Ajuste(if (comSite) "Site e catálogo" else "Catálogo da loja", { situacao }) { if (ferramentas.loja.conectada) abrirCatalogo() else escolherPlataforma() },
