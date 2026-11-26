@@ -7,6 +7,13 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class CobrancaTest {
+    @Test fun erroDaInfinitePayExplicaComoLigarOCheckout() {
+        val msg = Cobranca.erroInfinitePay(404, """{"success":false,"message":"External checkout is not enabled for this merchant. Enable it in your checkout settings to start creating payment links."}""")
+        assertTrue(msg.contains("Habilitar checkout integrado"))
+        assertTrue(msg.contains("app.infinitepay.io/external-checkout"))
+        assertTrue(Cobranca.erroInfinitePay(400, """{"message":"param is missing: handle"}""").contains("InfiniteTag"))
+    }
+
     @Test fun achaOLinkNaResposta() {
         assertEquals("https://checkout.infinitepay.io/loja/abc", Cobranca.urlDe("""{"url":"https://checkout.infinitepay.io/loja/abc"}"""))
         assertEquals("https://pay.x/1", Cobranca.urlDe("""{"data":{"link":"https://pay.x/1"}}"""))

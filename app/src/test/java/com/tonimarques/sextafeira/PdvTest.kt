@@ -33,6 +33,28 @@ class PdvTest {
         assertTrue(Pdv.faltando(Pdv.Carrinho().somar(3, 50), produtos).isEmpty())
     }
 
+    @Test fun descontoDoPixSeguraAsRegrasDaLoja() {
+        val normal = Loja.Produto(1, "Gel", true, 10, 10_000)
+        val promo = Loja.Produto(2, "Vibrador", true, 10, 8_000, precoAntigo = 10_000)
+        val produtos = listOf(normal, promo)
+        val c = Pdv.Carrinho().somar(1, 2).somar(2, 1)
+        val regras = RegrasDeVenda() // Pix 5%, não vale em promoção
+        // o normal ganha 5% (9.500 cada); o de promoção fica no preço de hoje
+        assertEquals(9_500, Pdv.precoNoPix(normal, regras))
+        assertEquals(8_000, Pdv.precoNoPix(promo, regras))
+        assertEquals(2 * 9_500 + 8_000, Pdv.totalNoPix(c, produtos, regras))
+        assertEquals(2 * 10_000 + 8_000, Pdv.total(c, produtos))
+        assertEquals(listOf("Vibrador"), Pdv.semDescontoNoPix(c, produtos, regras))
+        // a regra deixando, a promoção também ganha
+        assertEquals(7_600, Pdv.precoNoPix(promo, RegrasDeVenda(pixValeEmPromocao = true)))
+        // loja sem desconto no Pix: nada muda e nada é avisado
+        val sem = RegrasDeVenda(pixDescontoPct = 0)
+        assertEquals(Pdv.total(c, produtos), Pdv.totalNoPix(c, produtos, sem))
+        assertTrue(Pdv.semDescontoNoPix(c, produtos, sem).isEmpty())
+        // preço antigo igual ou menor que o atual não é promoção
+        assertEquals(false, Pdv.emPromocao(Loja.Produto(3, "X", true, null, 5_000, precoAntigo = 5_000)))
+    }
+
     @Test fun calculadoraDoDinheiro() {
         var v = 0L
         for (t in listOf("1", "5", "0", "0")) v = Pdv.teclar(v, t)

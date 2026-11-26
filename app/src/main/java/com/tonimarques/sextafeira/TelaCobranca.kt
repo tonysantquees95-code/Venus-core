@@ -57,7 +57,7 @@ internal fun MainActivity.configurarCobranca() {
             "infinitepay" -> {
                 f.cartao("Passo a passo: InfinitePay")
                 f.paragrafo("1. No app da InfinitePay, veja a sua InfiniteTag (no seu perfil; começa com $).\n" +
-                    "2. Ainda no app, em Checkout ou Link de pagamento, ligue o \"checkout integrado\" se aparecer essa opção.\n" +
+                    "2. IMPORTANTE: no app da InfinitePay, abra Configurações do Checkout (ou entre em app.infinitepay.io/external-checkout) e ligue \"Habilitar checkout integrado\". Sem isso a InfinitePay recusa o link (erro 404).\n" +
                     "3. Escreva a InfiniteTag aqui (sem o $) e toque em Salvar e conferir.\n" +
                     "4. Faça uma venda-teste de R$ 1,00 com Link de pagamento e pague você mesma, para ver o aviso chegar.", 14f, android.graphics.Color.WHITE)
                 val (b, campo) = f.campo("InfiniteTag", Cobranca.infiniteTag(this), "ex.: minhaloja", InputType.TYPE_CLASS_TEXT)

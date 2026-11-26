@@ -20,6 +20,27 @@ internal object Pdv {
 
     fun total(c: Carrinho, produtos: List<Loja.Produto>): Int = itens(c, produtos).sumOf { (p, q, _) -> (p.precoCentavos ?: 0) * q }
 
+    /** Produto em promoção = tem preço antigo maior que o atual (mesmo critério do site e das regras). */
+    fun emPromocao(p: Loja.Produto): Boolean = p.precoAntigo != null && p.precoAntigo > (p.precoCentavos ?: 0)
+
+    /** Preço de uma unidade no Pix, pelas regras da loja (desconto do Pix; produto em promoção fica no preço de hoje, salvo se a regra deixar). */
+    fun precoNoPix(p: Loja.Produto, regras: RegrasDeVenda): Int {
+        val preco = p.precoCentavos ?: 0
+        return regras.precoNoPix(preco, emPromocao(p)) ?: preco
+    }
+
+    /** Itens com o preço de cada unidade já no Pix (o terceiro campo é o preço que o registro da venda usa). */
+    fun itensNoPix(c: Carrinho, produtos: List<Loja.Produto>, regras: RegrasDeVenda): List<Triple<Loja.Produto, Int, Int?>> =
+        itens(c, produtos).map { (p, q, _) -> Triple(p, q, precoNoPix(p, regras)) }
+
+    fun totalNoPix(c: Carrinho, produtos: List<Loja.Produto>, regras: RegrasDeVenda): Int =
+        itens(c, produtos).sumOf { (p, q, _) -> precoNoPix(p, regras) * q }
+
+    /** Produtos do carrinho que ficam sem o desconto do Pix por estarem em promoção (só conta se a loja dá desconto no Pix). */
+    fun semDescontoNoPix(c: Carrinho, produtos: List<Loja.Produto>, regras: RegrasDeVenda): List<String> =
+        if (regras.pixDescontoPct <= 0) emptyList()
+        else itens(c, produtos).filter { (p, _, _) -> regras.precoNoPix(p.precoCentavos ?: 0, emPromocao(p)) == null }.map { it.first.nome }
+
     /** Produtos que passam do estoque (só os que têm controle de estoque). */
     fun faltando(c: Carrinho, produtos: List<Loja.Produto>): List<String> =
         itens(c, produtos).filter { (p, q, _) -> p.estoque != null && q > p.estoque }.map { it.first.nome }

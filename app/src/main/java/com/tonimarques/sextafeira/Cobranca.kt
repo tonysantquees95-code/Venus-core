@@ -190,11 +190,22 @@ object Cobranca {
                     .put("items", lista)
                     .put("webhook_url", "${SERVIDOR_AVISOS}${if (Servidor.configurado()) "/aviso" else "_aviso"}")
                 val (codigo, texto) = pedir("POST", "https://api.checkout.infinitepay.io/links", corpo)
-                if (codigo !in 200..299) throw IllegalStateException("A InfinitePay não criou o link ($codigo): ${erroDe(texto)}. Confira a InfiniteTag e se o checkout integrado está ligado.")
+                if (codigo !in 200..299) throw IllegalStateException(erroInfinitePay(codigo, texto))
                 val url = urlDe(texto) ?: throw IllegalStateException("A InfinitePay não devolveu o link.")
                 Link(ref, url, "infinitepay")
             }
             else -> throw IllegalStateException("Configure a cobrança primeiro (Menu → Cobrança por link).")
+        }
+    }
+
+    /** Erro da InfinitePay em português simples. "External checkout is not enabled" = o checkout integrado está desligado na CONTA (não é erro da Vênus). */
+    internal fun erroInfinitePay(codigo: Int, texto: String): String {
+        val t = texto.lowercase()
+        return when {
+            "external checkout is not enabled" in t || "not enabled for this merchant" in t ->
+                "O checkout integrado está desligado na sua conta InfinitePay. Abra o app InfinitePay, vá em Configurações do Checkout (ou entre em app.infinitepay.io/external-checkout), ligue \"Habilitar checkout integrado\" e tente de novo."
+            codigo == 400 && "handle" in t -> "A InfinitePay não reconheceu essa InfiniteTag. Escreva só o nome, sem o \$ e sem espaços."
+            else -> "A InfinitePay não criou o link ($codigo): ${erroDe(texto)}. Confira a InfiniteTag e se o checkout integrado está ligado."
         }
     }
 

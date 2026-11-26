@@ -325,6 +325,9 @@ class CaixaActivity : TelaBase() {
         if (itens.isEmpty()) { etapa = Etapa.PRODUTOS; return desenhar() }
         val total = Pdv.total(carrinho, produtos)
         val sem = Pdv.faltando(carrinho, produtos)
+        val regras = Perfil.regras
+        val totalPix = Pdv.totalNoPix(carrinho, produtos, regras)
+        val semDescontoPix = Pdv.semDescontoNoPix(carrinho, produtos, regras)
         val corpo = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(16), dp(4), dp(16), dp(24)) }
         corpo.addView(cabecalhoDeSecao("Resumo da compra · confira"))
         val cartaoResumo = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(14), dp(10), dp(14), dp(12)); background = fundo(Color.argb(150, 24, 19, 44), 20) }
@@ -335,6 +338,12 @@ class CaixaActivity : TelaBase() {
                 addView(vertical(
                     TextView(this@CaixaActivity).apply { text = p.nome; textSize = 15f; setTextColor(Color.WHITE); maxLines = 2 },
                     TextView(this@CaixaActivity).apply { text = "$q × ${unit.brl()}"; textSize = 12.5f; setTextColor(apagado) },
+                    TextView(this@CaixaActivity).apply {
+                        val semPix = p.nome in semDescontoPix
+                        text = if (semPix) "em promoção · sem desconto no Pix" else ""
+                        visibility = if (semPix) View.VISIBLE else View.GONE
+                        textSize = 11.5f; setTextColor(destaque)
+                    },
                 ), LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
                 addView(pequeno("−") { carrinho = carrinho.somar(p.id, -1); desenhar() })
                 addView(TextView(this@CaixaActivity).apply { text = q.toString(); textSize = 16f; setTextColor(Color.WHITE); gravity = Gravity.CENTER; minWidth = dp(30) })
@@ -348,11 +357,19 @@ class CaixaActivity : TelaBase() {
             addView(TextView(this@CaixaActivity).apply { text = "TOTAL"; textSize = 13f; letterSpacing = 0.2f; setTextColor(destaque) }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
             addView(TextView(this@CaixaActivity).apply { text = total.brl(); textSize = 26f; setTextColor(Color.WHITE) })
         })
+        if (totalPix < total) {
+            cartaoResumo.addView(LinearLayout(this).apply {
+                gravity = Gravity.CENTER_VERTICAL; setPadding(0, dp(10), 0, 0)
+                addView(TextView(this@CaixaActivity).apply { text = "NO PIX (${regras.pixDescontoPct}% DE DESCONTO)"; textSize = 12f; letterSpacing = 0.12f; setTextColor(destaque) }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+                addView(TextView(this@CaixaActivity).apply { text = totalPix.brl(); textSize = 20f; setTextColor(Color.WHITE) })
+            })
+            cartaoResumo.addView(TextView(this).apply { text = "Você economiza ${(total - totalPix).brl()} pagando no Pix"; textSize = 12f; setTextColor(apagado) })
+        }
         corpo.addView(cartaoResumo)
         if (sem.isNotEmpty()) corpo.addView(TextView(this).apply { text = "Atenção: sem estoque suficiente de ${sem.joinToString(", ")}. A venda vai deixar o estoque zerado."; textSize = 12.5f; setTextColor(alerta); setPadding(dp(4), dp(8), 0, 0) })
 
         corpo.addView(cabecalhoDeSecao("Forma de pagamento"))
-        corpo.addView(botao("Pix (QR Code na hora)", true) { cobrarPix() }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+        corpo.addView(botao(if (totalPix < total) "Pix · ${totalPix.brl()} (${regras.pixDescontoPct}% de desconto)" else "Pix (QR Code na hora)", true) { cobrarPix() }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
         corpo.addView(LinearLayout(this).apply {
             addView(botao("Dinheiro", false) { cobrarDinheiro() }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
             addView(botao("Cartão", false) { cobrarCartao() }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { marginStart = dp(8) })
@@ -503,7 +520,7 @@ class CaixaActivity : TelaBase() {
     // ------------------------------------------------------------------ Pix: automático (Mercado Pago) ou pela chave da loja
     private fun cobrarPix() {
         if (vazio()) return
-        val total = Pdv.total(carrinho, produtos)
+        val total = Pdv.totalNoPix(carrinho, produtos, Perfil.regras)
         if (!Cobranca.pixAutomaticoPronto(this)) return pixDaChave(total)
         Toast.makeText(this, "Gerando o Pix…", Toast.LENGTH_SHORT).show()
         val ref = "balcao-" + java.util.UUID.randomUUID().toString().replace("-", "")
@@ -584,8 +601,9 @@ class CaixaActivity : TelaBase() {
     /** Registra a venda atual, zera o carrinho e vai para o recibo. Loja sem site: registro do catálogo. Loja com site: baixa o estoque no site e guarda a venda aqui. */
     private fun fechar(forma: String, nota: String) {
         if (gravando) return
-        val total = Pdv.total(carrinho, produtos)
-        val itens = Pdv.itens(carrinho, produtos)
+        // no Pix vale o preço com o desconto da loja (promoção fica de fora); nas outras formas, o preço cheio de hoje
+        val itens = if (forma == "Pix") Pdv.itensNoPix(carrinho, produtos, Perfil.regras) else Pdv.itens(carrinho, produtos)
+        val total = itens.sumOf { (p, q, preco) -> (preco ?: p.precoCentavos ?: 0) * q }
         val sem = Pdv.faltando(carrinho, produtos)
         if (itens.isEmpty()) return
         gravando = true
@@ -605,7 +623,7 @@ class CaixaActivity : TelaBase() {
                     for ((p, q, _) in itens) {
                         try { loja.baixarEstoque(frescos.firstOrNull { it.id == p.id } ?: p, q) } catch (e: Exception) { falhas += p.nome }
                     }
-                    val venda = PdvVendas.registrar(this, itens.map { (p, q, _) -> PdvVendas.Linha(p.id, p.nome, q, p.precoCentavos ?: 0) }, forma)
+                    val venda = PdvVendas.registrar(this, itens.map { (p, q, preco) -> PdvVendas.Linha(p.id, p.nome, q, preco ?: p.precoCentavos ?: 0) }, forma)
                     numero = "B" + PdvVendas.numeroAmigavel(venda.id)
                     if (falhas.isNotEmpty()) avisoExtra = "Venda registrada, mas não consegui baixar o estoque de ${falhas.joinToString(", ")} no site. Ajuste lá."
                 }
@@ -622,7 +640,7 @@ class CaixaActivity : TelaBase() {
                 Diario.anotar(this, "loja", "Caixa: ${itens.joinToString(", ") { "${it.second}x ${it.first.nome}" }} (${total.brl()}) no $forma", "tela")
                 if (CaixaDoVyntem.ligado(this)) Thread { try { CaixaDoVyntem.conferir(applicationContext) } catch (e: Exception) { } }.start()
                 val extra = (extraFinal?.let { " $it" } ?: "") + if (sem.isNotEmpty()) " Atenção: o estoque de ${sem.joinToString(", ")} ficou zerado." else ""
-                concluida = Concluida(numero, itens.map { (p, q, _) -> Pdv.LinhaDoRecibo(p.nome, q, p.precoCentavos ?: 0) }, forma, nota + extra, quando)
+                concluida = Concluida(numero, itens.map { (p, q, preco) -> Pdv.LinhaDoRecibo(p.nome, q, preco ?: p.precoCentavos ?: 0) }, forma, nota + extra, quando)
                 carrinho = Pdv.Carrinho()
                 produtos = atualizados
                 etapa = Etapa.RECIBO
