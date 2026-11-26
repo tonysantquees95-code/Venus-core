@@ -140,6 +140,10 @@ class Gaveta(private val a: MainActivity) : FrameLayout(a) {
             LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = a.dp(14) })
         painel.addView(linha(R.drawable.ic_publicacoes, "Minha loja", "Perfil, site, vitrine, painel ao vivo, canais, marketing e plano") { fechar(); a.abrirCentral() },
             LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = a.dp(8) })
+        painel.addView(linha(R.drawable.ic_publicacoes, "Caixa", "Vender no balcão: Pix, dinheiro e cartão, com leitura de etiqueta") { fechar(); a.abrirCaixa() },
+            LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = a.dp(8) })
+        painel.addView(linha(R.drawable.ic_publicacoes, "Vênus Vitrine", "Site, logo, panfleto, link curto e catálogo grátis") { fechar(); a.abrirPaginaDoServidor("Vênus Vitrine", "/vitrine/", extra = "&app=venus") },
+            LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = a.dp(8) })
         painel.addView(linha(R.drawable.ic_publicacoes, "Aparência", "Cor, orbe e ícones") { fechar(); a.abrirAparencia() },
             LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = a.dp(8) })
 

@@ -1,0 +1,63 @@
+package com.tonimarques.sextafeira
+
+import android.content.Context
+import org.json.JSONArray
+import org.json.JSONObject
+
+/**
+ * Vendas do Caixa em lojas COM site (Floot, Shopify, WooCommerce, Nuvemshop): o estoque baixa no site, mas o site não recebe
+ * um pedido, então a Vênus guarda aqui, neste celular, cada venda de balcão. Elas viram pedidos pagos (ids a partir de
+ * 1.000.000, que nunca colidem com os do site) para entrar no caixa do Vyntem e em "Sua loja hoje". Na loja sem site o
+ * registro é o próprio catálogo interno ([CatalogoInterno.registrarVenda]).
+ */
+internal object PdvVendas {
+    private const val PREFS = "pdv_vendas"
+    private const val BASE_ID = 1_000_000
+    private const val MAX_GUARDADAS = 500
+
+    data class Linha(val produtoId: Int, val nome: String, val quantidade: Int, val precoCentavos: Int)
+    data class Venda(val id: Int, val quando: Long, val forma: String, val itens: List<Linha>) {
+        val total: Int get() = itens.sumOf { it.quantidade * it.precoCentavos }
+    }
+
+    /** Próxima venda da lista (lógica pura, testada). */
+    internal fun nova(vendas: List<Venda>, itens: List<Linha>, forma: String, agora: Long): Venda =
+        Venda((vendas.maxOfOrNull { it.id } ?: (BASE_ID - 1)) + 1, agora, forma, itens)
+
+    internal fun comoPedido(v: Venda): Loja.Pedido = Loja.Pedido(
+        v.id, "paid", v.total, "Cliente do balcão", "pickup", v.quando, v.quando,
+        v.itens.map { Loja.Item(it.nome, it.quantidade, it.precoCentavos, it.produtoId) },
+    )
+
+    private fun ler(c: Context): List<Venda> {
+        val texto = c.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString("lista", "[]").orEmpty()
+        return try {
+            val a = JSONArray(texto)
+            (0 until a.length()).mapNotNull { a.optJSONObject(it) }.map { o ->
+                val l = o.optJSONArray("itens") ?: JSONArray()
+                Venda(
+                    o.optInt("id"), o.optLong("quando"), o.optString("forma"),
+                    (0 until l.length()).mapNotNull { l.optJSONObject(it) }.map { Linha(it.optInt("p"), it.optString("n"), it.optInt("q"), it.optInt("c")) },
+                )
+            }
+        } catch (e: Exception) { emptyList() }
+    }
+
+    @Synchronized
+    fun registrar(c: Context, itens: List<Linha>, forma: String, agora: Long = System.currentTimeMillis()): Venda {
+        val todas = ler(c)
+        val v = nova(todas, itens, forma, agora)
+        val guardar = (todas + v).takeLast(MAX_GUARDADAS)
+        val a = JSONArray()
+        for (x in guardar) a.put(
+            JSONObject().put("id", x.id).put("quando", x.quando).put("forma", x.forma).put(
+                "itens", JSONArray().also { l -> x.itens.forEach { i -> l.put(JSONObject().put("p", i.produtoId).put("n", i.nome).put("q", i.quantidade).put("c", i.precoCentavos)) } },
+            ),
+        )
+        c.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putString("lista", a.toString()).apply()
+        return v
+    }
+
+    /** As vendas de balcão como pedidos pagos (vazio em loja sem site, onde elas já estão no catálogo). */
+    fun pedidos(c: Context): List<Loja.Pedido> = ler(c).map { comoPedido(it) }
+}

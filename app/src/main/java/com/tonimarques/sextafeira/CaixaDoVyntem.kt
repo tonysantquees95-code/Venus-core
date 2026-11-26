@@ -78,7 +78,7 @@ object CaixaDoVyntem {
         val prefs = c.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         val k = lojaChave(c)
         val lote = montarLote(
-            loja.pedidos(), ler(prefs.getString("env_$k", "")), ler(prefs.getString("est_$k", "")),
+            loja.pedidos() + PdvVendas.pedidos(c), ler(prefs.getString("env_$k", "")), ler(prefs.getString("est_$k", "")),
             prefs.getLong(P_DESDE, System.currentTimeMillis()), k, System.currentTimeMillis(),
         )
         for (parte in lote.itens.chunked(50)) {

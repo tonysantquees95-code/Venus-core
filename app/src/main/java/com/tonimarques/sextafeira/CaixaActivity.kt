@@ -31,7 +31,7 @@ private fun Int.brl() = Loja.dinheiro(this)
 /**
  * O Caixa: a Vênus vira um ponto de venda portátil. Tela cheia, tela sempre ligada, botões grandes para somar produtos,
  * "Ler etiqueta" (QR Code colado no produto) e Pix, dinheiro ou cartão. Cada venda usa o mesmo registro de venda da loja
- * ([CatalogoInterno.registrarVenda]): baixa o estoque, entra nos relatórios e, com o Vyntem ligado, vai para o caixa dele.
+ * Funciona em qualquer loja: usa o catálogo e os preços que ela já tem, baixa o estoque (no site, se a loja tem site) e, com o Vyntem ligado, a venda vai para o caixa dele.
  * "Sair do caixa" (ou voltar) devolve para a Vênus.
  */
 class CaixaActivity : TelaBase() {
@@ -45,11 +45,26 @@ class CaixaActivity : TelaBase() {
         super.onCreate(savedInstanceState)
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) // não apaga a tela enquanto o caixa está aberto
         Perfil.carregar(this)
-        if (!Loja(this).ehInterno) { Toast.makeText(this, "O Caixa é para a loja sem site.", Toast.LENGTH_LONG).show(); finish(); return }
-        produtos = CatalogoInterno(this).produtos().filter { it.ativo && (it.precoCentavos ?: 0) > 0 }.sortedBy { it.nome.lowercase() }
-        if (produtos.isEmpty()) { Toast.makeText(this, "Cadastre produtos com preço primeiro.", Toast.LENGTH_LONG).show(); finish(); return }
-        montar()
+        setContentView(TextView(this).apply {
+            text = "Abrindo o caixa…"; textSize = 16f; setTextColor(Color.WHITE); gravity = Gravity.CENTER
+            setBackgroundColor(Color.parseColor("#03040A"))
+        })
+        Thread {
+            val lido = try { Result.success(carregarProdutos()) } catch (e: Exception) { Result.failure(e) }
+            runOnUiThread {
+                lido.onFailure {
+                    Toast.makeText(this, "Não consegui ler o catálogo da loja agora. Confira a internet e a conexão da loja.", Toast.LENGTH_LONG).show(); finish()
+                }.onSuccess { lista ->
+                    produtos = lista
+                    if (produtos.isEmpty()) { Toast.makeText(this, "Cadastre produtos com preço primeiro.", Toast.LENGTH_LONG).show(); finish() } else montar()
+                }
+            }
+        }.start()
     }
+
+    /** O catálogo da loja conectada (com ou sem site) só com o que dá para vender: ativo e com preço. */
+    private fun carregarProdutos(): List<Loja.Produto> =
+        Loja(this).produtos().filter { it.ativo && (it.precoCentavos ?: 0) > 0 }.sortedBy { it.nome.lowercase() }
 
     override fun onDestroy() {
         window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
@@ -134,24 +149,49 @@ class CaixaActivity : TelaBase() {
 
     private fun aviso(t: String) = Toast.makeText(this, t, Toast.LENGTH_LONG).show()
 
-    /** Registra a venda atual (baixa o estoque e entra nos relatórios) e zera o carrinho. */
+    private var gravando = false
+
+    /** Registra a venda atual e zera o carrinho. Loja sem site: registro do catálogo. Loja com site: baixa o estoque no site e guarda a venda aqui. */
     private fun fechar(forma: String, nota: String) {
+        if (gravando) return
         val total = Pdv.total(carrinho, produtos)
         val itens = Pdv.itens(carrinho, produtos)
         val sem = Pdv.faltando(carrinho, produtos)
         if (itens.isEmpty()) return
-        try {
-            CatalogoInterno(this).registrarVenda("Cliente do balcão", itens, forma, "Em mãos ou retirada")
-        } catch (e: Exception) {
-            return aviso("Não consegui registrar: ${e.message}")
-        }
-        Diario.anotar(this, "loja", "Caixa: ${itens.joinToString(", ") { "${it.second}x ${it.first.nome}" }} (${total.brl()}) no $forma", "tela")
-        if (CaixaDoVyntem.ligado(this)) Thread { try { CaixaDoVyntem.conferir(applicationContext) } catch (e: Exception) { } }.start()
-        carrinho = Pdv.Carrinho()
-        // o estoque mudou: recarrega os produtos para mostrar o que sobrou
-        produtos = CatalogoInterno(this).produtos().filter { it.ativo && (it.precoCentavos ?: 0) > 0 }.sortedBy { it.nome.lowercase() }
-        atualizar()
-        aviso("Venda de ${total.brl()} registrada. $nota" + if (sem.isNotEmpty()) " Atenção: o estoque de ${sem.joinToString(", ")} ficou zerado." else "")
+        gravando = true
+        val loja = Loja(this)
+        Thread {
+            val erro: String? = try {
+                if (loja.ehInterno) {
+                    CatalogoInterno(this).registrarVenda("Cliente do balcão", itens, forma, "Em mãos ou retirada")
+                    null
+                } else {
+                    // estoque lido na hora (outro aparelho ou o site podem ter vendido nesse meio tempo)
+                    val frescos = loja.produtos()
+                    val falhas = mutableListOf<String>()
+                    for ((p, q, _) in itens) {
+                        try { loja.baixarEstoque(frescos.firstOrNull { it.id == p.id } ?: p, q) } catch (e: Exception) { falhas += p.nome }
+                    }
+                    PdvVendas.registrar(this, itens.map { (p, q, _) -> PdvVendas.Linha(p.id, p.nome, q, p.precoCentavos ?: 0) }, forma)
+                    if (falhas.isNotEmpty()) "Venda registrada, mas não consegui baixar o estoque de ${falhas.joinToString(", ")} no site. Ajuste lá." else null
+                }
+                null
+            } catch (e: Exception) {
+                "Não consegui registrar: ${e.message}"
+            }
+            val atualizados = try { carregarProdutos() } catch (e: Exception) { produtos }
+            runOnUiThread {
+                gravando = false
+                if (erro != null && erro.startsWith("Não consegui registrar")) return@runOnUiThread aviso(erro)
+                Diario.anotar(this, "loja", "Caixa: ${itens.joinToString(", ") { "${it.second}x ${it.first.nome}" }} (${total.brl()}) no $forma", "tela")
+                if (CaixaDoVyntem.ligado(this)) Thread { try { CaixaDoVyntem.conferir(applicationContext) } catch (e: Exception) { } }.start()
+                carrinho = Pdv.Carrinho()
+                produtos = atualizados
+                atualizar()
+                aviso("Venda de ${total.brl()} registrada. $nota" + (erro?.let { " $it" } ?: "") +
+                    if (sem.isNotEmpty()) " Atenção: o estoque de ${sem.joinToString(", ")} ficou zerado." else "")
+            }
+        }.start()
     }
 
     private fun vazio(): Boolean {
@@ -255,7 +295,7 @@ class CaixaActivity : TelaBase() {
     }
 
     private fun gerarEtiquetas() {
-        val todos = CatalogoInterno(this).produtos().filter { it.ativo }.sortedBy { it.nome.lowercase() }
+        val todos = produtos
         if (todos.isEmpty()) return aviso("Cadastre produtos primeiro.")
         aviso("Montando as etiquetas…")
         Thread {

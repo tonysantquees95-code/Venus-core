@@ -73,4 +73,17 @@ class PdvTest {
         assertTrue(g[1].x > g[0].x && g[3].y > g[0].y)
         assertTrue(g.all { it.x + it.largura <= 580.01f && it.y + it.altura <= 780.01f })
     }
+
+    @Test fun vendaDeBalcaoEmLojaComSiteViraPedidoPago() {
+        val itens = listOf(PdvVendas.Linha(5, "Água", 2, 300), PdvVendas.Linha(6, "Pastel", 1, 850))
+        val v1 = PdvVendas.nova(emptyList(), itens, "Pix", 1_000L)
+        assertEquals(1_000_000, v1.id)
+        assertEquals(1450, v1.total)
+        val v2 = PdvVendas.nova(listOf(v1), itens, "Dinheiro", 2_000L)
+        assertEquals(1_000_001, v2.id)
+        val p = PdvVendas.comoPedido(v1)
+        assertEquals("paid", p.status)
+        assertEquals(1450, p.totalCentavos)
+        assertEquals(listOf("Água", "Pastel"), p.itens.map { it.nome })
+    }
 }

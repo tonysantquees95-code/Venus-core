@@ -190,6 +190,17 @@ class Loja(private val contexto: Context) {
         return lerProdutos(lista)
     }
 
+    /**
+     * Baixa [quantidade] do estoque do produto na loja conectada (site no Floot, Shopify, WooCommerce, Nuvemshop).
+     * [p] deve ser lido na hora (estoque atual). Produto sem controle de estoque não muda. Loja sem site: use [CatalogoInterno.registrarVenda].
+     */
+    fun baixarEstoque(p: Produto, quantidade: Int) {
+        val atual = p.estoque ?: return
+        val novo = (atual - quantidade).coerceAtLeast(0)
+        if (ehFloot) enviar("/_api/admin/stock_update", JSONObject().put("productId", p.id).put("quantity", novo).put("mode", "set"))
+        else (externa ?: throw ErroDaLoja(SEM_PLATAFORMA)).definirEstoque(p, novo)
+    }
+
     // ------------------------------------------------------------- respostas
     fun resumo(periodo: String): String = montarResumo(pedidos(), periodo, Calendar.getInstance())
 

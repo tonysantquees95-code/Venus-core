@@ -10,7 +10,7 @@ internal fun MainActivity.abrirSuaLojaHoje() {
     aviso("Abrindo…")
     emFundo({
         val l = Loja(this)
-        if (l.conectada) Pair(l.pedidos(), l.produtos()) else null
+        if (l.conectada) Pair(l.pedidos() + PdvVendas.pedidos(this), l.produtos()) else null
     }) { r ->
         val dados = r.getOrNull()
         val agora = Calendar.getInstance()
