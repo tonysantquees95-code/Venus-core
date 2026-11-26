@@ -27,6 +27,14 @@ internal object Pdv {
     /** Troco em centavos; null se o que o cliente deu não cobre o total. */
     fun troco(total: Int, recebido: Int): Int? = if (recebido >= total) recebido - total else null
 
+    /** Calculadora do dinheiro: os dígitos entram pela direita, como numa maquininha (digitar 1 5 0 0 = R$ 15,00). Teclas: "0".."9", "00", "apagar", "limpar". Passa de R$ 999.999,99 não entra. */
+    fun teclar(centavos: Long, tecla: String): Long = when (tecla) {
+        "apagar" -> centavos / 10
+        "limpar" -> 0L
+        "00" -> if (centavos * 100 > 99_999_999L) centavos else centavos * 100
+        else -> if (tecla.length == 1 && tecla[0] in '0'..'9' && centavos * 10 + (tecla[0] - '0') <= 99_999_999L) centavos * 10 + (tecla[0] - '0') else centavos
+    }
+
     /** Taxa e líquido de um pagamento com taxa em % (ex.: 3,49). Arredonda a taxa para o centavo mais próximo. */
     fun liquido(total: Int, taxaPct: Double): Pair<Int, Int> {
         val pct = taxaPct.coerceIn(0.0, 100.0)

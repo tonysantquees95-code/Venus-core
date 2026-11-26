@@ -33,6 +33,19 @@ class PdvTest {
         assertTrue(Pdv.faltando(Pdv.Carrinho().somar(3, 50), produtos).isEmpty())
     }
 
+    @Test fun calculadoraDoDinheiro() {
+        var v = 0L
+        for (t in listOf("1", "5", "0", "0")) v = Pdv.teclar(v, t)
+        assertEquals(1500L, v)
+        assertEquals(150L, Pdv.teclar(v, "apagar"))
+        assertEquals(150000L, Pdv.teclar(v, "00"))
+        assertEquals(0L, Pdv.teclar(v, "limpar"))
+        assertEquals(0L, Pdv.teclar(0L, "00"))
+        assertEquals(99_999_999L, Pdv.teclar(99_999_999L, "7"))
+        assertEquals(99_999_999L, Pdv.teclar(99_999_999L, "00"))
+        assertEquals(1500L, Pdv.teclar(1500L, "x"))
+    }
+
     @Test fun troco() {
         assertEquals(150, Pdv.troco(850, 1000))
         assertEquals(0, Pdv.troco(850, 850))

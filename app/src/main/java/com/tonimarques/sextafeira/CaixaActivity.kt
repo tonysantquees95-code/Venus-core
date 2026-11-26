@@ -376,19 +376,122 @@ class CaixaActivity : TelaBase() {
             .setPositiveButton(ok) { _, _ -> aoOk(campo.text.toString().trim()) }.setNegativeButton("Cancelar", null).show()
     }
 
+    // ------------------------------------------------------------------ dinheiro: calculadora de troco
     private fun cobrarDinheiro() {
         if (vazio()) return
         val total = Pdv.total(carrinho, produtos)
-        pedirValor("Dinheiro · total ${total.brl()}", "Quanto o cliente deu (R$) — vazio = valor exato", "", "Dar baixa") { v ->
-            val recebido = if (v.isBlank()) total else ComandosLocais.centavos(v.replace(Regex("[^0-9,.]"), "")) ?: return@pedirValor aviso("Valor inválido.")
-            val troco = Pdv.troco(total, recebido) ?: return@pedirValor aviso("O valor não cobre o total de ${total.brl()}.")
-            fechar("Dinheiro", if (troco > 0) "Troco: ${troco.brl()}." else "Sem troco.")
+        var recebido = 0L
+        val visor = TextView(this).apply { textSize = 38f; setTextColor(Color.WHITE); gravity = Gravity.CENTER; setPadding(0, dp(4), 0, dp(2)) }
+        val situacao = TextView(this).apply { textSize = 17f; gravity = Gravity.CENTER; setPadding(0, 0, 0, dp(10)) }
+        val dar = botao("Dar baixa", true) { }
+        val dialogo = CaixaBuilder(this).setNegativeButton("Cancelar", null).create()
+        fun atualizar() {
+            visor.text = recebido.toInt().brl()
+            val troco = Pdv.troco(total, recebido.toInt())
+            when {
+                recebido == 0L -> { situacao.text = "Digite o valor que o cliente deu"; situacao.setTextColor(apagado) }
+                troco == null -> { situacao.text = "Faltam ${(total - recebido.toInt()).brl()}"; situacao.setTextColor(alerta) }
+                troco == 0 -> { situacao.text = "Valor exato, sem troco"; situacao.setTextColor(Color.parseColor("#4ADE80")) }
+                else -> { situacao.text = "TROCO  ${troco.brl()}"; situacao.setTextColor(Color.parseColor("#4ADE80")) }
+            }
+            situacao.textSize = if (troco != null && troco > 0) 24f else 17f
+            dar.alpha = if (troco != null && recebido > 0) 1f else 0.4f
         }
+        fun tecla(rotulo: String, codigo: String) = TextView(this).apply {
+            text = rotulo; textSize = 26f; gravity = Gravity.CENTER; setTextColor(Color.WHITE)
+            background = fundo(Color.parseColor("#1A1D33"), 14)
+            setOnClickListener { recebido = Pdv.teclar(recebido, codigo); atualizar() }
+            if (codigo == "apagar") setOnLongClickListener { recebido = 0L; atualizar(); true }
+        }
+        fun linha(vararg t: Pair<String, String>) = LinearLayout(this).apply {
+            for ((r, c) in t) addView(tecla(r, c), LinearLayout.LayoutParams(0, dp(66), 1f).apply { setMargins(dp(4), dp(4), dp(4), dp(4)) })
+        }
+        dar.setOnClickListener {
+            val troco = Pdv.troco(total, recebido.toInt())
+            if (recebido == 0L || troco == null) return@setOnClickListener aviso("O valor recebido não cobre o total de ${total.brl()}.")
+            dialogo.dismiss()
+            fechar("Dinheiro", if (troco > 0) "Recebido ${recebido.toInt().brl()}, troco ${troco.brl()}." else "Valor exato.")
+        }
+        val corpo = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL; setPadding(dp(14), dp(4), dp(14), 0)
+            addView(TextView(this@CaixaActivity).apply { text = "TOTAL DA VENDA  ${total.brl()}"; textSize = 13f; letterSpacing = 0.15f; setTextColor(destaque); gravity = Gravity.CENTER })
+            addView(TextView(this@CaixaActivity).apply { text = "RECEBIDO"; textSize = 11f; letterSpacing = 0.25f; setTextColor(apagado); gravity = Gravity.CENTER; setPadding(0, dp(10), 0, 0) })
+            addView(visor); addView(situacao)
+            addView(linha("1" to "1", "2" to "2", "3" to "3"))
+            addView(linha("4" to "4", "5" to "5", "6" to "6"))
+            addView(linha("7" to "7", "8" to "8", "9" to "9"))
+            addView(linha("00" to "00", "0" to "0", "⌫" to "apagar"))
+            addView(LinearLayout(this@CaixaActivity).apply {
+                addView(botao("Valor exato", false) {
+                    dialogo.dismiss(); fechar("Dinheiro", "Valor exato.")
+                }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+                addView(dar, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { marginStart = dp(8) })
+            }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(8) })
+        }
+        atualizar()
+        dialogo.setTitle("Dinheiro")
+        dialogo.setView(ScrollView(this).apply { addView(corpo) })
+        dialogo.show()
     }
 
+    // ------------------------------------------------------------------ cartão: página segura do provedor
     private fun cobrarCartao() {
         if (vazio()) return
         val total = Pdv.total(carrinho, produtos)
+        if (!Cobranca.configurada(this)) return cartaoNaMaquininha(total)
+        val itens = Pdv.itens(carrinho, produtos).map { (p, q, _) -> Loja.Item(p.nome, q, p.precoCentavos ?: 0, p.id) }
+        Toast.makeText(this, "Preparando o pagamento seguro…", Toast.LENGTH_SHORT).show()
+        Thread {
+            try {
+                val link = Cobranca.criarLink(this, 0, itens, "Cliente do balcão")
+                runOnUiThread { cartaoPorLink(total, link) }
+            } catch (e: Exception) {
+                runOnUiThread { aviso((e.message ?: "Não consegui criar o link.") + " Use a maquininha."); cartaoNaMaquininha(total) }
+            }
+        }.start()
+    }
+
+    private fun abrirLink(url: String) {
+        try { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) } catch (e: ActivityNotFoundException) { aviso("Não achei um navegador. Copie o link e abra onde quiser.") }
+    }
+
+    private fun cartaoPorLink(total: Int, link: Cobranca.Link) {
+        val nome = Cobranca.PROVEDORES.firstOrNull { it.id == link.provedor }?.nome ?: "provedor de pagamento"
+        var vivo = true
+        val corpo = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL; setPadding(dp(20), dp(8), dp(20), 0)
+            addView(TextView(this@CaixaActivity).apply {
+                text = "A página segura do $nome abre para o cliente digitar os dados do cartão. Entregue o aparelho a ele (os dados não passam pela Vênus). A venda fecha sozinha quando o pagamento for aprovado."
+                textSize = 13.5f; setTextColor(Color.parseColor("#D7DAEE")); setPadding(0, 0, 0, dp(10))
+            })
+            addView(botao("Abrir a página de pagamento", true) { abrirLink(link.url) })
+            addView(botao("Compartilhar o link com o cliente", false) {
+                startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, Cobranca.mensagemParaCliente("", total, link.url)), "Enviar link de pagamento"))
+            })
+            addView(TextView(this@CaixaActivity).apply { text = "Aguardando o pagamento…"; textSize = 12.5f; setTextColor(apagado); gravity = Gravity.CENTER; setPadding(0, dp(12), 0, 0) })
+        }
+        val d = CaixaBuilder(this).setTitle("Cartão · ${total.brl()}").setView(ScrollView(this).apply { addView(corpo) })
+            .setPositiveButton("Confirmar à mão") { _, _ -> fechar("Cartão", "Confirmado à mão (link do $nome).") }
+            .setNegativeButton("Cancelar", null).show()
+        d.setOnDismissListener { vivo = false }
+        abrirLink(link.url)
+        Thread {
+            var n = 0
+            while (vivo && n < 300) {
+                try {
+                    val s = Cobranca.conferir(this, link.ref, link.provedor)
+                    if (s.pago) {
+                        runOnUiThread { if (vivo) { vivo = false; d.dismiss(); fechar(s.forma ?: "Cartão", "Aprovado pelo $nome.") } }
+                        return@Thread
+                    }
+                } catch (e: Exception) { /* tenta de novo */ }
+                n++; Thread.sleep(4000)
+            }
+        }.start()
+    }
+
+    /** Sem provedor de cobrança cadastrado: a pessoa passa o cartão na própria maquininha e só registra. */
+    private fun cartaoNaMaquininha(total: Int) {
         pedirValor("Cartão · total ${total.brl()}", "Taxa da maquininha (%), opcional", prefs.getString("pdv_taxa_cartao", "").orEmpty(), "Já passei no cartão") { v ->
             val pct = if (v.isBlank()) 0.0 else Pdv.lerPct(v) ?: return@pedirValor aviso("Taxa inválida.")
             prefs.edit().putString("pdv_taxa_cartao", v).apply()
@@ -397,13 +500,28 @@ class CaixaActivity : TelaBase() {
         }
     }
 
+    // ------------------------------------------------------------------ Pix: automático (Mercado Pago) ou pela chave da loja
     private fun cobrarPix() {
         if (vazio()) return
         val total = Pdv.total(carrinho, produtos)
+        if (!Cobranca.pixAutomaticoPronto(this)) return pixDaChave(total)
+        Toast.makeText(this, "Gerando o Pix…", Toast.LENGTH_SHORT).show()
+        val ref = "balcao-" + java.util.UUID.randomUUID().toString().replace("-", "")
+        Thread {
+            try {
+                val px = Cobranca.criarPixMp(this, total, "Venda no balcão · ${Perfil.loja}", ref)
+                runOnUiThread { mostrarPix(total, px.codigo, px.id) }
+            } catch (e: Exception) {
+                runOnUiThread { aviso(e.message ?: "Não consegui gerar o Pix automático."); pixDaChave(total) }
+            }
+        }.start()
+    }
+
+    private fun pixDaChave(total: Int) {
         val chave = DadosDaLoja.guardado(prefs, DadosDaLoja.PREF_PIX)
         fun mostrar(k: String) {
             val codigo = try { QrLocal.pixCopiaECola(k, Perfil.loja, Perfil.cidade, total.toLong()) } catch (e: Exception) { return aviso(e.message ?: "Não consegui gerar o Pix.") }
-            mostrarPix(total, codigo)
+            mostrarPix(total, codigo, null)
         }
         if (QrLocal.chavePix(chave) != null) return mostrar(chave)
         val campo = EditText(this).apply { hint = "CPF, CNPJ, celular, e-mail ou chave aleatória"; setText(chave); setSingleLine() }
@@ -416,7 +534,8 @@ class CaixaActivity : TelaBase() {
         }.setNegativeButton("Cancelar", null).show()
     }
 
-    private fun mostrarPix(total: Int, codigo: String) {
+    /** [mpId] != null: Pix criado no Mercado Pago, conferido a cada 3 s; a venda fecha sozinha quando cai. */
+    private fun mostrarPix(total: Int, codigo: String, mpId: Long?) {
         val m = QrLocal.matriz(codigo)
         val px = 720
         val bmp = Bitmap.createBitmap(px, px, Bitmap.Config.ARGB_8888)
@@ -429,21 +548,37 @@ class CaixaActivity : TelaBase() {
             if (m.modulos[y * m.tamanho + x] == '1') c.drawRect((x0 + x * modulo).toFloat(), (x0 + y * modulo).toFloat(), (x0 + (x + 1) * modulo).toFloat(), (x0 + (y + 1) * modulo).toFloat(), tinta)
         }
         val lado = dp(280)
+        var vivo = true
         val corpo = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER_HORIZONTAL; setPadding(dp(20), dp(8), dp(20), 0)
             addView(ImageView(this@CaixaActivity).apply { setImageBitmap(bmp) }, LinearLayout.LayoutParams(lado, lado))
             addView(TextView(this@CaixaActivity).apply {
-                text = "Mostre ao cliente. Quando o dinheiro cair na sua conta, toque em “Pix recebido”."
+                text = if (mpId != null) "Mostre ao cliente. Assim que o Pix cair no Mercado Pago, a venda fecha sozinha."
+                else "Mostre ao cliente. Quando o dinheiro cair na sua conta, toque em “Pix recebido”."
                 textSize = 13f; setTextColor(Color.parseColor("#D7DAEE")); gravity = Gravity.CENTER; setPadding(0, dp(10), 0, dp(6))
             })
             addView(botao("Copiar código Pix", false) {
                 (getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(ClipData.newPlainText("Pix", codigo))
                 Toast.makeText(this@CaixaActivity, "Código copiado.", Toast.LENGTH_SHORT).show()
             })
+            if (mpId != null) addView(TextView(this@CaixaActivity).apply { text = "Aguardando o pagamento…"; textSize = 12.5f; setTextColor(apagado); gravity = Gravity.CENTER; setPadding(0, dp(8), 0, 0) })
         }
-        CaixaBuilder(this).setTitle("Pix de ${total.brl()}").setView(ScrollView(this).apply { addView(corpo) })
-            .setPositiveButton("Pix recebido") { _, _ -> fechar("Pix", "Estoque atualizado.") }
+        val d = CaixaBuilder(this).setTitle("Pix de ${total.brl()}").setView(ScrollView(this).apply { addView(corpo) })
+            .setPositiveButton(if (mpId != null) "Confirmar à mão" else "Pix recebido") { _, _ -> fechar("Pix", if (mpId != null) "Confirmado à mão." else "Estoque atualizado.") }
             .setNegativeButton("Cancelar", null).show()
+        d.setOnDismissListener { vivo = false }
+        if (mpId != null) Thread {
+            var n = 0
+            while (vivo && n < 200) {
+                try {
+                    if (Cobranca.statusDoPixMp(this, mpId) == "approved") {
+                        runOnUiThread { if (vivo) { vivo = false; d.dismiss(); fechar("Pix", "Confirmado pelo Mercado Pago.") } }
+                        return@Thread
+                    }
+                } catch (e: Exception) { /* tenta de novo */ }
+                n++; Thread.sleep(3000)
+            }
+        }.start()
     }
 
     /** Registra a venda atual, zera o carrinho e vai para o recibo. Loja sem site: registro do catálogo. Loja com site: baixa o estoque no site e guarda a venda aqui. */

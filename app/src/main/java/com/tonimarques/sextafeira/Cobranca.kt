@@ -118,6 +118,38 @@ object Cobranca {
     }
 
     // ------------------------------------------------------------------ criar o link
+    // ------------------------------------------------------------------ Pix automático (caixa)
+    /** Mercado Pago cadastrado e com chave: o Caixa gera o Pix pela conta da loja e confere sozinho quando cai. */
+    fun mercadoPagoPronto(ctx: Context): Boolean = provedor(ctx) == "mercadopago" && tokenMercadoPago(ctx).isNotBlank()
+    fun pixAutomaticoPronto(ctx: Context): Boolean = mercadoPagoPronto(ctx)
+
+    data class PixMp(val id: Long, val codigo: String)
+
+    /** Cria um Pix de [totalCentavos] na conta Mercado Pago da loja. Bloqueante. O e-mail do pagador é obrigatório no Mercado Pago, mas o Pix não o usa. */
+    fun criarPixMp(ctx: Context, totalCentavos: Int, descricao: String, ref: String): PixMp {
+        if (totalCentavos < 1) throw IllegalStateException("O valor do Pix precisa ser maior que zero.")
+        val corpo = JSONObject()
+            .put("transaction_amount", totalCentavos / 100.0)
+            .put("description", descricao.take(200).ifBlank { "Venda no balcão" })
+            .put("payment_method_id", "pix")
+            .put("external_reference", ref)
+            .put("payer", JSONObject().put("email", "cliente@balcao.vetorial.tech"))
+        val (codigo, texto) = pedir("POST", "$MP/v1/payments", corpo, mp(ctx) + mapOf("X-Idempotency-Key" to ref))
+        if (codigo == 401 || codigo == 403) throw IllegalStateException("O Mercado Pago recusou a chave. Confira em Menu → Cobrança.")
+        if (codigo !in 200..299) throw IllegalStateException("O Mercado Pago não criou o Pix ($codigo): ${erroDe(texto)}")
+        val o = JSONObject(texto)
+        val copia = o.optJSONObject("point_of_interaction")?.optJSONObject("transaction_data")?.optString("qr_code").orEmpty()
+        if (copia.isBlank()) throw IllegalStateException("O Mercado Pago não devolveu o código do Pix.")
+        return PixMp(o.getLong("id"), copia)
+    }
+
+    /** "approved" quando o Pix caiu; "pending", "cancelled", "rejected"... Bloqueante. */
+    fun statusDoPixMp(ctx: Context, id: Long): String {
+        val (codigo, texto) = pedir("GET", "$MP/v1/payments/$id", cabecalhos = mp(ctx))
+        if (codigo !in 200..299) throw IllegalStateException("Mercado Pago $codigo")
+        return JSONObject(texto).optString("status")
+    }
+
     data class Link(val ref: String, val url: String, val provedor: String)
 
     /** Cria o link de pagamento da venda. Bloqueante; lança erro com a explicação. */
