@@ -36,4 +36,26 @@ internal object Pdv {
 
     /** Lê "3,49" ou "3.49" como porcentagem; null se não for número. */
     fun lerPct(texto: String): Double? = texto.trim().replace(',', '.').toDoubleOrNull()?.takeIf { it in 0.0..100.0 }
+
+    // ------------------------------------------------------------------ etiquetas com QR Code
+    const val PREFIXO_CODIGO = "venus:p:"
+
+    /** O texto guardado no QR Code da etiqueta de um produto. */
+    fun codigoDoProduto(id: Int): String = "$PREFIXO_CODIGO$id"
+
+    /** O id do produto lido de uma etiqueta; null se o QR Code não for de etiqueta da Vênus. */
+    fun lerCodigo(texto: String?): Int? {
+        val t = texto?.trim().orEmpty()
+        if (!t.startsWith(PREFIXO_CODIGO)) return null
+        return t.removePrefix(PREFIXO_CODIGO).toIntOrNull()?.takeIf { it > 0 }
+    }
+
+    data class Celula(val x: Float, val y: Float, val largura: Float, val altura: Float)
+
+    /** Divide a página em [colunas] x [linhas] etiquetas, da esquerda para a direita e de cima para baixo. */
+    fun grade(largura: Int, altura: Int, colunas: Int, linhas: Int, margem: Int): List<Celula> {
+        val cw = (largura - 2 * margem) / colunas.toFloat()
+        val ch = (altura - 2 * margem) / linhas.toFloat()
+        return (0 until linhas).flatMap { r -> (0 until colunas).map { c -> Celula(margem + c * cw, margem + r * ch, cw, ch) } }
+    }
 }

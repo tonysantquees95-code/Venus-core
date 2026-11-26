@@ -50,4 +50,27 @@ class PdvTest {
         assertNull(Pdv.lerPct("abc"))
         assertNull(Pdv.lerPct("-1"))
     }
+
+    @Test fun codigoDaEtiquetaVaiEVolta() {
+        assertEquals("venus:p:42", Pdv.codigoDoProduto(42))
+        assertEquals(42, Pdv.lerCodigo(Pdv.codigoDoProduto(42)))
+        assertEquals(7, Pdv.lerCodigo("  venus:p:7 "))
+    }
+
+    @Test fun qrDeOutraCoisaNaoEEtiqueta() {
+        assertNull(Pdv.lerCodigo("https://exemplo.com"))
+        assertNull(Pdv.lerCodigo("venus:p:abc"))
+        assertNull(Pdv.lerCodigo("venus:p:0"))
+        assertNull(Pdv.lerCodigo(null))
+    }
+
+    @Test fun gradeDeEtiquetas() {
+        val g = Pdv.grade(600, 800, 3, 5, 20)
+        assertEquals(15, g.size)
+        assertEquals(20f, g[0].x, 0.01f)
+        assertEquals(20f, g[0].y, 0.01f)
+        assertEquals(560f / 3, g[0].largura, 0.01f)
+        assertTrue(g[1].x > g[0].x && g[3].y > g[0].y)
+        assertTrue(g.all { it.x + it.largura <= 580.01f && it.y + it.altura <= 780.01f })
+    }
 }

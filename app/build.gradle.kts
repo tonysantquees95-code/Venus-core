@@ -76,6 +76,8 @@ dependencies {
     implementation("com.google.android.gms:play-services-mlkit-subject-segmentation:16.0.0-beta1")
     // QR Code gerado no próprio celular (cartão, panfleto e QR da Central da loja não dependem mais do servidor).
     implementation("com.google.zxing:core:3.5.3")
+    // Leitor de QR Code do Google (Caixa: ler a etiqueta do produto). Usa a tela de leitura do Google Play Services: não precisa da permissão de câmera.
+    implementation("com.google.android.gms:play-services-code-scanner:16.1.0")
     // Ed25519 (conferir a assinatura do selo de licença sem internet).
     implementation("net.i2p.crypto:eddsa:0.3.0")
     testImplementation("junit:junit:4.13.2")

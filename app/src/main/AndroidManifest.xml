@@ -153,6 +153,7 @@
 
         <!-- As regras de venda para o Vênus Robô (somente leitura, mesma assinatura) -->
         <!-- Vênus Robô (agora parte da Vênus): tela, respostas prontas do Instagram e o ouvido das notificações -->
+        <activity android:name=".CaixaActivity" android:exported="false" android:configChanges="orientation|screenSize|keyboardHidden" />
         <activity android:name=".robo.TelaRobo" android:exported="false" />
         <activity android:name=".robo.TelaRespostas" android:exported="false" android:windowSoftInputMode="adjustResize" />
         <service
