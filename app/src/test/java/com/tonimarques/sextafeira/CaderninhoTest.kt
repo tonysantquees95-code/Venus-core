@@ -110,9 +110,13 @@ class CaderninhoTest {
         assertTrue(curta.contains("R$ 400,00")); assertTrue(curta.contains("PIXPIX")); assertFalse(curta.contains("Produto com nome"))
     }
 
-    @Test fun agradecimentoCitaOValorEADataDaCompra() {
+    @Test fun confirmacaoDoPagamentoECaprichadaEComprovanteAvisa() {
         val t = Caderninho.textoDeAgradecimento("Desejo", fiado())
-        assertTrue(t.contains("Oi, Maria!")); assertTrue(t.contains("R$ 20,00")); assertTrue(t.contains("26/11/2026")); assertTrue(t.contains("obrigado"))
+        assertTrue(t.contains("Oi, Maria!")); assertTrue(t.contains("Pagamento confirmado")); assertTrue(t.contains("R$ 20,00"))
+        assertTrue(t.contains("26/11/2026")); assertTrue(t.contains("2x Pastel")); assertTrue(t.contains("obrigado pela compra"))
+        val c = Caderninho.textoDeComprovante("Desejo", fiado())
+        assertTrue(c.contains("Oi, Maria!")); assertTrue(c.contains("comprovante")); assertTrue(c.contains("R$ 20,00"))
+        assertFalse(c.contains("Pagamento confirmado")) // só avisa que chegou; confirmar é depois do "Pago"
     }
 
     @Test fun guardaELeDeVolta() {

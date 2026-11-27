@@ -1035,6 +1035,8 @@ class CaixaActivity : TelaBase() {
                 addView(botao(if (f.cobrancas > 0) "Cobrar de novo" else "Cobrar", false) { cobrarDeNovo(f) }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
                 if (f.viaPix) addView(botao("QR Pix", false) { mostrarQrDoFiado(f) }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { marginStart = dp(8) })
             })
+            cartao.addView(botao("Recebi o comprovante", false) { enviarZap(f.telefone, Caderninho.textoDeComprovante(Perfil.loja, f)) },
+                LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(8) })
             cartao.addView(botao("Pago", true) { confirmarPago(f) }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(8) })
             cartao.addView(pequeno("Editar ou excluir") { editarFiado(f) }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(10); gravity = Gravity.END })
             corpo.addView(cartao, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(10) })

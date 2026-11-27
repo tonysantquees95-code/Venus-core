@@ -162,9 +162,17 @@ internal object Caderninho {
         return b.toString()
     }
 
-    fun textoDeAgradecimento(loja: String, f: Fiado): String =
-        saudacao(f.cliente) + "Recebi o pagamento de " + Documentos.dinheiro(f.total) + " da sua compra de " + dataBR(f.criado) +
-            ". Muito obrigado! 💖\n— " + loja.ifBlank { "Equipe" }
+    /** Quando o pagamento é marcado como recebido: confirmação caprichada (✅, valor, o que comprou) e agradecimento. */
+    fun textoDeAgradecimento(loja: String, f: Fiado): String {
+        val itens = f.linhas.joinToString(", ") { "${it.quantidade}x ${it.nome}" }
+        return saudacao(f.cliente) + "✅ *Pagamento confirmado!*\n\n" +
+            "Recebemos " + Documentos.dinheiro(f.total) + " da sua compra de " + dataBR(f.criado) + " (" + itens + ").\n\n" +
+            "Muito obrigado pela compra e pela confiança! Foi um prazer atender você 💖\nQuando precisar, é só chamar.\n— " + loja.ifBlank { "Equipe" }
+    }
+
+    /** Quando o cliente manda o comprovante: avisa que chegou, antes de conferir e marcar como pago. */
+    fun textoDeComprovante(loja: String, f: Fiado): String =
+        saudacao(f.cliente) + "Recebi o seu comprovante de " + Documentos.dinheiro(f.total) + ", obrigado! 💖\nVou conferir e já te confirmo por aqui.\n— " + loja.ifBlank { "Equipe" }
 
     // ------------------------------------------------------------------ guardar no celular (JSON)
     internal fun paraJson(lista: List<Fiado>): String {
