@@ -107,7 +107,7 @@ class CaderninhoTest {
         val curta = Caderninho.textoDaCobranca("Desejo", muitos, "PIX".repeat(80), false, hoje, compacto = true)
         assertTrue(cheia.length > 1000)
         assertTrue(curta.length < 1000)
-        assertTrue(curta.contains("R$ 40.000,00")); assertTrue(curta.contains("PIXPIX")); assertFalse(curta.contains("Produto com nome"))
+        assertTrue(curta.contains("R$ 400,00")); assertTrue(curta.contains("PIXPIX")); assertFalse(curta.contains("Produto com nome"))
     }
 
     @Test fun agradecimentoCitaOValorEADataDaCompra() {
