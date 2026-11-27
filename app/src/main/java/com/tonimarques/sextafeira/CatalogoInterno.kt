@@ -179,7 +179,7 @@ class CatalogoInterno(private val ctx: Context) : Plataformas.Adaptador {
     }
 
     /** Corrige uma venda do caderninho ainda não paga (cliente e itens) e acerta o estoque só pela diferença. */
-    fun editarVendaPendente(id: Int, cliente: String, itens: List<PdvVendas.Linha>) = editar { raiz ->
+    internal fun editarVendaPendente(id: Int, cliente: String, itens: List<PdvVendas.Linha>) = editar { raiz ->
         val v = vendaJson(raiz, id) ?: throw Loja.ErroDaLoja("Não achei essa venda no catálogo.")
         if (v.optString("status") != "awaiting_payment") throw Loja.ErroDaLoja("Essa venda já foi paga.")
         val antes = itensDe(v)
