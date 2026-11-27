@@ -28,7 +28,7 @@ internal object CaderninhoNoCelular {
     fun ler(c: Context, loja: String = Lojas.aberta(c)): List<Fiado> = deJson(c.getSharedPreferences(arquivo(loja), Context.MODE_PRIVATE).getString("lista", "[]"))
 
     @Synchronized
-    fun gravar(c: Context, lista: List<Fiado>) { c.getSharedPreferences(arquivo(Lojas.aberta(c)), Context.MODE_PRIVATE).edit().putString("lista", paraJson(lista)).apply() }
+    fun gravar(c: Context, lista: List<Fiado>, loja: String = Lojas.aberta(c)) { c.getSharedPreferences(arquivo(loja), Context.MODE_PRIVATE).edit().putString("lista", paraJson(lista)).apply() }
 
     /** Anota um fiado novo e agenda o aviso do dia. */
     @Synchronized
@@ -37,6 +37,7 @@ internal object CaderninhoNoCelular {
         gravar(c, nova)
         val salvo = nova.last { it.criado == f.criado && it.numero == f.numero }
         agendar(c, salvo)
+        if (salvo.linkRef.isNotBlank()) agendarConferencia(c)
         return salvo
     }
 
@@ -89,7 +90,71 @@ internal object CaderninhoNoCelular {
     fun cancelar(c: Context, f: Fiado) { c.getSystemService(AlarmManager::class.java)?.cancel(intencao(c, f)) }
 
     /** Depois de reiniciar o celular ou atualizar o app: refaz os avisos (só da loja aberta; as outras refazem quando forem abertas). */
-    fun reagendarTodos(c: Context) { for (f in aReceber(ler(c))) agendar(c, f) }
+    fun reagendarTodos(c: Context) {
+        for (f in aReceber(ler(c))) agendar(c, f)
+        if (esperandoLink(ler(c)).isNotEmpty()) agendarConferencia(c, 30_000L)
+    }
+
+    // ------------------------------------------------------------------ link de pagamento: a Vênus descobre sozinha que o cliente pagou
+    const val ACAO_CONFERIR = "com.tonimarques.sextafeira.CADERNINHO_CONFERIR"
+    private const val INTERVALO_MS = 2 * 60_000L
+
+    /** Os fiados abertos que têm link e ainda não foram vistos como pagos. */
+    internal fun esperandoLink(lista: List<Fiado>) = lista.filter { !it.pago && it.linkRef.isNotBlank() && it.linkPagoEm == 0L }
+
+    private fun alarmeDeConferencia(c: Context) = PendingIntent.getBroadcast(
+        c, 9099, Intent(c, AvisoDoCaderninho::class.java).setAction(ACAO_CONFERIR), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+    )
+
+    fun agendarConferencia(c: Context, daqui: Long = INTERVALO_MS) {
+        val am = c.getSystemService(AlarmManager::class.java) ?: return
+        val quando = System.currentTimeMillis() + daqui
+        try {
+            if (Build.VERSION.SDK_INT < 31 || am.canScheduleExactAlarms()) am.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, quando, alarmeDeConferencia(c))
+            else am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, quando, alarmeDeConferencia(c))
+        } catch (e: SecurityException) { am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, quando, alarmeDeConferencia(c)) }
+    }
+
+    private val travaConferencia = Any()
+
+    /**
+     * Pergunta ao Mercado Pago/InfinitePay se algum link foi pago. Quando foi, só ANOTA (linkPagoEm) e avisa; a baixa (entrar no caixa) sai quando a pessoa confirma.
+     * Devolve quantos foram vistos como pagos agora. Bloqueante; chame fora da tela. Continua agendando enquanto houver link esperando.
+     */
+    fun conferirLinks(c: Context, loja: String = Lojas.aberta(c)): Int = synchronized(travaConferencia) {
+        var novos = 0
+        for (f in esperandoLink(ler(c, loja))) {
+            val s = try { Cobranca.conferir(c, f.linkRef, f.linkProvedor) } catch (e: Exception) { continue }
+            if (!s.pago) continue
+            val atual = ler(c, loja)
+            if (atual.none { it.id == f.id && !it.pago && it.linkPagoEm == 0L }) continue
+            gravar(c, atual.map { if (it.id == f.id) it.copy(linkPagoEm = System.currentTimeMillis(), linkForma = s.forma.orEmpty()) else it }, loja)
+            novos++
+            notificar(c, 9700 + f.id, f, "Pagamento recebido: ${Documentos.dinheiro(s.valorCentavos ?: f.total)}",
+                "${f.cliente} pagou pelo link${s.forma?.let { " ($it)" } ?: ""}. Toque para confirmar e agradecer.")
+        }
+        if (esperandoLink(ler(c, loja)).isNotEmpty()) agendarConferencia(c)
+        novos
+    }
+
+    /** Guarda um link novo no fiado (ao criar de novo porque o valor mudou). */
+    @Synchronized
+    fun definirLink(c: Context, id: Int, ref: String, url: String, provedor: String) {
+        gravar(c, ler(c).map { if (it.id == id && !it.pago) it.copy(linkRef = ref, linkUrl = url, linkProvedor = provedor, linkPagoEm = 0L, linkForma = "") else it })
+        agendarConferencia(c)
+    }
+
+    private fun notificar(c: Context, idNotificacao: Int, f: Fiado, titulo: String, texto: String) {
+        val gerente = c.getSystemService(NotificationManager::class.java)
+        gerente.createNotificationChannel(NotificationChannel(CANAL, "Caderninho", NotificationManager.IMPORTANCE_HIGH).apply { description = "Aviso no dia em que o cliente combinou de pagar e quando um link é pago" })
+        val abrir = PendingIntent.getActivity(
+            c, idNotificacao, Intent(c, CaixaActivity::class.java).putExtra("receber", true).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+        val n = Notification.Builder(c, CANAL).setSmallIcon(R.drawable.ic_venus_simbolo).setContentTitle(titulo).setContentText(texto)
+            .setContentIntent(abrir).setAutoCancel(true).setCategory(Notification.CATEGORY_REMINDER).build()
+        try { gerente.notify(idNotificacao, n) } catch (e: SecurityException) { }
+    }
 
     internal fun disparou(c: Context, id: Int, loja: String = Lojas.aberta(c)) {
         val f = ler(c, loja).firstOrNull { it.id == id } ?: return
@@ -113,6 +178,14 @@ class AvisoDoCaderninho : BroadcastReceiver() {
     override fun onReceive(ctx: Context, intent: Intent) {
         when (intent.action) {
             Intent.ACTION_BOOT_COMPLETED, Intent.ACTION_MY_PACKAGE_REPLACED -> CaderninhoNoCelular.reagendarTodos(ctx)
+            CaderninhoNoCelular.ACAO_CONFERIR -> {
+                val pendente = goAsync()
+                Thread {
+                    try { CaderninhoNoCelular.conferirLinks(ctx.applicationContext) }
+                    catch (e: Exception) { CaderninhoNoCelular.agendarConferencia(ctx.applicationContext) }
+                    finally { pendente.finish() }
+                }.start()
+            }
             else -> CaderninhoNoCelular.disparou(ctx, intent.getIntExtra("id", 0), intent.getStringExtra("loja") ?: Lojas.aberta(ctx))
         }
     }

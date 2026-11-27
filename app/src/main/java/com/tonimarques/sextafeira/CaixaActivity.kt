@@ -59,7 +59,7 @@ class CaixaActivity : TelaBase() {
     private var abrirReceber = false
     private var baixando = false
     /** Dados que a pessoa digitou ao fechar no caderninho. */
-    private class DadosDoFiado(val cliente: String, val telefone: String, val venceEm: Long)
+    private class DadosDoFiado(val cliente: String, val telefone: String, val venceEm: Long, val comLink: Boolean = false)
     private var campoNome: EditText? = null
     private var campoTel: EditText? = null
     private val prefs by lazy { getSharedPreferences("config", Context.MODE_PRIVATE) }
@@ -750,6 +750,17 @@ class CaixaActivity : TelaBase() {
             } catch (e: Exception) {
                 falha = "Não consegui registrar: ${e.message}"
             }
+            // caderninho no Pix com cobrança configurada: um link (Pix ou cartão) que a Vênus confere sozinha; se falhar, a venda segue e a cobrança vai com o QR da chave Pix
+            var link: Cobranca.Link? = null
+            if (falha == null && fiado != null && fiado.comLink) {
+                try {
+                    val dias = (((fiado.venceEm - System.currentTimeMillis()) / 86_400_000L).toInt() + 30).coerceIn(7, 90)
+                    link = Cobranca.criarLink(this, pedidoId, itens.map { (p, q, preco) -> Loja.Item(p.nome, q, preco ?: p.precoCentavos ?: 0, p.id) }, "Caderninho", dias) // o nome do cliente NÃO vai ao Mercado Pago/InfinitePay
+                } catch (e: Exception) {
+                    avisoExtra = (avisoExtra?.let { "$it " } ?: "") + "Não consegui criar o link de pagamento (${e.message}). A cobrança vai com o QR da chave Pix."
+                }
+            }
+            val linkFinal = link
             val atualizados = try { carregarProdutos() } catch (e: Exception) { produtos }
             val quando = System.currentTimeMillis()
             val erroFinal = falha
@@ -764,6 +775,7 @@ class CaixaActivity : TelaBase() {
                     CaderninhoNoCelular.anotar(this, Caderninho.Fiado(
                         0, numero, it.cliente, it.telefone, itens.map { (p, q, preco) -> Caderninho.Linha(p.nome, q, preco ?: p.precoCentavos ?: 0, p.id) },
                         forma, quando, it.venceEm, 0L, pedidoId, interno,
+                        linkRef = linkFinal?.ref.orEmpty(), linkUrl = linkFinal?.url.orEmpty(), linkProvedor = linkFinal?.provedor.orEmpty(),
                     ))
                 }
                 concluida = Concluida(numero, itens.map { (p, q, preco) -> Pdv.LinhaDoRecibo(p.nome, q, preco ?: p.precoCentavos ?: 0) }, forma, nota + extra, quando, anotado)
@@ -933,6 +945,10 @@ class CaixaActivity : TelaBase() {
             try { startActivityForResult(Intent(Intent.ACTION_PICK, ContactsContract.CommonDataKinds.Phone.CONTENT_URI), PEDIDO_CONTATO) }
             catch (e: ActivityNotFoundException) { aviso("Não achei a lista de contatos. Digite o número.") }
         }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(10) })
+        val comLink = forma == Caderninho.FORMA_PIX && Cobranca.configurada(this)
+        if (comLink) corpo.addView(TextView(this).apply {
+            text = "Vai um link de pagamento (Pix ou cartão). Quando o cliente pagar, a Vênus te avisa para confirmar."; textSize = 12.5f; setTextColor(apagado); setPadding(dp(4), dp(10), 0, 0)
+        })
         corpo.addView(cabecalhoDeSecao("Até quando ele paga?"))
         corpo.addView(LinearLayout(this).apply {
             for ((i, valor) in listOf(7, 15, 30).withIndex()) addView(chip(valor), LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { if (i > 0) marginStart = dp(8) })
@@ -951,7 +967,7 @@ class CaixaActivity : TelaBase() {
             val tel55 = if (bruto.isBlank()) "" else (Pdv.telefoneParaWhatsApp(bruto) ?: return@setOnClickListener aviso("O WhatsApp não parece certo. Use DDD + número, ex.: (51) 99999-0000."))
             val venceEm = if (escolha == -1) (Caderninho.dataDeTexto(data.text.toString(), agora) ?: return@setOnClickListener aviso("Essa data não vale. Use dd/mm/aaaa, de hoje em diante.")) else Caderninho.vencimentoEmDias(agora, escolha)
             d.dismiss()
-            fechar(forma, "", false, DadosDoFiado(n, tel55, venceEm))
+            fechar(forma, "", false, DadosDoFiado(n, tel55, venceEm, comLink))
         }
     }
 
@@ -991,9 +1007,9 @@ class CaixaActivity : TelaBase() {
         })
         corpo.addView(cabecalhoDeSecao("Mandar a cobrança"))
         val pix = if (f.viaPix) primeiroPix(f.total) else null
-        corpo.addView(botao(if (f.viaPix) "Enviar cobrança com QR Code" else "Enviar cobrança no WhatsApp", true) { enviarCobranca(f, false) }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+        corpo.addView(botao(if (f.temLink) "Enviar cobrança com o link" else if (f.viaPix) "Enviar cobrança com QR Code" else "Enviar cobrança no WhatsApp", true) { enviarCobranca(f, false) }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
         val dica = buildString {
-            append(if (f.viaPix) "Vai uma mensagem só: a imagem do QR Code com o texto e o Pix copia e cola embaixo. " else "")
+            append(if (f.temLink) "Vai o resumo da compra, a data e o link de pagamento. Quando o cliente pagar, a Vênus te avisa. " else if (f.viaPix) "Vai uma mensagem só: a imagem do QR Code com o texto e o Pix copia e cola embaixo. " else "")
             append(if (f.telefone.isBlank()) "Sem número: o WhatsApp vai pedir para você escolher o contato. " else "Abre o WhatsApp Business (ou o comum) já com a mensagem pronta. ")
             if (f.viaPix && pix == null) append("Cadastre a chave Pix da loja para a cobrança levar o Pix copia e cola.")
         }
@@ -1012,6 +1028,10 @@ class CaixaActivity : TelaBase() {
         val agora = System.currentTimeMillis()
         val todos = CaderninhoNoCelular.ler(this)
         val abertos = Caderninho.aReceber(todos)
+        if (CaderninhoNoCelular.esperandoLink(todos).isNotEmpty()) Thread {
+            val novos = try { CaderninhoNoCelular.conferirLinks(this) } catch (e: Exception) { 0 }
+            if (novos > 0) runOnUiThread { if (etapa == Etapa.RECEBER) desenhar() }
+        }.start()
         val corpo = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(16), dp(8), dp(16), dp(24)) }
         corpo.addView(TextView(this).apply { text = "Falta receber"; textSize = 13f; setTextColor(apagado); setPadding(dp(4), dp(4), 0, 0) })
         corpo.addView(TextView(this).apply { text = Caderninho.totalAReceber(todos).brl(); textSize = 32f; setTextColor(Color.WHITE); setPadding(dp(4), 0, 0, dp(4)) })
@@ -1030,14 +1050,21 @@ class CaixaActivity : TelaBase() {
             })
             cartao.addView(TextView(this).apply { text = Caderninho.prazoEmTexto(f, agora) + " · " + (if (f.viaPix) "Pix" else "dinheiro"); textSize = 13f; setTextColor(corPrazo) })
             cartao.addView(TextView(this).apply { text = f.linhas.joinToString(", ") { "${it.quantidade}x ${it.nome}" }; textSize = 12.5f; setTextColor(apagado); maxLines = 2; setPadding(0, dp(2), 0, 0) })
+            if (f.pagoNoLink) cartao.addView(TextView(this).apply {
+                text = "✅ Pagamento recebido pelo link" + (if (f.linkForma.isNotBlank()) " (${f.linkForma})" else "") + ". Confirme para dar baixa e agradecer."
+                textSize = 13f; setTextColor(verde); setPadding(0, dp(8), 0, 0)
+            })
+            else if (f.temLink) cartao.addView(TextView(this).apply { text = "Link de pagamento enviado · aguardando o cliente pagar"; textSize = 12.5f; setTextColor(apagado); setPadding(0, dp(6), 0, 0) })
             cartao.addView(LinearLayout(this).apply {
                 setPadding(0, dp(10), 0, 0)
                 addView(botao(if (f.cobrancas > 0) "Cobrar de novo" else "Cobrar", false) { cobrarDeNovo(f) }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-                if (f.viaPix) addView(botao("QR Pix", false) { mostrarQrDoFiado(f) }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { marginStart = dp(8) })
+                if (f.temLink) addView(botao("Enviar link", false) { enviarZap(f.telefone, Caderninho.textoDoLink(Perfil.loja, f)) }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { marginStart = dp(8) })
+                else if (f.viaPix) addView(botao("QR Pix", false) { mostrarQrDoFiado(f) }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { marginStart = dp(8) })
             })
+            if (f.temLink) cartao.addView(pequeno("Mostrar o QR do link") { mostrarQrDoFiado(f) }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(8) })
             cartao.addView(botao("Recebi o comprovante", false) { enviarZap(f.telefone, Caderninho.textoDeComprovante(Perfil.loja, f)) },
                 LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(8) })
-            cartao.addView(botao("Pago", true) { confirmarPago(f) }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(8) })
+            cartao.addView(botao(if (f.pagoNoLink) "Confirmar pagamento" else "Pago", true) { confirmarPago(f) }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(8) })
             cartao.addView(pequeno("Editar ou excluir") { editarFiado(f) }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(10); gravity = Gravity.END })
             corpo.addView(cartao, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(10) })
         }
@@ -1110,6 +1137,8 @@ class CaixaActivity : TelaBase() {
      */
     private fun enviarCobranca(f: Caderninho.Fiado, lembrete: Boolean) {
         val agora = System.currentTimeMillis()
+        // com link de pagamento: mensagem de texto com o link (o WhatsApp mostra a prévia e a página do Pix/cartão abre direto)
+        if (f.temLink) return enviarZap(f.telefone, Caderninho.textoDaCobranca(Perfil.loja, f, null, lembrete, agora, link = f.linkUrl))
         val codigo = if (f.viaPix) primeiroPix(f.total) else null
         if (codigo == null) {
             if (f.viaPix) aviso("Sem chave Pix cadastrada: mandei só o texto. Cadastre a chave para a cobrança levar o QR Code.")
@@ -1129,16 +1158,16 @@ class CaixaActivity : TelaBase() {
 
     /** Mostra o QR na tela (para o cliente escanear na frente da pessoa) com o botão de mandar só a imagem. */
     private fun mostrarQrDoFiado(f: Caderninho.Fiado) {
-        val codigo = codigoPixDoFiado(f) ?: return
+        val codigo = (if (f.temLink) f.linkUrl else codigoPixDoFiado(f)) ?: return
         val lado = dp(280)
         val corpo = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER_HORIZONTAL; setPadding(dp(20), dp(8), dp(20), 0)
             addView(ImageView(this@CaixaActivity).apply { setImageBitmap(qrBitmap(codigo)) }, LinearLayout.LayoutParams(lado, lado))
             addView(TextView(this@CaixaActivity).apply { text = "${f.cliente} · ${f.total.brl()}"; textSize = 14f; setTextColor(Color.parseColor("#D7DAEE")); gravity = Gravity.CENTER; setPadding(0, dp(8), 0, dp(8)) })
             addView(botao("Mandar só o QR Code no WhatsApp", true) { enviarQr(f, codigo) })
-            addView(botao("Copiar código Pix", false) {
+            addView(botao(if (f.temLink) "Copiar link de pagamento" else "Copiar código Pix", false) {
                 (getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(ClipData.newPlainText("Pix", codigo))
-                Toast.makeText(this@CaixaActivity, "Código copiado.", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this@CaixaActivity, "Copiado.", Toast.LENGTH_SHORT).show()
             }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(8) })
         }
         CaixaBuilder(this).setTitle("QR Code Pix").setView(ScrollView(this).apply { addView(corpo) }).setNegativeButton("Fechar", null).show()
@@ -1228,6 +1257,7 @@ class CaixaActivity : TelaBase() {
         baixando = true
         Thread {
             var erro: String? = null
+            var aviso2: String? = null
             try {
                 val vendaLinhas = linhas.map { PdvVendas.Linha(it.produtoId, it.nome, it.quantidade, it.precoCentavos) }
                 if (f.interno) CatalogoInterno(this).editarVendaPendente(f.pedidoId, cliente, vendaLinhas)
@@ -1239,6 +1269,15 @@ class CaixaActivity : TelaBase() {
                     for ((pid, delta) in Caderninho.diferencaDeEstoque(antes, linhas)) frescos.firstOrNull { it.id == pid }?.let { try { loja.baixarEstoque(it, delta) } catch (e: Exception) { } }
                 }
                 if (!CaderninhoNoCelular.atualizar(this, f.id, cliente, telefone, venceEm, linhas)) throw Loja.ErroDaLoja("Não consegui salvar a correção.")
+                // o link antigo cobra o valor antigo: se o total mudou, cria um novo
+                if (f.temLink && linhas.sumOf { it.quantidade * it.precoCentavos } != f.total) {
+                    try {
+                        val dias = (((venceEm - System.currentTimeMillis()) / 86_400_000L).toInt() + 30).coerceIn(7, 90)
+                        val novo = Cobranca.criarLink(this, f.pedidoId, linhas.map { Loja.Item(it.nome, it.quantidade, it.precoCentavos, it.produtoId) }, "Caderninho", dias)
+                        CaderninhoNoCelular.definirLink(this, f.id, novo.ref, novo.url, novo.provedor)
+                        aviso2 = "O valor mudou, então criei um link novo. Mande de novo ao cliente (Enviar link)."
+                    } catch (e: Exception) { aviso2 = "Salvei, mas não consegui criar o link novo (${e.message}). O link antigo cobra o valor antigo." }
+                }
             } catch (e: Exception) { erro = e.message ?: "Não consegui salvar agora." }
             val atualizados = try { carregarProdutos() } catch (e: Exception) { produtos }
             runOnUiThread {
@@ -1246,7 +1285,7 @@ class CaixaActivity : TelaBase() {
                 produtos = atualizados
                 if (erro != null) return@runOnUiThread aviso(erro)
                 Diario.anotar(this, "loja", "Caderninho: corrigiu a venda de $cliente", "tela")
-                aviso("Correção salva.")
+                aviso(aviso2 ?: "Correção salva.")
                 desenhar()
             }
         }.start()

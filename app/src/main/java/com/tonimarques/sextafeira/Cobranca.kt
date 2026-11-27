@@ -153,7 +153,7 @@ object Cobranca {
     data class Link(val ref: String, val url: String, val provedor: String)
 
     /** Cria o link de pagamento da venda. Bloqueante; lança erro com a explicação. */
-    fun criarLink(ctx: Context, vendaId: Int, itens: List<Loja.Item>, cliente: String): Link {
+    fun criarLink(ctx: Context, vendaId: Int, itens: List<Loja.Item>, cliente: String, diasAberta: Int = DIAS_ABERTA): Link {
         require(itens.isNotEmpty()) { "A venda não tem itens." }
         val ref = "venus-" + UUID.randomUUID().toString().replace("-", "")
         return when (provedor(ctx)) {
@@ -170,7 +170,7 @@ object Cobranca {
                     .put("statement_descriptor", Perfil.loja.replace(Regex("[^A-Za-z0-9 ]"), "").take(13).ifBlank { "LOJA" })
                     .put("payment_methods", JSONObject().put("installments", Perfil.regras.cartaoParcelasMax.coerceIn(1, 12)))
                     .put("expires", true)
-                    .put("expiration_date_to", iso.format(System.currentTimeMillis() + DIAS_ABERTA * 86_400_000L))
+                    .put("expiration_date_to", iso.format(System.currentTimeMillis() + diasAberta * 86_400_000L))
                     .put("metadata", JSONObject().put("venda", vendaId).put("cliente", cliente.take(60)))
                 val (codigo, texto) = pedir("POST", "$MP/checkout/preferences", corpo, mp(ctx))
                 if (codigo == 401 || codigo == 403) throw IllegalStateException("O Mercado Pago recusou a chave. Confira em Menu → Cobrança.")

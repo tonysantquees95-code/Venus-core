@@ -119,8 +119,34 @@ class CaderninhoTest {
         assertFalse(c.contains("Pagamento confirmado")) // só avisa que chegou; confirmar é depois do "Pago"
     }
 
+    @Test fun cobrancaComLinkLevaOLinkEFalaQuantosDiasFaltam() {
+        val f = fiado().copy(linkUrl = "https://pague.exemplo/abc", linkRef = "venus-1", linkProvedor = "mercadopago")
+        assertTrue(f.temLink)
+        val inicial = Caderninho.textoDaCobranca("Desejo", f, null, false, hoje, link = f.linkUrl)
+        assertTrue(inicial.contains("https://pague.exemplo/abc")); assertTrue(inicial.contains("2x Pastel")); assertTrue(inicial.contains("03/12/2026"))
+        assertFalse(inicial.contains("copia e cola"))
+        val doisDias = fiado(venceEm = brasilia(2026, 11, 28, 9)).copy(linkUrl = "https://pague.exemplo/abc")
+        val lembrete = Caderninho.textoDaCobranca("Desejo", doisDias, null, true, hoje, link = doisDias.linkUrl)
+        assertTrue(lembrete.contains("falta 2 dias")); assertTrue(lembrete.contains("https://pague.exemplo/abc"))
+        val umDia = doisDias.copy(venceEm = brasilia(2026, 11, 27, 9))
+        assertTrue(Caderninho.textoDaCobranca("Desejo", umDia, null, true, hoje, link = "x").contains("falta 1 dia,").not() )
+        assertTrue(Caderninho.textoDaCobranca("Desejo", umDia, null, true, hoje, link = "x").contains("falta 1 dia"))
+        val perdi = Caderninho.textoDoLink("Desejo", f)
+        assertTrue(perdi.contains("R$ 20,00")); assertTrue(perdi.contains("https://pague.exemplo/abc")); assertTrue(perdi.startsWith("Oi, Maria!"))
+    }
+
+    @Test fun pagamentoNoLinkSoViraBaixaQuandoConfirmado() {
+        val f = fiado().copy(linkUrl = "u", linkRef = "r", linkPagoEm = hoje, linkForma = "Pix")
+        assertTrue(f.pagoNoLink); assertFalse(f.pago)
+        assertEquals("Pix", f.formaReal)
+        assertEquals(1, Caderninho.aReceber(listOf(f)).size)            // continua devendo até confirmar
+        val (_, pago) = Caderninho.pagar(listOf(f.copy(id = 1)), 1, hoje + 10)!!
+        assertTrue(pago.pago); assertFalse(pago.pagoNoLink)
+        assertEquals("Dinheiro", fiado(forma = Caderninho.FORMA_DINHEIRO).formaReal)
+    }
+
     @Test fun guardaELeDeVolta() {
-        val f = fiado().copy(id = 4, pagoEm = 5L, pedidoId = 12, interno = false, cobrancas = 2)
+        val f = fiado().copy(id = 4, pagoEm = 5L, pedidoId = 12, interno = false, cobrancas = 2, linkRef = "venus-9", linkUrl = "https://x/y", linkProvedor = "infinitepay", linkPagoEm = 7L, linkForma = "Pix")
         assertEquals(listOf(f), Caderninho.deJson(Caderninho.paraJson(listOf(f))))
         assertTrue(Caderninho.deJson("lixo").isEmpty())
         assertTrue(Caderninho.deJson(null).isEmpty())

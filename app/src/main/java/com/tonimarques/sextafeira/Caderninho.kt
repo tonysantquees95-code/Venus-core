@@ -25,12 +25,18 @@ internal object Caderninho {
     data class Fiado(
         val id: Int, val numero: String, val cliente: String, val telefone: String, val linhas: List<Linha>, val forma: String,
         val criado: Long, val venceEm: Long, val pagoEm: Long = 0L, val pedidoId: Int = 0, val interno: Boolean = true, val cobrancas: Int = 0,
+        /** Link de pagamento (Mercado Pago/InfinitePay): o cliente paga por ele e a Vênus descobre sozinha. Vazio = sem link (cobra pelo QR da chave Pix). */
+        val linkRef: String = "", val linkUrl: String = "", val linkProvedor: String = "",
+        /** Quando a Vênus viu o pagamento no link (0 = ainda não) e por qual forma; a baixa só sai quando a pessoa confirma. */
+        val linkPagoEm: Long = 0L, val linkForma: String = "",
     ) {
         val total: Int get() = linhas.sumOf { it.quantidade * it.precoCentavos }
         val pago: Boolean get() = pagoEm > 0L
         val viaPix: Boolean get() = forma == FORMA_PIX
+        val temLink: Boolean get() = linkUrl.isNotBlank()
+        val pagoNoLink: Boolean get() = linkPagoEm > 0L && !pago
         /** Como a venda fica registrada quando o dinheiro entra. */
-        val formaReal: String get() = if (viaPix) "Pix" else "Dinheiro"
+        val formaReal: String get() = linkForma.ifBlank { if (viaPix) "Pix" else "Dinheiro" }
     }
 
     enum class Situacao { ABERTO, VENCE_HOJE, ATRASADO, PAGO }
@@ -138,7 +144,7 @@ internal object Caderninho {
     private fun saudacao(cliente: String): String { val n = primeiroNome(cliente); return if (n.isNotBlank()) "Oi, $n! " else "Oi! " }
 
     /** A cobrança. [lembrete] = true na segunda vez em diante ("Cobrar de novo"). [pix] = o Pix copia e cola (só vai se a forma é Pix). */
-    fun textoDaCobranca(loja: String, f: Fiado, pix: String?, lembrete: Boolean, agora: Long, compacto: Boolean = false): String {
+    fun textoDaCobranca(loja: String, f: Fiado, pix: String?, lembrete: Boolean, agora: Long, compacto: Boolean = false, link: String? = null): String {
         val b = StringBuilder()
         b.append(saudacao(f.cliente))
         val nomeLoja = loja.ifBlank { "nossa loja" }
@@ -146,7 +152,7 @@ internal object Caderninho {
             val quando = when (situacao(f, agora)) {
                 Situacao.ATRASADO -> "venceu em ${dataBR(f.venceEm)}"
                 Situacao.VENCE_HOJE -> "vence hoje"
-                else -> "vence em ${dataBR(f.venceEm)}"
+                else -> { val d = diasEntre(diaDe(agora), diaDe(f.venceEm)); "vence em ${dataBR(f.venceEm)}, falta $d dia" + if (d == 1) "" else "s" }
             }
             b.append("Passando só para lembrar do combinado com a *").append(nomeLoja).append("*: ").append(Documentos.dinheiro(f.total)).append(" ($quando).\n")
         } else if (compacto) {
@@ -157,10 +163,15 @@ internal object Caderninho {
             b.append("\n*Total: ").append(Documentos.dinheiro(f.total)).append("*\n")
             b.append("Combinado para pagar até *").append(dataBR(f.venceEm)).append("*").append(if (f.viaPix) " no Pix." else " em dinheiro.").append("\n")
         }
-        if (f.viaPix && !pix.isNullOrBlank()) b.append("\nPix copia e cola:\n").append(pix).append("\n")
+        if (!link.isNullOrBlank()) b.append("\nPague pelo link (Pix ou cartão, a confirmação é na hora):\n").append(link).append("\n")
+        else if (f.viaPix && !pix.isNullOrBlank()) b.append("\nPix copia e cola:\n").append(pix).append("\n")
         b.append("\nQualquer dúvida é só chamar. Obrigado! 💖")
         return b.toString()
     }
+
+    /** "Perdi o link": só o link de novo, curto. */
+    fun textoDoLink(loja: String, f: Fiado): String =
+        saudacao(f.cliente) + "Aqui está o link para pagar os " + Documentos.dinheiro(f.total) + " da sua compra na *" + loja.ifBlank { "nossa loja" } + "* (Pix ou cartão):\n" + f.linkUrl + "\n\nQualquer coisa é só chamar 💖"
 
     /** Quando o pagamento é marcado como recebido: confirmação caprichada (✅, valor, o que comprou) e agradecimento. */
     fun textoDeAgradecimento(loja: String, f: Fiado): String {
@@ -179,7 +190,7 @@ internal object Caderninho {
         val a = JSONArray()
         for (f in lista) a.put(
             JSONObject().put("id", f.id).put("num", f.numero).put("cli", f.cliente).put("tel", f.telefone).put("forma", f.forma)
-                .put("criado", f.criado).put("vence", f.venceEm).put("pago", f.pagoEm).put("ped", f.pedidoId).put("int", f.interno).put("cob", f.cobrancas)
+                .put("criado", f.criado).put("vence", f.venceEm).put("pago", f.pagoEm).put("ped", f.pedidoId).put("int", f.interno).put("cob", f.cobrancas).put("lr", f.linkRef).put("lu", f.linkUrl).put("lp", f.linkProvedor).put("lpe", f.linkPagoEm).put("lf", f.linkForma)
                 .put("itens", JSONArray().also { l -> f.linhas.forEach { l.put(JSONObject().put("n", it.nome).put("q", it.quantidade).put("c", it.precoCentavos).put("p", it.produtoId)) } }),
         )
         return a.toString()
@@ -193,6 +204,7 @@ internal object Caderninho {
                 o.optInt("id"), o.optString("num"), o.optString("cli"), o.optString("tel"),
                 (0 until l.length()).mapNotNull { l.optJSONObject(it) }.map { Linha(it.optString("n"), it.optInt("q"), it.optInt("c"), it.optInt("p")) },
                 o.optString("forma"), o.optLong("criado"), o.optLong("vence"), o.optLong("pago"), o.optInt("ped"), o.optBoolean("int", true), o.optInt("cob"),
+                o.optString("lr"), o.optString("lu"), o.optString("lp"), o.optLong("lpe"), o.optString("lf"),
             )
         }
     } catch (e: Exception) { emptyList() }
