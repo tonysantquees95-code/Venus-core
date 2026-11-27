@@ -199,6 +199,16 @@
             </intent-filter>
         </receiver>
 
+        <!-- Caderninho do Caixa: aviso no dia em que o cliente combinou de pagar -->
+        <receiver
+            android:name=".AvisoDoCaderninho"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
+
         <!-- Estudo diário da Vênus (memória vetorial) -->
         <service
             android:name=".EstudoDiario"

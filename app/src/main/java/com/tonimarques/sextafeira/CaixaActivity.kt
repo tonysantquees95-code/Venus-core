@@ -11,6 +11,9 @@ import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.drawable.GradientDrawable
 import android.net.Uri
+import android.provider.ContactsContract
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import android.text.Editable
 import android.text.InputType
@@ -39,10 +42,10 @@ private fun Int.brl() = Loja.dinheiro(this)
  * baixa o estoque (no site, se a loja tem site) e, com o Vyntem ligado, a venda vai para o caixa dele. O CPF do cliente nunca é guardado: só vai no recibo.
  */
 class CaixaActivity : TelaBase() {
-    private enum class Etapa { LOJA, PRODUTOS, PAGAMENTO, RECIBO }
+    private enum class Etapa { LOJA, PRODUTOS, PAGAMENTO, RECIBO, RECEBER }
 
     /** A venda que acabou de ser fechada (para o recibo). */
-    private class Concluida(val numero: String, val linhas: List<Pdv.LinhaDoRecibo>, val forma: String, val nota: String, val quando: Long) {
+    private class Concluida(val numero: String, val linhas: List<Pdv.LinhaDoRecibo>, val forma: String, val nota: String, val quando: Long, val fiado: Caderninho.Fiado? = null) {
         val total: Int get() = linhas.sumOf { it.quantidade * it.precoCentavos }
     }
 
@@ -53,6 +56,12 @@ class CaixaActivity : TelaBase() {
     private var filtro = ""
     private var concluida: Concluida? = null
     private var gravando = false
+    private var abrirReceber = false
+    private var baixando = false
+    /** Dados que a pessoa digitou ao fechar no caderninho. */
+    private class DadosDoFiado(val cliente: String, val telefone: String, val venceEm: Long)
+    private var campoNome: EditText? = null
+    private var campoTel: EditText? = null
     private val prefs by lazy { getSharedPreferences("config", Context.MODE_PRIVATE) }
     private val verde = Color.parseColor("#35D07F")
     private val alerta = Color.parseColor("#FFB454")
@@ -64,6 +73,7 @@ class CaixaActivity : TelaBase() {
         super.onCreate(savedInstanceState)
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) // não apaga a tela enquanto o caixa está aberto
         Perfil.carregar(this)
+        abrirReceber = intent?.getBooleanExtra("receber", false) == true
         carregando("Abrindo o caixa…")
         Thread {
             // a conta pode ter até 3 lojas: se tiver mais de uma, a primeira etapa é escolher onde está vendendo
@@ -86,12 +96,13 @@ class CaixaActivity : TelaBase() {
             Etapa.LOJA -> finish()
             Etapa.PRODUTOS -> sair()
             Etapa.PAGAMENTO -> { etapa = Etapa.PRODUTOS; desenhar() }
-            Etapa.RECIBO -> novaVenda(perguntar = true)
+            Etapa.RECIBO -> novaVenda(perguntar = concluida?.fiado == null)
+            Etapa.RECEBER -> { etapa = if (concluida != null) Etapa.RECIBO else Etapa.PRODUTOS; desenhar() }
         }
     }
 
     private fun sair() {
-        if (carrinho.vazio() || etapa == Etapa.RECIBO || etapa == Etapa.LOJA) return finish()
+        if (carrinho.vazio() || etapa == Etapa.RECIBO || etapa == Etapa.LOJA || etapa == Etapa.RECEBER) return finish()
         CaixaBuilder(this).setTitle("Sair do caixa?").setMessage("Tem uma venda em andamento. Se sair, ela é descartada.")
             .setPositiveButton("Sair") { _, _ -> finish() }.setNegativeButton("Continuar vendendo", null).show()
     }
@@ -123,7 +134,7 @@ class CaixaActivity : TelaBase() {
                     if (produtos.isEmpty()) {
                         aviso("Cadastre produtos com preço primeiro.")
                         if (variasLojas) { etapa = Etapa.LOJA; desenhar() } else finish()
-                    } else { etapa = Etapa.PRODUTOS; desenhar() }
+                    } else { etapa = if (abrirReceber) Etapa.RECEBER else Etapa.PRODUTOS; abrirReceber = false; desenhar() }
                 }
             }
         }.start()
@@ -152,6 +163,7 @@ class CaixaActivity : TelaBase() {
         Etapa.PRODUTOS -> if (variasLojas) 2 else 1
         Etapa.PAGAMENTO -> if (variasLojas) 3 else 2
         Etapa.RECIBO -> if (variasLojas) 4 else 3
+        Etapa.RECEBER -> if (variasLojas) 2 else 1
     }
 
     /** A moldura comum de toda etapa: barra de cima (voltar, título, sair), marcador de etapas, o conteúdo e o rodapé fixo. */
@@ -190,6 +202,7 @@ class CaixaActivity : TelaBase() {
             Etapa.PRODUTOS -> telaProdutos()
             Etapa.PAGAMENTO -> telaPagamento()
             Etapa.RECIBO -> telaRecibo()
+            Etapa.RECEBER -> telaReceber()
         }
     }
 
@@ -249,6 +262,13 @@ class CaixaActivity : TelaBase() {
             addView(botao("Ler etiqueta (QR)", true) { lerEtiqueta() }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
             addView(botao("Etiquetas", false) { gerarEtiquetas() }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { marginStart = dp(8) })
         }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(10) })
+        val abertos = Caderninho.aReceber(CaderninhoNoCelular.ler(this))
+        if (abertos.isNotEmpty()) {
+            val atras = Caderninho.atrasados(CaderninhoNoCelular.ler(this), System.currentTimeMillis()).size
+            corpo.addView(botao("Caderninho · falta receber ${Caderninho.totalAReceber(CaderninhoNoCelular.ler(this)).brl()}" + if (atras > 0) " · $atras atrasado" + (if (atras > 1) "s" else "") else "", false) {
+                etapa = Etapa.RECEBER; desenhar()
+            }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(10) })
+        }
         corpo.addView(cabecalhoDeSecao("Produtos · toque para pôr no carrinho"))
         lista = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         corpo.addView(lista)
@@ -378,6 +398,12 @@ class CaixaActivity : TelaBase() {
             corpo.addView(botao("Cartão por aproximação (celular)", false) { cobrarAproximacao() },
                 LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(10) })
         }
+        corpo.addView(cabecalhoDeSecao("Caderninho · o cliente paga depois"))
+        corpo.addView(LinearLayout(this).apply {
+            addView(botao("Caderninho Pix", false) { pedirCaderninho(Caderninho.FORMA_PIX) }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+            addView(botao("Caderninho dinheiro", false) { pedirCaderninho(Caderninho.FORMA_DINHEIRO) }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { marginStart = dp(8) })
+        }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+        corpo.addView(TextView(this).apply { text = "No caderninho o estoque baixa na hora, mas a venda só entra no seu caixa (e no Vyntem) quando você marcar “Pago”. Preço cheio, sem o desconto do Pix."; textSize = 12.5f; setTextColor(apagado); setPadding(dp(4), dp(8), 0, 0) })
         corpo.addView(TextView(this).apply { text = "Só depois de escolher a forma e confirmar o recebimento a venda é registrada e o estoque baixa."; textSize = 12.5f; setTextColor(apagado); setPadding(dp(4), dp(12), 0, 0) })
         moldura("Pagamento", corpo, null) { etapa = Etapa.PRODUTOS; desenhar() }
     }
@@ -504,6 +530,7 @@ class CaixaActivity : TelaBase() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
+        if (intent.getBooleanExtra("receber", false) && produtos.isNotEmpty() && etapa != Etapa.PAGAMENTO && etapa != Etapa.LOJA) { etapa = Etapa.RECEBER; desenhar(); return }
         val u = intent.data ?: return
         if (u.scheme != "venus-tap") return
         when (val r = Pdv.resultadoDoTap({ u.getQueryParameter(it) }, tapPendente)) {
@@ -683,7 +710,7 @@ class CaixaActivity : TelaBase() {
     }
 
     /** Registra a venda atual, zera o carrinho e vai para o recibo. Loja sem site: registro do catálogo. Loja com site: baixa o estoque no site e guarda a venda aqui. */
-    private fun fechar(forma: String, nota: String, comDescontoPix: Boolean = forma == "Pix") {
+    private fun fechar(forma: String, nota: String, comDescontoPix: Boolean = forma == "Pix", fiado: DadosDoFiado? = null) {
         if (gravando) return
         // no Pix vale o preço com o desconto da loja (promoção fica de fora); nas outras formas, o preço cheio de hoje
         val itens = if (comDescontoPix) Pdv.itensNoPix(carrinho, produtos, Perfil.regras) else Pdv.itens(carrinho, produtos)
@@ -696,10 +723,13 @@ class CaixaActivity : TelaBase() {
             var numero = ""
             var falha: String? = null
             var avisoExtra: String? = null
+            var pedidoId = 0
+            var interno = true
             try {
                 if (loja.ehInterno) {
-                    val pedido = CatalogoInterno(this).registrarVenda("Cliente do balcão", itens, forma, "Em mãos ou retirada")
+                    val pedido = CatalogoInterno(this).registrarVenda(fiado?.cliente ?: "Cliente do balcão", itens, forma, "Em mãos ou retirada", aguardandoPagamento = fiado != null)
                     numero = "B" + pedido.id
+                    pedidoId = pedido.id
                 } else {
                     // estoque lido na hora (outro aparelho ou o site podem ter vendido nesse meio tempo)
                     val frescos = loja.produtos()
@@ -707,8 +737,9 @@ class CaixaActivity : TelaBase() {
                     for ((p, q, _) in itens) {
                         try { loja.baixarEstoque(frescos.firstOrNull { it.id == p.id } ?: p, q) } catch (e: Exception) { falhas += p.nome }
                     }
-                    val venda = PdvVendas.registrar(this, itens.map { (p, q, preco) -> PdvVendas.Linha(p.id, p.nome, q, preco ?: p.precoCentavos ?: 0) }, forma)
+                    val venda = PdvVendas.registrar(this, itens.map { (p, q, preco) -> PdvVendas.Linha(p.id, p.nome, q, preco ?: p.precoCentavos ?: 0) }, forma, pendente = fiado != null)
                     numero = "B" + PdvVendas.numeroAmigavel(venda.id)
+                    pedidoId = venda.id; interno = false
                     if (falhas.isNotEmpty()) avisoExtra = "Venda registrada, mas não consegui baixar o estoque de ${falhas.joinToString(", ")} no site. Ajuste lá."
                 }
             } catch (e: Exception) {
@@ -724,20 +755,29 @@ class CaixaActivity : TelaBase() {
                 Diario.anotar(this, "loja", "Caixa: ${itens.joinToString(", ") { "${it.second}x ${it.first.nome}" }} (${total.brl()}) no $forma", "tela")
                 if (CaixaDoVyntem.ligado(this)) Thread { try { CaixaDoVyntem.conferir(applicationContext) } catch (e: Exception) { } }.start()
                 val extra = (extraFinal?.let { " $it" } ?: "") + if (sem.isNotEmpty()) " Atenção: o estoque de ${sem.joinToString(", ")} ficou zerado." else ""
-                concluida = Concluida(numero, itens.map { (p, q, preco) -> Pdv.LinhaDoRecibo(p.nome, q, preco ?: p.precoCentavos ?: 0) }, forma, nota + extra, quando)
+                val anotado = fiado?.let {
+                    CaderninhoNoCelular.anotar(this, Caderninho.Fiado(
+                        0, numero, it.cliente, it.telefone, itens.map { (p, q, preco) -> Caderninho.Linha(p.nome, q, preco ?: p.precoCentavos ?: 0) },
+                        forma, quando, it.venceEm, 0L, pedidoId, interno,
+                    ))
+                }
+                concluida = Concluida(numero, itens.map { (p, q, preco) -> Pdv.LinhaDoRecibo(p.nome, q, preco ?: p.precoCentavos ?: 0) }, forma, nota + extra, quando, anotado)
                 carrinho = Pdv.Carrinho()
                 produtos = atualizados
                 etapa = Etapa.RECIBO
                 desenhar()
+                if (anotado != null) pedirPermissaoDeAviso()
             }
         }.start()
     }
 
     // ------------------------------------------------------------------ etapa 4: recibo (CPF e WhatsApp, os dois opcionais)
     private var semCpf = false
+    private val PEDIDO_CONTATO = 4710
 
     private fun telaRecibo() {
         val v = concluida ?: return novaVenda(perguntar = false)
+        v.fiado?.let { return telaReciboDoFiado(v, it) }
         val corpo = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(16), dp(8), dp(16), dp(24)) }
         corpo.addView(LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER_HORIZONTAL; setPadding(dp(14), dp(18), dp(14), dp(18)); background = fundo(Color.argb(150, 24, 19, 44), 20, verde)
@@ -831,6 +871,208 @@ class CaixaActivity : TelaBase() {
         if (!perguntar) return ir()
         CaixaBuilder(this).setTitle("Começar outra venda?").setMessage("O recibo desta venda some da tela. Se o cliente ainda quer o recibo, envie antes.")
             .setPositiveButton("Nova venda") { _, _ -> ir() }.setNegativeButton("Voltar ao recibo", null).show()
+    }
+
+    // ------------------------------------------------------------------ caderninho (fiado)
+    private fun primeiroPix(total: Int): String? {
+        val chave = DadosDaLoja.guardado(prefs, DadosDaLoja.PREF_PIX)
+        if (QrLocal.chavePix(chave) == null) return null
+        return try { QrLocal.pixCopiaECola(chave, Perfil.loja, Perfil.cidade, total.toLong()) } catch (e: Exception) { null }
+    }
+
+    /** Abre o WhatsApp Business se houver; senão o WhatsApp comum; senão o que o celular tiver para o link. Sem número, a pessoa escolhe o contato lá. */
+    private fun enviarZap(telefone55: String?, texto: String) {
+        val uri = Uri.parse(Pdv.linkWhatsApp(telefone55?.ifBlank { null }, texto))
+        for (pacote in listOf("com.whatsapp.w4b", "com.whatsapp")) {
+            try { startActivity(Intent(Intent.ACTION_VIEW, uri).setPackage(pacote)); return } catch (e: ActivityNotFoundException) { }
+        }
+        try { startActivity(Intent(Intent.ACTION_VIEW, uri)) } catch (e: ActivityNotFoundException) { aviso("Não achei o WhatsApp neste celular.") }
+    }
+
+    private fun campoDeTexto(dica: String, tipo: Int) = EditText(this).apply {
+        hint = dica; setHintTextColor(apagado); setSingleLine(); textSize = 15f; setTextColor(Color.WHITE); inputType = tipo
+        setPadding(dp(14), dp(12), dp(14), dp(12)); background = fundo(Color.parseColor("#120E22"), 14)
+    }
+
+    /** A janelinha do caderninho: quem é o cliente (contato ou número digitado) e até quando ele combinou de pagar. */
+    private fun pedirCaderninho(forma: String) {
+        if (vazio()) return
+        val agora = System.currentTimeMillis()
+        val total = Pdv.total(carrinho, produtos)
+        var escolha = 7
+        val nome = campoDeTexto("Nome do cliente", InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_WORDS)
+        val tel = campoDeTexto("WhatsApp com DDD (ou escolha dos contatos)", InputType.TYPE_CLASS_PHONE)
+        val data = campoDeTexto("dd/mm/aaaa", InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_VARIATION_NORMAL)
+        campoNome = nome; campoTel = tel
+        val rotulos = linkedMapOf(7 to "7 dias", 15 to "15 dias", 30 to "30 dias", -1 to "Outra data")
+        val chips = mutableMapOf<Int, TextView>()
+        val vencimento = TextView(this).apply { textSize = 12.5f; setTextColor(apagado); setPadding(dp(4), dp(8), 0, 0) }
+        fun marcar() {
+            for ((valor, v) in chips) {
+                val sel = valor == escolha
+                v.text = (if (sel) "✓ " else "") + rotulos[valor]
+                v.setTextColor(if (sel) Color.WHITE else destaque)
+                v.background = GradientDrawable().apply { cornerRadius = dp(22).toFloat(); if (sel) setColor(destaque) else setStroke(dp(1), destaque) }
+            }
+            data.visibility = if (escolha == -1) View.VISIBLE else View.GONE
+            vencimento.text = if (escolha == -1) "Digite o dia combinado para o pagamento." else "Vence em ${Caderninho.dataBR(Caderninho.vencimentoEmDias(agora, escolha))}. A Vênus te avisa nesse dia."
+        }
+        fun chip(valor: Int) = TextView(this).apply {
+            textSize = 14f; gravity = Gravity.CENTER; setPadding(dp(10), dp(11), dp(10), dp(11)); setOnClickListener { escolha = valor; marcar() }
+        }.also { chips[valor] = it }
+        val corpo = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(20), dp(6), dp(20), 0) }
+        corpo.addView(TextView(this).apply { text = "${total.brl()} · $forma"; textSize = 15f; setTextColor(Color.WHITE); setPadding(0, 0, 0, dp(10)) })
+        corpo.addView(nome, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+        corpo.addView(tel, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(10) })
+        corpo.addView(pequeno("Escolher dos contatos") {
+            try { startActivityForResult(Intent(Intent.ACTION_PICK, ContactsContract.CommonDataKinds.Phone.CONTENT_URI), PEDIDO_CONTATO) }
+            catch (e: ActivityNotFoundException) { aviso("Não achei a lista de contatos. Digite o número.") }
+        }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(10) })
+        corpo.addView(cabecalhoDeSecao("Até quando ele paga?"))
+        corpo.addView(LinearLayout(this).apply {
+            for ((i, valor) in listOf(7, 15, 30).withIndex()) addView(chip(valor), LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { if (i > 0) marginStart = dp(8) })
+        })
+        corpo.addView(chip(-1), LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(8) })
+        corpo.addView(data, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(8) })
+        corpo.addView(vencimento)
+        marcar()
+        val d = CaixaBuilder(this).setTitle(forma).setView(ScrollView(this).apply { addView(corpo) })
+            .setPositiveButton("Fechar venda", null).setNegativeButton("Cancelar", null).show()
+        d.setOnDismissListener { campoNome = null; campoTel = null }
+        d.getButton(android.app.AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+            val n = nome.text.toString().trim()
+            if (n.isBlank()) return@setOnClickListener aviso("Escreva o nome do cliente.")
+            val bruto = tel.text.toString().trim()
+            val tel55 = if (bruto.isBlank()) "" else (Pdv.telefoneParaWhatsApp(bruto) ?: return@setOnClickListener aviso("O WhatsApp não parece certo. Use DDD + número, ex.: (51) 99999-0000."))
+            val venceEm = if (escolha == -1) (Caderninho.dataDeTexto(data.text.toString(), agora) ?: return@setOnClickListener aviso("Essa data não vale. Use dd/mm/aaaa, de hoje em diante.")) else Caderninho.vencimentoEmDias(agora, escolha)
+            d.dismiss()
+            fechar(forma, "", false, DadosDoFiado(n, tel55, venceEm))
+        }
+    }
+
+    @Deprecated("Deprecated in Java")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode != PEDIDO_CONTATO || resultCode != RESULT_OK) return
+        val uri = data?.data ?: return
+        try {
+            contentResolver.query(uri, arrayOf(ContactsContract.CommonDataKinds.Phone.NUMBER, ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME), null, null, null)?.use { c ->
+                if (!c.moveToFirst()) return
+                campoTel?.setText(c.getString(0).orEmpty())
+                if (campoNome?.text.isNullOrBlank()) campoNome?.setText(c.getString(1).orEmpty())
+            }
+        } catch (e: Exception) { aviso("Não consegui ler esse contato. Digite o número.") }
+    }
+
+    /** Uma vez só, explica por que precisa avisar e pede a permissão de notificação (Android 13+). */
+    private fun pedirPermissaoDeAviso() {
+        if (Build.VERSION.SDK_INT < 33 || checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) return
+        if (prefs.getBoolean("caderninho_pediu_aviso", false)) return
+        prefs.edit().putBoolean("caderninho_pediu_aviso", true).apply()
+        CaixaBuilder(this).setTitle("Avisar no dia do pagamento?")
+            .setMessage("Para te lembrar no dia em que o cliente combinou de pagar, a Vênus precisa de permissão para mostrar notificações. Ela só usa isso para o caderninho.")
+            .setPositiveButton("Permitir") { _, _ -> requestPermissions(arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), 4711) }
+            .setNegativeButton("Agora não", null).show()
+    }
+
+    private fun telaReciboDoFiado(v: Concluida, f: Caderninho.Fiado) {
+        val corpo = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(16), dp(8), dp(16), dp(24)) }
+        corpo.addView(LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER_HORIZONTAL; setPadding(dp(14), dp(18), dp(14), dp(18)); background = fundo(Color.argb(150, 24, 19, 44), 20, verde)
+            addView(TextView(this@CaixaActivity).apply { text = "✓ Anotado no caderninho"; textSize = 18f; setTextColor(verde) })
+            addView(TextView(this@CaixaActivity).apply { text = v.total.brl(); textSize = 32f; setTextColor(Color.WHITE) })
+            addView(TextView(this@CaixaActivity).apply { text = "Compra nº ${v.numero} · ${v.forma}"; textSize = 13f; setTextColor(apagado) })
+            addView(TextView(this@CaixaActivity).apply { text = "${f.cliente} paga até ${Caderninho.dataBR(f.venceEm)}"; textSize = 14.5f; setTextColor(Color.parseColor("#D7DAEE")); gravity = Gravity.CENTER; setPadding(0, dp(6), 0, 0) })
+        })
+        corpo.addView(cabecalhoDeSecao("Mandar a cobrança"))
+        val pix = if (f.viaPix) primeiroPix(f.total) else null
+        corpo.addView(botao("Enviar cobrança no WhatsApp", true) {
+            enviarZap(f.telefone, Caderninho.textoDaCobranca(Perfil.loja, f, pix, false, System.currentTimeMillis()))
+        }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+        val dica = buildString {
+            append(if (f.telefone.isBlank()) "Sem número: o WhatsApp vai pedir para você escolher o contato. " else "Abre o WhatsApp Business (ou o comum) já com a mensagem pronta. ")
+            if (f.viaPix && pix == null) append("Cadastre a chave Pix da loja para a cobrança levar o Pix copia e cola.")
+        }
+        corpo.addView(TextView(this).apply { text = dica; textSize = 12.5f; setTextColor(apagado); setPadding(dp(4), dp(8), 0, 0) })
+        corpo.addView(botao("Ver o caderninho", false) { etapa = Etapa.RECEBER; desenhar() }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(12) })
+        val rodape = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL; setPadding(dp(14), dp(10), dp(14), dp(12))
+            addView(botao("Nova venda", true) { novaVenda(perguntar = false) })
+        }
+        moldura("Caderninho", corpo, rodape, null)
+    }
+
+    // ------------------------------------------------------------------ A receber: a lista do caderninho
+    private fun telaReceber() {
+        val agora = System.currentTimeMillis()
+        val todos = CaderninhoNoCelular.ler(this)
+        val abertos = Caderninho.aReceber(todos)
+        val corpo = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(16), dp(8), dp(16), dp(24)) }
+        corpo.addView(TextView(this).apply { text = "Falta receber"; textSize = 13f; setTextColor(apagado); setPadding(dp(4), dp(4), 0, 0) })
+        corpo.addView(TextView(this).apply { text = Caderninho.totalAReceber(todos).brl(); textSize = 32f; setTextColor(Color.WHITE); setPadding(dp(4), 0, 0, dp(4)) })
+        corpo.addView(TextView(this).apply {
+            text = if (abertos.isEmpty()) "Ninguém deve nada agora." else "${abertos.size} cliente" + (if (abertos.size > 1) "s" else "") + " no caderninho"
+            textSize = 13f; setTextColor(apagado); setPadding(dp(4), 0, 0, dp(8))
+        })
+        for (f in abertos) {
+            val sit = Caderninho.situacao(f, agora)
+            val corPrazo = when (sit) { Caderninho.Situacao.ATRASADO -> Color.parseColor("#FF6B6B"); Caderninho.Situacao.VENCE_HOJE -> alerta; else -> apagado }
+            val cartao = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(14), dp(12), dp(14), dp(12)); background = fundo(Color.argb(150, 24, 19, 44), 18, if (sit == Caderninho.Situacao.PAGO) linhaCor else corPrazo.takeIf { sit != Caderninho.Situacao.ABERTO } ?: linhaCor) }
+            cartao.addView(LinearLayout(this).apply {
+                gravity = Gravity.CENTER_VERTICAL
+                addView(TextView(this@CaixaActivity).apply { text = f.cliente; textSize = 16f; setTextColor(Color.WHITE); maxLines = 1 }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+                addView(TextView(this@CaixaActivity).apply { text = f.total.brl(); textSize = 18f; setTextColor(Color.WHITE) })
+            })
+            cartao.addView(TextView(this).apply { text = Caderninho.prazoEmTexto(f, agora) + " · " + (if (f.viaPix) "Pix" else "dinheiro"); textSize = 13f; setTextColor(corPrazo) })
+            cartao.addView(TextView(this).apply { text = f.linhas.joinToString(", ") { "${it.quantidade}x ${it.nome}" }; textSize = 12.5f; setTextColor(apagado); maxLines = 2; setPadding(0, dp(2), 0, 0) })
+            cartao.addView(LinearLayout(this).apply {
+                setPadding(0, dp(10), 0, 0)
+                addView(botao(if (f.cobrancas > 0) "Cobrar de novo" else "Cobrar", false) { cobrarDeNovo(f) }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+                addView(botao("Pago", true) { confirmarPago(f) }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { marginStart = dp(8) })
+            })
+            corpo.addView(cartao, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(10) })
+        }
+        val voltar = { etapa = if (concluida != null) Etapa.RECIBO else Etapa.PRODUTOS; desenhar() }
+        moldura("A receber", corpo, null, voltar)
+    }
+
+    private fun cobrarDeNovo(f: Caderninho.Fiado) {
+        val agora = System.currentTimeMillis()
+        enviarZap(f.telefone, Caderninho.textoDaCobranca(Perfil.loja, f, if (f.viaPix) primeiroPix(f.total) else null, true, agora))
+        CaderninhoNoCelular.gravar(this, Caderninho.cobrou(CaderninhoNoCelular.ler(this), f.id))
+    }
+
+    private fun confirmarPago(f: Caderninho.Fiado) {
+        CaixaBuilder(this).setTitle("Marcar como pago?")
+            .setMessage("${f.cliente} pagou ${f.total.brl()}. A venda entra no seu caixa agora.")
+            .setPositiveButton("Sim, recebi") { _, _ -> darBaixa(f) }.setNegativeButton("Ainda não", null).show()
+    }
+
+    /** O dinheiro entrou: a venda vira paga (e vai para o Vyntem uma vez só) e a Vênus oferece o "recebi, obrigado". */
+    private fun darBaixa(f: Caderninho.Fiado) {
+        if (baixando) return
+        baixando = true
+        Thread {
+            var erro: String? = null
+            var pago: Caderninho.Fiado? = null
+            try {
+                // primeiro a venda (se já estava paga, nada muda), depois o caderninho: se falhar no meio, dá para tentar de novo sem contar duas vezes
+                if (f.interno) CatalogoInterno(this).marcarPaga(f.pedidoId, f.formaReal) else PdvVendas.marcarPaga(this, f.pedidoId)
+                pago = CaderninhoNoCelular.darBaixa(this, f.id)
+            } catch (e: Exception) { erro = "Não consegui dar baixa agora: ${e.message}" }
+            if (pago != null && CaixaDoVyntem.ligado(this)) try { CaixaDoVyntem.conferir(applicationContext) } catch (e: Exception) { }
+            runOnUiThread {
+                baixando = false
+                if (erro != null) return@runOnUiThread aviso(erro)
+                Diario.anotar(this, "loja", "Caderninho: ${f.cliente} pagou ${f.total.brl()}", "tela")
+                desenhar()
+                val quem = pago ?: return@runOnUiThread
+                CaixaBuilder(this).setTitle("Pago ✓")
+                    .setMessage("${quem.total.brl()} de ${quem.cliente} entrou no caixa. Quer mandar um “recebi, obrigado”?")
+                    .setPositiveButton("Mandar agradecimento") { _, _ -> enviarZap(quem.telefone, Caderninho.textoDeAgradecimento(Perfil.loja, quem)) }
+                    .setNegativeButton("Agora não", null).show()
+            }
+        }.start()
     }
 
     // ------------------------------------------------------------------ etiquetas QR
