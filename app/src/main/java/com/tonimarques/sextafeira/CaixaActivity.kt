@@ -991,10 +991,9 @@ class CaixaActivity : TelaBase() {
         })
         corpo.addView(cabecalhoDeSecao("Mandar a cobrança"))
         val pix = if (f.viaPix) primeiroPix(f.total) else null
-        corpo.addView(botao("Enviar cobrança no WhatsApp", true) {
-            enviarZap(f.telefone, Caderninho.textoDaCobranca(Perfil.loja, f, pix, false, System.currentTimeMillis()))
-        }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+        corpo.addView(botao(if (f.viaPix) "Enviar cobrança com QR Code" else "Enviar cobrança no WhatsApp", true) { enviarCobranca(f, false) }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
         val dica = buildString {
+            append(if (f.viaPix) "Vai uma mensagem só: a imagem do QR Code com o texto e o Pix copia e cola embaixo. " else "")
             append(if (f.telefone.isBlank()) "Sem número: o WhatsApp vai pedir para você escolher o contato. " else "Abre o WhatsApp Business (ou o comum) já com a mensagem pronta. ")
             if (f.viaPix && pix == null) append("Cadastre a chave Pix da loja para a cobrança levar o Pix copia e cola.")
         }
@@ -1046,7 +1045,7 @@ class CaixaActivity : TelaBase() {
 
     private fun cobrarDeNovo(f: Caderninho.Fiado) {
         val agora = System.currentTimeMillis()
-        enviarZap(f.telefone, Caderninho.textoDaCobranca(Perfil.loja, f, if (f.viaPix) primeiroPix(f.total) else null, true, agora))
+        enviarCobranca(f, true)
         CaderninhoNoCelular.gravar(this, Caderninho.cobrou(CaderninhoNoCelular.ler(this), f.id))
     }
 
@@ -1084,7 +1083,7 @@ class CaixaActivity : TelaBase() {
     }
 
     /** Manda SÓ a imagem do QR Code (sem texto) pelo WhatsApp Business, ou pelo comum, ou pelo que o celular tiver. Com número, já abre a conversa dele. */
-    private fun enviarQr(f: Caderninho.Fiado, codigo: String) {
+    private fun enviarQr(f: Caderninho.Fiado, codigo: String, legenda: String? = null) {
         val arquivo = try {
             val (file, uri) = FotoProvider.novoArquivo(this, "pix_${f.numero.lowercase().filter { it.isLetterOrDigit() }}_${System.currentTimeMillis()}.png")
             java.io.FileOutputStream(file).use { qrBitmap(codigo, 900).compress(Bitmap.CompressFormat.PNG, 100, it) }
@@ -1093,6 +1092,7 @@ class CaixaActivity : TelaBase() {
         fun intencao(pacote: String?) = Intent(Intent.ACTION_SEND).setType("image/png").putExtra(Intent.EXTRA_STREAM, arquivo)
             .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION).also {
                 it.clipData = ClipData.newRawUri("QR Pix", arquivo)
+                if (legenda != null) it.putExtra(Intent.EXTRA_TEXT, legenda)
                 if (pacote != null) it.setPackage(pacote)
                 if (pacote != null && f.telefone.isNotBlank()) it.putExtra("jid", f.telefone + "@s.whatsapp.net")
             }
@@ -1100,6 +1100,22 @@ class CaixaActivity : TelaBase() {
             try { startActivity(intencao(pacote)); return } catch (e: ActivityNotFoundException) { }
         }
         startActivity(Intent.createChooser(intencao(null), "Enviar o QR Code"))
+    }
+
+    /**
+     * A cobrança completa: no Pix, UMA mensagem com a imagem do QR Code e, na legenda, o texto com os itens, o total, a data e o Pix copia e cola
+     * (se a conversa for apagada, ainda dá para copiar o código). Sem Pix ou sem chave, só o texto. [lembrete] = "Cobrar de novo".
+     */
+    private fun enviarCobranca(f: Caderninho.Fiado, lembrete: Boolean) {
+        val agora = System.currentTimeMillis()
+        val codigo = if (f.viaPix) primeiroPix(f.total) else null
+        if (codigo == null) {
+            if (f.viaPix) aviso("Sem chave Pix cadastrada: mandei só o texto. Cadastre a chave para a cobrança levar o QR Code.")
+            return enviarZap(f.telefone, Caderninho.textoDaCobranca(Perfil.loja, f, null, lembrete, agora))
+        }
+        var texto = Caderninho.textoDaCobranca(Perfil.loja, f, codigo, lembrete, agora)
+        if (texto.length > 1000) texto = Caderninho.textoDaCobranca(Perfil.loja, f, codigo, lembrete, agora, compacto = true) // a legenda do WhatsApp tem limite
+        enviarQr(f, codigo, texto)
     }
 
     /** O código do Pix desta cobrança (chave Pix da loja); avisa se ainda não tem chave. */

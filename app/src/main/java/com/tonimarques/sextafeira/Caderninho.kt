@@ -138,7 +138,7 @@ internal object Caderninho {
     private fun saudacao(cliente: String): String { val n = primeiroNome(cliente); return if (n.isNotBlank()) "Oi, $n! " else "Oi! " }
 
     /** A cobrança. [lembrete] = true na segunda vez em diante ("Cobrar de novo"). [pix] = o Pix copia e cola (só vai se a forma é Pix). */
-    fun textoDaCobranca(loja: String, f: Fiado, pix: String?, lembrete: Boolean, agora: Long): String {
+    fun textoDaCobranca(loja: String, f: Fiado, pix: String?, lembrete: Boolean, agora: Long, compacto: Boolean = false): String {
         val b = StringBuilder()
         b.append(saudacao(f.cliente))
         val nomeLoja = loja.ifBlank { "nossa loja" }
@@ -149,6 +149,8 @@ internal object Caderninho {
                 else -> "vence em ${dataBR(f.venceEm)}"
             }
             b.append("Passando só para lembrar do combinado com a *").append(nomeLoja).append("*: ").append(Documentos.dinheiro(f.total)).append(" ($quando).\n")
+        } else if (compacto) {
+            b.append("Aqui é da *").append(nomeLoja).append("*. Sua compra no caderninho deu *").append(Documentos.dinheiro(f.total)).append("*, combinado para pagar até *").append(dataBR(f.venceEm)).append("*").append(if (f.viaPix) " no Pix." else " em dinheiro.").append("\n")
         } else {
             b.append("Aqui é da *").append(nomeLoja).append("*. Anotei a sua compra no caderninho:\n\n")
             for (l in f.linhas) b.append(l.quantidade).append("x ").append(l.nome).append(" — ").append(Documentos.dinheiro(l.quantidade * l.precoCentavos)).append("\n")

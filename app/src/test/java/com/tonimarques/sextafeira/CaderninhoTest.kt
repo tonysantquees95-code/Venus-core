@@ -101,6 +101,15 @@ class CaderninhoTest {
         assertFalse(l.contains("Pix copia e cola"))
     }
 
+    @Test fun cobrancaCompactaCabeNaLegendaDoWhatsApp() {
+        val muitos = fiado().copy(linhas = (1..40).map { Caderninho.Linha("Produto com nome bem comprido número $it", 1, 1000) })
+        val cheia = Caderninho.textoDaCobranca("Desejo", muitos, "PIX".repeat(80), false, hoje)
+        val curta = Caderninho.textoDaCobranca("Desejo", muitos, "PIX".repeat(80), false, hoje, compacto = true)
+        assertTrue(cheia.length > 1000)
+        assertTrue(curta.length < 1000)
+        assertTrue(curta.contains("R$ 40.000,00")); assertTrue(curta.contains("PIXPIX")); assertFalse(curta.contains("Produto com nome"))
+    }
+
     @Test fun agradecimentoCitaOValorEADataDaCompra() {
         val t = Caderninho.textoDeAgradecimento("Desejo", fiado())
         assertTrue(t.contains("Oi, Maria!")); assertTrue(t.contains("R$ 20,00")); assertTrue(t.contains("26/11/2026")); assertTrue(t.contains("obrigado"))
