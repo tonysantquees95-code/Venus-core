@@ -167,6 +167,39 @@ class CatalogoInterno(private val ctx: Context) : Plataformas.Adaptador {
         return paga?.let { vendaDe(it) }
     }
 
+    private fun itensDe(v: JSONObject): Map<Int, Int> {
+        val l = v.optJSONArray("itens") ?: return emptyMap()
+        return (0 until l.length()).mapNotNull { l.optJSONObject(it) }.groupBy { it.optInt("produtoId") }.mapValues { e -> e.value.sumOf { it.optInt("quantidade") } }
+    }
+
+    private fun moverEstoque(raiz: JSONObject, delta: Map<Int, Int>) {
+        for ((pid, d) in delta) acharProduto(raiz, pid)?.let { o ->
+            if (!o.isNull("stockQuantity")) o.put("stockQuantity", (o.optInt("stockQuantity") - d).coerceAtLeast(0))
+        }
+    }
+
+    /** Corrige uma venda do caderninho ainda não paga (cliente e itens) e acerta o estoque só pela diferença. */
+    fun editarVendaPendente(id: Int, cliente: String, itens: List<PdvVendas.Linha>) = editar { raiz ->
+        val v = vendaJson(raiz, id) ?: throw Loja.ErroDaLoja("Não achei essa venda no catálogo.")
+        if (v.optString("status") != "awaiting_payment") throw Loja.ErroDaLoja("Essa venda já foi paga.")
+        val antes = itensDe(v)
+        val depois = itens.filter { it.produtoId > 0 }.groupBy { it.produtoId }.mapValues { e -> e.value.sumOf { it.quantidade } }
+        moverEstoque(raiz, (antes.keys + depois.keys).associateWith { (depois[it] ?: 0) - (antes[it] ?: 0) }.filterValues { it != 0 })
+        val linhas = JSONArray()
+        for (i in itens) linhas.put(JSONObject().put("produtoId", i.produtoId).put("nome", i.nome).put("quantidade", i.quantidade).put("precoCents", i.precoCentavos))
+        v.put("itens", linhas).put("totalCents", itens.sumOf { it.quantidade * it.precoCentavos }).put("cliente", cliente.trim().ifBlank { "Cliente" })
+    }
+
+    /** Apaga uma venda do caderninho ainda não paga; [devolverEstoque] põe os itens de volta no estoque. */
+    fun removerVendaPendente(id: Int, devolverEstoque: Boolean) = editar { raiz ->
+        val vendas = raiz.optJSONArray("vendas") ?: return@editar
+        val pos = (0 until vendas.length()).firstOrNull { vendas.optJSONObject(it)?.optInt("id") == id } ?: return@editar
+        val v = vendas.getJSONObject(pos)
+        if (v.optString("status") != "awaiting_payment") throw Loja.ErroDaLoja("Essa venda já foi paga.")
+        if (devolverEstoque) moverEstoque(raiz, itensDe(v).mapValues { -it.value })
+        vendas.remove(pos)
+    }
+
     private fun vendaJson(raiz: JSONObject, id: Int): JSONObject? {
         val vendas = raiz.optJSONArray("vendas") ?: return null
         return (0 until vendas.length()).mapNotNull { vendas.optJSONObject(it) }.firstOrNull { it.optInt("id") == id }

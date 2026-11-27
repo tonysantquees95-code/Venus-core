@@ -757,7 +757,7 @@ class CaixaActivity : TelaBase() {
                 val extra = (extraFinal?.let { " $it" } ?: "") + if (sem.isNotEmpty()) " Atenção: o estoque de ${sem.joinToString(", ")} ficou zerado." else ""
                 val anotado = fiado?.let {
                     CaderninhoNoCelular.anotar(this, Caderninho.Fiado(
-                        0, numero, it.cliente, it.telefone, itens.map { (p, q, preco) -> Caderninho.Linha(p.nome, q, preco ?: p.precoCentavos ?: 0) },
+                        0, numero, it.cliente, it.telefone, itens.map { (p, q, preco) -> Caderninho.Linha(p.nome, q, preco ?: p.precoCentavos ?: 0, p.id) },
                         forma, quando, it.venceEm, 0L, pedidoId, interno,
                     ))
                 }
@@ -1030,6 +1030,7 @@ class CaixaActivity : TelaBase() {
                 addView(botao(if (f.cobrancas > 0) "Cobrar de novo" else "Cobrar", false) { cobrarDeNovo(f) }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
                 addView(botao("Pago", true) { confirmarPago(f) }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { marginStart = dp(8) })
             })
+            cartao.addView(pequeno("Editar ou excluir") { editarFiado(f) }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(10); gravity = Gravity.END })
             corpo.addView(cartao, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(10) })
         }
         val voltar = { etapa = if (concluida != null) Etapa.RECIBO else Etapa.PRODUTOS; desenhar() }
@@ -1071,6 +1072,155 @@ class CaixaActivity : TelaBase() {
                     .setMessage("${quem.total.brl()} de ${quem.cliente} entrou no caixa. Quer mandar um “recebi, obrigado”?")
                     .setPositiveButton("Mandar agradecimento") { _, _ -> enviarZap(quem.telefone, Caderninho.textoDeAgradecimento(Perfil.loja, quem)) }
                     .setNegativeButton("Agora não", null).show()
+            }
+        }.start()
+    }
+
+    // ------------------------------------------------------------------ editar ou excluir um fiado
+    /** Corrige o que foi anotado errado: nome, telefone, prazo e itens (tirar, trocar quantidade, acrescentar). Ou exclui. */
+    private fun editarFiado(f: Caderninho.Fiado) {
+        val agora = System.currentTimeMillis()
+        // fiados antigos não guardavam o produto: acha pelo nome no catálogo
+        val linhas = f.linhas.map { l -> if (l.produtoId > 0) l else l.copy(produtoId = produtos.firstOrNull { it.nome == l.nome }?.id ?: 0) }.toMutableList()
+        val nome = campoDeTexto("Nome do cliente", InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_WORDS).apply { setText(f.cliente) }
+        val tel = campoDeTexto("WhatsApp com DDD", InputType.TYPE_CLASS_PHONE).apply { setText(f.telefone.removePrefix("55")) }
+        val data = campoDeTexto("dd/mm/aaaa", InputType.TYPE_CLASS_NUMBER).apply { setText(Caderninho.dataBR(f.venceEm)) }
+        campoNome = nome; campoTel = tel
+        val itens = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        val totalTxt = TextView(this).apply { textSize = 15f; setTextColor(Color.WHITE); setPadding(dp(4), dp(8), 0, 0) }
+        fun desenharItens() {
+            itens.removeAllViews()
+            for (l in linhas.toList()) {
+                itens.addView(LinearLayout(this).apply {
+                    gravity = Gravity.CENTER_VERTICAL; setPadding(0, dp(6), 0, dp(6))
+                    addView(vertical(
+                        TextView(this@CaixaActivity).apply { text = l.nome; textSize = 14.5f; setTextColor(Color.WHITE); maxLines = 2 },
+                        TextView(this@CaixaActivity).apply { text = l.precoCentavos.brl() + " cada"; textSize = 12f; setTextColor(apagado) },
+                    ), LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+                    addView(pequeno("−") {
+                        val i = linhas.indexOf(l); if (i >= 0) { if (l.quantidade > 1) linhas[i] = l.copy(quantidade = l.quantidade - 1) else linhas.removeAt(i); desenharItens() }
+                    })
+                    addView(TextView(this@CaixaActivity).apply { text = l.quantidade.toString(); textSize = 16f; setTextColor(Color.WHITE); gravity = Gravity.CENTER; minWidth = dp(30) })
+                    addView(pequeno("+") { val i = linhas.indexOf(l); if (i >= 0) { linhas[i] = l.copy(quantidade = l.quantidade + 1); desenharItens() } })
+                    addView(pequeno("Tirar") { linhas.remove(l); desenharItens() }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { marginStart = dp(6) })
+                })
+            }
+            totalTxt.text = "Total: " + linhas.sumOf { it.quantidade * it.precoCentavos }.brl()
+        }
+        fun adicionarProduto() {
+            if (produtos.isEmpty()) return aviso("Não há produtos com preço no catálogo.")
+            CaixaBuilder(this).setTitle("Acrescentar produto")
+                .setItems(produtos.map { it.nome + " · " + (it.precoCentavos ?: 0).brl() }.toTypedArray()) { _, i ->
+                    val p = produtos[i]
+                    val j = linhas.indexOfFirst { it.produtoId == p.id }
+                    if (j >= 0) linhas[j] = linhas[j].copy(quantidade = linhas[j].quantidade + 1)
+                    else linhas += Caderninho.Linha(p.nome, 1, p.precoCentavos ?: 0, p.id)
+                    desenharItens()
+                }.setNegativeButton("Cancelar", null).show()
+        }
+        val corpo = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(20), dp(6), dp(20), 0) }
+        corpo.addView(nome, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+        corpo.addView(tel, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(10) })
+        corpo.addView(pequeno("Escolher dos contatos") {
+            try { startActivityForResult(Intent(Intent.ACTION_PICK, ContactsContract.CommonDataKinds.Phone.CONTENT_URI), PEDIDO_CONTATO) }
+            catch (e: ActivityNotFoundException) { aviso("Não achei a lista de contatos. Digite o número.") }
+        }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(10) })
+        corpo.addView(cabecalhoDeSecao("Paga até"))
+        corpo.addView(data, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+        corpo.addView(LinearLayout(this).apply {
+            for ((i, dias) in listOf(7, 15, 30).withIndex()) addView(pequeno("+$dias dias") { data.setText(Caderninho.dataBR(Caderninho.vencimentoEmDias(agora, dias))) },
+                LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { if (i > 0) marginStart = dp(8) })
+        }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(8) })
+        corpo.addView(cabecalhoDeSecao("Itens"))
+        corpo.addView(itens)
+        corpo.addView(pequeno("+ Acrescentar produto") { adicionarProduto() }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(6) })
+        corpo.addView(totalTxt)
+        desenharItens()
+        val d = CaixaBuilder(this).setTitle("Editar · ${f.forma}").setView(ScrollView(this).apply { addView(corpo) })
+            .setPositiveButton("Salvar", null).setNegativeButton("Cancelar", null).setNeutralButton("Excluir", null).show()
+        d.setOnDismissListener { campoNome = null; campoTel = null }
+        d.getButton(android.app.AlertDialog.BUTTON_NEUTRAL).setOnClickListener { confirmarExclusao(f, d) }
+        d.getButton(android.app.AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+            val n = nome.text.toString().trim()
+            if (n.isBlank()) return@setOnClickListener aviso("Escreva o nome do cliente.")
+            if (linhas.isEmpty()) return@setOnClickListener aviso("Sem itens não dá para manter a venda. Acrescente um produto ou use Excluir.")
+            val bruto = tel.text.toString().trim()
+            val tel55 = if (bruto.isBlank()) "" else (Pdv.telefoneParaWhatsApp(bruto) ?: return@setOnClickListener aviso("O WhatsApp não parece certo. Use DDD + número."))
+            val texto = data.text.toString()
+            val venceEm = if (texto.filter { it.isDigit() } == Caderninho.dataBR(f.venceEm).filter { it.isDigit() }) f.venceEm
+                else (Caderninho.dataDeTexto(texto, agora) ?: return@setOnClickListener aviso("Essa data não vale. Use dd/mm/aaaa, de hoje em diante."))
+            d.dismiss()
+            salvarEdicao(f, n, tel55, venceEm, linhas.toList())
+        }
+    }
+
+    /** Grava a correção: primeiro a venda (itens, total e estoque pela diferença), depois o caderninho. */
+    private fun salvarEdicao(f: Caderninho.Fiado, cliente: String, telefone: String, venceEm: Long, linhas: List<Caderninho.Linha>) {
+        if (baixando) return
+        baixando = true
+        Thread {
+            var erro: String? = null
+            try {
+                val vendaLinhas = linhas.map { PdvVendas.Linha(it.produtoId, it.nome, it.quantidade, it.precoCentavos) }
+                if (f.interno) CatalogoInterno(this).editarVendaPendente(f.pedidoId, cliente, vendaLinhas)
+                else {
+                    if (!PdvVendas.atualizarPendente(this, f.pedidoId, vendaLinhas)) throw Loja.ErroDaLoja("Essa venda já foi paga.")
+                    val loja = Loja(this)
+                    val frescos = loja.produtos()
+                    val antes = f.linhas.map { l -> if (l.produtoId > 0) l else l.copy(produtoId = frescos.firstOrNull { it.nome == l.nome }?.id ?: 0) }
+                    for ((pid, delta) in Caderninho.diferencaDeEstoque(antes, linhas)) frescos.firstOrNull { it.id == pid }?.let { try { loja.baixarEstoque(it, delta) } catch (e: Exception) { } }
+                }
+                if (!CaderninhoNoCelular.atualizar(this, f.id, cliente, telefone, venceEm, linhas)) throw Loja.ErroDaLoja("Não consegui salvar a correção.")
+            } catch (e: Exception) { erro = e.message ?: "Não consegui salvar agora." }
+            val atualizados = try { carregarProdutos() } catch (e: Exception) { produtos }
+            runOnUiThread {
+                baixando = false
+                produtos = atualizados
+                if (erro != null) return@runOnUiThread aviso(erro)
+                Diario.anotar(this, "loja", "Caderninho: corrigiu a venda de $cliente", "tela")
+                aviso("Correção salva.")
+                desenhar()
+            }
+        }.start()
+    }
+
+    private fun confirmarExclusao(f: Caderninho.Fiado, janela: android.app.AlertDialog) {
+        CaixaBuilder(this).setTitle("Excluir do caderninho?")
+            .setMessage("A venda de ${f.cliente} (${f.total.brl()}) sai do caderninho e deixa de contar como venda. Quer devolver os itens ao estoque?")
+            .setPositiveButton("Excluir e devolver ao estoque") { _, _ -> janela.dismiss(); excluirFiado(f, true) }
+            .setNeutralButton("Excluir sem mexer no estoque") { _, _ -> janela.dismiss(); excluirFiado(f, false) }
+            .setNegativeButton("Cancelar", null).show()
+    }
+
+    private fun excluirFiado(f: Caderninho.Fiado, devolver: Boolean) {
+        if (baixando) return
+        baixando = true
+        Thread {
+            var erro: String? = null
+            try {
+                if (f.interno) CatalogoInterno(this).removerVendaPendente(f.pedidoId, devolver)
+                else {
+                    if (!PdvVendas.removerPendente(this, f.pedidoId)) throw Loja.ErroDaLoja("Essa venda já foi paga.")
+                    if (devolver) {
+                        val loja = Loja(this)
+                        val frescos = loja.produtos()
+                        // fiados antigos não guardavam o produto: acha pelo nome
+                        for (l in f.linhas) {
+                            val p = frescos.firstOrNull { it.id == l.produtoId } ?: frescos.firstOrNull { it.nome == l.nome } ?: continue
+                            try { loja.baixarEstoque(p, -l.quantidade) } catch (e: Exception) { }
+                        }
+                    }
+                }
+                CaderninhoNoCelular.excluir(this, f.id)
+            } catch (e: Exception) { erro = e.message ?: "Não consegui excluir agora." }
+            val atualizados = try { carregarProdutos() } catch (e: Exception) { produtos }
+            runOnUiThread {
+                baixando = false
+                produtos = atualizados
+                if (erro != null) return@runOnUiThread aviso(erro)
+                Diario.anotar(this, "loja", "Caderninho: excluiu a venda de ${f.cliente} (${f.total.brl()})", "tela")
+                aviso("Excluído do caderninho.")
+                desenhar()
             }
         }.start()
     }

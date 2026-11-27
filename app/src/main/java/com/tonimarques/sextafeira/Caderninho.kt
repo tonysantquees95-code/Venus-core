@@ -20,7 +20,7 @@ internal object Caderninho {
 
     fun ehCaderninho(forma: String) = forma == FORMA_PIX || forma == FORMA_DINHEIRO
 
-    data class Linha(val nome: String, val quantidade: Int, val precoCentavos: Int)
+    data class Linha(val nome: String, val quantidade: Int, val precoCentavos: Int, val produtoId: Int = 0)
 
     data class Fiado(
         val id: Int, val numero: String, val cliente: String, val telefone: String, val linhas: List<Linha>, val forma: String,
@@ -98,6 +98,28 @@ internal object Caderninho {
         return Pair(lista.map { if (it.id == id) pago else it }, pago)
     }
 
+    /** Corrige um fiado ainda aberto (nome, telefone, prazo e itens). Null se não existe, já foi pago ou ficou sem itens (para isso é excluir). */
+    fun editar(lista: List<Fiado>, id: Int, cliente: String, telefone: String, venceEm: Long, linhas: List<Linha>): List<Fiado>? {
+        val alvo = lista.firstOrNull { it.id == id } ?: return null
+        val boas = linhas.filter { it.quantidade > 0 }
+        if (alvo.pago || boas.isEmpty() || cliente.isBlank()) return null
+        val novo = alvo.copy(cliente = cliente.trim(), telefone = telefone, venceEm = venceEm, linhas = boas)
+        return lista.map { if (it.id == id) novo else it }
+    }
+
+    /** Tira da lista um fiado ainda aberto. Pago não se apaga (já virou dinheiro no caixa). */
+    fun excluir(lista: List<Fiado>, id: Int): List<Fiado>? {
+        val alvo = lista.firstOrNull { it.id == id } ?: return null
+        return if (alvo.pago) null else lista.filter { it.id != id }
+    }
+
+    /** Quanto cada produto muda no estoque ao trocar [antes] por [depois]: positivo = sai mais do estoque, negativo = volta. Só produtos conhecidos (id > 0) e que mudaram. */
+    fun diferencaDeEstoque(antes: List<Linha>, depois: List<Linha>): Map<Int, Int> {
+        val a = antes.filter { it.produtoId > 0 }.groupBy { it.produtoId }.mapValues { e -> e.value.sumOf { it.quantidade } }
+        val d = depois.filter { it.produtoId > 0 }.groupBy { it.produtoId }.mapValues { e -> e.value.sumOf { it.quantidade } }
+        return (a.keys + d.keys).associateWith { (d[it] ?: 0) - (a[it] ?: 0) }.filterValues { it != 0 }
+    }
+
     fun cobrou(lista: List<Fiado>, id: Int): List<Fiado> = lista.map { if (it.id == id && !it.pago) it.copy(cobrancas = it.cobrancas + 1) else it }
 
     fun aReceber(lista: List<Fiado>): List<Fiado> = lista.filter { !it.pago }.sortedBy { it.venceEm }
@@ -148,7 +170,7 @@ internal object Caderninho {
         for (f in lista) a.put(
             JSONObject().put("id", f.id).put("num", f.numero).put("cli", f.cliente).put("tel", f.telefone).put("forma", f.forma)
                 .put("criado", f.criado).put("vence", f.venceEm).put("pago", f.pagoEm).put("ped", f.pedidoId).put("int", f.interno).put("cob", f.cobrancas)
-                .put("itens", JSONArray().also { l -> f.linhas.forEach { l.put(JSONObject().put("n", it.nome).put("q", it.quantidade).put("c", it.precoCentavos)) } }),
+                .put("itens", JSONArray().also { l -> f.linhas.forEach { l.put(JSONObject().put("n", it.nome).put("q", it.quantidade).put("c", it.precoCentavos).put("p", it.produtoId)) } }),
         )
         return a.toString()
     }
@@ -159,7 +181,7 @@ internal object Caderninho {
             val l = o.optJSONArray("itens") ?: JSONArray()
             Fiado(
                 o.optInt("id"), o.optString("num"), o.optString("cli"), o.optString("tel"),
-                (0 until l.length()).mapNotNull { l.optJSONObject(it) }.map { Linha(it.optString("n"), it.optInt("q"), it.optInt("c")) },
+                (0 until l.length()).mapNotNull { l.optJSONObject(it) }.map { Linha(it.optString("n"), it.optInt("q"), it.optInt("c"), it.optInt("p")) },
                 o.optString("forma"), o.optLong("criado"), o.optLong("vence"), o.optLong("pago"), o.optInt("ped"), o.optBoolean("int", true), o.optInt("cob"),
             )
         }

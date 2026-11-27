@@ -50,6 +50,27 @@ internal object CaderninhoNoCelular {
         return r.second
     }
 
+    /** Guarda a correção e troca o aviso do dia pelo do novo prazo. Falso se não deu (já pago, sem itens...). */
+    @Synchronized
+    fun atualizar(c: Context, id: Int, cliente: String, telefone: String, venceEm: Long, linhas: List<Caderninho.Linha>): Boolean {
+        val antes = ler(c).firstOrNull { it.id == id } ?: return false
+        val nova = Caderninho.editar(ler(c), id, cliente, telefone, venceEm, linhas) ?: return false
+        gravar(c, nova)
+        cancelar(c, antes)
+        nova.firstOrNull { it.id == id }?.let { agendar(c, it) }
+        return true
+    }
+
+    @Synchronized
+    fun excluir(c: Context, id: Int): Boolean {
+        val antes = ler(c).firstOrNull { it.id == id } ?: return false
+        val nova = Caderninho.excluir(ler(c), id) ?: return false
+        gravar(c, nova)
+        cancelar(c, antes)
+        c.getSystemService(NotificationManager::class.java)?.cancel(9500 + id)
+        return true
+    }
+
     private fun intencao(c: Context, f: Fiado) = PendingIntent.getBroadcast(
         c, 9100 + f.id, Intent(c, AvisoDoCaderninho::class.java).setAction(ACAO_ALARME).putExtra("id", f.id).putExtra("loja", Lojas.aberta(c)),
         PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,

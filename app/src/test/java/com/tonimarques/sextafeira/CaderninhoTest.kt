@@ -119,6 +119,34 @@ class CaderninhoTest {
         assertTrue(Caderninho.ehCaderninho("Caderninho Pix")); assertFalse(Caderninho.ehCaderninho("Pix"))
     }
 
+    @Test fun editarCorrigeSoOQueEstaAberto() {
+        val l = Caderninho.adicionar(emptyList(), fiado(0))
+        val id = l.first().id
+        val novas = listOf(Caderninho.Linha("Pastel", 3, 850, 5))
+        val e = Caderninho.editar(l, id, " Joana ", "5551988887777", brasilia(2026, 12, 10, 9), novas)!!
+        assertEquals("Joana", e[0].cliente); assertEquals(2550, e[0].total); assertEquals("5551988887777", e[0].telefone)
+        assertNull(Caderninho.editar(l, id, "Joana", "", hoje, emptyList()))            // sem itens: é excluir
+        assertNull(Caderninho.editar(l, id, " ", "", hoje, novas))                     // sem nome
+        assertNull(Caderninho.editar(l, 99, "Joana", "", hoje, novas))                 // não existe
+        val paga = Caderninho.pagar(l, id, hoje)!!.first
+        assertNull(Caderninho.editar(paga, id, "Joana", "", hoje, novas))              // pago não se edita
+    }
+
+    @Test fun excluirSoDoQueNaoFoiPago() {
+        val l = Caderninho.adicionar(Caderninho.adicionar(emptyList(), fiado(0)), fiado(0))
+        assertEquals(listOf(2), Caderninho.excluir(l, 1)!!.map { it.id })
+        assertNull(Caderninho.excluir(l, 99))
+        assertNull(Caderninho.excluir(Caderninho.pagar(l, 1, hoje)!!.first, 1))
+    }
+
+    @Test fun diferencaDeEstoque() {
+        val antes = listOf(Caderninho.Linha("A", 2, 100, 1), Caderninho.Linha("B", 1, 100, 2), Caderninho.Linha("Velho", 4, 100, 0))
+        val depois = listOf(Caderninho.Linha("A", 5, 100, 1), Caderninho.Linha("C", 1, 100, 3))
+        // A sai mais 3, B volta 1, C sai 1; sem id (0) não mexe
+        assertEquals(mapOf(1 to 3, 2 to -1, 3 to 1), Caderninho.diferencaDeEstoque(antes, depois))
+        assertTrue(Caderninho.diferencaDeEstoque(antes, antes).isEmpty())
+    }
+
     // a venda pendente do caixa de loja com site: não vira dinheiro antes do "Pago"
     @Test fun vendaPendenteNaoEntraNoVyntemAteSerPaga() {
         val v = PdvVendas.nova(emptyList(), listOf(PdvVendas.Linha(1, "Pastel", 1, 850)), Caderninho.FORMA_PIX, hoje, pendente = true)

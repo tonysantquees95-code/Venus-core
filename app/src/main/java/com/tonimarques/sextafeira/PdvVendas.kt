@@ -66,6 +66,25 @@ internal object PdvVendas {
         return v
     }
 
+    /** Corrige os itens de uma venda do caderninho que ainda não foi paga. Falso se não existe ou já foi paga. */
+    @Synchronized
+    fun atualizarPendente(c: Context, id: Int, itens: List<Linha>): Boolean {
+        val todas = ler(c)
+        val alvo = todas.firstOrNull { it.id == id } ?: return false
+        if (!alvo.pendente) return false
+        gravar(c, todas.map { if (it.id == id) it.copy(itens = itens) else it })
+        return true
+    }
+
+    @Synchronized
+    fun removerPendente(c: Context, id: Int): Boolean {
+        val todas = ler(c)
+        val alvo = todas.firstOrNull { it.id == id } ?: return false
+        if (!alvo.pendente) return false
+        gravar(c, todas.filter { it.id != id })
+        return true
+    }
+
     /** O dinheiro do caderninho entrou. Falso se a venda não existe ou já estava paga (nunca conta duas vezes). */
     @Synchronized
     fun marcarPaga(c: Context, id: Int, agora: Long = System.currentTimeMillis()): Boolean {
