@@ -1061,6 +1061,7 @@ class CaixaActivity : TelaBase() {
                 if (f.temLink) addView(botao("Enviar link", false) { enviarZap(f.telefone, Caderninho.textoDoLink(Perfil.loja, f)) }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { marginStart = dp(8) })
                 else if (f.viaPix) addView(botao("QR Pix", false) { mostrarQrDoFiado(f) }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { marginStart = dp(8) })
             })
+            if (!f.temLink && f.viaPix && Cobranca.configurada(this)) cartao.addView(pequeno("Gerar link de pagamento") { gerarLinkDoFiado(f) }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(8) })
             if (f.temLink) cartao.addView(pequeno("Mostrar o QR do link") { mostrarQrDoFiado(f) }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(8) })
             cartao.addView(botao("Recebi o comprovante", false) { enviarZap(f.telefone, Caderninho.textoDeComprovante(Perfil.loja, f)) },
                 LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(8) })
@@ -1070,6 +1071,32 @@ class CaixaActivity : TelaBase() {
         }
         val voltar = { etapa = if (concluida != null) Etapa.RECIBO else Etapa.PRODUTOS; desenhar() }
         moldura("A receber", corpo, null, voltar)
+    }
+
+    /** Fiado antigo (anotado antes do link): cria o link de pagamento agora e já oferece mandar ao cliente. O nome do cliente NÃO vai ao provedor. */
+    private fun gerarLinkDoFiado(f: Caderninho.Fiado) {
+        if (baixando) return
+        baixando = true
+        aviso("Criando o link de pagamento…")
+        Thread {
+            var erro: String? = null
+            try {
+                val dias = (((f.venceEm - System.currentTimeMillis()) / 86_400_000L).toInt() + 30).coerceIn(7, 90)
+                val novo = Cobranca.criarLink(this, f.pedidoId, f.linhas.map { Loja.Item(it.nome, it.quantidade, it.precoCentavos, it.produtoId) }, "Caderninho", dias)
+                CaderninhoNoCelular.definirLink(this, f.id, novo.ref, novo.url, novo.provedor)
+            } catch (e: Exception) { erro = e.message ?: "Não consegui criar o link agora." }
+            runOnUiThread {
+                baixando = false
+                if (erro != null) return@runOnUiThread aviso("Não consegui criar o link: $erro")
+                Diario.anotar(this, "loja", "Caderninho: criou o link de pagamento de ${f.cliente}", "tela")
+                desenhar()
+                val atual = CaderninhoNoCelular.ler(this).firstOrNull { it.id == f.id } ?: return@runOnUiThread
+                CaixaBuilder(this).setTitle("Link criado")
+                    .setMessage("Quando ${f.cliente} pagar, a Vênus te avisa. Quer mandar o link agora pelo WhatsApp?")
+                    .setPositiveButton("Enviar agora") { _, _ -> enviarZap(atual.telefone, Caderninho.textoDoLink(Perfil.loja, atual)) }
+                    .setNegativeButton("Depois", null).show()
+            }
+        }.start()
     }
 
     private fun cobrarDeNovo(f: Caderninho.Fiado) {

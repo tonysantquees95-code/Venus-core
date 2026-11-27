@@ -25,4 +25,5 @@ Uma linha por mudança que valha lembrar (a mais nova em cima). O Painel Dev tam
 
 | Data | O que mudou | Onde |
 | --- | --- | --- |
+| 2026-11-27 | Caderninho: botão "Gerar link de pagamento" nos fiados antigos (sem link) quando há cobrança configurada. Novidade 51. | `CaixaActivity.kt` (`gerarLinkDoFiado`), `Novidades.kt` |
 | 2026-11-27 | Manual criado | `MANUAL.md` |
