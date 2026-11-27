@@ -642,18 +642,23 @@ class CaixaActivity : TelaBase() {
     }
 
     /** [mpId] != null: Pix criado no Mercado Pago, conferido a cada 3 s; a venda fecha sozinha quando cai. */
-    private fun mostrarPix(total: Int, codigo: String, mpId: Long?, link: Cobranca.Link? = null) {
+    /** O QR Code em imagem (fundo branco, 4 módulos de silêncio de cada lado), pronto para mostrar ou mandar. */
+    private fun qrBitmap(codigo: String, px: Int = 720): Bitmap {
         val m = QrLocal.matriz(codigo)
-        val px = 720
         val bmp = Bitmap.createBitmap(px, px, Bitmap.Config.ARGB_8888)
         val c = Canvas(bmp)
         c.drawColor(Color.WHITE)
-        val modulo = px / (m.tamanho + 8) // 4 módulos de silêncio de cada lado
+        val modulo = px / (m.tamanho + 8)
         val x0 = (px - m.tamanho * modulo) / 2
         val tinta = Paint().apply { color = Color.BLACK }
         for (y in 0 until m.tamanho) for (x in 0 until m.tamanho) {
             if (m.modulos[y * m.tamanho + x] == '1') c.drawRect((x0 + x * modulo).toFloat(), (x0 + y * modulo).toFloat(), (x0 + (x + 1) * modulo).toFloat(), (x0 + (y + 1) * modulo).toFloat(), tinta)
         }
+        return bmp
+    }
+
+    private fun mostrarPix(total: Int, codigo: String, mpId: Long?, link: Cobranca.Link? = null) {
+        val bmp = qrBitmap(codigo)
         val lado = dp(280)
         var vivo = true
         val corpo = LinearLayout(this).apply {
@@ -994,6 +999,7 @@ class CaixaActivity : TelaBase() {
             if (f.viaPix && pix == null) append("Cadastre a chave Pix da loja para a cobrança levar o Pix copia e cola.")
         }
         corpo.addView(TextView(this).apply { text = dica; textSize = 12.5f; setTextColor(apagado); setPadding(dp(4), dp(8), 0, 0) })
+        if (f.viaPix) corpo.addView(botao("Mandar só o QR Code Pix", false) { mostrarQrDoFiado(f) }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(10) })
         corpo.addView(botao("Ver o caderninho", false) { etapa = Etapa.RECEBER; desenhar() }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(12) })
         val rodape = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL; setPadding(dp(14), dp(10), dp(14), dp(12))
@@ -1028,8 +1034,9 @@ class CaixaActivity : TelaBase() {
             cartao.addView(LinearLayout(this).apply {
                 setPadding(0, dp(10), 0, 0)
                 addView(botao(if (f.cobrancas > 0) "Cobrar de novo" else "Cobrar", false) { cobrarDeNovo(f) }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-                addView(botao("Pago", true) { confirmarPago(f) }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { marginStart = dp(8) })
+                if (f.viaPix) addView(botao("QR Pix", false) { mostrarQrDoFiado(f) }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { marginStart = dp(8) })
             })
+            cartao.addView(botao("Pago", true) { confirmarPago(f) }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(8) })
             cartao.addView(pequeno("Editar ou excluir") { editarFiado(f) }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(10); gravity = Gravity.END })
             corpo.addView(cartao, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(10) })
         }
@@ -1074,6 +1081,49 @@ class CaixaActivity : TelaBase() {
                     .setNegativeButton("Agora não", null).show()
             }
         }.start()
+    }
+
+    /** Manda SÓ a imagem do QR Code (sem texto) pelo WhatsApp Business, ou pelo comum, ou pelo que o celular tiver. Com número, já abre a conversa dele. */
+    private fun enviarQr(f: Caderninho.Fiado, codigo: String) {
+        val arquivo = try {
+            val (file, uri) = FotoProvider.novoArquivo(this, "pix_${f.numero.lowercase().filter { it.isLetterOrDigit() }}_${System.currentTimeMillis()}.png")
+            java.io.FileOutputStream(file).use { qrBitmap(codigo, 900).compress(Bitmap.CompressFormat.PNG, 100, it) }
+            uri
+        } catch (e: Exception) { return aviso("Não consegui montar o QR Code. Tente de novo.") }
+        fun intencao(pacote: String?) = Intent(Intent.ACTION_SEND).setType("image/png").putExtra(Intent.EXTRA_STREAM, arquivo)
+            .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION).also {
+                it.clipData = ClipData.newRawUri("QR Pix", arquivo)
+                if (pacote != null) it.setPackage(pacote)
+                if (pacote != null && f.telefone.isNotBlank()) it.putExtra("jid", f.telefone + "@s.whatsapp.net")
+            }
+        for (pacote in listOf("com.whatsapp.w4b", "com.whatsapp")) {
+            try { startActivity(intencao(pacote)); return } catch (e: ActivityNotFoundException) { }
+        }
+        startActivity(Intent.createChooser(intencao(null), "Enviar o QR Code"))
+    }
+
+    /** O código do Pix desta cobrança (chave Pix da loja); avisa se ainda não tem chave. */
+    private fun codigoPixDoFiado(f: Caderninho.Fiado): String? {
+        val c = primeiroPix(f.total)
+        if (c == null) aviso("Cadastre a chave Pix da loja (na hora de cobrar no Pix pelo Caixa) para gerar o QR Code.")
+        return c
+    }
+
+    /** Mostra o QR na tela (para o cliente escanear na frente da pessoa) com o botão de mandar só a imagem. */
+    private fun mostrarQrDoFiado(f: Caderninho.Fiado) {
+        val codigo = codigoPixDoFiado(f) ?: return
+        val lado = dp(280)
+        val corpo = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER_HORIZONTAL; setPadding(dp(20), dp(8), dp(20), 0)
+            addView(ImageView(this@CaixaActivity).apply { setImageBitmap(qrBitmap(codigo)) }, LinearLayout.LayoutParams(lado, lado))
+            addView(TextView(this@CaixaActivity).apply { text = "${f.cliente} · ${f.total.brl()}"; textSize = 14f; setTextColor(Color.parseColor("#D7DAEE")); gravity = Gravity.CENTER; setPadding(0, dp(8), 0, dp(8)) })
+            addView(botao("Mandar só o QR Code no WhatsApp", true) { enviarQr(f, codigo) })
+            addView(botao("Copiar código Pix", false) {
+                (getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(ClipData.newPlainText("Pix", codigo))
+                Toast.makeText(this@CaixaActivity, "Código copiado.", Toast.LENGTH_SHORT).show()
+            }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(8) })
+        }
+        CaixaBuilder(this).setTitle("QR Code Pix").setView(ScrollView(this).apply { addView(corpo) }).setNegativeButton("Fechar", null).show()
     }
 
     // ------------------------------------------------------------------ editar ou excluir um fiado
