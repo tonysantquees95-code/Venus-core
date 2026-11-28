@@ -62,10 +62,14 @@ object AtendenteDoRobo {
             return Decisao("Oi! Que bom falar com você de novo 💗 Em que posso te ajudar?$RODAPE", false, "principal")
         }
         if (numero != null && menuAtual == "principal") {
+            // sem site e sem a regra preenchida, quem responde é a equipe: não dá para mandar ver no site
+            if (site.isBlank() && ((numero == 2 && listOf("frete", "frete_gratis", "postagem").all { texto(it) == null }) || (numero == 3 && texto("pagamento") == null))) {
+                return Decisao("Vou pedir para a equipe te passar " + (if (numero == 2) "as opções de entrega e o valor" else "as formas de pagamento") + ", só um instante 💗", true, null)
+            }
             val r = when (numero) {
                 1 -> "Me conta o que você procura" + (if (ramoIntimo) " (por exemplo: gel, lingerie, presente para casal)" else "") + " que eu te mostro as opções 💗$noSite"
                 2 -> listOfNotNull(texto("frete"), texto("frete_gratis"), texto("postagem")).joinToString(" ").ifBlank { "O frete é calculado pelo CEP." } +
-                    " Me mande seu CEP ou simule no site para ver o valor e o prazo certinhos.${if (site.isNotBlank()) " $site" else ""}"
+                    (if (site.isNotBlank()) " Me mande seu CEP ou simule no site para ver o valor e o prazo certinhos. $site" else " Me mande seu CEP que a equipe confirma o valor e o prazo certinhos.")
                 3 -> texto("pagamento") ?: "As formas de pagamento aparecem no site, na hora de finalizar.$noSite"
                 4 -> if (temDiscreta) texto("discreto") ?: "Sim, a entrega é discreta: embalagem sem identificação do conteúdo."
                 else return Decisao("Não encontrei essa opção. " + menu(loja, assistente, temRetirada, temDiscreta), false, "principal")

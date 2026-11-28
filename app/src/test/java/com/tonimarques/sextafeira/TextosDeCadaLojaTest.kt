@@ -45,4 +45,27 @@ class TextosDeCadaLojaTest {
         respostas.forEach { limpo(it.pergunta) }
         assertEquals(Respostas.MODELOS.size - 2, respostas.size)
     }
+
+    @Test fun regrasVaziasNaoAfirmamNada() {
+        val vazia = RegrasDeVenda.VAZIA
+        assertEquals(listOf("troca"), vazia.perguntasComId("Loja X").map { it.first })
+        listOf("pagamento", "cartão", "envio", "entrega", "retirada").forEach { assertFalse(vazia.texto(), vazia.texto().contains(it)) }
+        assertTrue(vazia.faltando().contains("formas de pagamento"))
+        // o que foi preenchido sai sem buracos
+        val parcial = vazia.copy(freteMetodos = listOf("PAC"), horarioAtendimento = "seg a sex").perguntasComId("Loja X").associate { it.first to it.third }
+        assertEquals("A Loja X faz entrega por PAC.", parcial["frete"])
+        assertEquals("Não, a Loja X trabalha só com envio.", parcial["retirada"])
+        assertEquals("O atendimento é seg a sex.", parcial["horario"])
+    }
+
+    @Test fun semSiteNaoFalaEmSite() {
+        assertEquals("Como faço um pedido?", Respostas.modelos(false, false, temSite = false).first { it.id == "pedido" }.pergunta)
+        assertEquals("Como faço o pedido pelo site?", Respostas.modelos(true, true, temSite = true).first { it.id == "pedido" }.pergunta)
+        val conversa = AtendenteDoRobo.Conversa(listOf(AtendenteDoRobo.Msg(true, "oi", 1000L)), 0L, "principal", 1000L)
+        listOf("2", "3").forEach {
+            val d = AtendenteDoRobo.decidir(it, conversa, emptyMap(), "Loja X", "Vênus", "", 2000L, temRetirada = false, temDiscreta = false, ramoIntimo = false)!!
+            assertTrue(d.texto, d.texto.contains("equipe"))
+            assertFalse(d.texto, d.texto.contains("site"))
+        }
+    }
 }

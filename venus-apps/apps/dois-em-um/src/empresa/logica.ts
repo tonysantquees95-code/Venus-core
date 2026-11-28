@@ -68,7 +68,7 @@ export function regrasEmLinhas(r: Record<string, any> | null): string[] {
   const p = objeto(r.pagamento);
   if (p) {
     if (typeof p.pix_desconto_pct === "number" && p.pix_desconto_pct > 0) l.push(`Pix com ${p.pix_desconto_pct}% de desconto${p.pix_em_promocao ? " (vale também em promoção)" : ""}`);
-    if (typeof p.cartao_parcelas_max === "number" && p.cartao_parcelas_max > 0) l.push(`Cartão em até ${p.cartao_parcelas_max}x${typeof p.parcelas_sem_juros === "number" && p.parcelas_sem_juros > 0 ? ` (${p.parcelas_sem_juros}x sem juros)` : ""}`);
+    if (typeof p.cartao_parcelas_max === "number" && p.cartao_parcelas_max > 1) l.push(`Cartão em até ${p.cartao_parcelas_max}x${typeof p.parcelas_sem_juros === "number" && p.parcelas_sem_juros > 0 ? ` (${p.parcelas_sem_juros}x sem juros)` : ""}`);
   }
   const f = objeto(r.frete);
   if (f) {

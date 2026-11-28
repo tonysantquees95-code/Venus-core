@@ -65,7 +65,7 @@ class TelaRobo : TelaBase() {
             when {
                 regras == null -> "Regras de venda: não consegui ler agora. Tente de novo em instantes."
                 !regras.configuradas -> "Regras de venda: ainda não preenchidas na Vênus (Ajustes → Site, ramo e regras de venda)."
-                else -> "✓ Regras de venda lidas da Vênus: ${regras.respostas.size} respostas exatas (pagamento, frete, retirada…)."
+                else -> "✓ Regras de venda lidas da Vênus: ${regras.respostas.size} ${if (regras.respostas.size == 1) "resposta exata" else "respostas exatas"}, só do que você preencheu."
             },
             12.5f, apagado,
         ))
