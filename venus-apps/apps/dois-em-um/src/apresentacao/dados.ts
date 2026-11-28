@@ -72,7 +72,8 @@ export const NOVIDADES: Novidade[] = [
   { id: 30, data: "2026-11-24", tipo: "novo", titulo: "Plano anual da Vênus", texto: "Ao renovar a Vênus, agora dá para pagar o plano anual: R$ 499 de uma vez no Pix ou no débito, valendo 365 dias (equivale a 2 meses grátis). Não renova sozinho: quando vencer, é só pagar de novo." },
   { id: 31, data: "2026-11-24", tipo: "novo", titulo: "Loja pelo cardápio", texto: "Na aba Vênus Vitrine, agora dá para criar a sua loja pelo cardápio: mande a foto ou o PDF, a Vênus lê os itens e os preços e monta o catálogo com pedido no WhatsApp. Você confere tudo antes de publicar. No grátis são 2 leituras por dia." },
   { id: 52, data: "2026-11-28", tipo: "correcao", titulo: "Textos de cada loja", texto: "As respostas prontas do Instagram agora seguem o ramo e as regras da sua loja: as perguntas sobre entrega discreta e produtos para usar a dois só aparecem para quem tem a ver." },
-  { id: 53, data: "2026-11-28", tipo: "correcao", titulo: "Respostas sem informação inventada", texto: "As respostas do Instagram não perguntam mais sobre pedido pelo site quando a loja não tem site, e o resumo das regras não anuncia cartão quando você não preencheu parcelas." }
+  { id: 53, data: "2026-11-28", tipo: "correcao", titulo: "Respostas sem informação inventada", texto: "As respostas do Instagram não perguntam mais sobre pedido pelo site quando a loja não tem site, e o resumo das regras não anuncia cartão quando você não preencheu parcelas." },
+  { id: 54, data: "2026-11-28", tipo: "novo", titulo: "Aceita Pix e aceita cartão", texto: "O resumo das regras de venda mostra quando a loja não aceita Pix ou cartão. A escolha é feita no celular, em Regras de venda." }
 ];
 
 export const ROTULO: Record<TipoNovidade, string> = { novo: "Novo", melhoria: "Melhorou", correcao: "Corrigido" };

@@ -272,9 +272,11 @@ internal fun MainActivity.registrarVenda(inicial: Loja.Produto?) {
     val (bCli, cliente) = f.campo("Cliente (opcional)", "", "Ex.: Maria (WhatsApp)")
     f.adicionar(bCli, 2)
     // com a cobrança ligada, o link de pagamento vem primeiro (a Vênus confere e dá baixa sozinha)
-    val LINK = "Link de pagamento (Pix ou cartão)"
-    val pagamentos = if (Cobranca.configurada(this)) listOf(LINK, "Pix (já pago)", "Cartão (já pago)", "Dinheiro", "Outro")
-    else listOf("Pix", "Cartão", "Dinheiro", "Outro", "$LINK: configurar")
+    val aceita = Perfil.regras
+    val LINK = "Link de pagamento (${aceita.formasDoLink})"
+    val pagamentos = (if (Cobranca.configurada(this)) listOf(LINK, "Pix (já pago)", "Cartão (já pago)", "Dinheiro", "Outro")
+    else listOf("Pix", "Cartão", "Dinheiro", "Outro", "$LINK: configurar"))
+        .filterNot { (!aceita.aceitaPix && it.startsWith("Pix")) || (!aceita.aceitaCartao && it.startsWith("Cartão")) }
     f.adicionar(f.rotulo("Pagamento"), 10)
     val pagamento = f.seletor(pagamentos, 0)
     f.adicionar(pagamento, 4)

@@ -46,6 +46,14 @@ test("regras viram linhas legíveis", () => {
   assert.deepEqual(regrasEmLinhas(null), []);
 });
 
+test("forma de pagamento desligada não aparece", () => {
+  const semCartao = regrasEmLinhas({ pagamento: { ...DO_CELULAR.regras.pagamento, aceita_cartao: false } });
+  assert.deepEqual(semCartao, ["Não aceita cartão", "Pix com 5% de desconto"]);
+  const semPix = regrasEmLinhas({ pagamento: { ...DO_CELULAR.regras.pagamento, aceita_pix: false } });
+  assert.deepEqual(semPix, ["Não aceita Pix", "Cartão em até 6x (3x sem juros)"]);
+  assert.deepEqual(regrasEmLinhas({ pagamento: { aceita_cartao: false } }), ["Não aceita cartão", "Aceita Pix"]);
+});
+
 test("contexto da conversa: vazio sem cadastro, com regras ou com aviso de que faltam", () => {
   assert.equal(contextoDaEmpresa(EMPRESA_VAZIA), "");
   const c = contextoDaEmpresa(limparEmpresa(DO_CELULAR));

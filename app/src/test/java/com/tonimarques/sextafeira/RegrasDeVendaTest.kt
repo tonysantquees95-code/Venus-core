@@ -56,6 +56,40 @@ class RegrasDeVendaTest {
         assertFalse(padrao.perguntas("Loja X").any { it.first.contains("horário") })
     }
 
+    @Test fun lojaSemCartaoNaoFalaEmCartao() {
+        val r = padrao.copy(aceitaCartao = false)
+        assertEquals("somente por Pix, com 5% de desconto (exceto produtos em promoção)", r.textoPagamento())
+        assertNull(r.parcelas(4990))
+        assertEquals("Pix", r.formasDoLink)
+        assertFalse(r.perguntas("Loja X").any { it.second.contains("cartão") })
+        assertEquals("somente por Pix", RegrasDeVenda.VAZIA.copy(aceitaCartao = false).textoPagamento())
+    }
+
+    @Test fun lojaSemPixNaoFalaEmPixNemDaDesconto() {
+        val r = padrao.copy(aceitaPix = false)
+        assertEquals("somente por cartão em até 3x sem juros", r.textoPagamento())
+        assertNull(r.precoNoPix(4990))
+        assertEquals(0, r.descontoDoPix)
+        assertEquals("cartão", r.formasDoLink)
+        assertFalse(r.texto().contains("Pix"))
+        assertEquals("somente por cartão à vista", RegrasDeVenda.VAZIA.copy(aceitaPix = false).textoPagamento())
+    }
+
+    @Test fun formasDePagamentoGuardadas() {
+        for (r in listOf(padrao.copy(aceitaPix = false), padrao.copy(aceitaCartao = false))) assertEquals(r, RegrasDeVenda.ler(r.json("x").toString()))
+        val antiga = RegrasDeVenda.ler("""{"pagamento":{"pix_desconto_pct":10}}""")
+        assertTrue(antiga.aceitaPix && antiga.aceitaCartao)
+        val estragada = RegrasDeVenda.ler("""{"pagamento":{"aceita_pix":false,"aceita_cartao":false}}""")
+        assertTrue(estragada.aceitaPix && estragada.aceitaCartao)
+    }
+
+    @Test fun linkDoMercadoPagoEscondeOQueALojaNaoAceita() {
+        assertFalse(Cobranca.meiosDoMercadoPago(padrao).has("excluded_payment_types"))
+        assertTrue(Cobranca.meiosDoMercadoPago(padrao.copy(aceitaPix = false)).toString().contains("bank_transfer"))
+        val semCartao = Cobranca.meiosDoMercadoPago(padrao.copy(aceitaCartao = false)).toString()
+        assertTrue(semCartao.contains("credit_card") && semCartao.contains("debit_card") && !semCartao.contains("bank_transfer"))
+    }
+
     @Test fun injecaoNoPrompt() {
         val t = Perfil.injecao()
         assertTrue(t.startsWith("Perfil da loja"))

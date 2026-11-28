@@ -952,12 +952,13 @@ class Loja(private val contexto: Context) {
             val preco = p.precoCentavos!!
             val promo = p.precoAntigo?.takeIf { it > preco }
             val pix = Perfil.regras.precoNoPix(preco, emPromocao = promo != null) ?: preco
+            val colunaPix = if (Perfil.regras.aceitaPix) dinheiro(pix) else "não aceita Pix"
             val estoque = when {
                 p.estoque == null -> "disponível"
                 p.estoque <= 0 -> "esgotado"
                 else -> "${p.estoque} un."
             }
-            "${p.nome} | ${dinheiro(preco)}${if (promo != null) " (promoção, de ${dinheiro(promo)})" else ""} | ${dinheiro(pix)} | $estoque | ${p.link?.ifBlank { "sem site: a compra é combinada na conversa" } ?: "$SITE/produto/${p.id}"}"
+            "${p.nome} | ${dinheiro(preco)}${if (promo != null) " (promoção, de ${dinheiro(promo)})" else ""} | $colunaPix | $estoque | ${p.link?.ifBlank { "sem site: a compra é combinada na conversa" } ?: "$SITE/produto/${p.id}"}"
         }
 
         /** As categorias do site (id, nome). */
@@ -1122,7 +1123,7 @@ class Loja(private val contexto: Context) {
                     val off = ((cheio - novo) * 100 + cheio / 2) / cheio
                     var texto = if (emPromocao) "${p.nome} já está em promoção por ${dinheiro(preco)}. Mudar para de ${dinheiro(cheio)} por ${dinheiro(novo)} ($off% a menos)?"
                     else "Colocar ${p.nome} em promoção: de ${dinheiro(cheio)} por ${dinheiro(novo)} ($off% a menos)?"
-                    texto += " No site aparece o preço antigo riscado. Produto em promoção não tem o desconto extra do Pix."
+                    texto += " No site aparece o preço antigo riscado." + if (Perfil.pixPorcento > 0) " Produto em promoção não tem o desconto extra do Pix." else ""
                     if (off >= 50) texto += " É um desconto grande, confira."
                     Preparo(texto + CONFIRMA, Alteracao("promocao", p, valor = novo))
                 }

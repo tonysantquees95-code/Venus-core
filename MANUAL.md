@@ -5,7 +5,7 @@
 Assistente de IA e plataforma do lojista. Android (Kotlin) e `venus-apps` (web, Windows, Mac).
 
 ## Onde fica cada coisa
-- `app/src/main/java/com/tonimarques/sextafeira/*.kt`: o app Android (nome antigo do projeto; não mude, é a identidade do app). Assistente/IA: `Assistente.kt`, `Cerebro.kt`, `Gemini.kt`. Loja: `Loja.kt`, `CatalogoInterno.kt`, `Instagram.kt`. Caixa: `CaixaActivity.kt`, `Pdv.kt`, `Cobranca.kt`, `Caderninho*.kt`. Documentos: `Documentos.kt`, `GeradorDeDocumentos.kt`. Robô: `AtendenteDoRobo.kt`. Conta: `VetorialId.kt`, `Licenca.kt`, `Atualizador.kt`. Novidades: `Novidades.kt` (último id 50).
+- `app/src/main/java/com/tonimarques/sextafeira/*.kt`: o app Android (nome antigo do projeto; não mude, é a identidade do app). Assistente/IA: `Assistente.kt`, `Cerebro.kt`, `Gemini.kt`. Loja: `Loja.kt`, `CatalogoInterno.kt`, `Instagram.kt`. Caixa: `CaixaActivity.kt`, `Pdv.kt`, `Cobranca.kt`, `Caderninho*.kt`. Documentos: `Documentos.kt`, `GeradorDeDocumentos.kt`. Robô: `AtendenteDoRobo.kt`. Conta: `VetorialId.kt`, `Licenca.kt`, `Atualizador.kt`. Novidades: `Novidades.kt` (último id 54).
 - `app/src/test/`: testes. `app/src/main/assets/erros_consertados.txt`: erros já consertados (formato no `CLAUDE.md`).
 - `venus-apps/apps/{assistente,dois-em-um,robo}`: Vênus web/Windows e robô. `venus-apps/desktop`: casca Electron. `venus-apps/teste`: testes e segurança.
 - `.github/workflows/gerar-apk.yml`: testa, compila, assina e publica `v1.N` (~4 min). `venus-apps.yml`: instaladores `win-1.N`/`mac-1.N`. Os fluxos `criar-chave`, `guardar-chave-antiga`, `exportar-segredos`, `teste-chave` mexem na chave de assinatura: não rode sem saber o motivo.
@@ -25,6 +25,7 @@ Uma linha por mudança que valha lembrar (a mais nova em cima). O Painel Dev tam
 
 | Data | O que mudou | Onde |
 | --- | --- | --- |
+| 2026-11-28 | Regras de venda têm "aceita Pix" e "aceita cartão" (`aceitaPix`, `aceitaCartao`; para o desconto use sempre `descontoDoPix`). Desligado, some dos textos, Caixa e link do Mercado Pago. O link da InfinitePay não permite esconder uma forma. Novidade 54. | `RegrasDeVenda.kt`, `CaixaActivity.kt`, `Cobranca.kt`, `empresa/logica.ts` |
 | 2026-11-28 | Campo vazio nas regras de venda não vira afirmação: pagamento, entrega e retirada só aparecem se preenchidos (`RegrasDeVenda.textoPagamento/textoEntrega/textoRetirada`), e loja sem site não é mandada ao site (Novidade 53) | `RegrasDeVenda.kt`, `AtendenteDoRobo.kt`, `robo/Respostas.kt`, `empresa/marketing.ts` |
 | 2026-11-28 | Textos fixos da primeira loja saíram das outras: o que é do ramo íntimo depende de `Perfil.ramoIntimo`, a discrição na entrega de `Perfil.entregaDiscreta` e o que é só da primeira loja (stories já ligados, estudos pessoais) de `Perfil.primeiraLoja`. Texto novo para clientes nunca leva nome, site ou ramo escrito no código. Novidade 52. | `Perfil.kt`, `StoriesDoDia.kt`, `Gemini.kt`, `AtendenteDoRobo.kt`, `Gestao.kt`, `Estudo.kt`, `RegrasDaLoja.kt` |
 | 2026-11-27 | Caderninho: botão "Gerar link de pagamento" nos fiados antigos (sem link) quando há cobrança configurada. Novidade 51. | `CaixaActivity.kt` (`gerarLinkDoFiado`), `Novidades.kt` |

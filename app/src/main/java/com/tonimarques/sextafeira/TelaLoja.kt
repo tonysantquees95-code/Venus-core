@@ -121,11 +121,31 @@ internal fun MainActivity.editarDadosDaLoja() {
     secao("Loja")
     val site = texto(Perfil.site.removePrefix("https://"), if (Plataformas.tipo(this) == "interno") "Endereço do site (vazio = loja sem site)" else "Endereço do site (ex.: minhaloja.com.br)")
     val ramo = texto(Perfil.ramo, "Ramo (ex.: moda, cosméticos, eletrônicos)")
+    fun chave(valor: Boolean, t: String) = android.widget.Switch(this).apply {
+        text = t
+        textSize = 15f
+        isChecked = valor
+        setPadding(dp(4), dp(10), dp(4), dp(10))
+        val estados = arrayOf(intArrayOf(android.R.attr.state_checked), intArrayOf())
+        thumbTintList = android.content.res.ColorStateList(estados, intArrayOf(Aparencia.destaque or 0xFF000000.toInt(), android.graphics.Color.parseColor("#9A93B5")))
+        trackTintList = android.content.res.ColorStateList(estados, intArrayOf(Aparencia.comAlfa(120), android.graphics.Color.parseColor("#2A2440")))
+        Aparencia.pintar(this)
+        caixa.addView(this)
+    }
     secao("Pagamento")
+    val aceitaPix = chave(r.aceitaPix, "Aceita Pix")
+    val aceitaCartao = chave(r.aceitaCartao, "Aceita cartão")
     val pix = numero(r.pixDescontoPct, "Desconto no Pix (%)")
     val pixPromo = marcar(r.pixValeEmPromocao, "Desconto do Pix vale também em produtos em promoção")
     val parcelas = numero(r.cartaoParcelasMax, "Parcelas no cartão (máximo)")
     val semJuros = numero(r.parcelasSemJuros, "Parcelas sem juros (até quantas)")
+    fun mostrarCamposDoPagamento() {
+        pix.visibility = if (aceitaPix.isChecked) android.view.View.VISIBLE else android.view.View.GONE
+        pixPromo.visibility = pix.visibility
+        parcelas.visibility = if (aceitaCartao.isChecked) android.view.View.VISIBLE else android.view.View.GONE
+        semJuros.visibility = parcelas.visibility
+    }
+    ligarFormasDePagamento(aceitaPix, aceitaCartao, ::mostrarCamposDoPagamento)
     secao("Frete e envio")
     val metodos = texto(r.freteMetodos.joinToString(", "), "Formas de envio (ex.: PAC, SEDEX, motoboy)")
     val calculo = texto(r.freteCalculo, "Como o frete é calculado (ex.: pelo CEP no site)")
@@ -174,6 +194,8 @@ internal fun MainActivity.editarDadosDaLoja() {
             if (site.text.isBlank() && Plataformas.tipo(this) != "interno") return@setPositiveButton Toast.makeText(this, "Preencha o endereço do site.", Toast.LENGTH_SHORT).show()
             fun int(e: EditText) = e.text.toString().trim().toIntOrNull()
             val novas = RegrasDeVenda(
+                aceitaPix = aceitaPix.isChecked,
+                aceitaCartao = aceitaCartao.isChecked,
                 pixDescontoPct = (int(pix) ?: 0).coerceIn(0, 50),
                 pixValeEmPromocao = pixPromo.isChecked,
                 cartaoParcelasMax = (int(parcelas) ?: 1).coerceIn(1, 24),
@@ -203,6 +225,17 @@ internal fun MainActivity.editarDadosDaLoja() {
         }
         .setNegativeButton("Cancelar", null)
         .show()
+}
+
+/** As chaves "aceita Pix" e "aceita cartão": mostram só os campos da forma ligada e não deixam desligar as duas. */
+internal fun android.content.Context.ligarFormasDePagamento(pix: android.widget.CompoundButton, cartao: android.widget.CompoundButton, aoMudar: () -> Unit) {
+    for ((esta, outra) in listOf(pix to cartao, cartao to pix)) esta.setOnCheckedChangeListener { _, ligada ->
+        if (!ligada && !outra.isChecked) {
+            esta.isChecked = true
+            Toast.makeText(this, "Deixe pelo menos uma ligada: Pix ou cartão.", Toast.LENGTH_SHORT).show()
+        } else aoMudar()
+    }
+    aoMudar()
 }
 
 internal fun MainActivity.escolherPlataforma() {

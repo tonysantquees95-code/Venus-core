@@ -17,6 +17,9 @@ data class RegrasDeVenda(
     val pixValeEmPromocao: Boolean = false,
     val cartaoParcelasMax: Int = 3,
     val parcelasSemJuros: Int = 3,
+    /** Desligado: a forma some de tudo o que a Vênus diz e cobra. Os números acima ficam guardados para quando religar. */
+    val aceitaPix: Boolean = true,
+    val aceitaCartao: Boolean = true,
     // frete
     val freteMetodos: List<String> = listOf("PAC", "SEDEX"),
     val freteCalculo: String = "pelo CEP no site",
@@ -42,15 +45,21 @@ data class RegrasDeVenda(
     val observacoes: String = "",
 ) {
     // ------------------------------------------------------------------ contas
+    /** O desconto que vale de verdade: zero se a loja não aceita Pix. */
+    val descontoDoPix: Int get() = if (aceitaPix) pixDescontoPct else 0
+
+    /** "Pix ou cartão", "Pix" ou "cartão". */
+    val formasDoLink: String get() = listOfNotNull(if (aceitaPix) "Pix" else null, if (aceitaCartao) "cartão" else null).joinToString(" ou ")
+
     /** Preço no Pix (null se a loja não dá desconto ou se o produto está em promoção e o Pix não vale). */
     fun precoNoPix(centavos: Int, emPromocao: Boolean = false): Int? {
-        if (pixDescontoPct <= 0 || (emPromocao && !pixValeEmPromocao)) return null
+        if (descontoDoPix <= 0 || (emPromocao && !pixValeEmPromocao)) return null
         return centavos - (centavos * pixDescontoPct + 50) / 100
     }
 
     /** "3x de R$ 16,63 sem juros" (null se não parcela). */
     fun parcelas(centavos: Int): String? {
-        if (cartaoParcelasMax <= 1) return null
+        if (!aceitaCartao || cartaoParcelasMax <= 1) return null
         val vezes = cartaoParcelasMax
         val parcela = (centavos + vezes - 1) / vezes
         val juros = if (parcelasSemJuros >= vezes) " sem juros" else if (parcelasSemJuros > 1) " (sem juros até ${parcelasSemJuros}x)" else ""
@@ -63,11 +72,14 @@ data class RegrasDeVenda(
     // ------------------------------------------------------------------ texto para as IAs
     /** "Pix com 5% de desconto ou cartão em até 3x sem juros" (null se a loja não preencheu nada do pagamento: não se afirma nada). */
     fun textoPagamento(): String? {
-        if (pixDescontoPct <= 0 && cartaoParcelasMax <= 1) return null
-        return listOf(
-            if (pixDescontoPct > 0) "Pix com $pixDescontoPct% de desconto" + (if (pixValeEmPromocao) "" else " (exceto produtos em promoção)") else "Pix",
-            if (cartaoParcelasMax > 1) "cartão em até ${cartaoParcelasMax}x" + (if (parcelasSemJuros >= cartaoParcelasMax) " sem juros" else if (parcelasSemJuros > 1) " (sem juros até ${parcelasSemJuros}x)" else "") else "cartão à vista",
-        ).joinToString(" ou ")
+        if (aceitaPix && aceitaCartao && pixDescontoPct <= 0 && cartaoParcelasMax <= 1) return null
+        val desconto = "$pixDescontoPct% de desconto" + (if (pixValeEmPromocao) "" else " (exceto produtos em promoção)")
+        val cartao = if (cartaoParcelasMax > 1) "cartão em até ${cartaoParcelasMax}x" + (if (parcelasSemJuros >= cartaoParcelasMax) " sem juros" else if (parcelasSemJuros > 1) " (sem juros até ${parcelasSemJuros}x)" else "") else "cartão à vista"
+        return when {
+            !aceitaCartao -> "somente por Pix" + (if (pixDescontoPct > 0) ", com $desconto" else "")
+            !aceitaPix -> "somente por $cartao"
+            else -> (if (pixDescontoPct > 0) "Pix com $desconto" else "Pix") + " ou " + cartao
+        }
     }
 
     /** "entrega para todo o Brasil por PAC…", só com o que foi preenchido (null se nada sobre a entrega foi informado). */
@@ -141,7 +153,8 @@ data class RegrasDeVenda(
     fun json(ramo: String = Perfil.ramo): JSONObject = JSONObject()
         .put("versao", 1)
         .put("pagamento", JSONObject().put("pix_desconto_pct", pixDescontoPct).put("pix_em_promocao", pixValeEmPromocao)
-            .put("cartao_parcelas_max", cartaoParcelasMax).put("parcelas_sem_juros", parcelasSemJuros))
+            .put("cartao_parcelas_max", cartaoParcelasMax).put("parcelas_sem_juros", parcelasSemJuros)
+            .put("aceita_pix", aceitaPix).put("aceita_cartao", aceitaCartao))
         .put("frete", JSONObject().put("metodos", JSONArray(freteMetodos)).put("calculo", freteCalculo)
             .put("gratis_acima_de_centavos", freteGratisAcimaDe ?: JSONObject.NULL).put("prazo_postagem_dias", prazoPostagemDias ?: JSONObject.NULL))
         .put("retirada", JSONObject().put("disponivel", retiradaDisponivel).put("cidade", retiradaCidade).put("como", retiradaComo)
@@ -186,7 +199,12 @@ data class RegrasDeVenda(
             val tr = o.optJSONObject("trocas")
             val at = o.optJSONObject("atendimento")
             val rs = o.optJSONObject("restricoes")
+            val comPix = pag?.optBoolean("aceita_pix", true) ?: true
+            val comCartao = pag?.optBoolean("aceita_cartao", true) ?: true
+            val nenhuma = !comPix && !comCartao // não existe loja sem nenhuma das duas: dado estragado volta ao normal
             return RegrasDeVenda(
+                aceitaPix = comPix || nenhuma,
+                aceitaCartao = comCartao || nenhuma,
                 pixDescontoPct = pag?.optInt("pix_desconto_pct", p.pixDescontoPct)?.coerceIn(0, 50) ?: p.pixDescontoPct,
                 pixValeEmPromocao = pag?.optBoolean("pix_em_promocao", p.pixValeEmPromocao) ?: p.pixValeEmPromocao,
                 cartaoParcelasMax = pag?.optInt("cartao_parcelas_max", p.cartaoParcelasMax)?.coerceIn(1, 24) ?: p.cartaoParcelasMax,

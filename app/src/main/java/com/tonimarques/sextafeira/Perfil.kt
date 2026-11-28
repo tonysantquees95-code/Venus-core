@@ -30,7 +30,7 @@ object Perfil {
     @Volatile var regras: RegrasDeVenda = RegrasDeVenda()
         private set
     /** Desconto no Pix, em %, usado nos preços que a Vênus passa para as clientes. */
-    val pixPorcento: Int get() = regras.pixDescontoPct
+    val pixPorcento: Int get() = regras.descontoDoPix
     /** false = loja nova que ainda não preencheu as regras: a Vênus não promete nada sobre venda. */
     @Volatile var regrasConfiguradas: Boolean = true
         private set
@@ -129,7 +129,7 @@ object Perfil {
             .apply()
         carregar(ctx)
         Consciencia.esquecerRetrato()
-        Diario.anotar(ctx, "perfil", "Regras de venda atualizadas: $site, $ramo, Pix $pixPorcento%, ${regras.cartaoParcelasMax}x no cartão", "tela")
+        Diario.anotar(ctx, "perfil", "Regras de venda atualizadas: $site, $ramo, " + (if (regras.aceitaPix) "Pix $pixPorcento%" else "sem Pix") + ", " + (if (regras.aceitaCartao) "${regras.cartaoParcelasMax}x no cartão" else "sem cartão"), "tela")
     }
 
     /** "Porto Alegre, RS" ou "Porto Alegre RS" → cidade e UF. */

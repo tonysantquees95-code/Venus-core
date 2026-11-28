@@ -184,7 +184,7 @@ internal fun MainActivity.abrirMenu(@Suppress("UNUSED_PARAMETER") ancora: View) 
                 TelaDeAjustes.Ajuste("Primeiros passos", { "A lista do que configurar para a $n funcionar com a sua loja." }) { primeirosPassos() },
                 TelaDeAjustes.Ajuste("Perfil do dono e da loja", { Perfil.resumo() + ". A $n usa esses dados nas respostas, nos avisos e no estudo." }) { editarPerfil() },
                 TelaDeAjustes.Ajuste("Site, ramo e regras de venda", {
-                    "${Loja.SITE.removePrefix("https://")} · ${Perfil.ramo} · Pix ${Perfil.pixPorcento}%. É o que a $n pode prometer às clientes."
+                    "${Loja.SITE.removePrefix("https://")} · ${Perfil.ramo} · ${if (Perfil.regras.aceitaPix) "Pix ${Perfil.pixPorcento}%" else "sem Pix"}. É o que a $n pode prometer às clientes."
                 }) { editarDadosDaLoja() },
                 TelaDeAjustes.Ajuste("Plataforma da loja", {
                     val t = Plataformas.TIPOS.firstOrNull { it.id == Plataformas.tipo(this) }?.nome ?: "Site próprio"

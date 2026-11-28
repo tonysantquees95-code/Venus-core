@@ -380,7 +380,7 @@ class CaixaActivity : TelaBase() {
         if (totalPix < total) {
             cartaoResumo.addView(LinearLayout(this).apply {
                 gravity = Gravity.CENTER_VERTICAL; setPadding(0, dp(10), 0, 0)
-                addView(TextView(this@CaixaActivity).apply { text = "NO PIX (${regras.pixDescontoPct}% DE DESCONTO)"; textSize = 12f; letterSpacing = 0.12f; setTextColor(destaque) }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+                addView(TextView(this@CaixaActivity).apply { text = "NO PIX (${regras.descontoDoPix}% DE DESCONTO)"; textSize = 12f; letterSpacing = 0.12f; setTextColor(destaque) }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
                 addView(TextView(this@CaixaActivity).apply { text = totalPix.brl(); textSize = 20f; setTextColor(Color.WHITE) })
             })
             cartaoResumo.addView(TextView(this).apply { text = "Você economiza ${(total - totalPix).brl()} pagando no Pix"; textSize = 12f; setTextColor(apagado) })
@@ -389,19 +389,19 @@ class CaixaActivity : TelaBase() {
         if (sem.isNotEmpty()) corpo.addView(TextView(this).apply { text = "Atenção: sem estoque suficiente de ${sem.joinToString(", ")}. A venda vai deixar o estoque zerado."; textSize = 12.5f; setTextColor(alerta); setPadding(dp(4), dp(8), 0, 0) })
 
         corpo.addView(cabecalhoDeSecao("Forma de pagamento"))
-        corpo.addView(botao(if (totalPix < total) "Pix · ${totalPix.brl()} (${regras.pixDescontoPct}% de desconto)" else "Pix (QR Code na hora)", true) { cobrarPix() }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+        if (regras.aceitaPix) corpo.addView(botao(if (totalPix < total) "Pix · ${totalPix.brl()} (${regras.descontoDoPix}% de desconto)" else "Pix (QR Code na hora)", true) { cobrarPix() }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
         corpo.addView(LinearLayout(this).apply {
             addView(botao("Dinheiro", false) { cobrarDinheiro() }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-            addView(botao("Cartão", false) { cobrarCartao() }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { marginStart = dp(8) })
+            if (regras.aceitaCartao) addView(botao("Cartão", false) { cobrarCartao() }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { marginStart = dp(8) })
         }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(10) })
-        if (Cobranca.provedor(this) == "infinitepay" && Cobranca.configurada(this)) {
+        if (regras.aceitaCartao && Cobranca.provedor(this) == "infinitepay" && Cobranca.configurada(this)) {
             corpo.addView(botao("Cartão por aproximação (celular)", false) { cobrarAproximacao() },
                 LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(10) })
         }
         corpo.addView(cabecalhoDeSecao("Caderninho · o cliente paga depois"))
         corpo.addView(LinearLayout(this).apply {
-            addView(botao("Caderninho Pix", false) { pedirCaderninho(Caderninho.FORMA_PIX) }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-            addView(botao("Caderninho dinheiro", false) { pedirCaderninho(Caderninho.FORMA_DINHEIRO) }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { marginStart = dp(8) })
+            if (regras.aceitaPix) addView(botao("Caderninho Pix", false) { pedirCaderninho(Caderninho.FORMA_PIX) }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+            addView(botao("Caderninho dinheiro", false) { pedirCaderninho(Caderninho.FORMA_DINHEIRO) }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { if (regras.aceitaPix) marginStart = dp(8) })
         }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
         corpo.addView(TextView(this).apply { text = "No caderninho o estoque baixa na hora, mas a venda só entra no seu caixa (e no Vyntem) quando você marcar “Pago”. Preço cheio, sem o desconto do Pix."; textSize = 12.5f; setTextColor(apagado); setPadding(dp(4), dp(8), 0, 0) })
         corpo.addView(TextView(this).apply { text = "Só depois de escolher a forma e confirmar o recebimento a venda é registrada e o estoque baixa."; textSize = 12.5f; setTextColor(apagado); setPadding(dp(4), dp(12), 0, 0) })
@@ -1058,7 +1058,7 @@ class CaixaActivity : TelaBase() {
             cartao.addView(LinearLayout(this).apply {
                 setPadding(0, dp(10), 0, 0)
                 addView(botao(if (f.cobrancas > 0) "Cobrar de novo" else "Cobrar", false) { cobrarDeNovo(f) }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-                if (f.temLink) addView(botao("Enviar link", false) { enviarZap(f.telefone, Caderninho.textoDoLink(Perfil.loja, f)) }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { marginStart = dp(8) })
+                if (f.temLink) addView(botao("Enviar link", false) { enviarZap(f.telefone, Caderninho.textoDoLink(Perfil.loja, f, Perfil.regras.formasDoLink)) }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { marginStart = dp(8) })
                 else if (f.viaPix) addView(botao("QR Pix", false) { mostrarQrDoFiado(f) }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { marginStart = dp(8) })
             })
             if (!f.temLink && f.viaPix && Cobranca.configurada(this)) cartao.addView(pequeno("Gerar link de pagamento") { gerarLinkDoFiado(f) }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(8) })
@@ -1093,7 +1093,7 @@ class CaixaActivity : TelaBase() {
                 val atual = CaderninhoNoCelular.ler(this).firstOrNull { it.id == f.id } ?: return@runOnUiThread
                 CaixaBuilder(this).setTitle("Link criado")
                     .setMessage("Quando ${f.cliente} pagar, a Vênus te avisa. Quer mandar o link agora pelo WhatsApp?")
-                    .setPositiveButton("Enviar agora") { _, _ -> enviarZap(atual.telefone, Caderninho.textoDoLink(Perfil.loja, atual)) }
+                    .setPositiveButton("Enviar agora") { _, _ -> enviarZap(atual.telefone, Caderninho.textoDoLink(Perfil.loja, atual, Perfil.regras.formasDoLink)) }
                     .setNegativeButton("Depois", null).show()
             }
         }.start()
@@ -1165,7 +1165,7 @@ class CaixaActivity : TelaBase() {
     private fun enviarCobranca(f: Caderninho.Fiado, lembrete: Boolean) {
         val agora = System.currentTimeMillis()
         // com link de pagamento: mensagem de texto com o link (o WhatsApp mostra a prévia e a página do Pix/cartão abre direto)
-        if (f.temLink) return enviarZap(f.telefone, Caderninho.textoDaCobranca(Perfil.loja, f, null, lembrete, agora, link = f.linkUrl))
+        if (f.temLink) return enviarZap(f.telefone, Caderninho.textoDaCobranca(Perfil.loja, f, null, lembrete, agora, link = f.linkUrl, formas = Perfil.regras.formasDoLink))
         val codigo = if (f.viaPix) primeiroPix(f.total) else null
         if (codigo == null) {
             if (f.viaPix) aviso("Sem chave Pix cadastrada: mandei só o texto. Cadastre a chave para a cobrança levar o QR Code.")

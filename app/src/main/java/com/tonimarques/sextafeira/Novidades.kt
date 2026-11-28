@@ -70,6 +70,7 @@ internal object Novidades {
         Item(51, "2026-11-27", "melhoria", "Caderninho: gerar link nos fiados antigos", "Os fiados que você já tinha anotado agora têm o botão Gerar link de pagamento. Toque nele, a Vênus cria o link da sua cobrança (Mercado Pago ou InfinitePay) e já oferece mandar para o cliente pelo WhatsApp. Quando o cliente pagar, a Vênus avisa."),
         Item(52, "2026-11-28", "correcao", "Textos de cada loja", "Stories, legendas, respostas, Robô, datas que vendem e avisos agora usam o ramo, o site e as regras da sua loja. Os stories automáticos ficam desligados até você ligar no botão Publicações (na loja que já usava os stories de bem-estar íntimo, continua como estava)."),
         Item(53, "2026-11-28", "correcao", "Respostas sem informação inventada", "As respostas prontas e o Robô só falam de pagamento, entrega e retirada que você preencheu nas regras de venda. Loja sem site não é mais mandada ver no site. Se já tinha respostas geradas, toque em Gerar todas de novo (as que você editou ficam como estão)."),
+        Item(54, "2026-11-28", "novo", "Aceita Pix e aceita cartão", "Nas regras de venda agora dá para escolher se a loja aceita Pix, cartão ou os dois. O que ficar desligado sai das respostas, do Robô, do catálogo, do Caixa e das mensagens de cobrança. Todas as lojas começam com os dois ligados. Link da InfinitePay: a página dela pode continuar mostrando as duas formas."),
     )
 
     fun rotulo(tipo: String): String = when (tipo) { "novo" -> "Novo"; "melhoria" -> "Melhorou"; "correcao" -> "Corrigido"; else -> tipo }

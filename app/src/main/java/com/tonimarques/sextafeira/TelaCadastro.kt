@@ -175,8 +175,17 @@ internal fun MainActivity.cadastroGuiado(etapaInicial: Int = 0) {
                 val (bPix, pix) = f.campo("Desconto no Pix (%)", r.pixDescontoPct.takeIf { it > 0 }?.toString().orEmpty(), "Ex.: 5 (vazio = sem desconto)", numero)
                 val (bParc, parcelas) = f.campo("Parcelas no cartão (até)", r.cartaoParcelasMax.takeIf { it > 1 }?.toString().orEmpty(), "Ex.: 3", numero)
                 val (bJuros, semJuros) = f.campo("Sem juros até", r.parcelasSemJuros.takeIf { it > 1 }?.toString().orEmpty(), "Ex.: 3", numero)
-                f.adicionar(bPix)
+                val aceitaPix = f.interruptor("Aceita Pix", r.aceitaPix)
+                f.adicionar(aceitaPix)
+                f.adicionar(bPix, 10)
+                val aceitaCartao = f.interruptor("Aceita cartão", r.aceitaCartao)
+                f.adicionar(aceitaCartao, 14)
                 f.lado(bParc, bJuros)
+                ligarFormasDePagamento(aceitaPix, aceitaCartao) {
+                    bPix.visibility = if (aceitaPix.isChecked) android.view.View.VISIBLE else android.view.View.GONE
+                    bParc.visibility = if (aceitaCartao.isChecked) android.view.View.VISIBLE else android.view.View.GONE
+                    bJuros.visibility = bParc.visibility
+                }
 
                 f.cartao("Envio")
                 val (bMet, metodos) = f.campo("Formas de envio", r.freteMetodos.joinToString(", "), "Ex.: PAC, SEDEX, motoboy")
@@ -205,6 +214,8 @@ internal fun MainActivity.cadastroGuiado(etapaInicial: Int = 0) {
                 f.acoes(f.botao("Salvar e continuar", primario = true) {
                     fun int(e: EditText) = e.text.toString().trim().toIntOrNull()
                     val novas = r.copy(
+                        aceitaPix = aceitaPix.isChecked,
+                        aceitaCartao = aceitaCartao.isChecked,
                         pixDescontoPct = (int(pix) ?: 0).coerceIn(0, 50),
                         cartaoParcelasMax = (int(parcelas) ?: 1).coerceIn(1, 24),
                         parcelasSemJuros = (int(semJuros) ?: 1).coerceIn(1, 24),

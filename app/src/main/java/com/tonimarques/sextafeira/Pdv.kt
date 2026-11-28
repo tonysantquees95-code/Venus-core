@@ -38,7 +38,7 @@ internal object Pdv {
 
     /** Produtos do carrinho que ficam sem o desconto do Pix por estarem em promoção (só conta se a loja dá desconto no Pix). */
     fun semDescontoNoPix(c: Carrinho, produtos: List<Loja.Produto>, regras: RegrasDeVenda): List<String> =
-        if (regras.pixDescontoPct <= 0) emptyList()
+        if (regras.descontoDoPix <= 0) emptyList()
         else itens(c, produtos).filter { (p, _, _) -> regras.precoNoPix(p.precoCentavos ?: 0, emPromocao(p)) == null }.map { it.first.nome }
 
     /** Produtos que passam do estoque (só os que têm controle de estoque). */

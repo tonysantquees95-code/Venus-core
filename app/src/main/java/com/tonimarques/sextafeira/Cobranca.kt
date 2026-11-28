@@ -150,6 +150,15 @@ object Cobranca {
         return JSONObject(texto).optString("status")
     }
 
+    /** Parcelas e o que o link do Mercado Pago deve esconder, conforme o que a loja aceita (no Mercado Pago, o Pix é "bank_transfer"). */
+    fun meiosDoMercadoPago(r: RegrasDeVenda): JSONObject {
+        val fora = (if (r.aceitaPix) emptyList() else listOf("bank_transfer")) +
+            (if (r.aceitaCartao) emptyList() else listOf("credit_card", "debit_card", "prepaid_card"))
+        val o = JSONObject().put("installments", r.cartaoParcelasMax.coerceIn(1, 12))
+        if (fora.isNotEmpty()) o.put("excluded_payment_types", JSONArray(fora.map { JSONObject().put("id", it) }))
+        return o
+    }
+
     data class Link(val ref: String, val url: String, val provedor: String)
 
     /** Cria o link de pagamento da venda. Bloqueante; lança erro com a explicação. */
@@ -168,7 +177,7 @@ object Cobranca {
                     .put("items", lista)
                     .put("external_reference", ref)
                     .put("statement_descriptor", Perfil.loja.replace(Regex("[^A-Za-z0-9 ]"), "").take(13).ifBlank { "LOJA" })
-                    .put("payment_methods", JSONObject().put("installments", Perfil.regras.cartaoParcelasMax.coerceIn(1, 12)))
+                    .put("payment_methods", meiosDoMercadoPago(Perfil.regras))
                     .put("expires", true)
                     .put("expiration_date_to", iso.format(System.currentTimeMillis() + diasAberta * 86_400_000L))
                     .put("metadata", JSONObject().put("venda", vendaId).put("cliente", cliente.take(60)))
@@ -367,7 +376,7 @@ object Cobranca {
     fun mensagemParaCliente(cliente: String, totalCentavos: Int, url: String): String {
         val nome = cliente.trim().substringBefore(" ").substringBefore("(").trim()
         return (if (nome.isNotBlank() && nome != "Cliente") "Oi, $nome! " else "Oi! ") +
-            "Segue o link para pagar sua compra na ${Perfil.loja} (${Loja.dinheiro(totalCentavos)}). Pode pagar por Pix ou cartão:\n$url\n\n" +
+            "Segue o link para pagar sua compra na ${Perfil.loja} (${Loja.dinheiro(totalCentavos)}). Pode pagar por ${Perfil.regras.formasDoLink}:\n$url\n\n" +
             "Assim que o pagamento entrar, a gente separa tudo e te avisa por aqui 💖"
     }
 }

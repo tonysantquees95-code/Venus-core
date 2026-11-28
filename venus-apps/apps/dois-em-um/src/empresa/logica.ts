@@ -67,8 +67,14 @@ export function regrasEmLinhas(r: Record<string, any> | null): string[] {
   const l: string[] = [];
   const p = objeto(r.pagamento);
   if (p) {
-    if (typeof p.pix_desconto_pct === "number" && p.pix_desconto_pct > 0) l.push(`Pix com ${p.pix_desconto_pct}% de desconto${p.pix_em_promocao ? " (vale também em promoção)" : ""}`);
-    if (typeof p.cartao_parcelas_max === "number" && p.cartao_parcelas_max > 1) l.push(`Cartão em até ${p.cartao_parcelas_max}x${typeof p.parcelas_sem_juros === "number" && p.parcelas_sem_juros > 0 ? ` (${p.parcelas_sem_juros}x sem juros)` : ""}`);
+    // cadastro antigo não tem esses campos: vale como aceito
+    const comPix = p.aceita_pix !== false, comCartao = p.aceita_cartao !== false;
+    if (!comCartao) l.push("Não aceita cartão");
+    if (!comPix) l.push("Não aceita Pix");
+    if (comPix && !comCartao && !(p.pix_desconto_pct > 0)) l.push("Aceita Pix");
+    if (comCartao && !comPix && !(p.cartao_parcelas_max > 1)) l.push("Cartão à vista");
+    if (comPix && typeof p.pix_desconto_pct === "number" && p.pix_desconto_pct > 0) l.push(`Pix com ${p.pix_desconto_pct}% de desconto${p.pix_em_promocao ? " (vale também em promoção)" : ""}`);
+    if (comCartao && typeof p.cartao_parcelas_max === "number" && p.cartao_parcelas_max > 1) l.push(`Cartão em até ${p.cartao_parcelas_max}x${typeof p.parcelas_sem_juros === "number" && p.parcelas_sem_juros > 0 ? ` (${p.parcelas_sem_juros}x sem juros)` : ""}`);
   }
   const f = objeto(r.frete);
   if (f) {

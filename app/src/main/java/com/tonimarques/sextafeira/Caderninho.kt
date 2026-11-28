@@ -144,7 +144,7 @@ internal object Caderninho {
     private fun saudacao(cliente: String): String { val n = primeiroNome(cliente); return if (n.isNotBlank()) "Oi, $n! " else "Oi! " }
 
     /** A cobrança. [lembrete] = true na segunda vez em diante ("Cobrar de novo"). [pix] = o Pix copia e cola (só vai se a forma é Pix). */
-    fun textoDaCobranca(loja: String, f: Fiado, pix: String?, lembrete: Boolean, agora: Long, compacto: Boolean = false, link: String? = null): String {
+    fun textoDaCobranca(loja: String, f: Fiado, pix: String?, lembrete: Boolean, agora: Long, compacto: Boolean = false, link: String? = null, formas: String = "Pix ou cartão"): String {
         val b = StringBuilder()
         b.append(saudacao(f.cliente))
         val nomeLoja = loja.ifBlank { "nossa loja" }
@@ -163,15 +163,15 @@ internal object Caderninho {
             b.append("\n*Total: ").append(Documentos.dinheiro(f.total)).append("*\n")
             b.append("Combinado para pagar até *").append(dataBR(f.venceEm)).append("*").append(if (f.viaPix) " no Pix." else " em dinheiro.").append("\n")
         }
-        if (!link.isNullOrBlank()) b.append("\nPague pelo link (Pix ou cartão, a confirmação é na hora):\n").append(link).append("\n")
+        if (!link.isNullOrBlank()) b.append("\nPague pelo link ($formas, a confirmação é na hora):\n").append(link).append("\n")
         else if (f.viaPix && !pix.isNullOrBlank()) b.append("\nPix copia e cola:\n").append(pix).append("\n")
         b.append("\nQualquer dúvida é só chamar. Obrigado! 💖")
         return b.toString()
     }
 
     /** "Perdi o link": só o link de novo, curto. */
-    fun textoDoLink(loja: String, f: Fiado): String =
-        saudacao(f.cliente) + "Aqui está o link para pagar os " + Documentos.dinheiro(f.total) + " da sua compra na *" + loja.ifBlank { "nossa loja" } + "* (Pix ou cartão):\n" + f.linkUrl + "\n\nQualquer coisa é só chamar 💖"
+    fun textoDoLink(loja: String, f: Fiado, formas: String = "Pix ou cartão"): String =
+        saudacao(f.cliente) + "Aqui está o link para pagar os " + Documentos.dinheiro(f.total) + " da sua compra na *" + loja.ifBlank { "nossa loja" } + "* ($formas):\n" + f.linkUrl + "\n\nQualquer coisa é só chamar 💖"
 
     /** Quando o pagamento é marcado como recebido: confirmação caprichada (✅, valor, o que comprou) e agradecimento. */
     fun textoDeAgradecimento(loja: String, f: Fiado): String {
