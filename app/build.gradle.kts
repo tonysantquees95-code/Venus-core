@@ -44,7 +44,7 @@ android {
             signingConfig = signingConfigs.getByName("fixa")
         }
         debug {
-            signingConfig = signingConfigs.getByName("fixa")
+            // linha de teste: o Gradle assina com a chave de teste dele, sem usar a chave da Vênus
         }
     }
 
