@@ -11,7 +11,7 @@ grep -q "^OK (" instrumentacao.txt
 # o relatório e um mosaico reduzido das telas (loja fictícia) também vão para o registro da execução
 cat telas/relatorio.txt
 pip install -q pillow
-python3 -I - <<'PY'
+python3 - <<'PY'
 import glob, base64, io
 from PIL import Image, ImageDraw
 fs = sorted(glob.glob('telas/robo-*.png')) + sorted(glob.glob('telas/respostas-*.png')) + ['telas/arte-produto.jpg', 'telas/arte-dica.jpg']
