@@ -35,8 +35,9 @@ object Respostas {
     )
 
     /** Só as perguntas que fazem sentido para a loja aberta. */
-    fun modelos(entregaDiscreta: Boolean = com.tonimarques.sextafeira.Perfil.entregaDiscreta, ramoIntimo: Boolean = com.tonimarques.sextafeira.Perfil.ramoIntimo): List<Modelo> =
+    fun modelos(entregaDiscreta: Boolean = com.tonimarques.sextafeira.Perfil.entregaDiscreta, ramoIntimo: Boolean = com.tonimarques.sextafeira.Perfil.ramoIntimo, temSite: Boolean = com.tonimarques.sextafeira.Perfil.site.isNotBlank()): List<Modelo> =
         MODELOS.filter { (it.id != "discreto" || entregaDiscreta) && (it.id != "casal" || ramoIntimo) }
+            .map { if (it.id == "pedido" && !temSite) it.copy(pergunta = "Como faço um pedido?") else it }
 
     /** O Instagram corta respostas muito longas; deixa uma margem. */
     const val MAXIMO = 900

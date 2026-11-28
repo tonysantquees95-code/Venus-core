@@ -48,7 +48,7 @@ class TelaRespostas : TelaBase() {
             typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
             setTextColor(destaque)
         })
-        coluna.addView(texto("A Vênus da loja escreve com os produtos e as regras do site. Você confere, ajusta se quiser e cola no Instagram uma vez só. Depois o Instagram responde sozinho.", 13f, apagado))
+        coluna.addView(texto("A Vênus da loja escreve com os produtos e as regras da loja. Você confere, ajusta se quiser e cola no Instagram uma vez só. Depois o Instagram responde sozinho.", 13f, apagado))
 
         // ---- escrever
         cartao("Escrever com a Vênus da loja")

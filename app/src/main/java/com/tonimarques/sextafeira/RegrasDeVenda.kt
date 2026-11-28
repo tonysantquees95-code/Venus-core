@@ -61,27 +61,52 @@ data class RegrasDeVenda(
     fun freteGratis(totalCentavos: Int): Boolean? = freteGratisAcimaDe?.let { totalCentavos >= it }
 
     // ------------------------------------------------------------------ texto para as IAs
-    fun texto(): String = listOfNotNull(
-        "pagamento: " + listOfNotNull(
+    /** "Pix com 5% de desconto ou cartão em até 3x sem juros" (null se a loja não preencheu nada do pagamento: não se afirma nada). */
+    fun textoPagamento(): String? {
+        if (pixDescontoPct <= 0 && cartaoParcelasMax <= 1) return null
+        return listOf(
             if (pixDescontoPct > 0) "Pix com $pixDescontoPct% de desconto" + (if (pixValeEmPromocao) "" else " (exceto produtos em promoção)") else "Pix",
             if (cartaoParcelasMax > 1) "cartão em até ${cartaoParcelasMax}x" + (if (parcelasSemJuros >= cartaoParcelasMax) " sem juros" else if (parcelasSemJuros > 1) " (sem juros até ${parcelasSemJuros}x)" else "") else "cartão à vista",
-        ).joinToString(" ou "),
-        "entrega ${if (embalagemDiscreta) "discreta " else ""}para $abrangencia" +
+        ).joinToString(" ou ")
+    }
+
+    /** "entrega para todo o Brasil por PAC…", só com o que foi preenchido (null se nada sobre a entrega foi informado). */
+    fun textoEntrega(): String? {
+        if (abrangencia.isBlank() && freteMetodos.isEmpty() && freteCalculo.isBlank() && freteGratisAcimaDe == null && prazoPostagemDias == null && !embalagemDiscreta) return null
+        return "entrega" + (if (embalagemDiscreta) " discreta" else "") +
+            (if (abrangencia.isNotBlank()) " para $abrangencia" else "") +
             (if (freteMetodos.isNotEmpty()) " por ${freteMetodos.joinToString(" ou ")}" else "") +
             (if (freteCalculo.isNotBlank()) ", frete calculado $freteCalculo" else "") +
             (freteGratisAcimaDe?.let { ", frete grátis acima de ${dinheiro(it)}" } ?: "") +
-            (prazoPostagemDias?.let { ", postagem em até $it ${if (it == 1) "dia útil" else "dias úteis"} depois do pagamento" } ?: ""),
-        if (retiradaDisponivel) "retirada ${if (retiradaCustoCentavos == 0) "grátis" else "por ${dinheiro(retiradaCustoCentavos)}"} em $retiradaCidade" +
-            (if (retiradaComo.isNotBlank()) ", $retiradaComo" else "") else "sem retirada no local",
+            (prazoPostagemDias?.let { ", postagem em até $it ${if (it == 1) "dia útil" else "dias úteis"} depois do pagamento" } ?: "")
+    }
+
+    /** A retirada; "sem retirada" só quando a loja contou como entrega (senão não se sabe). */
+    fun textoRetirada(): String? = when {
+        retiradaDisponivel -> "retirada ${if (retiradaCustoCentavos == 0) "grátis" else "por ${dinheiro(retiradaCustoCentavos)}"}" +
+            (if (retiradaCidade.isNotBlank()) " em $retiradaCidade" else "") + (if (retiradaComo.isNotBlank()) ", $retiradaComo" else "")
+        textoEntrega() != null -> "sem retirada no local"
+        else -> null
+    }
+
+    private fun textoAtendimento(): String? = listOfNotNull(
+        canais.takeIf { it.isNotEmpty() }?.let { "por ${it.joinToString(", ")}" }, horarioAtendimento,
+    ).takeIf { it.isNotEmpty() }?.let { "atendimento " + it.joinToString(", ") }
+
+    fun texto(): String = listOfNotNull(
+        textoPagamento()?.let { "pagamento: $it" },
+        textoEntrega(),
+        textoRetirada(),
         if (embalagemDiscreta) "embalagem neutra e sem identificação" else null,
         "arrependimento em até $arrependimentoDias dias do recebimento; defeito com garantia $garantia",
-        if (canais.isNotEmpty()) "atendimento por ${canais.joinToString(", ")}" + (horarioAtendimento?.let { ", $it" } ?: "") else null,
+        textoAtendimento(),
         idadeMinima?.let { "venda só para maiores de $it anos" },
         observacoes.trim().ifBlank { null },
     ).joinToString("; ") + "."
 
     /** Os campos que a loja deixou sem informar (a Vênus diz que a equipe confirma, sem inventar). */
     fun faltando(): List<String> = listOfNotNull(
+        if (textoPagamento() == null) "formas de pagamento" else null,
         if (freteMetodos.isEmpty()) "formas de envio" else null,
         if (freteCalculo.isBlank()) "como o frete é calculado" else null,
         if (freteGratisAcimaDe == null) "frete grátis" else null,
@@ -96,18 +121,19 @@ data class RegrasDeVenda(
 
     /** As mesmas perguntas com um nome fixo (pagamento, frete…), para o robô achar a resposta certa. */
     fun perguntasComId(loja: String): List<Triple<String, String, String>> = listOfNotNull(
-        Triple("pagamento", "Quais são as formas de pagamento da $loja?", "Na $loja dá para pagar " + texto().substringAfter("pagamento: ").substringBefore(";") + "."),
-        Triple("frete", "Como funciona o frete e a entrega da $loja?", "A $loja faz " + texto().split("; ").first { it.startsWith("entrega") } + "."),
+        textoPagamento()?.let { Triple("pagamento", "Quais são as formas de pagamento da $loja?", "Na $loja dá para pagar $it.") },
+        textoEntrega()?.let { Triple("frete", "Como funciona o frete e a entrega da $loja?", "A $loja faz $it.") },
         freteGratisAcimaDe?.let { Triple("frete_gratis", "A $loja tem frete grátis?", "Sim, nas compras acima de ${dinheiro(it)}.") },
         prazoPostagemDias?.let { Triple("postagem", "Em quanto tempo a $loja posta o pedido?", "Em até $it ${if (it == 1) "dia útil" else "dias úteis"} depois da confirmação do pagamento.") },
-        Triple("retirada", "Dá para retirar o pedido pessoalmente na $loja?",
-            if (retiradaDisponivel) "Sim, a retirada é ${if (retiradaCustoCentavos == 0) "grátis" else "por ${dinheiro(retiradaCustoCentavos)}"} em $retiradaCidade" +
-                (if (retiradaComo.isNotBlank()) ", com $retiradaComo" else "") + "."
-            else "Não, a $loja trabalha só com envio."
-            ),
+        textoRetirada()?.let {
+            Triple("retirada", "Dá para retirar o pedido pessoalmente na $loja?",
+                if (retiradaDisponivel) "Sim, a retirada é ${if (retiradaCustoCentavos == 0) "grátis" else "por ${dinheiro(retiradaCustoCentavos)}"}" +
+                    (if (retiradaCidade.isNotBlank()) " em $retiradaCidade" else "") + (if (retiradaComo.isNotBlank()) ", com $retiradaComo" else "") + "."
+                else "Não, a $loja trabalha só com envio.")
+        },
         if (embalagemDiscreta) Triple("discreto", "A embalagem da $loja é discreta?", "Sim, a embalagem é neutra e sem identificação do conteúdo ou da loja.") else null,
         Triple("troca", "Posso trocar ou devolver um produto da $loja?", "Sim: em até $arrependimentoDias dias do recebimento você pode desistir da compra, e produto com defeito tem garantia $garantia. Fale com a equipe para combinar."),
-        horarioAtendimento?.let { Triple("horario", "Qual o horário de atendimento da $loja?", "O atendimento é ${canais.joinToString(", ")}, $it.") },
+        horarioAtendimento?.let { Triple("horario", "Qual o horário de atendimento da $loja?", "O atendimento é ${(canais + it).joinToString(", ")}.") },
         idadeMinima?.let { Triple("idade", "Menor de idade pode comprar na $loja?", "Não, a venda é só para maiores de $it anos.") },
     )
 

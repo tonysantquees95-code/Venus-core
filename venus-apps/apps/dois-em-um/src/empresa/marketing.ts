@@ -125,10 +125,11 @@ export const ehRamoIntimo = (ramo: string) =>
     ramo.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, " "));
 
 /** Só as perguntas que fazem sentido para a loja (mesma regra do celular, robo/Respostas.kt). */
-export const modelosDaLoja = (e: { ramo: string; regras: Record<string, any> | null; regrasConfiguradas: boolean }) =>
+export const modelosDaLoja = (e: { ramo: string; site?: string; regras: Record<string, any> | null; regrasConfiguradas: boolean }) =>
   MODELOS_DE_RESPOSTA.filter((m) =>
     (m.id !== "discreto" || (e.regrasConfiguradas && !!e.regras?.envio?.embalagem_discreta)) &&
-    (m.id !== "casal" || ehRamoIntimo(e.ramo)));
+    (m.id !== "casal" || ehRamoIntimo(e.ramo)))
+    .map((m) => (m.id === "pedido" && !e.site ? { ...m, pergunta: "Como faço um pedido?" } : m));
 
 /** O Instagram corta respostas muito longas; deixa uma margem. */
 export const MAXIMO_RESPOSTA = 900;

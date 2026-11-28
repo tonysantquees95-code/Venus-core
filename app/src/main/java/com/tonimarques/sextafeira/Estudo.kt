@@ -460,7 +460,7 @@ object Estudo {
     fun pedidoDeClientes(catalogo: String, foco: String, jaConhecidas: List<String>): String =
         "Você treina a atendente virtual da ${Perfil.loja}, loja online de ${Perfil.ramo} de ${Perfil.cidade} (site ${Loja.SITE}). " +
             "Dados da loja (produto | preço | preço no Pix | estoque | link):\n$catalogo\n" +
-            "No Pix há ${Perfil.pixPorcento}% de desconto. ${if (Perfil.site.isNotBlank()) "Compras pelo site; atendimento também pelo WhatsApp." else "A loja não tem site: a compra é combinada na conversa."}\n" +
+            "${if (Perfil.pixPorcento > 0) "No Pix há ${Perfil.pixPorcento}% de desconto. " else ""}${if (Perfil.site.isNotBlank()) "Compras pelo site; atendimento também pelo WhatsApp." else "A loja não tem site: a compra é combinada na conversa."}\n" +
             "Regras da loja: ${Perfil.regrasDeVenda}\n\n" +
             "Escreva exatamente ${CLIENTES_POR_DIA / 2} perguntas DIFERENTES que clientes mandam de verdade no WhatsApp ou no Instagram, $foco. " +
             "Varie o jeito (curtas, com erro de digitação, tímidas, diretas) e cite produtos reais da lista. " +
@@ -472,7 +472,7 @@ object Estudo {
             "Responda só com JSON: {\"perguntas\":[{\"pergunta\":\"...\",\"resposta\":\"...\"}]}"
 
     fun pedidoDeConferencia(catalogo: String, pares: List<Pair<String, String>>): String =
-        "Você confere respostas de atendimento de uma loja. Dados verdadeiros da loja:\n$catalogo\nNo Pix há ${Perfil.pixPorcento}% de desconto. Regras da loja: ${Perfil.regrasDeVenda}\n\n" +
+        "Você confere respostas de atendimento de uma loja. Dados verdadeiros da loja:\n$catalogo\n${if (Perfil.pixPorcento > 0) "No Pix há ${Perfil.pixPorcento}% de desconto. " else ""}Regras da loja: ${Perfil.regrasDeVenda}\n\n" +
             "Para cada par abaixo, aprove (true) só se a resposta: responde à pergunta; não inventa nada fora dos dados " +
             "(prazos, medidas, políticas, promoções); não diz preço nem estoque; cita o produto e o link certos quando fala de produto; " +
             "é gentil e sem linguagem explícita. Na dúvida, reprove (false). " +

@@ -103,3 +103,9 @@ test("posts e stories do celular", () => {
   assert.equal(s.fila.length, 1);
   assert.equal(lerDocStories({}), null);
 });
+
+test("loja sem site não pergunta sobre pedido pelo site", () => {
+  const pergunta = (site) => modelosDaLoja({ ...EMPRESA_VAZIA, site }).find((m) => m.id === "pedido").pergunta;
+  assert.equal(pergunta(""), "Como faço um pedido?");
+  assert.equal(pergunta("https://loja.com.br"), "Como faço o pedido pelo site?");
+});

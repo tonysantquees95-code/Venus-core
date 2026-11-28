@@ -159,9 +159,9 @@ object GeradorDeCatalogo {
         val regras = Perfil.regras
         val blocos = listOfNotNull(
             "COMO COMPRAR" to "Escolha os produtos e chame a gente no WhatsApp ou no Direct: separamos o seu pedido e combinamos a entrega.",
-            if (Perfil.regrasConfiguradas) "PAGAMENTO" to Perfil.regras.texto().substringAfter("pagamento: ").substringBefore(";").replaceFirstChar { it.uppercase() } + "." else null,
-            if (Perfil.regrasConfiguradas) "ENTREGA" to (regras.texto().split("; ").filter { it.startsWith("entrega") || it.startsWith("retirada") }
-                .joinToString(". ") { it.replaceFirstChar { ch -> ch.uppercase() } } + ".") else null,
+            regras.textoPagamento()?.takeIf { Perfil.regrasConfiguradas }?.let { "PAGAMENTO" to it.replaceFirstChar { c -> c.uppercase() } + "." },
+            listOfNotNull(regras.textoEntrega(), regras.textoRetirada()).takeIf { Perfil.regrasConfiguradas && it.isNotEmpty() }
+                ?.let { l -> "ENTREGA" to (l.joinToString(". ") { it.replaceFirstChar { ch -> ch.uppercase() } } + ".") },
             if (Perfil.site.isNotBlank() && !Perfil.site.contains("sua loja")) "SITE" to Perfil.site else null,
         )
         for ((t, v) in blocos) {

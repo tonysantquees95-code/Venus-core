@@ -25,6 +25,7 @@ Uma linha por mudança que valha lembrar (a mais nova em cima). O Painel Dev tam
 
 | Data | O que mudou | Onde |
 | --- | --- | --- |
+| 2026-11-28 | Campo vazio nas regras de venda não vira afirmação: pagamento, entrega e retirada só aparecem se preenchidos (`RegrasDeVenda.textoPagamento/textoEntrega/textoRetirada`), e loja sem site não é mandada ao site (Novidade 53) | `RegrasDeVenda.kt`, `AtendenteDoRobo.kt`, `robo/Respostas.kt`, `empresa/marketing.ts` |
 | 2026-11-28 | Textos fixos da primeira loja saíram das outras: o que é do ramo íntimo depende de `Perfil.ramoIntimo`, a discrição na entrega de `Perfil.entregaDiscreta` e o que é só da primeira loja (stories já ligados, estudos pessoais) de `Perfil.primeiraLoja`. Texto novo para clientes nunca leva nome, site ou ramo escrito no código. Novidade 52. | `Perfil.kt`, `StoriesDoDia.kt`, `Gemini.kt`, `AtendenteDoRobo.kt`, `Gestao.kt`, `Estudo.kt`, `RegrasDaLoja.kt` |
 | 2026-11-27 | Caderninho: botão "Gerar link de pagamento" nos fiados antigos (sem link) quando há cobrança configurada. Novidade 51. | `CaixaActivity.kt` (`gerarLinkDoFiado`), `Novidades.kt` |
 | 2026-11-27 | Manual criado | `MANUAL.md` |
