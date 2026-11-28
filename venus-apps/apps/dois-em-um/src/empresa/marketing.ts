@@ -120,6 +120,16 @@ export const MODELOS_DE_RESPOSTA: ModeloDeResposta[] = [
   { id: "rastreio", atalho: "rastreio", pergunta: "Como acompanho meu pedido?", faq: false },
   { id: "horario", atalho: "horario", pergunta: "Qual o horário de atendimento?", faq: false }
 ];
+export const ehRamoIntimo = (ramo: string) =>
+  /sex ?shop|moda intima|lingerie|erotic|bem estar intimo|produtos? (intimos?|adultos?)|artigos? adultos?/.test(
+    ramo.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, " "));
+
+/** Só as perguntas que fazem sentido para a loja (mesma regra do celular, robo/Respostas.kt). */
+export const modelosDaLoja = (e: { ramo: string; regras: Record<string, any> | null; regrasConfiguradas: boolean }) =>
+  MODELOS_DE_RESPOSTA.filter((m) =>
+    (m.id !== "discreto" || (e.regrasConfiguradas && !!e.regras?.envio?.embalagem_discreta)) &&
+    (m.id !== "casal" || ehRamoIntimo(e.ramo)));
+
 /** O Instagram corta respostas muito longas; deixa uma margem. */
 export const MAXIMO_RESPOSTA = 900;
 

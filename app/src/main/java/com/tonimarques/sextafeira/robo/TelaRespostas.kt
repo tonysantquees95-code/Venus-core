@@ -157,7 +157,7 @@ class TelaRespostas : TelaBase() {
 
     private fun gerarTodas() {
         val pular = Respostas.lista(this).filter { it.editada }.map { it.modelo.id }.toSet()
-        gerar(Respostas.MODELOS.filter { it.id !in pular }, forcar = false)
+        gerar(Respostas.modelos().filter { it.id !in pular }, forcar = false)
     }
 
     /** Pergunta uma a uma à Vênus da loja e vai preenchendo os campos. */

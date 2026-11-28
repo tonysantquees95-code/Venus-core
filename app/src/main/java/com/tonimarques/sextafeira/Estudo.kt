@@ -43,19 +43,22 @@ object Estudo {
     const val TIPO_SABER = "saber"
 
     /** Uma área por dia, em rodízio (os saberes que ela estuda além da loja). */
-    val DISCIPLINAS = listOf(
+    val DISCIPLINAS: List<String> get() = disciplinas(Perfil.ramoIntimo, Perfil.primeiraLoja)
+
+    /** Os assuntos íntimos são só do ramo; hotelaria e Rio Grande do Sul, só de quem usa a primeira loja. */
+    fun disciplinas(ramoIntimo: Boolean, primeiraLoja: Boolean): List<String> = listOfNotNull(
         "marketing digital e Instagram para pequenas lojas",
         "atendimento e vendas por WhatsApp e Direct",
         "finanças de pequeno negócio: preço, margem, fluxo de caixa e estoque",
         "direito do consumidor e comércio eletrônico no Brasil",
-        "educação sexual e bem-estar íntimo (informativo, sem orientação médica individual)",
+        "educação sexual e bem-estar íntimo (informativo, sem orientação médica individual)".takeIf { ramoIntimo },
         "psicologia do consumidor e comportamento de compra",
-        "logística, embalagem discreta e envio no Brasil",
-        "hotelaria e atendimento ao hóspede",
+        if (ramoIntimo) "logística, embalagem discreta e envio no Brasil" else "logística, embalagem e envio no Brasil",
+        "hotelaria e atendimento ao hóspede".takeIf { primeiraLoja },
         "tecnologia: Android, aplicativos e segurança digital",
         "comunicação, escrita persuasiva e negociação",
         "produtividade, organização e rotina de quem trabalha e empreende",
-        "cultura, história e expressões do Rio Grande do Sul",
+        "cultura, história e expressões do Rio Grande do Sul".takeIf { primeiraLoja },
     )
 
     fun disciplinaDoDia(diaDoAno: Int = java.util.Calendar.getInstance().get(java.util.Calendar.DAY_OF_YEAR)): String =
@@ -403,7 +406,16 @@ object Estudo {
 
     private fun juntar(l: List<String>) = if (l.size <= 1) l.joinToString("") else l.dropLast(1).joinToString(", ") + " e " + l.last()
 
-    val FOCOS_CLIENTE = listOf(
+    val FOCOS_CLIENTE: List<String> get() = if (Perfil.ramoIntimo) FOCOS_INTIMOS else FOCOS_GERAIS
+
+    private val FOCOS_GERAIS = listOf(
+        "sobre os produtos: para que serve, como usar, diferença entre dois produtos, qual indicar para começar ou para presente, " +
+            "material, tamanho, limpeza e cuidados",
+        "sobre comprar: como comprar, formas de pagamento, Pix, parcelamento, entrega e prazo, troca e devolução, " +
+            "produto esgotado, retirada, atendimento pelo WhatsApp",
+    )
+
+    private val FOCOS_INTIMOS = listOf(
         "sobre os produtos: para que serve, como usar, diferença entre dois produtos, qual indicar para iniciantes, para casal, " +
             "para presente, material, tamanho, limpeza, cuidados, se faz barulho, se é à prova d'água, se combina com lubrificante",
         "sobre comprar: como comprar no site, formas de pagamento, Pix, parcelamento, frete e prazo, se a embalagem é discreta, " +
@@ -440,7 +452,7 @@ object Estudo {
             "\n\nEscreva exatamente $VOZ_POR_DIA pedidos para essas ações do jeito que chegam ERRADOS ou informais: " +
             "erros comuns do reconhecimento de voz em português (palavras trocadas por outras de som parecido, falta de acento, " +
             "palavras coladas ou cortadas), erros de digitação no celular, abreviações de WhatsApp (vc, q, pq, tb, msg, zap, insta) " +
-            "e gírias gaúchas (bah, tchê, capaz, tri, guri, guria). Precisa continuar dando para entender o pedido. " +
+            "e gírias${if (Perfil.uf == "RS") " gaúchas (bah, tchê, capaz, tri, guri, guria)" else " do dia a dia"}. Precisa continuar dando para entender o pedido. " +
             "Em cada um, a ação certa e só os argumentos ditos ({} se nenhum). " +
             (if (jaConhecidas.isNotEmpty()) "Não repita estas: ${jaConhecidas.take(40).joinToString(" | ")}. " else "") +
             "Responda só com JSON: {\"frases\":[{\"frase\":\"...\",\"acao\":\"nome\",\"args\":{}}]}"
@@ -448,11 +460,11 @@ object Estudo {
     fun pedidoDeClientes(catalogo: String, foco: String, jaConhecidas: List<String>): String =
         "Você treina a atendente virtual da ${Perfil.loja}, loja online de ${Perfil.ramo} de ${Perfil.cidade} (site ${Loja.SITE}). " +
             "Dados da loja (produto | preço | preço no Pix | estoque | link):\n$catalogo\n" +
-            "No Pix há ${Perfil.pixPorcento}% de desconto. Compras pelo site; atendimento também pelo WhatsApp.\n" +
+            "No Pix há ${Perfil.pixPorcento}% de desconto. ${if (Perfil.site.isNotBlank()) "Compras pelo site; atendimento também pelo WhatsApp." else "A loja não tem site: a compra é combinada na conversa."}\n" +
             "Regras da loja: ${Perfil.regrasDeVenda}\n\n" +
             "Escreva exatamente ${CLIENTES_POR_DIA / 2} perguntas DIFERENTES que clientes mandam de verdade no WhatsApp ou no Instagram, $foco. " +
             "Varie o jeito (curtas, com erro de digitação, tímidas, diretas) e cite produtos reais da lista. " +
-            "Para cada uma, a resposta ideal da loja: acolhedora, discreta, sem julgamento, em até 3 frases, no máximo 1 emoji. " +
+            "Para cada uma, a resposta ideal da loja: acolhedora, ${if (Perfil.ramoIntimo) "discreta, sem julgamento, " else ""}em até 3 frases, no máximo 1 emoji. " +
             "Regras da resposta: use só o que está nos dados; NUNCA diga preço nem quantidade em estoque (mudam), mande o link do produto; " +
             "se a informação não estiver nos dados (prazo, frete, troca, medidas), diga com gentileza que a equipe confirma pelo WhatsApp, sem inventar. " +
             "Sem linguagem explícita. " +

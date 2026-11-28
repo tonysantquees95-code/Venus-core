@@ -20,13 +20,15 @@ object IdeiasDeVideo {
             val desc = p.bruto?.optString("description").orEmpty().takeIf { it != "null" }.orEmpty().replace(Regex("\\s+"), " ").take(220)
             "- ${p.nome}" + (if (desc.isNotBlank()) ": $desc" else "")
         }
+        val estetica = if (Perfil.ehRamoIntimo(ramo)) "Estética elegante, sensual sem ser explícita, nada vulgar nem nudez (regras do Instagram), sem promessas de saúde. "
+        else "Estética bonita e natural, de acordo com o ramo da loja, dentro das regras do Instagram, sem promessas de saúde. "
         return "Você é a social media da $loja, loja online de $ramo. Crie uma ideia de vídeo curto (Reels de 8 a 15 segundos) para CADA produto abaixo, " +
-            "para o Instagram da loja. Estética elegante, sensual sem ser explícita, nada vulgar nem nudez (regras do Instagram), sem promessas de saúde. " +
+            "para o Instagram da loja. " + estetica +
             "Cada vídeo deve fazer sentido com o produto de verdade: mostre o produto, o clima e o benefício, sem inventar características.\n" +
             "Produtos:\n$lista\n" +
             "Responda só com JSON: {\"ideias\":[{\"produto\":\"nome exato\",\"titulo\":\"até 50 caracteres\",\"roteiro\":[\"cena 1\",\"cena 2\",\"cena 3\"]," +
             "\"pedido_ia\":\"descrição da cena em inglês, pronta para um gerador de vídeo por IA: câmera, luz, cores, movimento, sem texto na tela\"," +
-            "\"legenda\":\"até 220 caracteres, com chamada para ver no site\",\"hashtags\":\"5 hashtags\"}]}"
+            "\"legenda\":\"até 220 caracteres, com chamada para ${if (Perfil.site.isNotBlank()) "ver no site" else "chamar a loja"}\",\"hashtags\":\"5 hashtags\"}]}"
     }
 
     fun ler(json: String): List<Ideia> {

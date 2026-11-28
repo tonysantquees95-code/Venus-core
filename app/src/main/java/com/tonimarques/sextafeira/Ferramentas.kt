@@ -1408,7 +1408,7 @@ class Ferramentas(private val activity: Activity, private val memoria: Memoria? 
         const val LEITOR_ATIVO = false
         const val MENSAGENS_INDISPONIVEL =
             "Ler e responder mensagens do WhatsApp não funciona nesta versão: o Android bloqueia a instalação de apps de fora da Play Store " +
-                "que leem notificações. Para mandar uma mensagem nova, diga: manda mensagem para a Natália que, e a mensagem."
+                "que leem notificações. Para mandar uma mensagem nova, diga: manda mensagem para a Maria que, e a mensagem."
         const val PEDIDO_CONTATOS = 20
         const val PEDIDO_LIGACAO = 22
         const val PEDIDO_LOCALIZACAO = 21

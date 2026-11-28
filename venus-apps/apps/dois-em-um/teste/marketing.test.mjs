@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { buscarConversas, extrairJson, inspiracao, lerIdeiasDePost, lerIdeiasDeVideo, lerStories, limparResposta, MODELOS_DE_RESPOSTA, pedidoDeIdeiasDePost, pedidoDeResposta, primeirosPassos, resumirConversa } from "../src/empresa/marketing.ts";
+import { buscarConversas, extrairJson, inspiracao, lerIdeiasDePost, lerIdeiasDeVideo, lerStories, limparResposta, MODELOS_DE_RESPOSTA, modelosDaLoja, pedidoDeIdeiasDePost, pedidoDeResposta, primeirosPassos, resumirConversa } from "../src/empresa/marketing.ts";
 import { EMPRESA_VAZIA } from "../src/empresa/logica.ts";
 import { hsvParaRgb, paraSecundaria, rgbParaHsv, trio } from "../src/theming/cor.ts";
 
@@ -41,6 +41,13 @@ test("respostas do Instagram: 12 modelos (4 perguntas frequentes), texto limpo e
   const p = pedidoDeResposta(loja, MODELOS_DE_RESPOSTA[0], "Loja: Desejo.");
   assert.ok(p.includes("A entrega é discreta?") && p.includes("Loja: Desejo."));
   assert.ok(inspiracao("gel íntimo")[0].url.includes("%C3%ADntimo"));
+});
+
+test("respostas prontas: embalagem discreta e “a dois” só em quem tem a ver", () => {
+  const geral = modelosDaLoja({ ...EMPRESA_VAZIA, ramo: "papelaria" }).map((m) => m.id);
+  assert.ok(!geral.includes("discreto") && !geral.includes("casal"));
+  const intima = modelosDaLoja({ ...EMPRESA_VAZIA, ramo: "Moda íntima e sex shop", regrasConfiguradas: true, regras: { envio: { embalagem_discreta: true } } });
+  assert.equal(intima.length, 12);
 });
 
 test("primeiros passos acompanham o cadastro", () => {

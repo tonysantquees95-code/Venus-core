@@ -192,9 +192,18 @@ object Gestao {
         return c
     }
 
-    fun datasDoAno(ano: Int): List<Data> {
+    fun datasDoAno(ano: Int, ramoIntimo: Boolean = Perfil.ramoIntimo): List<Data> {
         fun d(mes: Int, dia: Int) = Calendar.getInstance().apply { clear(); set(ano, mes, dia, 12, 0) }
         val carnaval = pascoa(ano).apply { add(Calendar.DAY_OF_MONTH, -47) }
+        if (!ramoIntimo) return listOf(
+            Data("Carnaval", carnaval, "tema da folia nas publicações; avise o horário da loja e poste uma semana antes"),
+            Data("Dia Internacional da Mulher", d(Calendar.MARCH, 8), "homenagem sincera e, se fizer sentido, uma condição especial"),
+            Data("Dia do Consumidor", d(Calendar.MARCH, 15), "cupom ou frete grátis por 1 ou 2 dias"),
+            Data("Dia dos Namorados", d(Calendar.JUNE, 12), "sugestões de presente e combos; reforce o estoque 3 semanas antes"),
+            Data("Black Friday", blackFriday(ano), "descontos reais nos parados e nos da curva C; garanta estoque dos da curva A"),
+            Data("Natal", d(Calendar.DECEMBER, 25), "sugestões de presente, embalagem caprichada e prazos bem avisados"),
+            Data("Réveillon", d(Calendar.DECEMBER, 31), "o que combina com a virada; poste até o dia 26"),
+        )
         return listOf(
             Data("Carnaval", carnaval, "kits para a folia, géis e preservativos; poste uma semana antes"),
             Data("Dia Internacional da Mulher", d(Calendar.MARCH, 8), "autocuidado e prazer feminino; lingeries e vibradores em destaque"),

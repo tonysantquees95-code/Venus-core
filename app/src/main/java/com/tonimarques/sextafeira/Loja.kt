@@ -1225,8 +1225,8 @@ class Loja(private val contexto: Context) {
             val link = "$SITE/pedido/${p.id}"
             val rastreio = a.rastreio ?: p.rastreio
             val texto = when (status) {
-                "paid" -> "$ola Recebemos o pagamento do seu pedido #${p.id} (${dinheiro(p.totalCentavos)}). Já estamos separando tudo com muito cuidado e discrição. 💖\nAcompanhe aqui: $link"
-                "preparing" -> "$ola Seu pedido #${p.id} já está sendo separado, com embalagem neutra e discreta. Em breve ele segue para " +
+                "paid" -> "$ola Recebemos o pagamento do seu pedido #${p.id} (${dinheiro(p.totalCentavos)}). Já estamos separando tudo com muito cuidado${if (Perfil.ramoIntimo) " e discrição" else ""}. 💖\nAcompanhe aqui: $link"
+                "preparing" -> "$ola Seu pedido #${p.id} já está sendo separado${if (Perfil.entregaDiscreta) ", com embalagem neutra e discreta" else ""}. Em breve ele segue para " +
                     (if (p.entrega == "pickup") "a retirada." else "o envio.") + " 💖\nAcompanhe aqui: $link"
                 "shipped" -> "$ola Seu pedido #${p.id} foi enviado! 📦\n" +
                     (if (rastreio != null) "Código de rastreio: $rastreio\n" else "Assim que o código de rastreio sair, ele aparece na página do pedido.\n") +

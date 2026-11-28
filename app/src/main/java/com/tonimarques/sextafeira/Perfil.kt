@@ -54,6 +54,23 @@ object Perfil {
         append("- Nunca prometa desconto, frete, prazo ou condição que não esteja aqui.")
     }
 
+    /** O site da primeira loja: é ele que mantém o que é só dela (stories já ligados, estudos pessoais). */
+    const val SITE_DA_PRIMEIRA_LOJA = "https://desejo-de-intimidade.tonysantquees95.workers.dev"
+    val primeiraLoja: Boolean get() = site == SITE_DA_PRIMEIRA_LOJA
+
+    /** Só lojas deste ramo recebem textos de bem-estar íntimo, lingerie e produtos adultos. */
+    val ramoIntimo: Boolean get() = ehRamoIntimo(ramo)
+
+    fun ehRamoIntimo(ramo: String): Boolean = RAMO_INTIMO.containsMatchIn(ComandosLocais.normalizar(ramo))
+
+    private val RAMO_INTIMO = Regex("sex[ -]?shop|moda intima|lingerie|erotic|bem[ -]estar intimo|produtos? (intimos?|adultos?)|artigos? adultos?")
+
+    /** A loja marcou "embalagem discreta" nas regras de venda: só então a Vênus fala em discrição na entrega. */
+    val entregaDiscreta: Boolean get() = regrasConfiguradas && regras.embalagemDiscreta
+
+    /** "loja online de moda íntima e sex shop", "loja de roupas" (sem site) ou só "loja", conforme o que foi preenchido. */
+    fun descricaoDaLoja(): String = (if (site.isNotBlank()) "loja online" else "loja") + (if (ramo.isNotBlank()) " de $ramo" else "")
+
     /** Uma frase sobre o dono (rotina, trabalho), usada no estudo de saberes. */
     @Volatile var sobre: String = "mora em Porto Alegre e trabalha num hotel"
         private set

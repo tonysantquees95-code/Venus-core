@@ -8,7 +8,7 @@ import { useEmpresa } from "./EmpresaProvider";
 import { pedirTexto } from "./ia";
 import { contextoDaEmpresa, regrasEmLinhas } from "./logica";
 import {
-  buscarConversas, inspiracao, lerIdeiasDePost, lerIdeiasDeVideo, lerStories, limparResposta, MAXIMO_RESPOSTA, MODELOS_DE_RESPOSTA,
+  buscarConversas, inspiracao, lerIdeiasDePost, lerIdeiasDeVideo, lerStories, limparResposta, MAXIMO_RESPOSTA, MODELOS_DE_RESPOSTA, modelosDaLoja,
   pedidoDeIdeiasDePost, pedidoDeIdeiasDeVideo, pedidoDeResposta, pedidoDeStories, primeirosPassos, resumirConversa,
   type IdeiaDePost, type IdeiaDeVideo, type StoryDoDia
 } from "./marketing";
@@ -366,7 +366,7 @@ export function RespostasDoInstagram() {
       setSalvas((s) => ({ ...s, [id]: { texto: t, editada: false } }));
     } catch (e) { setErro(e instanceof Error ? e.message : "Não consegui agora."); } finally { setFazendo(null); }
   };
-  const todas = async () => { for (const m of MODELOS_DE_RESPOSTA) if (!salvas[m.id]?.editada) await gerar(m.id); };
+  const todas = async () => { for (const m of modelosDaLoja(empresa)) if (!salvas[m.id]?.editada) await gerar(m.id); };
   return (
     <>
       <Titulo titulo="Respostas do Instagram (Robô)" descricao="Respostas prontas para colar nas “Perguntas frequentes” (até 4) e nas “Respostas salvas” do Direct do Instagram." />
@@ -375,7 +375,7 @@ export function RespostasDoInstagram() {
         <Erro texto={erro} />
       </div>
       <div className="grid gap-3 xl:grid-cols-2">
-        {MODELOS_DE_RESPOSTA.map((m) => {
+        {modelosDaLoja(empresa).map((m) => {
           const r = salvas[m.id];
           return (
             <Cartao key={m.id} id={`resp-${m.id}`} titulo={m.pergunta} descricao={`Atalho: /${m.atalho}${m.faq ? " · pergunta frequente" : ""}`}>

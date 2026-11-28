@@ -333,7 +333,12 @@ object Postagens {
 
         // selo com o endereço
         val endereco = link.ifBlank { Loja.SITE }.removePrefix("https://").removePrefix("http://").removeSuffix("/")
-        val chamada = if (link.isNotBlank()) "Compre este produto no site" else "Compre no site, entrega discreta"
+        val chamada = when {
+            link.isNotBlank() -> "Compre este produto no site"
+            endereco.isBlank() -> "Chame a loja e faça seu pedido"
+            Perfil.entregaDiscreta -> "Compre no site, entrega discreta"
+            else -> "Compre no nosso site"
+        }
         val p1 = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
             color = android.graphics.Color.WHITE
             textSize = 42f
@@ -344,14 +349,15 @@ object Postagens {
             typeface = android.graphics.Typeface.SANS_SERIF
             textSize = if (endereco.length > 42) 30f else 34f
         }
-        val largura = maxOf(p1.measureText(chamada), p2.measureText(endereco)) + 90f
+        val rodape = endereco.ifBlank { Perfil.loja }
+        val largura = maxOf(p1.measureText(chamada), p2.measureText(rodape)) + 90f
         val selo = android.graphics.RectF((w - largura) / 2, 1560f, (w + largura) / 2, 1700f)
         tela.drawRoundRect(selo, 70f, 70f, android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
             color = android.graphics.Color.rgb(255, 46, 151)
             setShadowLayer(30f, 0f, 0f, android.graphics.Color.argb(170, 255, 46, 151))
         })
         tela.drawText(chamada, w / 2f, 1620f, p1)
-        tela.drawText(endereco, w / 2f, 1672f, p2)
+        tela.drawText(rodape, w / 2f, 1672f, p2)
 
         val saida = java.io.ByteArrayOutputStream()
         arte.compress(android.graphics.Bitmap.CompressFormat.JPEG, 92, saida)

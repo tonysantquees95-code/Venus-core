@@ -142,7 +142,7 @@ internal fun MainActivity.gerarRelatorio(periodo: String) {
         arquivo.writeBytes(bytes)
         val fala = "O relatório de $titulo está pronto. " +
             (if (res.lucro >= 0) "Lucro de ${Loja.dinheiro(res.lucro.toInt())}" else "Prejuízo de ${Loja.dinheiro((-res.lucro).toInt())}") +
-            " sobre ${Loja.dinheiro(res.receita.toInt())} em vendas. Você pode abrir, imprimir ou mandar para a Natália."
+            " sobre ${Loja.dinheiro(res.receita.toInt())} em vendas. Você pode abrir, imprimir ou compartilhar."
         val acao: () -> Unit = {
             responder(fala)
             oferecerPdf(uri)

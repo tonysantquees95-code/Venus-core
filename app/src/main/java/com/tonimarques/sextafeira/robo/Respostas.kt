@@ -34,6 +34,10 @@ object Respostas {
         Modelo("horario", "horario", "Qual o horário de atendimento?", false),
     )
 
+    /** Só as perguntas que fazem sentido para a loja aberta. */
+    fun modelos(entregaDiscreta: Boolean = com.tonimarques.sextafeira.Perfil.entregaDiscreta, ramoIntimo: Boolean = com.tonimarques.sextafeira.Perfil.ramoIntimo): List<Modelo> =
+        MODELOS.filter { (it.id != "discreto" || entregaDiscreta) && (it.id != "casal" || ramoIntimo) }
+
     /** O Instagram corta respostas muito longas; deixa uma margem. */
     const val MAXIMO = 900
 
@@ -41,7 +45,7 @@ object Respostas {
 
     fun lista(ctx: Context): List<Pronta> {
         val salvas = lerSalvas(prefs(ctx).getString("lista", "{}").orEmpty())
-        return MODELOS.map { m -> salvas[m.id]?.let { Pronta(m, it.texto, it.editada, it.conferir) } ?: Pronta(m, "", false, false) }
+        return modelos().map { m -> salvas[m.id]?.let { Pronta(m, it.texto, it.editada, it.conferir) } ?: Pronta(m, "", false, false) }
     }
 
     fun quando(ctx: Context): Long = prefs(ctx).getLong("quando", 0)

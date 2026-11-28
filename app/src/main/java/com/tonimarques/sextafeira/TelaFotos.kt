@@ -83,19 +83,21 @@ internal fun MainActivity.abrirCadastro(args: Map<String, Any>, fotoInicial: Byt
 
     // --- produto
     f.cartao("Produto")
-    val (blocoNome, nome) = f.campo("Nome", nomeFalado, "Ex.: Gel de massagem morango 60ml")
+    val (blocoNome, nome) = f.campo("Nome", nomeFalado, if (Perfil.ramoIntimo) "Ex.: Gel de massagem morango 60ml" else "Ex.: nome e tamanho do produto")
     f.adicionar(blocoNome, 2)
     // sem site (catálogo na Vênus): a categoria é livre, do ramo de cada loja
     val interno = loja.ehInterno
     val categoria = f.seletor(categorias.map { it.second }, categorias.indexOfFirst { it.first == Loja.categoriaProvavel(nomeFalado) }.coerceAtLeast(0))
     val (blocoCategoria, categoriaLivre) = f.campo("Categoria", "", "Ex.: Vestidos, Bolsas, Acessórios")
-    if (interno) f.adicionar(blocoCategoria, 12)
+    // a lista fechada de categorias é a do site da primeira loja; as outras escrevem a própria
+    val categoriaAberta = interno || (!Perfil.primeiraLoja && Plataformas.tipo(this) != "floot")
+    if (categoriaAberta) f.adicionar(blocoCategoria, 12)
     else {
         f.adicionar(f.rotulo("Categoria"), 12)
         f.adicionar(categoria, 5)
     }
     fun categoriaEscolhida(): Pair<String, String> =
-        if (interno) categoriaLivre.text.toString().trim().let { it to it.ifBlank { Perfil.ramo } } else categorias[categoria.selectedItemPosition]
+        if (categoriaAberta) categoriaLivre.text.toString().trim().let { it to it.ifBlank { Perfil.ramo } } else categorias[categoria.selectedItemPosition]
 
     // --- preço, custo e estoque
     f.cartao("Preço e estoque")
@@ -333,7 +335,7 @@ internal fun MainActivity.editarFundo(fotoInicial: ByteArray?, aoUsar: ((ByteArr
         val k = chave()
         processar("Pedindo à IA (pode levar até um minuto)") {
             val r = Gemini.trocarFundoComIA(k, it, texto)
-                ?: throw Exception("A IA não fez essa edição (ela recusa algumas fotos de produtos íntimos). Use um dos fundos da loja.")
+                ?: throw Exception("A IA não fez essa edição" + (if (Perfil.ramoIntimo) " (ela recusa algumas fotos de produtos íntimos)" else "") + ". Use um dos fundos da loja.")
             // a IA pode devolver PNG: converte para JPEG quadrado como as outras
             val b = android.graphics.BitmapFactory.decodeByteArray(r, 0, r.size) ?: throw Exception("A IA devolveu uma imagem inválida.")
             java.io.ByteArrayOutputStream().use { out -> b.compress(android.graphics.Bitmap.CompressFormat.JPEG, 90, out); out.toByteArray() }

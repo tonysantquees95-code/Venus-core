@@ -243,7 +243,7 @@ object PedidosDoSite {
             null
         }
         val hora = SimpleDateFormat("dd/MM 'às' HH:mm", Locale("pt", "BR")).format(quando)
-        val como = if (Instagram.conectado(ctx)) "sai sozinho" else "na hora chega o aviso no celular do Toni para postar com um toque"
+        val como = if (Instagram.conectado(ctx)) "sai sozinho" else "na hora chega o aviso no celular de ${Perfil.dono} para postar com um toque"
         Diario.anotar(ctx, "instagram", "Ideia programada pelo site como ${if (tipo == "story") "story" else "post"}: ${ideia.titulo} ($hora, post ${post.id})", "site")
         return Resultado(true, "Programado para $hora${if (produto != null) ", com a foto de ${produto.nome}" else ""}: $como.", url)
     }

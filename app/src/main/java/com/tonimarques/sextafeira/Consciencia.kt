@@ -102,8 +102,8 @@ object Consciencia {
         val licoes = memoria.itensDoTipo(TIPO_LICAO, 12).joinToString("\n") { "- ${it.texto}" }
         val ultimaReserva = if (SegundaIA.ultimaVez > 0) Diario.hora(SegundaIA.ultimaVez) else "ainda não usada nesta sessão"
         return listOf(
-            "IDENTIDADE: ${Marca.nome} ${versao(ctx)}, assistente pessoal e comercial do ${Perfil.dono}, app Android próprio. Também existem a Vênus da Loja " +
-                "(atende no site desejo-de-intimidade.tonysantquees95.workers.dev) e o Vênus Robô (responde o WhatsApp Business pelas notificações).",
+            "IDENTIDADE: ${Marca.nome} ${versao(ctx)}, assistente pessoal e comercial do ${Perfil.dono}, app Android próprio. Também existem " +
+                (if (Perfil.primeiraLoja) "a Vênus da Loja (atende no site desejo-de-intimidade.tonysantquees95.workers.dev) e " else "") + "o Vênus Robô (responde o WhatsApp Business pelas notificações).",
             "CÉREBRO (ordem): ${cerebro(ctx).joinToString(" → ")}. IA reserva usada pela última vez: $ultimaReserva. Voz: ${VozNeural.resumo(ctx)}",
             "ESTADO: ${estadoCurto(ctx)}.",
             "MEMÓRIA: $contagem. $estudo.",

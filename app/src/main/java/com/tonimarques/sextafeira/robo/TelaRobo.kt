@@ -57,7 +57,7 @@ class TelaRobo : TelaBase() {
         val prontas = Respostas.lista(this).count { it.texto.isNotBlank() }
         adicionar(texto(
             if (prontas == 0) "A Vênus da loja escreve as respostas para as perguntas mais comuns, e você cola nas ferramentas oficiais do Instagram. O Instagram responde sozinho, sem risco de bloqueio."
-            else "$prontas de ${Respostas.MODELOS.size} respostas prontas para colar no Instagram.",
+            else "$prontas de ${Respostas.modelos().size} respostas prontas para colar no Instagram.",
             13.5f, Color.WHITE,
         ))
         val regras = RegrasDaVenus.ler(this)
@@ -134,7 +134,7 @@ class TelaRobo : TelaBase() {
             "Desligado: pergunta à Vênus da loja no site, com o endereço e a chave abaixo.", 12.5f, apagado))
         cartao("Vênus da loja (site)")
         adicionar(texto("Endereço", 12.5f, apagado))
-        val endereco = campo(Robo.endereco(this), InputType.TYPE_TEXT_VARIATION_URI)
+        val endereco = campo(Robo.endereco(this).takeUnless { it == Robo.ENDERECO_PADRAO && !com.tonimarques.sextafeira.Perfil.primeiraLoja }.orEmpty(), InputType.TYPE_TEXT_VARIATION_URI)
         adicionar(endereco)
         adicionar(texto("Chave do robô (no painel da loja)", 12.5f, apagado))
         val chave = campo(Robo.chave(this), InputType.TYPE_TEXT_VARIATION_PASSWORD)

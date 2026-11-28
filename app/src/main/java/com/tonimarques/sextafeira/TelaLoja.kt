@@ -72,8 +72,8 @@ internal fun MainActivity.editarPerfil() {
     }
     val dono = campo(Perfil.dono, "Seu nome")
     val loja = campo(Perfil.loja, "Nome da loja")
-    val cidade = campo(Perfil.cidade + if (Perfil.uf.isNotBlank()) ", ${Perfil.uf}" else "", "Cidade e estado (ex.: Porto Alegre, RS)")
-    val sobre = campoDeDialogo(Perfil.sobre, "Uma frase sobre você (ex.: trabalho num hotel)")
+    val cidade = campo(Perfil.cidade + if (Perfil.uf.isNotBlank()) ", ${Perfil.uf}" else "", "Cidade e estado (ex.: Campinas, SP)")
+    val sobre = campoDeDialogo(Perfil.sobre, "Uma frase sobre você (ex.: cuido da loja sozinha)")
     listOf(dono, loja, cidade, sobre).forEach { caixa.addView(it) }
     CaixaBuilder(this)
         .setTitle("Perfil do dono e da loja")
@@ -120,7 +120,7 @@ internal fun MainActivity.editarDadosDaLoja() {
 
     secao("Loja")
     val site = texto(Perfil.site.removePrefix("https://"), if (Plataformas.tipo(this) == "interno") "Endereço do site (vazio = loja sem site)" else "Endereço do site (ex.: minhaloja.com.br)")
-    val ramo = texto(Perfil.ramo, "Ramo (ex.: moda íntima e sex shop)")
+    val ramo = texto(Perfil.ramo, "Ramo (ex.: moda, cosméticos, eletrônicos)")
     secao("Pagamento")
     val pix = numero(r.pixDescontoPct, "Desconto no Pix (%)")
     val pixPromo = marcar(r.pixValeEmPromocao, "Desconto do Pix vale também em produtos em promoção")

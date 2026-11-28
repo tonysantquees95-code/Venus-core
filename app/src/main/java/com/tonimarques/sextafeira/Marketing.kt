@@ -198,7 +198,7 @@ internal fun MainActivity.abrirLogo() {
 }
 
 private fun MainActivity.criarLogotipos() {
-    perguntar("Logotipo", listOf("Nome da marca" to Perfil.loja, "Slogan (opcional)" to "", "Estilo (ex.: sensual, delicado, moderno)" to "elegante"), "Criar") { v ->
+    perguntar("Logotipo", listOf("Nome da marca" to Perfil.loja, "Slogan (opcional)" to "", "Estilo (ex.: elegante, delicado, moderno)" to "elegante"), "Criar") { v ->
         val nome = v[0].ifBlank { Perfil.loja }
         aviso("Criando conceitos…")
         emFundo({

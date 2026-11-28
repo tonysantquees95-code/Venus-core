@@ -41,8 +41,8 @@ import java.util.Locale
 
 /**
  * Stories do dia: duas vezes por dia (manhã e tarde) a Vênus publica sozinha no Instagram da loja um story de
- * dica ou curiosidade sobre bem-estar, autoestima e intimidade, com a cara da loja (fundo preto, rosa neon,
- * logo, foto de um produto da loja ao fundo).
+ * dica ou curiosidade do ramo da loja (bem-estar e intimidade só nas lojas desse ramo), com fundo preto, rosa neon,
+ * logo e foto de um produto da loja ao fundo. Vêm ligados só na primeira loja; as outras ligam em Publicações.
  *
  * Os textos vêm do Gemini uma vez por semana (14 de uma vez, gastando só 1 pedido da cota); se o Gemini
  * não responder, usa uma reserva fixa, então o story nunca falha por falta de texto.
@@ -88,7 +88,8 @@ object StoriesDoDia {
             .put("fila", proximos).put("usados", usados)
     }
 
-    fun ligado(ctx: Context) = prefs(ctx).getBoolean("ligado", true)
+    // nenhuma outra loja publica sem ter ligado por conta própria
+    fun ligado(ctx: Context) = prefs(ctx).getBoolean("ligado", Perfil.primeiraLoja)
 
     fun definirLigado(ctx: Context, v: Boolean) {
         prefs(ctx).edit().putBoolean("ligado", v).apply()
@@ -115,7 +116,8 @@ object StoriesDoDia {
     fun horaTexto(minutos: Int) = "%d:%02d".format(minutos / 60, minutos % 60)
 
     fun descricao(ctx: Context): String {
-        val base = "Às ${horaTexto(horario(ctx, "manha"))} publica sozinha um story de dica ou curiosidade sobre bem-estar e autoestima, com a cara da loja" +
+        val base = "Às ${horaTexto(horario(ctx, "manha"))} publica sozinha um story de dica ou curiosidade " +
+            (if (Perfil.ramoIntimo) "sobre bem-estar e autoestima" else "sobre o ramo da loja") + ", com a cara da loja" +
             (if (tardeInterativa(ctx)) "; às ${horaTexto(horario(ctx, "tarde"))} prepara o story com enquete (você só põe o adesivo e publica)."
             else " e às ${horaTexto(horario(ctx, "tarde"))} também.") + " Depois chega um aviso para pôr no status do WhatsApp."
         val ultimo = prefs(ctx).getString("ultimo", null)?.let { " Último: $it" }.orEmpty()
@@ -541,7 +543,13 @@ object StoriesDoDia {
     }
 
     // ------------------------------------------------------------------ temas (textos)
+    /** De que loja são os textos guardados: trocou de loja ou de ramo, a fila antiga não serve mais. */
+    private fun donoDaFila() = "${Perfil.loja}|${Perfil.ramo}"
+
     private fun fila(ctx: Context): MutableList<Tema> {
+        val de = prefs(ctx).getString("fila_de", null)
+        // fila sem marca vem de antes desta versão: só a primeira loja aproveita
+        if (if (de == null) !Perfil.primeiraLoja else de != donoDaFila()) return mutableListOf()
         val a = try {
             JSONArray(prefs(ctx).getString("fila", "[]"))
         } catch (e: Exception) {
@@ -553,7 +561,7 @@ object StoriesDoDia {
     private fun salvarFila(ctx: Context, l: List<Tema>) {
         val a = JSONArray()
         l.forEach { a.put(JSONObject().put("tipo", it.tipo).put("titulo", it.titulo).put("texto", it.texto).put("enquete", it.enquete)) }
-        prefs(ctx).edit().putString("fila", a.toString()).apply()
+        prefs(ctx).edit().putString("fila", a.toString()).putString("fila_de", donoDaFila()).apply()
     }
 
     private fun usados(ctx: Context): List<String> = try {
@@ -584,7 +592,8 @@ object StoriesDoDia {
         }
         f.firstOrNull()?.let { return it }
         val ja = usados(ctx).map { ComandosLocais.normalizar(it) }.toSet()
-        return RESERVA.firstOrNull { ComandosLocais.normalizar(it.titulo) !in ja } ?: RESERVA[(System.currentTimeMillis() / 86_400_000L % RESERVA.size).toInt()]
+        val reserva = reservaPara(Perfil.ramoIntimo)
+        return reserva.firstOrNull { ComandosLocais.normalizar(it.titulo) !in ja } ?: reserva[(System.currentTimeMillis() / 86_400_000L % reserva.size).toInt()]
     }
 
     private fun gerarTemas(ctx: Context): List<Tema> {
@@ -597,10 +606,13 @@ object StoriesDoDia {
     }
 
     fun pedidoDeTemas(jaUsados: List<String>): String =
-        "Você é a social media da ${Perfil.loja}, loja online de ${Perfil.ramo} de ${Perfil.cidade}. " +
-            "Crie 14 textos curtos para stories do Instagram, metade \"dica\" e metade \"curiosidade\", sobre: autoestima, amor-próprio, " +
-            "autocuidado, bem-estar íntimo, relacionamento e comunicação a dois, conhecer o próprio corpo, sono, estresse e libido, " +
-            "romance e datas especiais. Tom acolhedor, elegante, inclusivo e sem julgamento, em português do Brasil. " +
+        "Você é a social media da ${Perfil.loja}, ${Perfil.descricaoDaLoja()}" + (if (Perfil.cidade.isNotBlank()) " de ${Perfil.cidade}" else "") + ". " +
+            "Crie 14 textos curtos para stories do Instagram, metade \"dica\" e metade \"curiosidade\", sobre: " +
+            (if (Perfil.ramoIntimo) "autoestima, amor-próprio, " +
+                "autocuidado, bem-estar íntimo, relacionamento e comunicação a dois, conhecer o próprio corpo, sono, estresse e libido, " +
+                "romance e datas especiais"
+            else "como escolher, usar e cuidar do que a loja vende, assuntos do ramo que interessam às clientes, atendimento e datas especiais") +
+            ". Tom acolhedor, elegante, inclusivo e sem julgamento, em português do Brasil. " +
             "Regras: nada explícito nem vulgar (regras do Instagram); sem nomes de produtos nem preços; sem promessas de saúde nem " +
             "conselho médico; curiosidades só se forem verdadeiras e bem conhecidas (na dúvida, faça uma dica). " +
             "Título com até 45 caracteres; texto com até 170 caracteres; no máximo 1 emoji por texto. " +
@@ -646,6 +658,26 @@ object StoriesDoDia {
         Tema("dica", "Celebre seu corpo", "Troque a crítica no espelho por gratidão: pelo que seu corpo faz, sente e vive todos os dias."),
         Tema("curiosidade", "Perfume e memória", "O olfato é muito ligado às emoções e às lembranças. Um perfume especial pode virar a marca de um momento a dois."),
     )
+
+    /** Reserva das outras lojas: serve a qualquer ramo, sem prometer nada que a loja não informou. */
+    val RESERVA_GERAL = listOf(
+        Tema("dica", "Tem dúvida? Pergunte", "Antes de comprar, chame a loja e tire suas dúvidas. Escolher com calma é o melhor jeito de acertar ✨"),
+        Tema("dica", "Faça sua lista", "Anotar o que você precisa antes de comprar ajuda a escolher melhor e a não esquecer nada."),
+        Tema("dica", "Pense em quem vai ganhar", "Na hora de presentear, lembre do dia a dia da pessoa: o presente que ela usa é o que ela lembra."),
+        Tema("dica", "Compare com calma", "Veja os detalhes de cada opção antes de decidir. Se faltar alguma informação, é só perguntar."),
+        Tema("dica", "Cuide para durar", "Siga as instruções de uso e cuidado do produto. Esse hábito simples faz diferença no dia a dia."),
+        Tema("dica", "Não deixe para a última hora", "Tem data especial chegando? Escolhendo antes, você decide sem pressa."),
+        Tema("dica", "Conte o que achou", "Sua opinião ajuda a loja a melhorar e ajuda outras pessoas a escolher. Mande uma mensagem 💬"),
+        Tema("dica", "Apoie o pequeno negócio", "Compartilhar, comentar e indicar não custa nada e ajuda muito uma loja pequena a crescer."),
+        Tema("dica", "Salve para depois", "Gostou de algo que viu por aqui? Salve a publicação para achar fácil quando quiser."),
+        Tema("dica", "Indique para quem você gosta", "Conhece alguém que ia gostar da loja? Mande o perfil para essa pessoa."),
+        Tema("dica", "Guarde o comprovante", "Guardar o comprovante da compra facilita se você precisar falar com a loja depois."),
+        Tema("dica", "Peça uma sugestão", "Não sabe por onde começar? Conte o que você procura e peça uma sugestão para a loja."),
+        Tema("dica", "Confira antes de pagar", "Antes de fechar o pedido, confira o produto, o valor e como vai receber."),
+        Tema("dica", "Fique de olho nos stories", "É por aqui que a loja conta o que há de novo. Acompanhe para não perder."),
+    )
+
+    fun reservaPara(ramoIntimo: Boolean): List<Tema> = if (ramoIntimo) RESERVA else RESERVA_GERAL
 
     // ------------------------------------------------------------------ arte 1080×1920 com a cara da loja
     fun arte(ctx: Context, tema: Tema, espacoEnquete: Boolean = false): ByteArray {
@@ -708,7 +740,7 @@ object StoriesDoDia {
             typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
             setShadowLayer(16f, 0f, 0f, Color.argb(160, 255, 46, 151))
         }
-        val textoRotulo = if (tema.tipo == "curiosidade") "VOCÊ SABIA?" else "DICA DE BEM-ESTAR"
+        val textoRotulo = if (tema.tipo == "curiosidade") "VOCÊ SABIA?" else if (Perfil.ramoIntimo) "DICA DE BEM-ESTAR" else "DICA DO DIA"
         tela.drawText(textoRotulo, (w - rotulo.measureText(textoRotulo)) / 2, y, rotulo)
         y += 60f
         val filete = Paint(Paint.ANTI_ALIAS_FLAG).apply { strokeWidth = 3f }
@@ -779,6 +811,7 @@ object StoriesDoDia {
     private fun logo(ctx: Context): Bitmap? {
         val arquivo = File(ctx.filesDir, "logo_loja.png")
         if (!arquivo.exists() || arquivo.length() == 0L) {
+            if (!Perfil.primeiraLoja) return null // o logo guardado no site é o da primeira loja
             try {
                 val c = URL(Loja.enderecoCompleto(LOGO)).openConnection() as HttpURLConnection
                 c.connectTimeout = 10_000

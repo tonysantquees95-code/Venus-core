@@ -29,9 +29,9 @@ object AtendenteDoRobo {
     data class Saida(val mensagens: List<String>, val humano: Boolean)
 
     // ------------------------------------------------------------------ textos
-    fun menu(loja: String, assistente: String, temRetirada: Boolean): String =
+    fun menu(loja: String, assistente: String, temRetirada: Boolean, temDiscreta: Boolean = true): String =
         "Oi! Eu sou a $assistente, assistente virtual da $loja 💗 Como posso te ajudar? Responda com o número:\n" +
-            "1 - Produtos e promoções\n2 - Frete e prazo de entrega\n3 - Formas de pagamento\n4 - Entrega discreta\n" +
+            "1 - Produtos e promoções\n2 - Frete e prazo de entrega\n3 - Formas de pagamento\n" + (if (temDiscreta) "4 - Entrega discreta\n" else "") +
             (if (temRetirada) "5 - Retirada\n" else "") + "6 - Falar com a loja\n\nSe preferir, é só escrever sua dúvida."
 
     const val RODAPE = "\n\nDigite 0 para ver as opções ou 6 para falar com a loja."
@@ -45,7 +45,7 @@ object AtendenteDoRobo {
      */
     fun decidir(
         mensagem: String, conversa: Conversa?, regras: Map<String, String>, loja: String, assistente: String, site: String, agora: Long,
-        temRetirada: Boolean = true,
+        temRetirada: Boolean = true, temDiscreta: Boolean = true, ramoIntimo: Boolean = true,
     ): Decisao? {
         val t = normalizar(mensagem)
         val numero = if (Regex("^\\s*\\d{1,2}\\s*[.)-]?\\s*$").matches(mensagem)) mensagem.filter { it.isDigit() }.toInt() else null
@@ -56,20 +56,21 @@ object AtendenteDoRobo {
         if (PEDE_PESSOA.containsMatchIn(t) || (numero == 6)) return Decisao(CHAMAR_EQUIPE, true, null)
         val curta = t.split(' ').filter { it.isNotBlank() }.size <= 3
         if (numero == 0 || t == "menu" || (!recente && (SAUDACAO.containsMatchIn(t) || curta))) {
-            return Decisao(menu(loja, assistente, temRetirada), false, "principal")
+            return Decisao(menu(loja, assistente, temRetirada, temDiscreta), false, "principal")
         }
         if (recente && SAUDACAO.containsMatchIn(t) && curta) {
             return Decisao("Oi! Que bom falar com você de novo 💗 Em que posso te ajudar?$RODAPE", false, "principal")
         }
         if (numero != null && menuAtual == "principal") {
             val r = when (numero) {
-                1 -> "Me conta o que você procura (por exemplo: gel, lingerie, presente para casal) que eu te mostro as opções 💗$noSite"
+                1 -> "Me conta o que você procura" + (if (ramoIntimo) " (por exemplo: gel, lingerie, presente para casal)" else "") + " que eu te mostro as opções 💗$noSite"
                 2 -> listOfNotNull(texto("frete"), texto("frete_gratis"), texto("postagem")).joinToString(" ").ifBlank { "O frete é calculado pelo CEP." } +
                     " Me mande seu CEP ou simule no site para ver o valor e o prazo certinhos.${if (site.isNotBlank()) " $site" else ""}"
                 3 -> texto("pagamento") ?: "As formas de pagamento aparecem no site, na hora de finalizar.$noSite"
-                4 -> texto("discreto") ?: "Sim, a entrega é discreta: embalagem sem identificação do conteúdo."
-                5 -> if (temRetirada) texto("retirada") ?: "Dá para combinar a retirada com a equipe." else return Decisao("Não encontrei essa opção. " + menu(loja, assistente, temRetirada), false, "principal")
-                else -> return Decisao("Não encontrei essa opção. " + menu(loja, assistente, temRetirada), false, "principal")
+                4 -> if (temDiscreta) texto("discreto") ?: "Sim, a entrega é discreta: embalagem sem identificação do conteúdo."
+                else return Decisao("Não encontrei essa opção. " + menu(loja, assistente, temRetirada, temDiscreta), false, "principal")
+                5 -> if (temRetirada) texto("retirada") ?: "Dá para combinar a retirada com a equipe." else return Decisao("Não encontrei essa opção. " + menu(loja, assistente, temRetirada, temDiscreta), false, "principal")
+                else -> return Decisao("Não encontrei essa opção. " + menu(loja, assistente, temRetirada, temDiscreta), false, "principal")
             }
             return Decisao(r + RODAPE, false, if (numero == 1) null else "principal")
         }
@@ -93,7 +94,7 @@ object AtendenteDoRobo {
      * A solicitação de troca/devolução e a confirmação de compra que o site prepara (as mesmas que o robô do site reconhece).
      * [pedido] busca o pedido pelo número (na cópia local da Vênus); [prazoPostagem] em dias úteis. Null = não é uma delas.
      */
-    fun especial(mensagem: String, pedido: (Int) -> Loja.Pedido?, prazoPostagem: Int): Decisao? {
+    fun especial(mensagem: String, pedido: (Int) -> Loja.Pedido?, prazoPostagem: Int, embalagemDiscreta: Boolean = true): Decisao? {
         val t = normalizar(mensagem)
         RE_TROCA.find(t)?.let { m ->
             return Decisao(
@@ -123,7 +124,7 @@ object AtendenteDoRobo {
                 "motoboy" -> Decisao("Recebemos seu pedido #${p.id} e o pagamento está confirmado ✅ A equipe já vai confirmar a saída do entregador por aqui 💗", true, null)
                 else -> Decisao(
                     "Oba! Recebemos seu pedido #${p.id} e o pagamento está confirmado ✅ Vamos postar em até $prazoPostagem ${if (prazoPostagem == 1) "dia útil" else "dias úteis"}, " +
-                        "em embalagem discreta, e te mandamos o código de rastreio por aqui. Obrigada pela compra! 💗", false, null,
+                        (if (embalagemDiscreta) "em embalagem discreta, " else "") + "e te mandamos o código de rastreio por aqui. Obrigada pela compra! 💗", false, null,
                 )
             }
         }
@@ -203,8 +204,8 @@ object AtendenteDoRobo {
         if (!teste && conversa != null && conversa.pausadoAte > agora) return Saida(emptyList(), false)
 
         val regras = if (Perfil.regrasConfiguradas) Perfil.regras.perguntasComId(Perfil.loja).associate { it.first to it.third } else emptyMap()
-        val decisao = especial(mensagem, { n -> Loja(ctx).takeIf { it.conectada }?.pedidoPorNumero(n) }, Perfil.regras.prazoPostagemDias?.takeIf { it > 0 } ?: 2)
-            ?: decidir(mensagem, conversa, regras, Perfil.loja, Marca.nome, Perfil.site, agora, Perfil.regras.retiradaDisponivel)
+        val decisao = especial(mensagem, { n -> Loja(ctx).takeIf { it.conectada }?.pedidoPorNumero(n) }, Perfil.regras.prazoPostagemDias?.takeIf { it > 0 } ?: 2, Perfil.entregaDiscreta)
+            ?: decidir(mensagem, conversa, regras, Perfil.loja, Marca.nome, Perfil.site, agora, Perfil.regras.retiradaDisponivel, Perfil.entregaDiscreta, Perfil.ramoIntimo)
             ?: comIA(ctx, mensagem, conversa, canal)
         val nova = Conversa(
             (conversa?.mensagens.orEmpty() + Msg(true, mensagem, agora) + Msg(false, decisao.texto, agora)).takeLast(12),
@@ -228,7 +229,7 @@ object AtendenteDoRobo {
         val historico = conversa?.mensagens?.takeLast(8)?.joinToString("\n") { (if (it.cliente) "Cliente: " else "${Marca.nome}: ") + it.texto }.orEmpty()
         val pedido = "Você é a ${Marca.nome}, atendente virtual da ${Perfil.loja} (${Perfil.ramo}). Está respondendo no " +
             (if (canal == "whatsapp") "WhatsApp" else "direct do Instagram") + " da loja. " + Perfil.injecao() + "\n" +
-            "Escreva como uma pessoa simpática e discreta escreve no celular: curto (1 a 3 frases), no máximo 1 emoji, sem markdown, sem palavras vulgares. " +
+            "Escreva como uma pessoa simpática" + (if (Perfil.ramoIntimo) " e discreta" else "") + " escreve no celular: curto (1 a 3 frases), no máximo 1 emoji, sem markdown, sem palavras vulgares. " +
             "Use SOMENTE as regras acima e os produtos abaixo; não invente produtos, preços, prazos nem políticas. Quando indicar produto, mande o link dele (se tiver). " +
             (if (Plataformas.tipo(ctx) == "interno") "A loja não tem site: quando a cliente quiser comprar, confirme o produto e marque chamarHumano=true para a equipe fechar o pedido (pagamento e entrega). " else "") +
             ContextoDaLoja.AVISO_DADOS + " " +

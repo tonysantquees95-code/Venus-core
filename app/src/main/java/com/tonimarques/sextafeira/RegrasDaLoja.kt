@@ -9,7 +9,7 @@ import android.content.Context
  */
 object RegrasDaLoja {
 
-    const val VERSAO = 1
+    const val VERSAO = 2
     const val TIPO = "regra"
 
     data class Regra(val pergunta: String, val resposta: String, val fonte: String)
@@ -86,14 +86,23 @@ object RegrasDaLoja {
     /** Produtos do catálogo com nome de uma linha proibida (confira o fabricante antes de tirar do ar). */
     fun suspeitosDaAnvisa(nomes: List<String>): List<String> = nomes.filter { PROIBIDOS.containsMatchIn(ComandosLocais.normalizar(it)) }
 
-    /** Guarda as regras na memória (uma vez por versão). Devolve quantas entraram. */
+    /** As regras que valem para o ramo: o que cita produtos íntimos fica só nas lojas desse ramo. */
+    fun regrasPara(ramoIntimo: Boolean): List<Regra> = if (ramoIntimo) REGRAS else REGRAS
+        .filterNot { it.fonte.startsWith("Anvisa") }
+        .map { it.copy(resposta = it.resposta.replace(" (como géis e cosméticos)", " (como alimentos e cosméticos)").replace("(como vibradores)", "(como aparelhos)")) }
+
+    /** Guarda as regras na memória (uma vez por versão e por ramo). Devolve quantas entraram. */
     fun semear(ctx: Context, memoria: Memoria): Int {
         val prefs = ctx.getSharedPreferences("regras_da_loja", Context.MODE_PRIVATE)
-        if (prefs.getInt("versao", 0) >= VERSAO) return 0
+        val regras = regrasPara(Perfil.ramoIntimo)
+        val marca = "$VERSAO:${Perfil.ramoIntimo}"
+        if (prefs.getString("marca", null) == marca) return 0
+        // tira as da versão anterior: uma loja de outro ramo pode ter recebido regras que não são dela
+        REGRAS.map { it.fonte }.distinct().forEach { memoria.apagarDaFonte(TIPO, it) }
         var novas = 0
-        for (r in REGRAS) if (memoria.guardarVetor(TIPO, r.pergunta, resposta = r.resposta, fonte = r.fonte)) novas++
-        prefs.edit().putInt("versao", VERSAO).apply()
-        Diario.anotar(ctx, "memoria", "Regras da loja na memória: ${REGRAS.size} (CDC, LGPD, Anvisa, saúde)", "automatico")
+        for (r in regras) if (memoria.guardarVetor(TIPO, r.pergunta, resposta = r.resposta, fonte = r.fonte)) novas++
+        prefs.edit().putString("marca", marca).apply()
+        Diario.anotar(ctx, "memoria", "Regras da loja na memória: ${regras.size} (leis e cuidados com a cliente)", "automatico")
         return novas
     }
 }

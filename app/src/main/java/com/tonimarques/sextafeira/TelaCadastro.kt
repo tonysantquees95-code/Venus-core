@@ -98,7 +98,7 @@ internal fun MainActivity.cadastroGuiado(etapaInicial: Int = 0) {
                     InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_WORDS)
                 val (b2, loja) = f.campo("Nome da loja", if (novo) "" else Perfil.loja, "Ex.: Boutique da Ana",
                     InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_WORDS)
-                val (b3, cidade) = f.campo("Cidade e estado", Perfil.cidade + if (Perfil.uf.isNotBlank()) ", ${Perfil.uf}" else "", "Ex.: Porto Alegre, RS",
+                val (b3, cidade) = f.campo("Cidade e estado", Perfil.cidade + if (Perfil.uf.isNotBlank()) ", ${Perfil.uf}" else "", "Ex.: Campinas, SP",
                     InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_WORDS)
                 f.adicionar(b1)
                 f.adicionar(b2, 14)

@@ -117,7 +117,7 @@ private fun MainActivity.editarDadosDosDocumentos() {
     val (bContato, contato) = f.campo("Contato (WhatsApp ou Instagram)", emissor().contato, "(51) 99999-9999", InputType.TYPE_CLASS_TEXT)
     f.adicionar(bContato, 8)
     f.cartao("Endereço do remetente")
-    val (bEnd, end) = f.campo("Uma linha por item", p.getString("endereco", "").orEmpty(), "Rua das Flores, 100\nCentro\nPorto Alegre/RS\nCEP 90000-000",
+    val (bEnd, end) = f.campo("Uma linha por item", p.getString("endereco", "").orEmpty(), "Rua das Flores, 100\nCentro\nSua cidade/UF\nCEP 00000-000",
         InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE or InputType.TYPE_TEXT_FLAG_CAP_SENTENCES, 4)
     f.adicionar(bEnd, 2)
     f.cartao("Mensagem de agradecimento")
