@@ -8,7 +8,7 @@ import { useEmpresa } from "./EmpresaProvider";
 import { pedirTexto } from "./ia";
 import { contextoDaEmpresa, regrasEmLinhas } from "./logica";
 import {
-  buscarConversas, inspiracao, lerIdeiasDePost, lerIdeiasDeVideo, lerStories, limparResposta, MAXIMO_RESPOSTA, MODELOS_DE_RESPOSTA, modelosDaLoja,
+  buscarConversas, inspiracao, lerIdeiasDePost, lerIdeiasDeVideo, lerStories, limparResposta, MAXIMO_RESPOSTA, modelosDaLoja,
   pedidoDeIdeiasDePost, pedidoDeIdeiasDeVideo, pedidoDeResposta, pedidoDeStories, primeirosPassos, resumirConversa,
   type IdeiaDePost, type IdeiaDeVideo, type StoryDoDia
 } from "./marketing";
@@ -359,7 +359,7 @@ export function RespostasDoInstagram() {
   const [fazendo, setFazendo] = useState<string | null>(null);
   const [erro, setErro] = useState("");
   const gerar = async (id: string) => {
-    const m = MODELOS_DE_RESPOSTA.find((x) => x.id === id)!;
+    const m = modelosDaLoja(empresa).find((x) => x.id === id)!;
     setFazendo(id); setErro("");
     try {
       const t = limparResposta(await pedirTexto(pedidoDeResposta(empresa, m, contextoDaEmpresa(empresa)), empresa));
