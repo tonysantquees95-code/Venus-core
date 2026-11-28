@@ -21,7 +21,8 @@ android {
         versionName = "1.$numeroDaVersao"
         buildConfigField("String", "SELO_CHAVE", "\"$chaveDoSelo\"")
         // Só os processadores de celular (deixa o APK menor com o reconhecimento de voz offline).
-        ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a") }
+        ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86_64") }
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     // Chave fixa: assim cada APK novo instala por cima do anterior.
@@ -81,5 +82,7 @@ dependencies {
     // Ed25519 (conferir a assinatura do selo de licença sem internet).
     implementation("net.i2p.crypto:eddsa:0.3.0")
     testImplementation("junit:junit:4.13.2")
+    androidTestImplementation("androidx.test:runner:1.6.2")
+    androidTestImplementation("androidx.test.ext:junit:1.2.1")
     testImplementation("org.json:json:20240303")
 }
